@@ -1,0 +1,965 @@
+m all the
+    options that were modified and returns this value at *<i>maskPtr</i>; the
+    caller can then use this information to optimize itself so that, for
+    example, it does not redisplay the widget if the modified options do not
+    affect the widget's appearance.</p>
+<p class="Pp">The second additional feature of <b>Tk_SetOptions</b> has to do
+    with error recovery. If an error occurs while processing configuration
+    options, this feature makes it possible to restore all the configuration
+    options to their previous values. Errors can occur either while processing
+    options in <b>Tk_SetOptions</b> or later in the caller. In many cases the
+    caller does additional processing after <b>Tk_SetOptions</b> returns; for
+    example, it might use an option value to set a trace on a variable and may
+    detect an error if the variable is an array instead of a scalar. Error
+    recovery is enabled by passing in a non-NULL value for the <i>savePtr</i>
+    argument to <b>Tk_SetOptions</b>; this should be a pointer to an
+    uninitialized Tk_SavedOptions structure on the caller's stack.
+    <b>Tk_SetOptions</b> overwrites the structure pointed to by <i>savePtr</i>
+    with information about the old values of any options modified by the
+    procedure. If <b>Tk_SetOptions</b> returns successfully, the caller uses the
+    structure in one of two ways. If the caller completes its processing of the
+    new options without any errors, then it must pass the structure to
+    <b>Tk_FreeSavedOptions</b> so that the old values can be freed. If the
+    caller detects an error in its processing of the new options, then it should
+    pass the structure to <b>Tk_RestoreSavedOptions</b>, which will copy the old
+    values back into the widget record and free the new values. If
+    <b>Tk_SetOptions</b> detects an error then it automatically restores any
+    options that had already been modified and leaves *<i>savePtr</i> in an
+    empty state: the caller need not call either <b>Tk_FreeSavedOptions</b> or
+    <b>Tk_RestoreSavedOptions</b>. If the <i>savePtr</i> argument to
+    <b>Tk_SetOptions</b> is NULL then <b>Tk_SetOptions</b> frees each old option
+    value immediately when it sets a new value for the option. In this case, if
+    an error occurs in the third option, the old values for the first two
+    options cannot be restored.</p>
+<p class="Pp"><b>Tk_GetOptionValue</b> returns the current value of a
+    configuration option for a particular widget. The <i>namePtr</i> argument
+    contains the name of an option; <b>Tk_GetOptionValue</b> uses
+    <i>optionTable</i> to lookup the option and extract its value from the
+    widget record pointed to by <i>recordPtr</i>, then it returns an object
+    containing that value. If an error occurs (e.g., because <i>namePtr</i>
+    contains an unknown option name) then NULL is returned and an error message
+    is left in <i>interp</i>'s result unless <i>interp</i> is NULL.</p>
+<p class="Pp"><b>Tk_GetOptionInfo</b> returns information about configuration
+    options in a form suitable for <b>configure</b> widget commands. If the
+    <i>namePtr</i> argument is not NULL, it points to an object that gives the
+    name of a configuration option; <b>Tk_GetOptionInfo</b> returns an object
+    containing a list with five elements, which are the name of the option, the
+    name and class used for the option in the option database, the default value
+    for the option, and the current value for the option. If the <i>namePtr</i>
+    argument is NULL, then <b>Tk_GetOptionInfo</b> returns information about all
+    options in the form of a list of lists; each sublist describes one option.
+    Synonym options are handled differently depending on whether <i>namePtr</i>
+    is NULL: if <i>namePtr</i> is NULL then the sublist for each synonym option
+    has only two elements, which are the name of the option and the name of the
+    other option that it refers to; if <i>namePtr</i> is non-NULL and names a
+    synonym option then the object returned is the five-element list for the
+    other option that the synonym refers to. If an error occurs (e.g., because
+    <i>namePtr</i> contains an unknown option name) then NULL is returned and an
+    error message is left in <i>interp</i>'s result unless <i>interp</i> is
+    NULL.</p>
+<p class="Pp"><b>Tk_FreeConfigOptions</b> must be invoked when a widget is
+    deleted. It frees all of the resources associated with any of the
+    configuration options defined in <i>recordPtr</i> by <i>optionTable</i>.</p>
+<p class="Pp">The <b>Tk_Offset</b> macro is provided as a safe way of generating
+    the <i>objOffset</i> and <i>internalOffset</i> values for entries in
+    Tk_OptionSpec structures. It takes two arguments: the name of a type of
+    record, and the name of a field in that record. It returns the byte offset
+    of the named field in records of the given type.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TEMPLATES'><a class='permalink' href='#TEMPLATES'>TEMPLATES</a></h1>
+<p class="Pp">The array of Tk_OptionSpec structures passed to
+    <b>Tk_CreateOptionTable</b> via its <i>templatePtr</i> argument describes
+    the configuration options supported by a particular class of widgets. Each
+    structure specifies one configuration option and has the following
+  fields:</p>
+<div class="Bd-indent">
+<pre>typedef struct {
+    Tk_OptionType <i>type</i>;
+    const char *<i>optionName</i>;
+    const char *<i>dbName</i>;
+    const char *<i>dbClass</i>;
+    const char *<i>defValue</i>;
+    int <i>objOffset</i>;
+    int <i>internalOffset</i>;
+    int <i>flags</i>;
+    const void *<i>clientData</i>;
+    int <i>typeMask</i>;
+} <b>Tk_OptionSpec</b>;</pre>
+</div>
+The <i>type</i> field indicates what kind of configuration option this is (e.g.
+  <b>TK_OPTION_COLOR</b> for a color value, or <b>TK_OPTION_INT</b> for an
+  integer value). <i>Type</i> determines how the value of the option is parsed
+  (more on this below). The <i>optionName</i> field is a string such as
+  <b>-font</b> or <b>-bg</b>; it is the name used for the option in Tcl commands
+  and passed to procedures via the <i>objc</i> or <i>namePtr</i> arguments. The
+  <i>dbName</i> and <i>dbClass</i> fields are used by <b>Tk_InitOptions</b> to
+  look up a default value for this option in the option database; if
+  <i>dbName</i> is NULL then the option database is not used by
+  <b>Tk_InitOptions</b> for this option. The <i>defValue</i> field specifies a
+  default value for this configuration option if no value is specified in the
+  option database. The <i>objOffset</i> and <i>internalOffset</i> fields
+  indicate where to store the value of this option in widget records (more on
+  this below); values for the <i>objOffset</i> and <i>internalOffset</i> fields
+  should always be generated with the <b>Tk_Offset</b> macro. The <i>flags</i>
+  field contains additional information to control the processing of this
+  configuration option (see below for details). <i>ClientData</i> provides
+  additional type-specific data needed by certain types. For instance, for
+  <b>TK_OPTION_COLOR</b> types, <i>clientData</i> is a string giving the default
+  value to use on monochrome displays. See the descriptions of the different
+  types below for details. The last field, <i>typeMask</i>, is used by
+  <b>Tk_SetOptions</b> to return information about which options were modified;
+  see the description of <b>Tk_SetOptions</b> above for details.
+<p class="Pp">When <b>Tk_InitOptions</b> and <b>Tk_SetOptions</b> store the
+    value of an option into the widget record, they can do it in either of two
+    ways. If the <i>objOffset</i> field of the Tk_OptionSpec is greater than or
+    equal to zero, then the value of the option is stored as a (Tcl_Obj *) at
+    the location in the widget record given by <i>objOffset</i>. If the
+    <i>internalOffset</i> field of the Tk_OptionSpec is greater than or equal to
+    zero, then the value of the option is stored in a type-specific internal
+    form at the location in the widget record given by <i>internalOffset</i>.
+    For example, if the option's type is <b>TK_OPTION_INT</b> then the internal
+    form is an integer. If the <i>objOffset</i> or <i>internalOffset</i> field
+    is negative then the value is not stored in that form. At least one of the
+    offsets must be greater than or equal to zero.</p>
+<p class="Pp">The <i>flags</i> field consists of one or more bits ORed together.
+    The following flags are supported:</p>
+<dl class="Bl-tag">
+  <dt id="TK_OPTION_NULL_OK"><a class="permalink" href="#TK_OPTION_NULL_OK"><b>TK_OPTION_NULL_OK</b></a></dt>
+  <dd>If this bit is set for an option then an empty string will be accepted as
+      the value for the option and the resulting internal form will be a NULL
+      pointer, a zero value, or <b>None</b>, depending on the type of the
+      option. If the flag is not set then empty strings will result in errors.
+      <b>TK_OPTION_NULL_OK</b> is typically used to allow a feature to be turned
+      off entirely, e.g. set a cursor value to <b>None</b> so that a window
+      simply inherits its parent's cursor. Not all option types support the
+      <b>TK_OPTION_NULL_OK</b> flag; for those that do, there is an explicit
+      indication of that fact in the descriptions below.</dd>
+  <dt id="TK_OPTION_DONT_SET_DEFAULT"><a class="permalink" href="#TK_OPTION_DONT_SET_DEFAULT"><b>TK_OPTION_DONT_SET_DEFAULT</b></a></dt>
+  <dd>If this bit is set for an option then no default value will be set in
+      <b>Tk_InitOptions</b> for this option. Neither the option database, nor
+      any system default value, nor <i>optionTable</i> are used to give a
+      default value to this option. Instead it is assumed that the caller has
+      already supplied a default value in the widget code.</dd>
+</dl>
+<div class="Bd-indent">
+<p class="Pp">The <i>type</i> field of each Tk_OptionSpec structure determines
+    how to parse the value of that configuration option. The legal value for
+    <i>type</i>, and the corresponding actions, are described below. If the type
+    requires a <i>tkwin</i> value to be passed into procedures like
+    <b>Tk_SetOptions</b>, or if it uses the <i>clientData</i> field of the
+    Tk_OptionSpec, then it is indicated explicitly; if not mentioned, the type
+    requires neither <i>tkwin</i> nor <i>clientData</i>.</p>
+</div>
+<dl class="Bl-tag">
+  <dt id="TK_OPTION_ANCHOR"><a class="permalink" href="#TK_OPTION_ANCHOR"><b>TK_OPTION_ANCHOR</b></a></dt>
+  <dd>The value must be a standard anchor position such as <b>ne</b> or
+      <b>center</b>. The internal form is a Tk_Anchor value like the ones
+      returned by <b>Tk_GetAnchorFromObj</b>.</dd>
+  <dt id="TK_OPTION_BITMAP"><a class="permalink" href="#TK_OPTION_BITMAP"><b>TK_OPTION_BITMAP</b></a></dt>
+  <dd>The value must be a standard Tk bitmap name. The internal form is a Pixmap
+      token like the ones returned by <b>Tk_AllocBitmapFromObj</b>. This option
+      type requires <i>tkwin</i> to be supplied to procedures such as
+      <b>Tk_SetOptions</b>, and it supports the <b>TK_OPTION_NULL_OK</b>
+    flag.</dd>
+  <dt id="TK_OPTION_BOOLEAN"><a class="permalink" href="#TK_OPTION_BOOLEAN"><b>TK_OPTION_BOOLEAN</b></a></dt>
+  <dd>The value must be a standard boolean value such as <b>true</b> or
+      <b>no</b>. The internal form is an integer with value 0 or 1. Note that if
+      the <i>objOffset</i> field is not used, information about the original
+      value of this option will be lost.</dd>
+  <dt id="TK_OPTION_BORDER"><a class="permalink" href="#TK_OPTION_BORDER"><b>TK_OPTION_BORDER</b></a></dt>
+  <dd>The value must be a standard color name such as <b>red</b> or
+      <b>#ff8080</b>. The internal form is a Tk_3DBorder token like the ones
+      returned by <b>Tk_Alloc3DBorderFromObj</b>. This option type requires
+      <i>tkwin</i> to be supplied to procedures such as <b>Tk_SetOptions</b>,
+      and it supports the <b>TK_OPTION_NULL_OK</b> flag.</dd>
+  <dt id="TK_OPTION_COLOR"><a class="permalink" href="#TK_OPTION_COLOR"><b>TK_OPTION_COLOR</b></a></dt>
+  <dd>The value must be
+<section class="Sh">
+<h1 class="Sh" id="OPTION_TYPES"><a class="permalink" href="#OPTION_TYPES">OPTION TYPES</a></h1>
+<p class="Pp">The following option types are supported:</p>
+<dl class="Bl-dt">
+<dt id="TK_OPTION_COLOR"><a class="permalink" href="#TK_OPTION_COLOR"><b>TK_OPTION_COLOR</b></a></dt>
+<dd>The value must be a standard color name such as <b>red</b> or
+    <b>#ff8080</b>. The internal form is an (XColor *) token like the ones
+    returned by <b>Tk_AllocColorFromObj</b>. This option type requires
+    <i>tkwin</i> to be supplied to procedures such as <b>Tk_SetOptions</b>,
+    and it supports the <b>TK_OPTION_NULL_OK</b> flag.</dd>
+<dt id="TK_OPTION_CURSOR"><a class="permalink" href="#TK_OPTION_CURSOR"><b>TK_OPTION_CURSOR</b></a></dt>
+<dd>The value must be a standard cursor name such as <b>cross</b> or
+    <b>@foo</b>. The internal form is a Tk_Cursor token like the ones returned
+    by <b>Tk_AllocCursorFromObj</b>. This option type requires <i>tkwin</i> to
+    be supplied to procedures such as <b>Tk_SetOptions</b>, and when the
+    option is set the cursor for the window is changed by calling
+    <b>XDefineCursor</b>. This option type also supports the
+    <b>TK_OPTION_NULL_OK</b> flag.</dd>
+<dt id="TK_OPTION_CUSTOM"><a class="permalink" href="#TK_OPTION_CUSTOM"><b>TK_OPTION_CUSTOM</b></a></dt>
+<dd>This option allows applications to define new option types. The clientData
+    field of the entry points to a structure defining the new option type. See
+    the section <b>CUSTOM OPTION TYPES</b> below for details.</dd>
+<dt id="TK_OPTION_DOUBLE"><a class="permalink" href="#TK_OPTION_DOUBLE"><b>TK_OPTION_DOUBLE</b></a></dt>
+<dd>The string value must be a floating-point number in the format accepted by
+    <b>strtol</b>. The internal form is a C <b>double</b> value. This option
+    type supports the <b>TK_OPTION_NULL_OK</b> flag; if a NULL value is set,
+    the internal representation is set to zero.</dd>
+<dt id="TK_OPTION_END"><a class="permalink" href="#TK_OPTION_END"><b>TK_OPTION_END</b></a></dt>
+<dd>Marks the end of the template. There must be a Tk_OptionSpec structure
+    with <i>type</i> <b>TK_OPTION_END</b> at the end of each template. If the
+    <i>clientData</i> field of this structure is not NULL, then it points to
+    an additional array of Tk_OptionSpec's, which is itself terminated by
+    another <b>TK_OPTION_END</b> entry. Templates may be chained arbitrarily
+    deeply. This feature allows common options to be shared by several widget
+    classes.</dd>
+<dt id="TK_OPTION_FONT"><a class="permalink" href="#TK_OPTION_FONT"><b>TK_OPTION_FONT</b></a></dt>
+<dd>The value must be a standard font name such as <b>Times 16</b>. The
+    internal form is a Tk_Font handle like the ones returned by
+    <b>Tk_AllocFontFromObj</b>. This option type requires <i>tkwin</i> to be
+    supplied to procedures such as <b>Tk_SetOptions</b>, and it supports the
+    <b>TK_OPTION_NULL_OK</b> flag.</dd>
+<dt id="TK_OPTION_INT"><a class="permalink" href="#TK_OPTION_INT"><b>TK_OPTION_INT</b></a></dt>
+<dd>The string value must be an integer in the format accepted by
+    <b>strtol</b> (e.g. <b>0</b> and <b>0x</b> prefixes may be used to specify
+    octal or hexadecimal numbers, respectively). The internal form is a C
+    <b>int</b> value.</dd>
+<dt id="TK_OPTION_JUSTIFY"><a class="permalink" href="#TK_OPTION_JUSTIFY"><b>TK_OPTION_JUSTIFY</b></a></dt>
+<dd>The value must be a standard justification value such as <b>left</b>. The
+    internal form is a Tk_Justify like the values returned by
+    <b>Tk_GetJustifyFromObj</b>.</dd>
+<dt id="TK_OPTION_PIXELS"><a class="permalink" href="#TK_OPTION_PIXELS"><b>TK_OPTION_PIXELS</b></a></dt>
+<dd>The value must specify a screen distance such as <b>2i</b> or <b>6.4</b>.
+    The internal form is an integer value giving a distance in pixels, like
+    the values returned by <b>Tk_GetPixelsFromObj</b>. Note that if the
+    <i>objOffset</i> field is not used, information about the original value
+    of this option will be lost. See <b>OBJOFFSET VS. INTERNALOFFSET</b> below
+    for details. This option type supports the <b>TK_OPTION_NULL_OK</b> flag;
+    if a NULL value is set, the internal representation is set to
+    INT_MIN.</dd>
+<dt id="TK_OPTION_RELIEF"><a class="permalink" href="#TK_OPTION_RELIEF"><b>TK_OPTION_RELIEF</b></a></dt>
+<dd>The value must be standard relief such as <b>raised</b>. The internal form
+    is an integer relief value such as <b>TK_RELIEF_RAISED</b>. This option
+    type supports the <b>TK_OPTION_NULL_OK</b> flag; if a NULL value is set,
+    the internal representation is set to <b>TK_RELIEF_NULL</b>.</dd>
+<dt id="TK_OPTION_STRING"><a class="permalink" href="#TK_OPTION_STRING"><b>TK_OPTION_STRING</b></a></dt>
+<dd>The value may be any string. The internal form is a (char *) pointer that
+    points to a dynamically allocated copy of the value. This option type
+    supports the <b>TK_OPTION_NULL_OK</b> flag.</dd>
+<dt id="TK_OPTION_STRING_TABLE"><a class="permalink" href="#TK_OPTION_STRING_TABLE"><b>TK_OPTION_STRING_TABLE</b></a></dt>
+<dd>For this type, <i>clientData</i> is a pointer to an array of strings
+    suitable for passing to <b>Tcl_GetIndexFromObj</b>. The value must be one
+    of the strings in the table, or a unique abbreviation of one of the
+    strings. The internal form is an integer giving the index into the table
+    of the matching string, like the return value from
+    <b>Tcl_GetStringFromObj</b>. This option type supports the
+    <b>TK_OPTION_NULL_OK</b> flag; if a NULL value is set, the internal
+    representation is set to -1.</dd>
+<dt id="TK_OPTION_SYNONYM"><a class="permalink" href="#TK_OPTION_SYNONYM"><b>TK_OPTION_SYNONYM</b></a></dt>
+<dd>This type is used to provide alternative names for an option (for example,
+    <b>-bg</b> is often used as a synonym for <b>-background</b>). The
+    <b>clientData</b> field is a string that gives the name of another option
+    in the same table. Whenever the synonym option is used, the information
+    from the other option will be used instead.</dd>
+<dt id="TK_OPTION_WINDOW"><a class="permalink" href="#TK_OPTION_WINDOW"><b>TK_OPTION_WINDOW</b></a></dt>
+<dd>The value must be a window path name. The internal form is a
+    <b>Tk_Window</b> token for the window. This option type requires
+    <i>tkwin</i> to be supplied to procedures such as <b>Tk_SetOptions</b> (in
+    order to identify the application), and it supports the
+    <b>TK_OPTION_NULL_OK</b> flag.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STORAGE_MANAGEMENT_ISSUES'><a class='permalink' href='#STORAGE_MANAGEMENT_ISSUES'>STORAGE   MANAGEMENT ISSUES</a></h1>
+<p class="Pp">If a field of a widget record has its offset stored in the
+    <i>objOffset</i> or <i>internalOffset</i> field of a Tk_OptionSpec structure
+    then the procedures described here will handle all of the storage allocation
+    and resource management issues associated with the field. When the value of
+    an option is changed, <b>Tk_SetOptions</b> (or <b>Tk_FreeSavedOptions</b>)
+    will automatically free any resources associated with the old value, such as
+    Tk_Fonts for <b>TK_OPTION_FONT</b> options or dynamically allocated memory
+    for <b>TK_OPTION_STRING</b> options. For an option stored as an object using
+    the <i>objOffset</i> field of a Tk_OptionSpec, the widget record shares the
+    object pointed to by the <i>objv</i> value from the call to
+    <b>Tk_SetOptions</b>. The reference count for this object is incremented
+    when a pointer to it is stored in the widget record and decremented when the
+    option is modified. When the widget is deleted <b>Tk_FreeConfigOptions</b>
+    should be invoked; it will free the resources associated with all options
+    and decrement reference counts for any objects.</p>
+<p class="Pp">However, the widget code is responsible for storing NULL or
+    <b>None</b> in all pointer and token fields before invoking
+    <b>Tk_InitOptions</b>. This is needed to allow proper cleanup in the rare
+    case where an error occurs in <b>Tk_InitOptions</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OBJOFFSET_VS._INTERNALOFFSET'><a class='permalink' href='#OBJOFFSET_VS._INTERNALOFFSET'>OBJOFFSET   VS. INTERNALOFFSET</a></h1>
+<p class="Pp">In most cases it is simplest to use the <i>internalOffset</i>
+    field of a Tk_OptionSpec structure and not the <i>objOffset</i> field. This
+    makes the internal form of the value immediately available to the widget
+    code so the value does not have to be extracted from an object each time it
+    is used. However, there are two cases where the <i>objOffset</i> field is
+    useful. The first case is for <b>TK_OPTION_PIXELS</b> options. In this case,
+    the internal form is an integer pixel value that is valid only for a
+    particular screen. If the value of the option is retrieved, it will be
+    returned as a simple number. For example, after the command <b>.b configure
+    -borderwidth 2m</b>, the command <b>.b configure -borderwidth</b> might
+    return 7, which is the integer pixel value corresponding to <b>2m</b>.
+    Unfortunately, this loses the original screen-independent value. Thus for
+    <b>TK_OPTION_PIXELS</b> options it is better to use the <i>objOffset</i>
+    field. In this case the original value of the option is retained in the
+    object and can be returned when the option is retrieved. In most cases it is
+    convenient to use the <i>internalOffset</i> field as well, so that the
+    integer value is immediately available for use in the widget code
+    (alternatively, <b>Tk_GetPixelsFromObj</b> can be used to extract the
+    integer value from the object whenever it is needed). Note that the problem
+    of losing information on retrievals exists only for <b>TK_OPTION_PIXELS</b>
+    options.</p>
+<p class="Pp">The second reason to use the <i>objOffset</i> field is in order to
+    implement new types of options not supported by these procedures. To
+    implement a new type of option, you can use <b>TK_OPTION_STRING</b> as the
+    type in the Tk_OptionSpec structure and set the <i>objOffset</i> field but
+    not the <i>internalOffset</i> field. Then, after calling
+    <b>Tk_SetOptions</b>, convert the object to internal form yourself.</p>
+<p class="Pp">Ttk widgets do not support the <i>internalOffset</i> machinery.
+    Option values of Ttk widgets are always stored as (Tcl_Obj *), meaning that
+    the <i>objOffset</i> field must be used.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CUSTOM_OPTION_TYPES'><a class='permalink' href='#CUSTOM_OPTION_TYPES'>CUSTOM   OPTION TYPES</a></h1>
+<p class="Pp">Applications can extend the built-in configuration types with
+    additional configuration types by writing procedures to parse, print, free,
+    and restore saved copies of the type and creating a structure pointing to
+    those procedures:</p>
+<div class="Bd-indent">
+<pre>typedef struct Tk_ObjCustomOption {
+    const char *<i>name</i>;
+    Tk_CustomOptionSetProc *<i>setProc</i>;
+    Tk_CustomOptionGetProc *<i>getProc</i>;
+    Tk_CustomOptionRestoreProc *<i>restoreProc</i>;
+    Tk_CustomOptionFreeProc *<i>freeProc</i>;
+    ClientData <i>clientData</i>;
+} <b>Tk_ObjCustomOption</b>;
+typedef int <b>Tk_CustomOptionSetProc</b>(
+    ClientData <i>clientData</i>,
+    Tcl_Interp *<i>interp</i>,
+    Tk_Window <i>tkwin</i>,
+    Tcl_Obj **<i>valuePtr</i>,
+    char *<i>recordPtr</i>,
+    int <i>internalOffset</i>,
+    char *<i>saveInternalPtr</i>,
+    int <i>flags</i>);
+typedef Tcl_Obj *<b>Tk_CustomOptionGetProc</b>(
+    ClientData <i>clientData</i>,
+    Tk_Window <i>tkwin</i>,
+    char *<i>recordPtr</i>,
+    int <i>internalOffset</i>);
+typedef void <b>Tk_CustomOptionRestoreProc</b>(
+    ClientData <i>clientData</i>,
+    Tk_Window <i>tkwin</i>,
+    char *<i>internalPtr</i>,
+    char *<i>saveInternalPtr</i>);
+typedef void <b>Tk_CustomOptionFreeProc</b>(
+    ClientData <i>clientData</i>,
+    Tk_Window <i>tkwin</i>,
+    char *<i>internalPtr</i>);</pre>
+</div>
+<p class="Pp">The Tk_ObjCustomOption structure contains six fields: a name for
+    the custom option type; pointers to the four procedures; and a
+    <i>clientData</i> value to be passed to those procedures when they are
+    invoked. The <i>clientData</i> value</p>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Tk_GetOptionValue(3)</title>
+        <link rel="stylesheet" href="/assets/styles.css" type="text/css" />
+        <link rel="stylesheet" href="/assets/man.css" type="text/css" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tk_GetOptionValue(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tk/">tk</a></p>
+<p class="lic">التراخيص: TCL</p>
+
+        
+        <main>
+            <article>
+                <section class="Sh">
+    <h1 class="Sh" id="NAME">
+        <a class="permalink" href="#NAME">
+            NAME
+        </a>
+    </h1>
+    <p class="Pp">Tk_GetOptionValue, Tk_OptionSpec, Tk_OptionValueType, Tk_ObjCustomOption, Tk_SetOptions, Tk_GetOptionValue, Tk_GetOptionInfo, Tk_RestoreSavedOptions, Tk_FreeSavedOptions, Tk_InitOptions, Tk_OptionParseCmd, Tk_OptionCmd, Tk_ObjWorldOptionInit, Tk_ObjWorldOptionDeinit, Tk_ObjWorldOptionGet, Tk_ObjWorldOptionSet — Tk option database functions</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SYNOPSIS">
+        <a class="permalink" href="#SYNOPSIS">
+            SYNOPSIS
+        </a>
+    </h1>
+    <p class="Pp">
+        <pre>
+#include &lt;tk.h&gt;</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef struct {
+    const char *name;
+    const char *restName;
+    int type;
+    int offset;
+    const char *defaultValue;
+    int flags;
+    Tk_OptionParseProc *customPtr;
+    Tk_OptionPrintProc *customPtr;
+    const char *clientData;
+} Tk_OptionSpec;</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef struct {
+    const char *name;
+    const char *restName;
+    Tk_OptionValueType type;
+    int offset;
+    const char *defaultValue;
+    int flags;
+    Tk_OptionParseProc *parseProc;
+    Tk_OptionPrintProc *printProc;
+    const char *clientData;
+} Tk_ObjOptionSpec;</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef int (*Tk_OptionParseProc)(ClientData clientData, Tcl_Interp *interp,
+        Tk_Window tkwin, Tcl_Obj **valuePtr, char *recordPtr,
+        int internalOffset, char *saveInternalPtr, int flags);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef void (*Tk_OptionPrintProc)(ClientData clientData, Tk_Window tkwin,
+        char *recordPtr, int internalOffset, Tcl_Obj **valuePtr, int flags);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef void (*Tk_OptionRestoreProc)(ClientData clientData, Tk_Window tkwin,
+        char *internalPtr, char *saveInternalPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef void (*Tk_OptionFreeProc)(ClientData clientData, Tk_Window tkwin,
+        char *internalPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+typedef struct {
+    const char *optionName;
+    const char *argvName;
+    Tk_OptionValueType type;
+    int objOffset;
+    const char *defValue;
+    int flags;
+    Tk_OptionParseProc *parseProc;
+    Tk_OptionPrintProc *printProc;
+    Tk_OptionRestoreProc *restoreProc;
+    Tk_OptionFreeProc *freeProc;
+    ClientData clientData;
+} Tk_ObjCustomOption;</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_InitOptions(Tcl_Interp *interp, const Tk_OptionSpec *specs,
+        Tk_OptionList *optionListPtr, Tk_OptionList *customListPtr,
+        char *recordPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_SetOptions(Tcl_Interp *interp, const Tk_OptionSpec *specs,
+        const char *const sw[], char *recordPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_GetOptionValue(Tcl_Interp *interp, Tk_Window tkwin,
+        const Tk_OptionSpec *specs, const char *sw, char *recordPtr,
+        Tcl_Obj **valuePtrPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_GetOptionInfo(Tcl_Interp *interp, Tk_Window tkwin,
+        const Tk_OptionSpec *specs, const char *sw, char *recordPtr,
+        Tcl_Obj **infoPtrPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_RestoreSavedOptions(Tk_OptionList optionList,
+        Tk_OptionList customList, char *recordPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_FreeSavedOptions(Tk_OptionList optionList,
+        Tk_OptionList customList, char *recordPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_OptionParseCmd(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const objv[]);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+int Tk_OptionCmd(ClientData clientData, Tcl_Interp *interp, int objc,
+        Tcl_Obj *const objv[]);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_ObjWorldOptionInit(Tk_ObjWorldOption *woPtr,
+        Tk_ObjCustomOption *coPtr, const char *value);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_ObjWorldOptionDeinit(Tk_ObjWorldOption *woPtr,
+        Tk_ObjCustomOption *coPtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_ObjWorldOptionGet(Tk_ObjWorldOption *woPtr,
+        Tk_ObjCustomOption *coPtr, Tcl_Obj **valuePtr);</pre>
+    </p>
+    <p class="Pp">
+        <pre>
+void Tk_ObjWorldOptionSet(Tk_ObjWorldOption *woPtr,
+        Tk_ObjCustomOption *coPtr, Tcl_Obj *value);</pre>
+    </p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="ARGUMENTS">
+        <a class="permalink" href="#ARGUMENTS">
+            ARGUMENTS
+        </a>
+    </h1>
+    <p class="Pp">The Tk option database functions manage configuration options for Tk
+        widgets. The core data structure is a list of <b>Tk_OptionSpec</b> or
+        <b>Tk_ObjOptionSpec</b> structures, which describe the options supported by
+        a widget. These structures are typically created as static arrays within the
+        widget's implementation file.</p>
+    <p class="Pp">The <b>Tk_OptionSpec</b> structure contains the following fields:</p>
+    <dl class="Bl-tag">
+        <dt id="name"><a class="permalink" href="#name">name</a></dt>
+        <dd>The name of the option, e.g., "foreground". This is the name used when
+            setting or getting the option via the Tk configuration subcommand.</dd>
+        <dt id="restName"><a class="permalink" href="#restName">restName</a></dt>
+        <dd>The name used to set the option from the command line or option
+            database, e.g., "-foreground". This is often the same as <span class="Nd">name</span>
+            preceded by a hyphen.</dd>
+        <dt id="type"><a class="permalink" href="#type">type</a></dt>
+        <dd>An integer code indicating the type of the option. Standard Tk option
+            types include <b>TK_OPTION_BOOLEAN</b>, <b>TK_OPTION_PIXELS</b>,
+            <b>TK_OPTION_STRING</b>, <b>TK_OPTION_INT</b>,
+            <b>TK_OPTION_DOUBLE</b>, <b>TK_OPTION_FONT</b>,
+            <b>TK_OPTION_COLOR</b>, <b>TK_OPTION_BITMAP</b>,
+            <b>TK_OPTION_RELIEF</b>, <b>TK_OPTION_JUSTIFY</b>,
+            <b>TK_OPTION_ANCHOR</b>, <b>TK_OPTION_BORDER</b>,
+            <b>TK_OPTION_CURSES</b>, and <b>TK_OPTION_ACTIVE</b>. A complete list
+            can be found in the Tk header files.</dd>
+        <dt id="offset"><a class="permalink" href="#offset">offset</a></dt>
+        <dd>The offset in bytes from the beginning of the widget's record structure to
+            the field where the option's value is stored. For options that are
+            represented as strings or pointers, this is the offset to the character
+            pointer. For options that are represented as integers or doubles, this is
+            the offset to the integer or double value.</dd>
+        <dt id="defaultValue"><a class="permalink" href="#defaultValue">defaultValue</a></dt>
+        <dd>A string representing the default value for the option. This is used when
+            the option is not specified in the configuration request or the option
+            database.</dd>
+        <dt id="flags"><a class="permalink" href="#flags">flags</a></dt>
+        <dd>A bitmask of flags that modify the behavior of the option. Common flags
+            include <b>TK_OPTION_NULL_OK</b> (the option can be set to NULL),
+            <b>TK_OPTION_AUTOSCALE</b> (the value should be scaled according to the
+            widget's screen size), and <b>TK_OPTION_DIRTY</b> (setting this option
+            requires the widget to be redrawn).</dd>
+        <dt id="customPtr"><a class="permalink" href="#customPtr">customPtr</a></dt>
+        <dd>For custom option types, this points to a structure (or a pair of
+            function pointers) that handles the conversion between the internal
+            representation and the Tcl object representation. See "CUSTOM OPTION
+            TYPES" below.</dd>
+    </dl>
+    <p class="Pp">The <b>Tk_ObjOptionSpec</b> structure is similar to
+        <b>Tk_OptionSpec</b>, but it uses a more modern API that operates on
+        Tcl objects. The main differences are:</p>
+    <dl class="Bl-tag">
+        <dt id="type-1"><a class="permalink" href="#type-1">type</a></dt>
+        <dd>A <b>Tk_OptionValueType</b> enum, which is a superset of the integer
+            codes used in <b>Tk_OptionSpec</b>.</dd>
+        <dt id="objOffset"><a class="permalink" href="#objOffset">objOffset</a></dt>
+        <dd>The offset in bytes from the beginning of the widget's record structure to
+            the field where the option's Tcl object representation is stored. This field
+            is used when the option is stored as a Tcl object pointer (e.g.,
+            `Tcl_Obj *`). If the value is stored in a non-object format (like an
+            integer or a double), `objOffset` should be set to -1, and the
+            `offset` field from <b>Tk_OptionSpec</b> should be used instead.</dd>
+        <dt id="parseProc"><a class="permalink" href="#parseProc">parseProc</a></dt>
+        <dd>A pointer to the procedure that converts a Tcl object into the internal
+            representation of the option.</dd>
+        <dt id="printProc"><a class="permalink" href="#printProc">printProc</a></dt>
+        <dd>A pointer to the procedure that converts the internal representation of the
+            option into a Tcl object.</dd>
+        <dt id="restoreProc"><a class="permalink" href="#restoreProc">restoreProc</a></dt>
+        <dd>A pointer to the procedure that restores a saved internal representation of
+            the option.</dd>
+        <dt id="freeProc"><a class="permalink" href="#freeProc">freeProc</a></dt>
+        <dd>A pointer to the procedure that frees any dynamically allocated storage
+            associated with the internal representation of the option.</dd>
+        <dt id="clientData"><a class="permalink" href="#clientData-1">clientData</a></dt>
+        <dd>Arbitrary data that can be passed to the custom option procedures.</dd>
+    </dl>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="DESCRIPTION">
+        <a class="permalink" href="#DESCRIPTION">
+            DESCRIPTION
+        </a>
+    </h1>
+    <p class="Pp">The Tk option database functions provide a mechanism for managing
+        configuration options for Tk widgets. They allow widgets to define a set of
+        options, each with a name, type, default value, and storage location within the
+        widget's data structure. The option database also handles the conversion between
+        user-specified values (often strings or Tcl objects) and the internal
+        representation used by the widget.</p>
+    <p class="Pp"><b>Tk_InitOptions</b> initializes the option database for a widget.
+        It takes a list of <b>Tk_OptionSpec</b> structures and populates the widget's
+        internal option list. It also handles any custom option types specified.</p>
+    <p class="Pp"><b>Tk_SetOptions</b> is used to set the options for a widget based on
+        a list of configuration specifications. It parses the provided values, converts
+        them to the internal representation, and stores them in the widget's record. It
+        also handles saving the original values for later restoration.</p>
+    <p class="Pp"><b>Tk_GetOptionValue</b> retrieves the value of a specific option in
+        the form of a Tcl object. It converts the internal representation back to a
+        Tcl object.</p>
+    <p class="Pp"><b>Tk_GetOptionInfo</b> retrieves information about an option, including
+        its type, default value, and current value, in the form of a Tcl object. This is
+        useful for introspection and debugging.</p>
+    <p class="Pp"><b>Tk_RestoreSavedOptions</b> restores the options of a widget to their
+        previously saved values. This is typically called when a configuration operation
+        is cancelled.</p>
+    <p class="Pp"><b>Tk_FreeSavedOptions</b> frees any storage that was allocated for
+        saving option values. This is called when the widget is destroyed.</p>
+    <p class="Pp"><b>Tk_OptionParseCmd</b> and <b>Tk_OptionCmd</b> are internal
+        procedures used by Tk to implement the option database commands.</p>
+    <p class="Pp">The <b>Tk_ObjWorldOption*</b> procedures provide a more modern,
+        Tcl object-based API for managing custom options. They are used in conjunction
+        with the <b>Tk_ObjCustomOption</b> structure.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="TEMPLATES">
+        <a class="permalink" href="#TEMPLATES">
+            TEMPLATES
+        </a>
+    </h1>
+    <p class="Pp">The following procedures are called by the Tk option database
+        mechanism to handle custom option types. The actual procedure names and
+        arguments may vary slightly depending on the specific option type and Tk
+        version.</p>
+    <p class="Pp">The <i>setProc</i> procedure is invoked by <b>Tk_SetOptions</b> to
+        convert a Tcl object into an internal representation and store the resulting
+        value in the widget record. The arguments are:</p>
+    <div class="Bd-indent">
+        <dl class="Bl-tag">
+            <dt id="clientData-2"><a class="permalink" href="#clientData-2"><i>clientData</i></a></dt>
+            <dd>A copy of the <i>clientData</i> field in the Tk_ObjCustomOption
+                structure.</dd>
+            <dt id="interp-1"><a class="permalink" href="#interp-1"><i>interp</i></a></dt>
+            <dd>A pointer to a Tcl interpreter, used for error reporting.</dd>
+            <dt id="Tkwin-1"><a class="permalink" href="#Tkwin-1"><i>Tkwin</i></a></dt>
+            <dd>A copy of the <i>tkwin</i> argument to <b>Tk_SetOptions</b></dd>
+            <dt id="valuePtr-1"><a class="permalink" href="#valuePtr-1"><i>valuePtr</i></a></dt>
+            <dd>A pointer to a reference to a Tcl_Obj describing the new value for the
+                option; it could have been specified explicitly in the call to
+                <b>Tk_SetOptions</b> or it could come from the option database or a
+                default. If the objOffset for the option is non-negative (the option value
+                is stored as a (Tcl_Obj *) in the widget record), the Tcl_Obj pointer
+                referenced by <i>valuePtr</i> is the pointer that will be stored at the
+                objOffset for the option. <i>SetProc</i> may modify the value if
+                necessary; for example, <i>setProc</i> may change the value to NULL to
+                support the <b>TK_OPTION_NULL_OK</b> flag.</dd>
+            <dt id="recordPtr-1"><a class="permalink" href="#recordPtr-1"><i>recordPtr</i></a></dt>
+            <dd>A pointer to the start of the widget record to modify.</dd>
+            <dt id="internalOffset-1"><a class="permalink" href="#internalOffset-1"><i>internalOffset</i></a></dt>
+            <dd>Offset in bytes from the start of the widget record to the location where
+                the internal representation of the option value is to be placed.</dd>
+            <dt id="saveInternalPtr-1"><a class="permalink" href="#saveInternalPtr-1"><i>saveInternalPtr</i></a></dt>
+            <dd>A pointer to storage allocated in a Tk_SavedOptions structure for the
+                internal representation of the original option value. Before setting the
+                option to its new value, <i>setProc</i> should set the value referenced by
+                <i>saveInternalPtr</i> to the original value of the option in order to
+                support <b>Tk_RestoreSavedOptions</b>.</dd>
+            <dt id="flags-1"><a class="permalink" href="#flags-1"><i>flags</i></a></dt>
+            <dd>A copy of the <i>flags</i> field in the Tk_OptionSpec structure for the
+                option</dd>
+        </dl>
+    </div>
+    <p class="Pp"><i>SetProc</i> returns a standard Tcl result: <b>TCL_OK</b> to
+        indicate successful processing, or <b>TCL_ERROR</b> to indicate a failure of
+        any kind. An error message may be left in the Tcl interpreter given by
+        <i>interp</i> in the case of an error.</p>
+    <p class="Pp">The <i>getProc</i> procedure is invoked by
+        <b>Tk_GetOptionValue</b> and <b>Tk_GetOptionInfo</b> to retrieve a Tcl object
+        representation of the internal representation of an option. The
+        <i>clientData</i> argument is a copy of the <i>clientData</i> field in the
+        Tk_ObjCustomOption structure. <i>Tkwin</i> is a copy of the <i>tkwin</i>
+        argument to <b>Tk_GetOptionValue</b> or <b>Tk_GetOptionInfo</b>.
+        <i>RecordPtr</i> is a pointer to the beginning of the widget record to
+        query. <i>InternalOffset</i> is the offset in bytes from the beginning of
+        the widget record to the location where the internal representation of the
+        option value is stored. <i>GetProc</i> must return a pointer to a Tcl object
+        representing the value of the option.</p>
+    <p class="Pp">The <i>restoreProc</i> procedure is invoked by
+        <b>Tk_RestoreSavedOptions</b> to restore a previously saved internal
+        representation of a custom option value. The <i>clientData</i> argument is a
+        copy of the <i>clientData</i> field in the Tk_ObjCustomOption structure.
+        <i>Tkwin</i> is a copy of the <i>tkwin</i> argument to
+        <b>Tk_GetOptionValue</b> or <b>Tk_GetOptionInfo</b>. <i>InternalPtr</i> is a
+        pointer to the location where internal representation of the option value is
+        stored. <i>SaveInternalPtr</i> is a pointer to the saved value.
+        <i>RestoreProc</i> must copy the value from <i>saveInternalPtr</i> to
+        <i>internalPtr</i> to restore the value. <i>RestoreProc</i> need not free
+        any memory associated with either <i>internalPtr</i> or
+        <i>saveInternalPtr</i>; <i>freeProc</i> will be invoked to free that memory
+        if necessary. <i>RestoreProc</i> has no return value.</p>
+    <p class="Pp">The <i>freeProc</i> procedure is invoked by <b>Tk_SetOptions</b>
+        and <b>Tk_FreeSavedOptions</b> to free any storage allocated for the
+        internal representation of a custom option. The <i>clientData</i> argument
+        is a copy of the <i>clientData</i> field in the Tk_ObjCustomOption
+        structure. <i>Tkwin</i> is a copy of the <i>tkwin</i> argument to
+        <b>Tk_GetOptionValue</b> or <b>Tk_GetOptionInfo</b>. <i>InternalPtr</i> is a
+        pointer to the location where the internal representation of the option
+        value is stored. The <i>freeProc</i> must free any storage associated with
+        the option. <i>FreeProc</i> has no return value.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="STORAGE_MANAGEMENT_ISSUES">
+        <a class="permalink" href="#STORAGE_MANAGEMENT_ISSUES">
+            STORAGE MANAGEMENT ISSUES
+        </a>
+    </h1>
+    <p class="Pp">When managing custom option types, it is crucial to handle memory
+        allocation and deallocation correctly. The <i>setProc</i> is responsible for
+        converting the Tcl object value into the widget's internal representation. If
+        this internal representation involves dynamic memory allocation (e.g., for
+        strings or complex data structures), the allocated memory must be managed.
+        The <i>freeProc</i> is invoked by Tk to deallocate this memory when the option
+        is no longer needed (e.g., when the widget is destroyed or the option is
+        reconfigured). The <i>restoreProc</i> is used to restore a previously saved
+        value, and it should not attempt to free the memory pointed to by
+        <i>saveInternalPtr</i> or <i>internalPtr</i>, as that is the responsibility of
+        <i>freeProc</i>.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="OBJOFFSET_VS._INTERNALOFFSET">
+        <a class="permalink" href="#OBJOFFSET_VS._INTERNALOFFSET">
+            OBJOFFSET VS. INTERNALOFFSET
+        </a>
+    </h1>
+    <p class="Pp">The distinction between <i>objOffset</i> and <i>internalOffset</i>
+        is important. <i>objOffset</i> (used in <b>Tk_ObjOptionSpec</b>) refers to the
+        offset within the widget record where a pointer to a <b>Tcl_Obj</b> is stored.
+        This is used when the option's value is managed as a Tcl object directly.
+        <i>internalOffset</i> (used in <b>Tk_OptionSpec</b> and passed to the custom
+        procs) refers to the offset where the *internal representation* of the option
+        is stored. This internal representation might be a simple value (like an int or
+        double) or a pointer to dynamically allocated data.</p>
+    <p class="Pp">When using <b>Tk_ObjOptionSpec</b> and the option is stored as a
+        Tcl object pointer, `objOffset` should be non-negative, and the `offset` field
+        (from the perspective of <b>Tk_OptionSpec</b>) should be -1. In the custom
+        procedures, `internalOffset` will then correspond to the offset of the
+        `Tcl_Obj *` field.</p>
+    <p class="Pp">If the option is *not* stored as a Tcl object pointer, then
+        `objOffset` should be -1, and the `offset` field from <b>Tk_OptionSpec</b>
+        should be used. In this case, `internalOffset` will point to the location of the
+        widget's internal representation (e.g., an integer, a double, or a pointer to
+        some custom data structure).</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="CUSTOM_OPTION_TYPES">
+        <a class="permalink" href="#CUSTOM_OPTION_TYPES">
+            CUSTOM OPTION TYPES
+        </a>
+    </h1>
+    <p class="Pp">Tk provides a set of standard option types for common data formats.
+        However, for more complex or specialized data types, you can define custom
+        option types. This involves providing a set of procedures (<i>parseProc</i>,
+        <i>printProc</i>, <i>restoreProc</i>, <i>freeProc</i>) that handle the
+        conversion between the Tcl object representation and the widget's internal
+        representation. These procedures are specified in the <b>Tk_ObjCustomOption</b>
+        structure, which is then referenced by the <b>Tk_ObjOptionSpec</b>.</p>
+    <p class="Pp">The <i>parseProc</i> procedure is invoked by <b>Tk_SetOptions</b> to
+        convert a Tcl object into an internal representation and store the resulting
+        value in the widget record. The arguments are:</p>
+    <div class="Bd-indent">
+        <dl class="Bl-tag">
+            <dt id="clientData-3"><a class="permalink" href="#clientData-3"><i>clientData</i></a></dt>
+            <dd>A copy of the <i>clientData</i> field in the Tk_ObjCustomOption
+                structure. This can be used to pass additional context or information to the
+                parsing procedure.</dd>
+            <dt id="interp-2"><a class="permalink" href="#interp-2"><i>interp</i></a></dt>
+            <dd>A pointer to the Tcl interpreter. This is used for reporting errors that occur
+                during option processing.</dd>
+            <dt id="Tkwin-2"><a class="permalink" href="#Tkwin-2"><i>Tkwin</i></a></dt>
+            <dd>A copy of the <i>tkwin</i> argument passed to <b>Tk_SetOptions</b>. This is
+                the Tk window for which the option is being set.</dd>
+            <dt id="valuePtr-2"><a class="permalink" href="#valuePtr-2"><i>valuePtr</i></a></dt>
+            <dd>A pointer to a Tcl_Obj pointer. This Tcl_Obj represents the new value for the
+                option. The <i>parseProc</i> may modify this Tcl_Obj (e.g., to convert it to
+                a canonical form or to set it to NULL if <b>TK_OPTION_NULL_OK</b> is specified).
+                If the option is stored directly as a Tcl_Obj * in the widget record (i.e.,
+                `objOffset` is non-negative), this is the pointer that will be stored.</dd>
+            <dt id="recordPtr-2"><a class="permalink" href="#recordPtr-2"><i>recordPtr</i></a></dt>
+            <dd>A pointer to the beginning of the widget's data record. The <i>parseProc</i>
+                will write the converted internal representation into the appropriate location
+                within this record.</dd>
+            <dt id="internalOffset-2"><a class="permalink" href="#internalOffset-2"><i>internalOffset</i></a></dt>
+            <dd>An offset in bytes from the start of the widget record (<i>recordPtr</i>)
+                to the location where the internal representation of the option's value should
+                be stored. This is the location where the parsed value will be written.</dd>
+            <dt id="saveInternalPtr-2"><a class="permalink" href="#saveInternalPtr-2"><i>saveInternalPtr</i></a></dt>
+            <dd>A pointer to a location within the widget's saved options structure. Before
+                modifying the option's value, the <i>parseProc</i> should copy the *current*
+                internal value to the location pointed to by <i>saveInternalPtr</i>. This allows
+                <b>Tk_RestoreSavedOptions</b> to restore the previous value if necessary.</dd>
+            <dt id="flags-2"><a class="permalink" href="#flags-2"><i>flags</i></a></dt>
+            <dd>A copy of the <i>flags</i> field from the <b>Tk_OptionSpec</b> or
+                <b>Tk_ObjOptionSpec</b> for this option. These flags provide additional information
+                about how the option should be processed (e.g., <b>TK_OPTION_NULL_OK</b>).</dd>
+        </dl>
+    </div>
+    <p class="Pp">The <i>parseProc</i> returns <b>TCL_OK</b> on success or <b>TCL_ERROR</b>
+        on failure. If an error occurs, an error message should be left in the interpreter's
+        result.</p>
+    <p class="Pp">The <i>printProc</i> procedure is invoked by <b>Tk_GetOptionValue</b>
+        and <b>Tk_GetOptionInfo</b> to convert the internal representation of an option
+        back into a Tcl object. The arguments are:</p>
+    <div class="Bd-indent">
+        <dl class="Bl-tag">
+            <dt id="clientData-4"><a class="permalink" href="#clientData-4"><i>clientData</i></a></dt>
+            <dd>A copy of the <i>clientData</i> field in the Tk_ObjCustomOption
+                structure.</dd>
+            <dt id="Tkwin-3"><a class="permalink" href="#Tkwin-3"><i>Tkwin</i></a></dt>
+            <dd>A copy of the <i>tkwin</i> argument passed to <b>Tk_GetOptionValue</b> or
+                <b>Tk_GetOptionInfo</b>.</dd>
+            <dt id="recordPtr-3"><a class="permalink" href="#recordPtr-3"><i>recordPtr</i></a></dt>
+            <dd>A pointer to the beginning of the widget's data record.</dd>
+            <dt id="internalOffset-3"><a class="permalink" href="#internalOffset-3"><i>internalOffset</i></a></dt>
+            <dd>An offset in bytes from the start of the widget record (<i>recordPtr</i>)
+                to the location where the internal representation of the option's value is
+                stored.</dd>
+            <dt id="valuePtr-3"><a class="permalink" href="#valuePtr-3"><i>valuePtr</i></a></dt>
+            <dd>A pointer to a Tcl_Obj pointer. The <i>printProc</i> should create a new
+                Tcl object representing the option's value and set *valuePtrPtr to point
+                to it. The object should be created using Tcl object creation functions (e.g.,
+                Tcl_NewStringObj, Tcl_NewIntObj).</dd>
+            <dt id="flags-3"><a class="permalink" href="#flags-3"><i>flags</i></a></dt>
+            <dd>A copy of the <i>flags</i> field from the <b>Tk_OptionSpec</b> or
+                <b>Tk_ObjOptionSpec</b> for this option.</dd>
+        </dl>
+    </div>
+    <p class="Pp">The <i>printProc</i> does not return a value.</p>
+    <p class="Pp">The <i>restoreProc</i> procedure is invoked by
+        <b>Tk_RestoreSavedOptions</b> to restore a previously saved internal
+        representation of a custom option value. The <i>clientData</i> argument is a
+        copy of the <i>clientData</i> field in the Tk_ObjCustomOption structure.
+        <i>Tkwin</i> is a copy of the <i>tkwin</i> argument to
+        <b>Tk_GetOptionValue</b> or <b>Tk_GetOptionInfo</b>. <i>InternalPtr</i> is a
+        pointer to the location where internal representation of the option value is
+        stored. <i>SaveInternalPtr</i> is a pointer to the saved value.
+        <i>RestoreProc</i> must copy the value from <i>saveInternalPtr</i> to
+        <i>internalPtr</i> to restore the value. <i>RestoreProc</i> need not free
+        any memory associated with either <i>internalPtr</i> or
+        <i>saveInternalPtr</i>; <i>freeProc</i> will be invoked to free that memory
+        if necessary. <i>RestoreProc</i> has no return value.</p>
+    <p class="Pp">The <i>freeProc</i> procedure is invoked by <b>Tk_SetOptions</b>
+        and <b>Tk_FreeSavedOptions</b> to free any storage allocated for the
+        internal representation of a custom option. The <i>clientData</i> argument
+        is a copy of the <i>clientData</i> field in the Tk_ObjCustomOption
+        structure. <i>Tkwin</i> is a copy of the <i>tkwin</i> argument to
+        <b>Tk_GetOptionValue</b> or <b>Tk_GetOptionInfo</b>. <i>InternalPtr</i> is a
+        pointer to the location where the internal representation of the option
+        value is stored. The <i>freeProc</i> must free any storage associated with
+        the option. <i>FreeProc</i> has no return value.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="KEYWORDS">
+        <a class="permalink" href="#KEYWORDS">
+            KEYWORDS
+        </a>
+    </h1>
+    <p class="Pp">anchor, bitmap, boolean, border, color, configuration option,
+        cursor, double, font, integer, justify, pixels, relief, screen distance,
+        synonym</p>
+</section>
+</div>
+<table class="foot">
+    <tr>
+        <td class="foot-date">8.1</td>
+        <td class="foot-os">Tk</td>
+    </tr>
+</table>
+
+</article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+        <input type="search" placeholder="Search manual page" name="q" value="" />
+        <input type="submit" name="go" value="Go" />
+    </form>
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tk/">extra/tk</a></dd>
+        <dt>Version:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>TCL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/tk/">/listing/extra/tk/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+            <li><a href="#NAME">NAME</a></li>
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+            <li><a href="#ARGUMENTS">ARGUMENTS</a></li>
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+            <li><a href="#TEMPLATES">TEMPLATES</a></li>
+            <li><a href="#STORAGE_MANAGEMENT_ISSUES">STORAGE MANAGEMENT ISSUES</a></li>
+            <li><a href="#OBJOFFSET_VS._INTERNALOFFSET">OBJOFFSET VS. INTERNALOFFSET</a></li>
+            <li><a href="#CUSTOM_OPTION_TYPES">CUSTOM OPTION TYPES</a></li>
+            <li><a href="#KEYWORDS">KEYWORDS</a></li>
+        </ul>
+    </nav>
+</details>
+
+<nav class="other-formats">
+    <p>Other formats:
+        <a href="/man/Tk_GetOptionValue.3.en.txt">txt</a>,
+        <a href="/man/Tk_GetOptionValue.3.en.raw">raw</a>
+    </p>
+</nav>
+
+            </aside>
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

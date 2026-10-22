@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POE::Filter::Stackable(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Filter__Stackable(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">POE::Filter::Stackable(3)</td>
+    <td class="head-vol">وثائق Perl مساهمة من المستخدم</td>
+    <td class="head-rtitle">POE::Filter::Stackable(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">POE::Filter::Stackable - تجميع كائنات POE::Filter متعددة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>#!perl
+use POE qw(
+  Wheel::FollowTail
+  Filter::Line Filter::Grep Filter::Stackable
+);
+POE::Session-&gt;create(
+  inline_states =&gt; {
+    _start =&gt; sub {
+      my $parse_input_as_lines = POE::Filter::Line-&gt;new();
+      my $select_sudo_log_lines = POE::Filter::Grep-&gt;new(
+        Put =&gt; sub { 1 },
+        Get =&gt; sub {
+          my $input = shift;
+          return $input =~ /sudo\[\d+\]/i;
+        },
+      );
+      my $filter_stack = POE::Filter::Stackable-&gt;new(
+        Filters =&gt; [
+          $parse_input_as_lines, # أولاً عند الإدخال، أخيراً عند الإخراج
+          $select_sudo_log_lines, # أولاً عند الإخراج، أخيراً عند الإدخال
+        ]
+      );
+      $_[HEAP]{tailor} = POE::Wheel::FollowTail-&gt;new(
+        Filename =&gt; &quot;/var/log/system.log&quot;,
+        InputEvent =&gt; &quot;got_log_line&quot;,
+        Filter =&gt; $filter_stack,
+      );
+    },
+    got_log_line =&gt; sub {
+      print &quot;Log: $_[ARG0]\n&quot;;
+    }
+  }
+);
+POE::Kernel-&gt;run();
+exit;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يجمع POE::Filter::Stackable بين عوامل تصفية متعددة بطريقة تجعلها تبدو
+    كعامل تصفية واحد. تعمل جميع طرق POE::Filter المعتادة، ولكن يتم تمرير
+    البيانات سرًا عبر عوامل التصفية المكدسة قبل إرجاعها. لا تحتاج كائنات
+    POE::Wheel والبرامج المستقلة إلى تعديلات للعمل مع مكدس عوامل التصفية.</p>
+<p class="Pp">في &quot;الملخص&quot;، يتم دمج POE::Filter::Line و POE::Filter::Grep في
+    عامل تصفية واحد يعيد نوعًا معينًا فقط من الأسطر. يمكن أن يكون هذا أكثر
+    كفاءة من تصفية الأسطر في مساحة التطبيق، حيث قد تحتاج أحداث أقل إلى
+    الإرسال والمعالجة.</p>
+<p class="Pp">داخليًا، يتم تخزين عوامل التصفية في مصفوفة.</p>
+<p class="Pp">ستتدفق البيانات المضافة بواسطة <b>get_one_start()</b> عبر مصفوفة
+    عوامل التصفية بترتيب زيادة الفهرس. سيحصل عامل التصفية #0 على الفرصة الأولى
+    لمعالجتها، يليه عامل التصفية #1 وهكذا. ستعيد استدعاء <b>get_one()</b>
+    عنصرًا بعد مروره عبر عامل التصفية الأخير.</p>
+<p class="Pp">تمرر <b>put()</b> البيانات عبر عوامل التصفية بترتيب تنازلي
+    للفهرس. ستمر البيانات عبر عامل التصفية ذي الفهرس الأعلى أولاً، وستعيد
+    <b>put()</b> النتائج بعد مرور البيانات عبر عامل التصفية #0.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_FILTER_METHODS'><a class='permalink' href='#PUBLIC_FILTER_METHODS'>طرق عوامل التصفية العامة</a></h1>
+<p class="Pp">بالإضافة إلى طرق POE::Filter المعتادة، يدعم POE::Filter::Stackable
+    ما يلي أيضًا.</p>
+<section class="Ss">
+<h2 class="Ss" id='new'><a class='permalink' href='#new'>جديد</a></h2>
+<p class="Pp">بشكل افتراضي، تنشئ <b>new()</b> مكدس عوامل تصفية فارغًا يتصرف مثل
+    POE::Filter::Stream. يمكن تمرير معلمات اختيارية لتهيئة المكدس بمصفوفة من
+    عوامل التصفية.</p>
+<pre>my $sudo_lines = POE::Filter::Stackable-&gt;new(
+  Filters =&gt; [
+    POE::Filter::Line-&gt;new(),
+    POE::Filter::Grep-&gt;new(
+      Put =&gt; sub { 1 }, # إخراج جميع العناصر
+      Get =&gt; sub { shift() =~ /sudo\[\d+\]/i },
+    ),
+  ]
+);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='pop'><a class='permalink' href='#pop'>pop</a></h2>
+<p class="Pp">تتصرف مثل <b>pop()</b> المضمنة في Perl لمكدس عوامل التصفية. تتم
+    إزالة عامل التصفية ذي الفهرس الأعلى من المكدس وإعادته. يتم فقدان أي بيانات
+    متبقية في مخزن الإدخال المؤقت لعامل التصفية، ولكن يمكن للتطبيق دائمًا استدعاء
+    &quot;get_pending&quot; في POE::Filter على عامل التصفية المُعاد.</p>
+<pre>my $last_filter = $stackable-&gt;pop();
+my $last_buffer = $last_filter-&gt;get_pending();</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='shift'><a class='permalink' href='#shift'>shift</a></h2>
+<p class="Pp">تتصرف مثل <b>shift()</b> المضمنة في Perl لمكدس عوامل التصفية. تتم
+    إزالة عامل التصفية ذي الفهرس 0 من المكدس وإعادته. يتم تمرير أي بيانات
+    متبقية في مخزن الإدخال المؤقت لعامل التصفية إلى رأس المكدس الجديد، أو يتم
+    فقدانها إذا أصبح المكدس فارغًا. يمكن للتطبيق أيضًا استدعاء
+    &quot;get_pending&quot; في POE::Filter على عامل التصفية المُعاد لفحص مخزن
+    الإدخال المؤقت لعامل التصفية.</p>
+<pre>my $first_filter = $stackable-&gt;shift();
+my $first_buffer = $first_filter-&gt;get_pending();</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='push_FILTER[,_FILTER]'><a class='permalink' href='#push_FILTER%5B,_FILTER%5D'>push   FILTER[, FILTER]</a></h2>
+<p class="Pp">تضيف <b>push()</b> عامل تصفية (عوامل تصفية) جديدًا (جدد) إلى نهاية
+    المكدس. ستقوم عوامل التصفية المدفوعة حديثًا بمعالجة الإدخال أخيرًا، وستتعامل
+    مع الإخراج أولاً.</p>
+<pre># عكس البيانات المقروءة عبر المكدس.
+# تشفير rot13 للبيانات المرسلة عبر المكدس.
+$stackable-&gt;push(
+  POE::Filter::Map-&gt;(
+    Get =&gt; sub { return scalar reverse shift() },
+    Put =&gt; sub { local $_ = shift(); tr[a-zA-Z][n-za-mN-ZA-M]; $_ },
+  )
+);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='unshift_FILTER[,_FILTER]'><a class='permalink' href='#unshift_FILTER%5B,_FILTER%5D'>unshift   FILTER[, FILTER]</a></h2>
+<p class="Pp">تضيف <b>unshift()</b> عامل تصفية (عوامل تصفية) جديدًا (جدد) إلى
+    بداية المكدس. ستقوم عوامل التصفية المُضافة حديثًا بمعالجة الإدخال أولاً،
+    وستتعامل مع الإخراج أخيرًا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='filters'><a class='permalink' href='#filters'>filters</a></h2>
+<p class="Pp">تعيد <b>filters()</b> قائمة بعوامل التصفية داخل عامل التصفية
+    Stackable، بترتيب المكدس الأصلي.</p>
+<p class="Pp">استدعاء
+    <span class="Li">&quot;$filter_stack-&gt;filters()&quot;</span> في
+    &quot;الملخص&quot; سيعيد قائمة بعاملي تصفية:</p>
+<pre>POE::Filter::Line=ARRAY(0x8b5ee0)
+POE::Filter::Grep=ARRAY(0x8b5f7c)</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='filter_types'><a class='permalink' href='#filter_types'>filter_types</a></h2>
+<p class="Pp">تعيد <b>filter_types()</b> قائمة بأسماء الفئات لكل عامل تصفية في
+    المكدس، بترتيب المكدس الأصلي.</p>
+<p class="Pp">استدعاء
+    <span class="Li">&quot;$filter_stack-&gt;filter_types()&quot;</span> في
+    &quot;الملخص&quot; سيعيد قائمة باسمي فئة:</p>
+<pre>POE::FIlter::Line
+POE::Filter::Grep</pre>
+<p class="Pp">يمكن استبدالها بسهولة بـ:</p>
+<pre>my @filter_types = map { ref } $filter_stack-&gt;filters;</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp">POE لمزيد من المعلومات حول عوامل التصفية بشكل عام.</p>
+<p class="Pp">عوامل تصفية محددة، من بينها: POE::Filter::Block,
+    POE::Filter::Grep, POE::Filter::HTTPD, POE::Filter::Line, POE::Filter::Map,
+    POE::Filter::RecordBlock, POE::Filter::Reference, POE::Filter::Stream</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">لا توجد حاليًا أخطاء معروفة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">تم المساهمة بعامل التصفية Stackable من قبل Dieter Pearcey.
+    تم تقديم التوثيق بواسطة Rocco Caputo.</p>
+<p class="Pp">يرجى الاطلاع على صفحة دليل POE لمزيد من المعلومات حول المؤلفين
+    والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#PUBLIC_FILTER_METHODS">طرق عوامل التصفية العامة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Filter::Stackable.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Filter::Stackable.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>

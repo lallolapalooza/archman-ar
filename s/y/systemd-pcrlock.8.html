@@ -1,0 +1,471 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">systemd-pcrlock(8)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "systemd-pcrlock",
+  "date": "2023-01-01",
+  "section": "8",
+  "manual": "systemd",
+  "description": "Manages PCR lockdown files for system integrity verification.",
+  "content": [
+    {
+      "type": "section",
+      "title": "SYNOPSIS",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "systemd-pcrlock [OPTIONS...] lock|unlock TYPE [ARG]..."
+        },
+        {
+          "type": "paragraph",
+          "text": "systemd-pcrlock [OPTIONS...] LOG|PREDICT|MAKE-POLICY [ARG]..."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "DESCRIPTION",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "systemd-pcrlock is a tool for managing PCR (Platform Configuration Register) lockdown files. These files are used to ensure the integrity of the system's boot process and configuration by measuring various components and storing their hashes in TPM (Trusted Platform Module) PCRs. When the system boots, the TPM can verify that these measurements have not changed. If they have, it indicates a potential security breach or unauthorized modification."
+        },
+        {
+          "type": "paragraph",
+          "text": "The primary function of systemd-pcrlock is to generate or remove `.pcrlock` files. These files contain information about expected measurements for specific PCRs. The systemd-pcrlock.service unit then uses these files to enforce PCR lockdown during boot."
+        },
+        {
+          "type": "paragraph",
+          "text": "The tool supports locking and unlocking various aspects of the system, including firmware code, configuration, Secure Boot policy, GPT partition table, PE binaries (like bootloaders and UKIs), machine ID, file systems, kernel command line, and initrd. It can also be used to log, predict, or generate policies based on these measurements."
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "title": "Commands"
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-firmware-code",
+            "unlock-firmware-code"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the firmware code measurements. This uses PCRs 0-3 (platform-config, vmlinuz-id, firmware-config, and machine-id, respectively) and PCR 11 (kernel-boot) for firmware code. The policy is generated from the firmware's event log, which is assumed to contain measurements of the firmware code."
+            },
+            {
+              "type": "paragraph",
+              "text": "This command is useful for ensuring that the firmware code itself has not been tampered with. The system will be automatically locked to the new firmware version whenever the policy has been relaxed temporarily, in order to cover for firmware updates, as described above."
+            },
+            {
+              "type": "paragraph",
+              "text": "The files are only generated from the event log if the event log matches the current TPM2 PCR state."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the files /var/lib/pcrlock.d/250-firmware-code-early.pcrlock.d/generated.pcrlock and /var/lib/pcrlock.d/550-firmware-code-late.pcrlock.d/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-firmware-config",
+            "unlock-firmware-config"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "This is similar to lock-firmware-code/unlock-firmware-code but locks down the firmware configuration, i.e. PCRs 1 (\"platform-config\") and 3 (\"external-config\")."
+            },
+            {
+              "type": "paragraph",
+              "text": "This functionality should be used with care as in most scenarios a minor firmware configuration change should not invalidate access policies to TPM2 objects. Also note that some systems measure unstable and unpredictable information (e.g. current CPU voltages, temperatures, as part of SMBIOS data) to these PCRs, which means this form of lockdown cannot be used reliably on such systems. Use this functionality only if the system and hardware is well known and does not suffer by these limitations, for example in virtualized environments."
+            },
+            {
+              "type": "paragraph",
+              "text": "Use unlock-firmware-config before making firmware configuration changes. If the systemd-pcrlock-firmware-config.service unit is enabled it will automatically generate a pcrlock file from the new measurements."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the files /var/lib/pcrlock.d/250-firmware-config-early.pcrlock.d/generated.pcrlock and /var/lib/pcrlock.d/550-firmware-config-late.pcrlock.d/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-secureboot-policy",
+            "unlock-secureboot-policy"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the SecureBoot policy currently enforced. This looks at the SecureBoot, PK, KEK, db, dbx, dbt, dbr EFI variables and predicts their measurements to PCR 7 (\"secure-boot-policy\") on the next boot."
+            },
+            {
+              "type": "paragraph",
+              "text": "Use unlock-firmware-config before applying SecureBoot policy updates. If the systemd-pcrlock-secureboot-policy.service unit is enabled it will automatically generate a pcrlock file from the policy discovered."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/230-secureboot-policy.pcrlock.d/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-secureboot-authority",
+            "unlock-secureboot-authority"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the SecureBoot authorities used to validate the boot path. SecureBoot authorities are the specific SecureBoot database entries that where used to validate the UEFI PE binaries executed at boot. This looks at the event log of the current boot, and uses relevant measurements on PCR 7 (\"secure-boot-policy\")."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/620-secureboot-authority.pcrlock.d/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-gpt [DEVICE]",
+            "unlock-gpt"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the GPT partition table of the specified disk. If no disk is specified automatically determines the block device backing the root file system. This locks the state of the disk partitioning of the booted medium, which firmware measures to PCR 5 (\"boot-loader-config\")."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/600-gpt.pcrlock.d/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-pe [BINARY]",
+            "unlock-pe"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the specified PE binary. This is useful for predicting measurements the firmware makes to PCR 4 (\"boot-loader-code\") if the specified binary is part of the UEFI boot process. Use this on boot loader binaries and suchlike. Use lock-uki (see below) for PE binaries that are unified kernel images (UKIs)."
+            },
+            {
+              "type": "paragraph",
+              "text": "Expects a path to the PE binary as argument. If not specified, reads the binary from STDIN instead."
+            },
+            {
+              "type": "paragraph",
+              "text": "The pcrlock file to write must be specified via the --pcrlock= switch."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-uki [UKI]",
+            "unlock-uki"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on the specified UKI PE binary. This is useful for predicting measurements the firmware makes to PCR 4 (\"boot-loader-code\"), and systemd-stub(7) makes to PCR 11 (\"kernel-boot\"), if the specified UKI is booted. This is a superset of lock-pe."
+            },
+            {
+              "type": "paragraph",
+              "text": "Expects a path to the UKI PE binary as argument. If not specified, reads the binary from STDIN instead."
+            },
+            {
+              "type": "paragraph",
+              "text": "The pcrlock file to write must be specified via the --pcrlock= switch."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-machine-id",
+            "unlock-machine-id"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on /etc/machine-id. This is useful for predicting measurements systemd-pcrmachine.service(8) makes to PCR 15 (\"system-identity\")."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/820-machine-id.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-file-system [PATH]",
+            "unlock-file-system [PATH]"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on file system identity. This is useful for predicting measurements systemd-pcrfs@.service(8) makes to PCR 15 (\"system-identity\") for the root and /var/ file systems."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the files /var/lib/pcrlock.d/830-root-file-system.pcrlock and /var/lib/pcrlock.d/840-file-system-<i>path</i>.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-kernel-cmdline [FILE]",
+            "unlock-kernel-cmdline"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on /proc/cmdline (or the specified file if given). This is useful for predicting measurements the Linux kernel makes to PCR 9 (\"kernel-initrd\")."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/710-kernel-cmdline.pcrlock/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-kernel-initrd FILE",
+            "unlock-kernel-initrd"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on a kernel initrd cpio archive. This is useful for predicting measurements the Linux kernel makes to PCR 9 (\"kernel-initrd\"). Do not use for systemd-stub(7) UKIs, as the initrd is combined dynamically from various sources and hence does not take a single input, like this command."
+            },
+            {
+              "type": "paragraph",
+              "text": "This writes/removes the file /var/lib/pcrlock.d/720-kernel-initrd.pcrlock/generated.pcrlock."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "command_group",
+          "commands": [
+            "lock-raw [FILE]",
+            "unlock-raw"
+          ],
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Generates/removes a .pcrlock file based on raw binary data. The data is either read from the specified file or from STDIN (if none is specified). This requires that --pcrs= is specified. The generated .pcrlock file is written to the file specified via --pcrlock= or to STDOUT (if none is specified)."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "title": "Verbs"
+        },
+        {
+          "type": "paragraph",
+          "text": "In addition to the lock/unlock commands, systemd-pcrlock supports the following verbs:"
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "text": "**log**". The TPM2 event log is read and displayed. Each entry is decoded to a human-readable string if possible."
+            },
+            {
+              "type": "list_item",
+              "text": "**predict** [<i>FILE</i>]". The TPM2 event log is analyzed, and PCR values are predicted for the next boot based on the log and the current system state. If FILE is given, the prediction is written to it."
+            },
+            {
+              "type": "list_item",
+              "text": "**make-policy** [<i>FILE</i>]". A TPM2 policy is generated that will pass if the current PCR values match the predicted values. If FILE is given, the policy is written to it. This policy can be stored in TPM2 NVRAM using the --nv-index= option."
+            },
+            {
+              "type": "list_item",
+              "text": "**list-components**". Lists all known PCR lockdown components and their associated filenames."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "OPTIONS",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "The following options are understood:"
+        },
+        {
+          "type": "option",
+          "name": "--raw-description",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "When displaying the TPM2 event log do not attempt to decode the records to provide a friendly event log description string. Instead, show the binary payload data in escaped form."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "option",
+          "name": "--pcr=",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Specifies the PCR number to use. May be specified more than once to select multiple PCRs."
+            },
+            {
+              "type": "paragraph",
+              "text": "This is used by lock-raw and lock-pe to select the PCR to lock against."
+            },
+            {
+              "type": "paragraph",
+              "text": "If used with predict and make-policy this will override which PCRs to include in the prediction and policy. If unspecified this defaults to PCRs 0-5, 7, 11-15. Note that these commands will not include any PCRs in the prediction/policy (even if specified explicitly) if there are measurements in the event log that do not match the current PCR value, or there are unrecognized measurements in the event log, or components define measurements not seen in the event log."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "option",
+          "name": "--nv-index=",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Specifies the NV index to store the policy in. Honoured by make-policy. If not specified, the command will automatically pick a free NV index."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "option",
+          "name": "--components=",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Takes a path to read *.pcrlock and *.pcrlock.d/*.pcrlock files from. May be used more than once to specify multiple such directories. If not specified, defaults to /etc/pcrlock.d/, /run/pcrlock.d/, /var/lib/pcrlock.d/, /usr/local/lib/pcrlock.d/, /usr/lib/pcrlock.d/."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "option",
+          "name": "--location=",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Takes either a string or a colon-separated pair of strings. Configures up to which point in the sorted list of defined components to analyze/predict PCRs to. Typically, the systemd-pcrlock tool is invoked from a fully booted system after boot-up and before shutdown. This means various components that are defined for shutdown have not been measured yet, and should not be searched for. This option allows one to restrict which components are considered for analysis (taking only components before some point into account, ignoring components after them). The expected string is ordered against the filenames of the components defined. Any components with a lexicographically later name are ignored. This logic applies to the log, predict, and make-policy verbs. If a colon-separated pair of strings are specified then they select which phases of the boot to include in the prediction/policy. The first string defines where the first prediction shall be made, and the second string defines where the last prediction shall be made. All such predictions are then combined into one set."
+            },
+            {
+              "type": "paragraph",
+              "text": "If used with list-components the selected location range will be highlighted in the component list."
+            },
+            {
+              "type": "paragraph",
+              "text": "Defaults to \"760-:940-\", which means the policies generated by default will basically cover the whole runtime of the OS userspace, from the initrd (as \"760-\" closely follows 750-enter-initrd.pcrlock) until (and including) the main runtime of the system (as \"940-\" is closely followed by 950-shutdown.pcrlock). See systemd.pcrlock(5) for a full list of well-known components, that illustrate where this range is placed by default."
+            },
+            {
+              "type": "paragraph",
+              "text": "Added in version 255."
+            }
+          ]
+        },
+        {
+          "type": "option",
+          "name": "--recovery-pin=",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Takes one of \"hide\", \"show\" or \"query\". Defaults to \"hide\". Honoured by make-policy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "SEE ALSO",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "systemd.pcrlock(5), systemd-pcrlock.service(8)"
+        }
+      ]
+    }
+  ]
+}

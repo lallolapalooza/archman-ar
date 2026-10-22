@@ -1,0 +1,252 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">MIME__Parser__Filer(3pm)</h1>
+<link rel="stylesheet" href="basic.css">
+sections:
+  - section: Sh
+    title: NAME
+    content: |
+      MIME::Parser::Filer - file-naming utilities for MIME::Parser
+  - section: Sh
+    title: SYNOPSIS
+    content: |
+      use MIME::Parser::Filer;
+
+      # Subclassing example:
+      package MyFiler;
+      use base qw(MIME::Parser::Filer);
+
+      sub output_path {
+          my ($self, $head) = @_;
+          # ... custom logic ...
+      }
+
+      # Using built-in Filer:
+      $parser-&gt;use_filer( 'MIME::Parser::Filer' );
+      # or
+      $parser-&gt;use_filer( [ 'MIME::Parser::Filer', 'output_dir' =&gt; '/tmp/parts' ] );
+  - section: Sh
+    title: DESCRIPTION
+    content: |
+      The MIME::Parser::Filer class is responsible for determining where and
+      under what names the parts of a MIME message should be filed. It provides
+      a hook into MIME::Parser that allows you to control the naming of the
+      extracted files.
+
+      The base class MIME::Parser::Filer provides default behavior, which is
+      then overridden by subclasses like MIME::Parser::FileInto and
+      MIME::Parser::FileUnder, or by your own custom subclasses.
+
+      The basic flow for determining the output path for a part is:
+
+      1. Get a recommended filename from the MIME header (e.g. Content-Disposition).
+      2. If a recommended filename is not available, or if it's deemed "evil"
+         (see `evil_filename()`), generate a filename using `output_filename()`.
+      3. Determine the output directory using `output_dir()`.
+      4. Combine the directory and filename, ensuring the filename is unique
+         using `find_unused_path()`.
+
+      The default methods are designed to be overridden by subclasses or by
+      developers who need fine-grained control over file naming.
+  - section: Sh
+    title: PUBLIC INTERFACE
+    content:
+      - section: Ss
+        title: MIME::Parser::Filer
+        content:
+          - section: dl
+            items:
+              - dt: id="evil_filename"
+                dd: |
+                  <i>Instance method.</i> Return true if the filename is considered
+                  "evil" and should not be used. The default implementation returns
+                  true if the filename contains any character other than alphanumeric
+                  characters, periods, hyphens, or underscores.
+                  <p class="Pp">With argument, sets this value.</p>
+              - dt: id="find_unused_path"
+                dd: |
+                  <i>Instance method.</i> Given a DIRECTORY and a FILENAME, return a
+                  full path that does not exist. This is done by appending numeric
+                  suffixes (e.g., <code>file.txt</code>, <code>file.1.txt</code>,
+                  <code>file.2.txt</code>, etc.) until an unused path is found.
+                  <p class="Pp"><b>Note:</b> If you are overriding
+                      <code>output_path()</code>, you may not need to worry about
+                      this method, as the default implementation uses it. However, if
+                      you are providing your own naming logic that might generate
+                      collisions (e.g. if you are placing multiple parts in the same
+                      directory and they happen to have the same recommended
+                      filename, and you are placing them all in the same directory,
+                      this method might be unavoidable.</p>
+              - dt: id="ignore_filename"
+                dd: |
+                  <i>Instance method.</i> Return true if we should always ignore recommended
+                  filenames in messages, choosing instead to always generate our own
+                  filenames. With argument, sets this value.
+                  <p class="Pp"><b>Note:</b> subclasses of MIME::Parser::Filer which override
+                      <b>output_path()</b> might not honor this setting; note, however, that
+                      the built-in subclasses honor it.</p>
+              - dt: id="output_dir"
+                dd: |
+                  <i>Instance method.</i> Return the output directory for the given header.
+                  The default method returns <code>.</code>.
+              - dt: id="output_filename"
+                dd: |
+                  <i>Instance method, subclasses only.</i> A given recommended filename was
+                  either not given, or it was judged to be evil. Return a fake name,
+                  possibly using information in the message HEADer. Note that this is just
+                  the filename, not the full path.
+                  <p class="Pp">Used by <b>output_path()</b>. If you're using the default
+                      <span class="Li">output_path()</span>, you probably don't need to worry
+                      about avoiding collisions with existing files; we take care of that in
+                      <b>find_unused_path()</b>.</p>
+              - dt: id="output_prefix"
+                dd: |
+                  <i>Instance method.</i> Get the short string that all filenames for
+                  extracted body-parts will begin with (assuming that there is no better
+                  &quot;recommended filename&quot;). The default is <i>&quot;msg&quot;</i>.
+                  <p class="Pp">If PREFIX <i>is not</i> given, the current output prefix is
+                      returned. If PREFIX <i>is</i> given, the output prefix is set to the new
+                      value, and the previous value is returned.</p>
+                  <p class="Pp">Used by <b>output_filename()</b>.</p>
+                  <p class="Pp"><b>Note:</b> subclasses of MIME::Parser::Filer which override
+                      <b>output_path()</b> or <b>output_filename()</b> might not honor this
+                      setting; note, however, that the built-in subclasses honor it.</p>
+              - dt: id="output_type_ext"
+                dd: |
+                  <i>Instance method.</i> Return a reference to the hash used by the default
+                  <b>output_filename()</b> for mapping from content-types to extensions when
+                  there is no default extension to use.
+                  <pre>$emap = $filer-&gt;output_typemap;
+$emap-&gt;{'text/plain'} = '.txt';
+$emap-&gt;{'text/html'}  = '.html';
+$emap-&gt;{'text/*'}     = '.txt';
+$emap-&gt;{'*/*'}        = '.dat';
+</pre>
+                  <p class="Pp"><b>Note:</b> subclasses of MIME::Parser::Filer which override
+                      <b>output_path()</b> or <b>output_filename()</b> might not consult this
+                      hash; note, however, that the built-in subclasses consult it.</p>
+              - dt: id="output_path"
+                dd: |
+                  <i>Instance method, subclasses only.</i> Given a MIME head for a file to
+                  be extracted, come up with a good output pathname for the extracted file.
+                  This is the only method you need to worry about if you are building a
+                  custom filer.
+                  <p class="Pp">The default implementation does a lot of work; subclass
+                      implementers <i>really</i> should try to just override its components
+                      instead of the whole thing. It works basically as follows:</p>
+                  <pre>$directory = $self-&gt;output_dir($head);
+$filename = $head-&gt;recommended_filename();
+if (!$filename or
+     $self-&gt;ignore_filename() or
+     $self-&gt;evil_filename($filename)) {
+    $filename = $self-&gt;output_filename($head);
+}
+return $self-&gt;find_unused_path($directory, $filename);
+</pre>
+                  <p class="Pp"><b>Note:</b> There are many, many, many ways you might want to
+                      control the naming of files, based on your application. If you don't
+                      like the behavior of this function, you can easily define your own
+                      subclass of MIME::Parser::Filer and override it there.</p>
+                  <p class="Pp"><b>Note:</b> Nickolay Saukh pointed out that, given the
+                      subjective nature of what is &quot;evil&quot;, this function really
+                      shouldn't <i>warn</i> about an evil filename, but maybe just issue a
+                      <i>debug</i> message. I considered that, but then I thought: if
+                      debugging were off, people wouldn't know why (or even if) a given
+                      filename had been ignored. In mail robots that depend on
+                      externally-provided filenames, this could cause hard-to-diagnose
+                      problems. So, the message is still a warning.</p>
+                  <p class="Pp"><i>Thanks to Laurent Amon for pointing out problems with the
+                      original</i> <i>implementation, and for making some good suggestions.
+                      Thanks also to</i> <i>Achim Bohnet for pointing out that there should be
+                      a hookless, OO way of</i> <i>overriding the output path.</i></p>
+              - dt: id="purge"
+                dd: |
+                  <i>Instance method, final.</i> Purge all files/directories created by the
+                  last parse. This method simply goes through the purgeable list in reverse
+                  order (see &quot;purgeable&quot;) and removes all existing
+                  files/directories in it. You should not need to override this method.
+              - dt: id="purgeable"
+                dd: |
+                  <i>Instance method, final.</i> Add FILE to the list of
+                  &quot;purgeable&quot; files/directories (those which will be removed if
+                  you do a <span class="Li">purge()</span>). You should not need to override
+                  this method.
+                  <p class="Pp">If FILE is not given, the &quot;purgeable&quot; list is
+                      returned. This may be used for more-sophisticated purging.</p>
+                  <p class="Pp">As a special case, invoking this method with a FILE that is an
+                      arrayref will replace the purgeable list with a copy of the array's
+                      contents, so [] may be used to clear the list.</p>
+                  <p class="Pp">Note that the &quot;purgeable&quot; list is cleared when a
+                      parser begins a new parse; therefore, if you want to use <b>purge()</b>
+                      to do cleanup, you <i>must</i> do so <i>before</i> starting a new
+                      parse!</p>
+  - section: Ss
+    title: MIME::Parser::FileInto
+    content: |
+      This concrete subclass of MIME::Parser::Filer supports filing into
+      a given directory.
+      - section: dl
+        items:
+          - dt: id="init"
+            dd: |
+              <i>Instance method, initiallizer.</i> Set the directory where all files
+              will go.
+  - section: Ss
+    title: MIME::Parser::FileUnder
+    content: |
+      This concrete subclass of MIME::Parser::Filer supports filing
+      under a given directory, using one subdirectory per message, but with all
+      message parts in the same directory.
+      - section: dl
+        items:
+          - dt: id="init~2"
+            dd: |
+              <i>Instance method, initiallizer.</i> Set the base directory which will
+              contain the message directories. If used, then each parse of begins by
+              creating a new subdirectory of BASEDIR where the actual parts of the
+              message are placed. OPTSHASH can contain the following:
+              - section: Bd-indent
+                content:
+                  - section: dl
+                    items:
+                      - dt: id="DirName"
+                        dd: |
+                          Explicitly set the name of the subdirectory which is created. The default
+                          is to use the time, process id, and a sequence number, but you might want
+                          a predictable directory.
+                      - dt: id="Purge"
+                        dd: |
+                          Automatically purge the contents of the directory (including all
+                          subdirectories) before each parse. This is really only needed if using an
+                          explicit DirName, and is provided as a convenience only. Currently we use
+                          the 1-arg form of File::Path::rmtree; you should familiarize yourself with
+                          the caveats therein.
+  - section: Bd-indent
+    content: |
+      The <b>output_dir()</b> will return the path to this
+      message-specific directory until the next parse is begun, so you can do
+      this:
+      <pre>use File::Path;
+$parser-&gt;output_under(&quot;/tmp&quot;);
+$ent = eval { $parser-&gt;parse_open($msg); };   ### parse
+if (!$ent) {         ### parse failed
+    rmtree($parser-&gt;output_dir);
+    die &quot;parse failed: $@&quot;;
+}
+else {               ### parse succeeded
+    ...do stuff...
+}</pre>
+  - section: Sh
+    title: SEE ALSO
+    content: |
+      MIME::Tools, MIME::Parser
+  - section: Sh
+    title: AUTHOR
+    content: |
+      Eryq (<i>eryq@zeegee.com</i>), ZeeGee Software Inc
+      (<a href='http://www.zeegee.com'>http://www.zeegee.com</a>).
+      <p class="Pp">All rights reserved. This program is free software; you can
+          redistribute it and/or modify it under the same terms as Perl itself.</p>
+/p>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,560 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">btrfs-subvolume(8)</h1>
+<link rel="stylesheet" href="basic.css">
+# Copyright (c) 2011, Google Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from this
+#    software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+# TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+---
+title: btrfs-subvolume
+section: 8
+header: "btrfs-subvolume Manual"
+date: September 2023
+manual: 8
+name: "btrfs-subvolume - manage btrfs subvolumes"
+synopsis: "btrfs subvolume &lt;command&gt; &lt;args&gt;"
+description: |
+  Manages Btrfs subvolumes.
+  Subvolumes are the basic feature for snapshots and are a Copy-on-Write
+  enabled filesystem object. Btrfs subvolumes are not like LVM logical volumes,
+  which are block-level snapshots. Btrfs subvolumes are file extent-based.
+
+  Creating a subvolume only creates a new reference to the inode table.
+  The actual data is shared. A subvolume can be a read-write or read-only
+  filesystem object. Creating a read-only snapshot implies creating a subvolume
+  with the read-only flag set.
+
+  Subvolumes are organized in a tree-like structure. A freshly created filesystem
+  is also a subvolume, called top-level, with ID 5. All other subvolumes are
+  descendants of this top-level subvolume.
+
+  A subvolume can be mounted like any other filesystem. If a subvolume is
+  mounted, its parent directory is not visible. This is similar to a bind mount.
+  The mount options `subvol=` and `subvolid=` can be used for this.
+  See mount(8) for details.
+
+  Subvolumes can be deleted. The directory entry is removed, but the data blocks
+  are removed only when there are no other references and they are shared with
+  another subvolume. The deletion is asynchronous.
+
+  A subvolume is identified by its path or its subvolume ID. Subvolume IDs are
+  usually assigned by the filesystem and are unique within the filesystem.
+
+  See btrfs(5) for filesystem layout, features and maintenance.
+
+  Available commands:
+    create
+    delete
+    find-new
+    get-default
+    list
+    set-default
+    snapshot
+    sync
+    top-level
+  See btrfs-subvolume(8) man page for more details.
+options: |
+  The global options are inherited from btrfs(8).
+seealso: |
+  btrfs(8), btrfs-filesystem(8), btrfs-mount(8), btrfs-send(8)
+
+---
+title: "btrfs-subvolume"
+section: 8
+name: "btrfs-subvolume - manage btrfs subvolumes"
+synopsis: "btrfs subvolume &lt;command&gt; &lt;args&gt;"
+description: |
+  Subvolumes are a fundamental part of btrfs filesystem. They allow parts of the
+  filesystem to be snapshots or to have different mount options.
+  See btrfs(5) for more details.
+
+  The subvolume commands are:
+
+  * btrfs subvolume create
+  * btrfs subvolume delete
+  * btrfs subvolume list
+  * btrfs subvolume snapshot
+  * btrfs subvolume get-default
+  * btrfs subvolume set-default
+  * btrfs subvolume top-level
+  * btrfs subvolume list-receive
+  * btrfs subvolume sync
+  * btrfs subvolume find-new
+
+  See also btrfs(8) for global options.
+options: |
+  No specific options for the top-level command.
+
+seealso: |
+  btrfs(8), btrfs-mount(8), btrfs-send(8)
+
+---
+title: "btrfs-subvolume create"
+section: 8
+name: "btrfs subvolume create - create a subvolume"
+synopsis: "btrfs subvolume create [-i] [-p] &lt;path&gt; [&lt;path&gt;...]"
+description: |
+  Creates a subvolume at the specified path. If the path is not absolute, it is
+  interpreted relative to the current working directory. If multiple paths are
+  specified, each is created as a subvolume.
+
+options: |
+  -i &lt;qgroupid&gt;
+      Assign the newly created subvolume to a quota group. This option can be
+      specified multiple times to assign to multiple qgroups.
+  -p, --parents
+      Create any missing parent directories, similar to mkdir -p.
+
+seealso: |
+  btrfs-subvolume(8)
+
+---
+title: "btrfs-subvolume delete"
+section: 8
+name: "btrfs subvolume delete - delete a subvolume"
+synopsis: "btrfs subvolume delete [-r] [-c|-C] [-i &lt;subvolid&gt;] &lt;path&gt; [&lt;path&gt;...]"
+description: |
+  Deletes one or more subvolumes.
+
+  The deletion is asynchronous: the directory entry is removed immediately, but the
+  actual data blocks are freed later in the background. The command returns before
+  the subvolume is fully removed. Use 'btrfs subvolume sync' to wait for completion.
+
+  By default, subvolume deletion requires root privileges or the
+  'user_subvol_rm_allowed' mount option. The default subvolume (see
+  'btrfs subvolume set-default') cannot be deleted. Subvolumes involved in an
+  ongoing 'btrfs send' operation also cannot be deleted.
+
+options: |
+  -r, --recursive
+      Delete subvolumes recursively. This implies that all contents of the subvolume
+      will be deleted. This operation can be dangerous and should be used with
+      extreme caution. Requires root privileges or 'user_subvol_rm_allowed'.
+      The deletion is not atomic.
+  -c, --commit-after
+      Wait for the transaction commit at the end of the operation. This ensures
+      the deletion is safely stored on disk before the command returns.
+  -C, --commit-each
+      Wait for the transaction commit after deleting each subvolume. Useful when
+      deleting multiple subvolumes and wanting to ensure each deletion is committed.
+  -i &lt;subvolid&gt;
+      Specify the subvolume ID to delete instead of the path. The path argument
+      must point to the filesystem containing the subvolume.
+
+seealso: |
+  btrfs-subvolume(8), btrfs-subvolume-sync(8)
+
+---
+title: "btrfs-subvolume find-new"
+section: 8
+name: "btrfs subvolume find-new - find new/modified files in a subvolume"
+synopsis: "btrfs subvolume find-new &lt;subvolume&gt; &lt;last_gen&gt;"
+description: |
+  Lists files and directories within a subvolume that have been modified since
+  a given generation number. This is useful for incremental backups or
+  resynchronizing snapshots.
+
+arguments: |
+  subvolume
+      The path to the subvolume to check.
+  last_gen
+      The generation number from a previous run. Only items modified after this
+      generation will be listed.
+
+returns: |
+  A list of paths to modified files and directories, relative to the subvolume.
+
+seealso: |
+  btrfs-subvolume(8)
+
+---
+title: "btrfs-subvolume get-default"
+section: 8
+name: "btrfs subvolume get-default - get the default subvolume"
+synopsis: "btrfs subvolume get-default &lt;path&gt;"
+description: |
+  Retrieves the default subvolume for the specified filesystem path. The default
+  subvolume is the one mounted when the filesystem is mounted without specifying
+  a subvolume.
+
+arguments: |
+  path
+      A path within the btrfs filesystem.
+
+returns: |
+  Information about the default subvolume, including its ID and path.
+
+seealso: |
+  btrfs-subvolume(8), btrfs-subvolume-set-default(8)
+
+---
+title: "btrfs-subvolume list"
+section: 8
+name: "btrfs subvolume list - list subvolumes"
+synopsis: "btrfs subvolume list [-r] [-o] [-a] [-p] [-c] [-g] [-u] [-q] [-s] [--sort=KEY] &lt;path&gt;"
+description: |
+  Lists all subvolumes within the specified filesystem path.
+
+options: |
+  -r, --recursive
+      List subvolumes recursively. Only applicable when specifying a path to
+      a specific subvolume.
+  -o
+      Show only subvolumes located directly under the specified path. Does not
+      show nested subvolumes.
+  -a
+      Show all subvolumes in the filesystem, distinguishing between absolute
+      and relative paths with respect to the given path.
+  -p
+      Print the parent subvolume ID.
+  -c
+      Print the 'ogen' (origin generation) of the subvolume.
+  -g
+      Print the generation number of the subvolume (default).
+  -u
+      Print the UUID of the subvolume.
+  -q
+      Print the parent UUID of the subvolume (the UUID of the subvolume of which
+      this one is a snapshot).
+  -s
+      Print the subvolume ID.
+  --sort=KEY
+      Sort the output by KEY. Possible values are: rootid, gen, ogen, path.
+
+arguments: |
+  path
+      The path to the btrfs filesystem or a subvolume.
+
+example: |
+  List subvolumes in the current filesystem:
+    btrfs subvolume list .
+
+  List all subvolumes and sort by path:
+    btrfs subvolume list --sort=path /
+
+seealso: |
+  btrfs-subvolume(8)
+
+---
+title: "btrfs-subvolume set-default"
+section: 8
+name: "btrfs subvolume set-default - set the default subvolume"
+synopsis: "btrfs subvolume set-default &lt;subvolume&gt; &lt;path&gt;"
+description: |
+  Sets the default subvolume for the specified filesystem path. The default
+  subvolume is the one that gets mounted when the filesystem is mounted without
+  explicitly specifying a subvolume.
+
+arguments: |
+  subvolume
+      The path or ID of the subvolume to set as default.
+  path
+      A path within the btrfs filesystem.
+
+seealso: |
+  btrfs-subvolume(8), btrfs-subvolume-get-default(8)
+
+---
+title: "btrfs-subvolume snapshot"
+section: 8
+name: "btrfs subvolume snapshot - create a snapshot of a subvolume"
+synopsis: "btrfs subvolume snapshot [-r] [-p] &lt;source&gt; &lt;dest&gt; [&lt;dest&gt;...]"
+description: |
+  Creates a snapshot of an existing subvolume. A snapshot is a special kind
+  of subvolume that initially shares all its data extents with the source
+  subvolume. Changes made to either the source or the snapshot after creation
+  are stored copy-on-write, meaning only the modified extents are duplicated.
+
+options: |
+  -r, --read-only
+      Create a read-only snapshot. By default, snapshots are created read-write.
+  -p, --parent-disable
+      Do not disable parent subvolumes. This is relevant when creating snapshots
+      of nested subvolumes and might affect how the snapshot is treated regarding
+      parent visibility.
+
+arguments: |
+  source
+      The path to the existing subvolume to snapshot.
+  dest
+      The path where the new snapshot subvolume will be created.
+
+returns: |
+  The command creates the snapshot(s) and returns successfully if all snapshots
+  are created.
+
+seealso: |
+  btrfs-subvolume(8)
+
+---
+title: "btrfs-subvolume sync"
+section: 8
+name: "btrfs subvolume sync - wait for subvolume deletion to complete"
+synopsis: "btrfs subvolume sync &lt;path&gt; [&lt;path&gt;...]"
+description: |
+  Waits for asynchronous subvolume deletions to complete. When a subvolume is
+  deleted using 'btrfs subvolume delete', the operation is asynchronous. This
+  command ensures that all data associated with the deleted subvolume has been
+  fully reclaimed before proceeding.
+
+arguments: |
+  path
+      A path within the btrfs filesystem where deletions are pending.
+
+seealso: |
+  btrfs-subvolume(8), btrfs-subvolume-delete(8)
+
+---
+title: "btrfs-subvolume top-level"
+section: 8
+name: "btrfs subvolume top-level - show the top-level subvolume"
+synopsis: "btrfs subvolume top-level &lt;path&gt;"
+description: |
+  Shows the top-level subvolume of the filesystem specified by path. The top-level
+  subvolume has ID 5 and is the root of all other subvolumes.
+
+arguments: |
+  path
+      A path within the btrfs filesystem.
+
+returns: |
+  Information about the top-level subvolume, including its ID and path.
+
+seealso: |
+  btrfs-subvolume(8)
+
+---
+title: "MOUNTING"
+section: 8
+name: "MOUNTING"
+description: |
+  Subvolumes can be mounted like regular filesystems using the 'mount' command
+  with the -o subvol= or -o subvolid= options.
+
+  Example:
+    mount -o subvol=my_subvolume /dev/sda1 /mnt
+
+  Or using the subvolume ID:
+    mount -o subvolid=1234 /dev/sda1 /mnt
+
+  Mounting a subvolume makes it appear as the root of the mount point. The
+  parent directory of the subvolume becomes inaccessible at that mount point.
+  This behavior is similar to a bind mount.
+
+  The 'subvol' and 'subvolid' mount options can be specified only once for a
+  mount.
+
+  All subvolumes within a filesystem share the same mount options. Changes made
+  via 'remount' will take effect immediately.
+
+  Mounting a read-write snapshot as read-only is possible and does not change
+  the underlying subvolume's read-only property.
+
+  The name of the mounted subvolume is stored in /proc/self/mountinfo in the
+  4th column.
+
+example: |
+  27 21 0:19 /subv1 /mnt rw,relatime - btrfs /dev/sda rw,space_cache
+             ^^^^^^
+
+seealso: |
+  mount(8), btrfs(5)
+
+---
+title: "INODE NUMBERS"
+section: 8
+name: "INODE NUMBERS"
+description: |
+  A directory representing a subvolume typically has inode number 256. This is
+  also sometimes referred to as the root of the subvolume.
+
+example: |
+  $ ls -lis
+  total 0
+  389111 0 drwxr-xr-x 1 user users 0 Jan 20 12:13 dir
+  389110 0 -rw-r--r-- 1 user users 0 Jan 20 12:13 file
+     256 0 drwxr-xr-x 1 user users 0 Jan 20 12:13 snap1
+     256 0 drwxr-xr-x 1 user users 0 Jan 20 12:13 subv1
+
+  If a nested subvolume is snapshotted, the cloned directory entry representing
+  that subvolume might have inode number 2. Other files and directories within
+  the snapshot retain their original inode numbers.
+
+note: |
+  Inode numbers are not guaranteed to be unique across the entire filesystem.
+  Some applications might assume this. For a unique identifier, use the
+  'subvolumeid:inodenumber' pair. The subvolume ID can be obtained using
+  'btrfs inspect-internal rootid' or the BTRFS_IOC_INO_LOOKUP ioctl.
+
+seealso: |
+  btrfs-inspect-internal(8)
+
+---
+title: "PERFORMANCE"
+section: 8
+name: "PERFORMANCE"
+description: |
+  Subvolume creation requires flushing dirty data associated with the subvolume,
+  which may take some time. Once this is done, the snapshotting process itself is
+  instantaneous, involving only the creation of a new tree root copy in the metadata.
+
+  Subvolume deletion involves two phases:
+  1. The directory entry is removed, and the subvolume is added to a queue for deletion.
+  2. The queue is processed, and the data blocks belonging to the subvolume are freed.
+     This process, often called "cleaning," can take time depending on the amount
+     of shared blocks (requiring metadata updates) and the number of subvolumes
+     currently in the deletion queue.
+
+---
+title: "SUBVOLUME AND SNAPSHOT"
+section: 8
+name: "SUBVOLUME AND SNAPSHOT"
+description: |
+  A subvolume is a distinct part of a filesystem with its own independent
+  file/directory hierarchy. Subvolumes can share file extents, meaning that
+  identical data blocks are referenced by multiple subvolumes, saving space.
+
+  A snapshot is a specific type of subvolume created with the initial content
+  of another subvolume. Snapshots are typically used for backups and system
+  rollbacks. By default, snapshots are created as read-write. Modifications made
+  to a snapshot do not affect the original subvolume, and vice versa, due to the
+  copy-on-write mechanism.
+
+note: |
+  A btrfs subvolume is not analogous to an LVM logical volume. LVM performs
+  block-level snapshots, whereas btrfs subvolumes are based on file extent sharing.
+
+  Subvolumes appear and behave like regular directories but support additional
+  operations like snapshotting and independent mounting. They can be renamed or
+  moved, and nesting subvolumes is permitted, although it has implications for
+  snapshotting.
+
+  Subvolumes can be accessed in two primary ways:
+  1. As a regular directory accessible to the user.
+  2. As a separately mounted filesystem using the `subvol=` or `subvolid=` mount
+     options. In this case, the parent directory hierarchy is not visible or
+     accessible within the mount point, similar to a bind mount.
+
+  The root of a newly created filesystem is also a subvolume, known as the
+  "top-level" subvolume, with an internal ID of 5. This top-level subvolume
+  cannot be removed or replaced. It is the subvolume mounted by default unless
+  the default subvolume has been changed using the `set-default` command.
+
+seealso: |
+  btrfs(5), btrfs-subvolume(8)
+
+---
+title: "SUBCOMMAND"
+section: 8
+name: "SUBCOMMAND"
+description: |
+  This section details the available subcommands for 'btrfs subvolume'.
+
+commands:
+  create:
+    synopsis: "create [options] [&lt;dest&gt;/]&lt;name&gt; [[&lt;dest2&gt;/]&lt;name2&gt; ...]"
+    description: |
+      Creates one or more subvolumes at the specified destinations. If the destination
+      part of the path is omitted, the subvolume is created in the current directory.
+      If multiple destinations are provided, the same options apply to all. Failures
+      on one destination do not prevent retries on others, but the command will return
+      an error code.
+    options:
+      -i &lt;qgroupid&gt;
+          Adds the newly created subvolume to a quota group. Can be specified multiple times.
+      -p, --parents
+          Creates any missing parent directories for the specified path, similar to `mkdir -p`.
+
+  delete:
+    synopsis: "delete [options] [&lt;subvolume&gt; [&lt;subvolume&gt;...]], delete -i|--subvolid &lt;subvolid&gt; &lt;path&gt;"
+    description: |
+      Deletes one or more subvolumes from the filesystem. If a specified path is not
+      a subvolume, an error is returned, but the command continues if more arguments exist.
+      Using '--subvolid' requires the path to point to a btrfs filesystem and is used
+      in conjunction with the subvolume ID.
+      The directory entry is removed instantly, but data blocks are freed asynchronously in the background.
+      Use 'btrfs subvolume sync' to wait for complete removal.
+      Deletion is not atomic by default for performance reasons. Use '--commit-after' or
+      '--commit-each' to wait for transaction commits.
+      Sufficient permissions are required for deletion. By default, the owner cannot delete
+      unless 'user_subvol_rm_allowed' mount option is set or deletion is run as root.
+      The default subvolume cannot be deleted. Subvolumes involved in 'send' operations also cannot be deleted until the send completes.
+    options:
+      -c, --commit-after
+          Waits for the transaction commit at the end of the operation.
+      -C, --commit-each
+          Waits for the transaction commit after deleting each subvolume.
+      -i, --subvolid &lt;subvolid&gt;
+          Specifies the subvolume ID to remove instead of a path. The path must point to the filesystem.
+      -R, --recursive
+          Deletes subvolumes beneath each specified subvolume recursively. Requires CAP_SYS_ADMIN or 'user_subvol_rm_allowed' mount option. Unprivileged deletions skip inaccessible subvolumes. Deletion is not atomic.
+      -v, --verbose
+          (Deprecated) Alias for the global '-v' option.
+
+  find-new:
+    synopsis: "find-new &lt;subvolume&gt; &lt;last_gen&gt;"
+    description: |
+      Lists recently modified files and directories in a subvolume that have changed
+      since the specified generation number.
+
+  get-default:
+    synopsis: "get-default &lt;path&gt;"
+    description: |
+      Retrieves the default subvolume of the filesystem specified by path. The output format
+      is similar to the 'subvolume list' command.
+
+  list:
+    synopsis: "list [options] [-G [+|-]&lt;value&gt;] [-C [+|-]&lt;value&gt;] [--sort=rootid,gen,ogen,path] &lt;path&gt;"
+    description: |
+      Lists subvolumes present in the filesystem specified by path. By default, shows
+      ID, generation, parent ID, and relative path. Subvolume IDs can be used with
+      'set-default' or at mount time ('subvolid=').
+    options:
+      Path filtering:
+        -o
+            Prints only subvolumes directly below the specified path. Not recursive.
+        -a
+            Prints all subvolumes in the filesystem, distinguishing absolute/relative paths.
+      Field selection:
+        -p
+            Prints the parent ID (the subvolume containing this subvolume).
+        -c
+            Prints the ogeneration of the subvolume (also known as 'ogen' or 'origin generation').
+        -g
+            Prints the generation of the subvolume (default).
+        -u
+            Prints the UUID of the subvolume.
+        -q
+            Prints the parent UUID (UUID of the subvolume this one is a snapshot of).
+        -R
+            Prints the subvolume ID (root ID).
+      Sorting:
+        --sort=KEY
+            Sorts the output by KEY. Possible values: rootid, gen, ogen, path.
+
+seealso: |
+  btrfs(8), btrfs-mount(8), btrfs-send(8)
+  btrfs-inspect-internal(8) # For rootid command example.
+  btrfs-ioc-ino-lookup # Mentioned in inode number section.

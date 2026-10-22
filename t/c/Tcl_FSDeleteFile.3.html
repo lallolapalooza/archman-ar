@@ -1,0 +1,587 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tcl_FSDeleteFile(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tcl/">tcl</a></p>
+<link rel="stylesheet" href="basic.css">
+<dl>
+  <dt>int <i>*lenPtr</i> (out)</dt>
+  <dd>إذا لم يكن NULL، يتم ملؤه بعدد العناصر في المسار المقسم.</dd>
+  <dt>Tcl_Obj <i>*basePtr</i> (in)</dt>
+  <dd>المسار الأساسي الذي سيتم ربط العناصر المعطاة به. قد يكون NULL.</dd>
+  <dt>int <i>objc</i> (in)</dt>
+  <dd>عدد العناصر في <i>objv</i>.</dd>
+  <dt>Tcl_Obj *const <i>objv[]</i> (in)</dt>
+  <dd>العناصر التي سيتم ربطها بالمسار الأساسي المعطى.</dd>
+  <dt>Tcl_Obj <i>*linkNamePtr</i> (in)</dt>
+  <dd>اسم الرابط الذي سيتم إنشاؤه أو قراءته.</dd>
+  <dt>Tcl_Obj <i>*toPtr</i> (in)</dt>
+  <dd>ما يجب أن يرتبط به الرابط المسمى <i>linkNamePtr</i>، أو NULL إذا
+      كان من المفترض قراءة الرابط الرمزي المحدد بواسطة <i>linkNamePtr</i>.</dd>
+  <dt>int <i>linkAction</i> (in)</dt>
+  <dd>مزيج من العلامات المدمجة بواسطة OR يشير إلى نوع الرابط الذي يجب إنشاؤه
+      (سيتم تجاهله إذا كان <i>toPtr</i> هو NULL). البتات الصالحة التي يمكن تعيينها هي
+      <b>TCL_CREATE_SYMBOLIC_LINK</b> و <b>TCL_CREATE_HARD_LINK</b>. عند تعيين كلتا
+      العلامتين وكان نظام الملفات الأساسي قادرًا على القيام بأي منهما، يتم تفضيل الروابط الرمزية.
+        <br/>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">هناك عدة أسباب لاستدعاء دوال واجهة برمجة التطبيقات <b>Tcl_FS</b>
+    (على سبيل المثال، <b>Tcl_FSAccess</b> و <b>Tcl_FSStat</b>) بدلاً من استدعاء
+    دوال مستوى النظام مثل <b>access</b> و <b>stat</b> مباشرة. أولاً، ستعمل هذه الدوال
+    عبر الأنظمة الأساسية، لذا يجب أن يعمل الامتداد الذي يستدعيها دون تعديل على
+    Unix و Windows. ثانيًا، يوفر تنفيذ Windows لبعض هذه الدوال إصلاحات لبعض الأخطاء في
+    استدعاءات مستوى النظام. ثالثًا، تتعامل استدعاءات الدوال هذه مع أي تحويلات
+    للمسار من &#x201C;Utf إلى نظام أساسي أصلي&#x201D; قد تكون مطلوبة (وقد تخزن نتائج هذه
+    التحويلات لتحقيق كفاءة أكبر في الاستدعاءات اللاحقة). رابعًا، وربما الأهم من
+    ذلك، أن كل هذه الدوال &#x201C;تدرك أنظمة الملفات الافتراضية&#x201D;. أي نظام ملفات
+    افتراضي (VFS للاختصار) تم تسجيله (من خلال <b>Tcl_FSRegister</b>) قد يعيد توجيه
+    الوصول إلى الملفات إلى وسائط بديلة أو طرق وصول بديلة. هذا يعني أن كل هذه الدوال
+    (وبالتالي أوامر Tcl المقابلة <b>file</b> و <b>glob</b> و <b>pwd</b> و <b>cd</b> و
+    <b>open</b>، إلخ) قد تعمل على &#x201C;ملفات&#x201D; ليست ملفات أصلية في نظام الملفات
+    الأصلي. هذا يعني أيضًا أن أي امتداد Tcl يصل إلى نظام الملفات (FS للاختصار) من خلال
+    واجهة برمجة التطبيقات هذه هو &#x201C;يدرك أنظمة الملفات الافتراضية&#x201D; تلقائيًا.
+    بالطبع، إذا وصل امتداد إلى نظام الملفات الأصلي مباشرة (من خلال واجهات برمجة التطبيقات
+    الخاصة بالنظام الأساسي، على سبيل المثال)، فلا يمكن لـ Tcl اعتراض مثل هذه الاستدعاءات.</p>
+<p class="Pp">إذا تم تسجيل أنظمة الملفات الافتراضية المناسبة، فقد تكون
+    &#x201C;الملفات&#x201D;، لإعطاء مثالين، بعيدة (على سبيل المثال، موجودة على خادم
+    ftp بعيد) أو مؤرشفة (على سبيل المثال، موجودة داخل أرشيف .zip). توفر أنظمة
+    الملفات المسجلة هذه جدول بحث للدوال لتنفيذ كل أو بعض الوظائف المذكورة هنا.
+    أخيرًا، تجرد استدعاءات <b>Tcl_FSStat</b> و <b>Tcl_FSLstat</b> من كيفية تعريف
+    مخزن <i>struct stat</i> المؤقت، مما يسمح باستخدام نفس الكود لكل من الأنظمة التي
+    تدعم الملفات الأكبر من 2 جيجابايت وتلك التي لا تدعمها.</p>
+<p class="Pp">تم تحويل واجهة برمجة التطبيقات <b>Tcl_FS</b> إلى <b>Tcl_Obj</b>
+    ويمكنها تخزين التمثيلات الداخلية والسلاسل النصية الأخرى المتعلقة بالمسار
+    (على سبيل المثال، دليل العمل الحالي). أحد الآثار الجانبية لذلك هو أنه لا يجب
+    تمرير قيم بعدد مرجعي صفر إلى أي من هذه الدوال. إذا تم التعامل مع مثل هذه
+    الاستدعاءات، فقد يؤدي ذلك إلى تسرب الذاكرة (في بعض الظروف، قد يرغب كود نظام
+    الملفات في الاحتفاظ بمرجع للقيمة المدخلة، وبالتالي لا يجب افتراض أنه بعد أي من
+    هذه الاستدعاءات، لا تزال القيمة تحتوي على عدد مرجعي صفر - فقد يكون قد تم
+    زيادته) أو إلى خطأ تجزئة مباشر (أو خطأ وصول آخر للذاكرة) بسبب تحرير القيمة
+    في منتصف معالجة القيمة المعقدة المطلوبة لضمان أن المسار طبيعي وكامل مطلق
+    لتحديد نظام الملفات. الدرس العملي الذي يجب تعلمه من هذا هو أن</p>
+<div class="Bd-indent">
+<pre>Tcl_Obj *path = Tcl_NewStringObj(...);
+Tcl_FS<i>Whatever</i>(path);
+Tcl_DecrRefCount(path);</pre>
+</div>
+<p class="Pp">خطأ، وقد يسبب أخطاء في الذاكرة. يجب زيادة العدد المرجعي للمسار
+    قبل تمريره، أو تقليله. لهذا السبب، تعتبر القيم التي يكون عددها المرجعي صفرًا
+    ليست مسارات ملفات صالحة، وسيؤدي استدعاء أي دالة من واجهة برمجة التطبيقات Tcl_FS
+    بقيمة كهذه إلى عدم اتخاذ أي إجراء.</p>
+<section class="Ss">
+<h2 class="Ss" id='FS_API_FUNCTIONS'><a class='permalink' href='#FS_API_FUNCTIONS'>دوال واجهة برمجة تطبيقات نظام الملفات (FS API FUNCTIONS)</a></h2>
+<p class="Pp">تحاول <b>Tcl_FSCopyFile</b> نسخ الملف المعطى بواسطة <i>srcPathPtr</i>
+    إلى اسم المسار المعطى بواسطة <i>destPathPtr</i>. إذا كان المساران المعطيان يقعان
+    في نفس نظام الملفات (وفقًا لـ <b>Tcl_FSGetFileSystemForPath</b>) فسيتم استدعاء
+    دالة &#x201C;نسخ الملف&#x201D; الخاصة بنظام الملفات هذا (إذا لم تكن NULL). بخلاف
+    ذلك، تعود الدالة بـ -1 وتعيين المتغير العام C <b>errno</b> إلى رمز الخطأ POSIX
+    &#x201C;EXDEV&#x201D; (الذي يشير إلى &#x201C;رابط عبر النطاق&#x201D;).</p>
+<p class="Pp">تحاول <b>Tcl_FSCopyDirectory</b> نسخ الدليل المعطى بواسطة
+    <i>srcPathPtr</i> إلى اسم المسار المعطى بواسطة <i>destPathPtr</i>. إذا كان
+    المساران المعطيان يقعان في نفس نظام الملفات (وفقًا لـ
+    <b>Tcl_FSGetFileSystemForPath</b>) فسيتم استدعاء دالة &#x201C;نسخ الملف&#x201D;
+    الخاصة بنظام الملفات هذا (إذا لم تكن NULL). بخلاف ذلك، تعود الدالة بـ -1 وتعيين
+    المتغير العام C <b>errno</b> إلى رمز الخطأ POSIX &#x201C;EXDEV&#x201D; (الذي يشير
+    إلى &#x201C;رابط عبر النطاق&#x201D;).</p>
+<p class="Pp">تحاول <b>Tcl_FSCreateDirectory</b> إنشاء الدليل المعطى بواسطة
+    <i>pathPtr</i> عن طريق استدعاء دالة &#x201C;إنشاء دليل&#x201D; الخاصة بنظام الملفات
+    المالك.</p>
+<p class="Pp">تحاول <b>Tcl_FSDeleteFile</b> حذف الملف المعطى بواسطة <i>pathPtr</i>
+    عن طريق استدعاء دالة &#x201C;حذف ملف&#x201D; الخاصة بنظام الملفات المالك.</p>
+<p class="Pp">تحاول <b>Tcl_FSRemoveDirectory</b> إزالة الدليل المعطى بواسطة
+    <i>pathPtr</i> عن طريق استدعاء دالة &#x201C;إزالة دليل&#x201D; الخاصة بنظام
+    الملفات المالك.</p>
+<p class="Pp">تحاول <b>Tcl_FSRenameFile</b> إعادة تسمية الملف أو الدليل المعطى
+    بواسطة <i>srcPathPtr</i> إلى اسم المسار المعطى بواسطة <i>destPathPtr</i>. إذا
+    كان المساران المعطيان يقعان في نفس نظام الملفات (وفقًا لـ
+    <b>Tcl_FSGetFileSystemForPath</b>) فسيتم استدعاء دالة &#x201C;إعادة تسمية
+    ملف&#x201D; الخاصة بنظام الملفات هذا (إذا لم تكن NULL). بخلاف ذلك، تعود الدالة بـ
+    -1 وتعيين المتغير العام C <b>errno</b> إلى رمز الخطأ POSIX &#x201C;EXDEV&#x201D;
+    (الذي يشير إلى &#x201C;رابط عبر النطاق&#x201D;).</p>
+<p class="Pp">تستدعي <b>Tcl_FSListVolumes</b> كل نظام ملفات لديه دالة
+    &#x201C;قائمة وحدات التخزين&#x201D; غير NULL وتطلب منه إرجاع قائمة وحدات التخزين
+    الجذرية الخاصة به. تقوم بتجميع القيم المرتجعة في قائمة يتم إرجاعها للمتصل
+    (بعدد مرجعي 0).</p>
+<p class="Pp">تقوم <b>Tcl_FSEvalFileEx</b> بقراءة الملف المعطى بواسطة <i>pathPtr</i>
+    باستخدام الترميز المحدد بواسطة <i>encodingName</i> وتقييم محتوياته كبرنامج نصي
+    لـ Tcl. تعيد نفس المعلومات التي تعيدها <b>Tcl_EvalObjEx</b>. إذا كان
+    <i>encodingName</i> هو NULL، يتم استخدام ترميز النظام لقراءة محتويات الملف.
+    إذا تعذر قراءة الملف، يتم إرجاع خطأ Tcl لوصف سبب تعذر قراءة الملف. نهاية
+    الملف للملفات هي &#x201C;\x1A&#x201D; (^Z) لجميع الأنظمة الأساسية. إذا كنت بحاجة
+    إلى &#x201C;^Z&#x201D; في الكود للمقارنة بين السلاسل النصية، يمكنك استخدام
+    &#x201C;\x1A&#x201D;، والذي سيتم استبداله بأمان بواسطة مترجم Tcl إلى
+    &#x201C;^Z&#x201D;. <b>Tcl_FSEvalFile</b> هي نسخة أبسط من
+    <b>Tcl_FSEvalFileEx</b> التي تستخدم دائمًا ترميز النظام عند قراءة الملف.</p>
+<p class="Pp">تقوم <b>Tcl_FSLoadFile</b> بتحميل ملف شفرة ثنائية ديناميكيًا في
+    الذاكرة وتعيد عناوين إجراءين داخل هذا الملف، إذا تم تعريفهما. سيتم استدعاء
+    الدالة المناسبة لنظام الملفات الذي ينتمي إليه <i>pathPtr</i>. إذا لم يقم نظام
+    الملفات هذا بتنفيذ هذه الدالة (معظم أنظمة الملفات الافتراضية لن تفعل ذلك، بسبب
+    قيود نظام التشغيل في التحميل الديناميكي للشفرة الثنائية)، فستحاول Tcl نسخ
+    الملف إلى دليل مؤقت وتحميل هذا الملف المؤقت. <b>Tcl_FSUnloadFile</b> يعكس
+    العملية، ويطلب إزالة المكتبة المشار إليها بواسطة <i>loadHandle</i> من العملية.
+    لاحظ أنه، على عكس الأمر <b>unload</b>، هذا لا يعطي المكتبة أي فرصة للتنظيف.</p>
+<p class="Pp">تعيد كلتا الدالتين المذكورتين أعلاه رمز إكمال Tcl قياسي. في حالة
+    حدوث خطأ، يتم وضع رسالة خطأ في نتيجة <i>interp</i>.</p>
+<p class="Pp">يمكن استخدام الرمز المميز المقدم عبر المتغير المشار إليه بواسطة
+    <i>loadHandlePtr</i> مع <b>Tcl_FindSymbol</b>.</p>
+<p class="Pp">تستخدم <b>Tcl_FSMatchInDirectory</b> بواسطة شفرة globbing للبحث
+    عن جميع الملفات في دليل تتطابق مع نمط معين. سيتم استدعاء الدالة المناسبة لنظام
+    الملفات الذي ينتمي إليه <i>pathPtr</i>.</p>
+<p class="Pp">القيمة المرتجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان هناك خطأ قد
+    حدث في globbing. يتم وضع رسائل الخطأ في interp (ما لم يكن interp NULL، وهو
+    مسموح به)، ولكن يتم وضع النتائج الجيدة في resultPtr المعطى.</p>
+<p class="Pp">لاحظ أن شفرة <b>glob</b> تنفذ الأنماط المتكررة داخليًا، لذا سيتم
+    تمرير الأنماط البسيطة فقط إلى هذه الدالة، والتي يمكن مطابقتها باستخدام منطق
+    <b>string match</b>. للتعامل مع التكرار، ستستدعي Tcl هذه الدالة بشكل متكرر
+    طالبةً فقط إرجاع الدلائل. حالة خاصة عند استدعائها بنمط NULL تشير إلى أنه يجب
+    التحقق من المسار فقط للتأكد من نوعه الصحيح.</p>
+<p class="Pp">تستبدل <b>Tcl_FSLink</b> النسخة المكتبية من <b>readlink</b>،
+    وتوسعها لدعم إنشاء الروابط. سيتم استدعاء الدالة المناسبة لنظام الملفات الذي
+    ينتمي إليه <i>linkNamePtr</i>.</p>
+<p class="Pp">إذا كان <i>toPtr</i> هو NULL، يتم تنفيذ إجراء
+    &#x201C;قراءة رابط&#x201D;. النتيجة هي Tcl_Obj تحدد محتويات الرابط الرمزي المعطى
+    بواسطة <i>linkNamePtr</i>، أو NULL إذا تعذر قراءة الرابط. المتصل يمتلك النتيجة،
+    والذي يجب عليه استدعاء <b>Tcl_DecrRefCount</b> عندما لم تعد النتيجة مطلوبة.
+    إذا كان <i>toPtr</i> ليس NULL، يجب على Tcl إنشاء رابط من أحد الأنواع الممررة
+    في علامة <i>linkAction</i>. هذه العلامة هي مزيج OR من
+    <b>TCL_CREATE_SYMBOLIC_LINK</b> و <b>TCL_CREATE_HARD_LINK</b>. حيث يوجد خيار
+    (أي، تم تمرير أكثر من علامة واحدة)، فإن اصطلاح Tcl هو تفضيل الروابط الرمزية.
+    عند إنشاء رابط بنجاح، يجب أن تكون القيمة المرتجعة هي <i>toPtr</i> (الذي
+    يمتلكه المتصل بالفعل). إذا فشلت، يتم إرجاع NULL.</p>
+<p class="Pp">تملأ <b>Tcl_FSLstat</b> المخزن المؤقت <i>Tcl_StatBuf</i>
+    <i>statPtr</i> بمعلومات حول الملف المحدد. لا تحتاج إلى أي حقوق وصول للملف
+    للحصول على هذه المعلومات ولكنك تحتاج إلى حقوق بحث لجميع الدلائل المسماة في
+    المسار المؤدي إلى الملف. يتضمن المخزن المؤقت <i>Tcl_StatBuf</i> معلومات
+    بخصوص الجهاز، inode (دائمًا 0 على Windows)، وضع الامتيازات، nlink (دائمًا 1 على
+    Windows)، معرف المستخدم (دائمًا 0 على Windows)، معرف المجموعة (دائمًا 0 على
+    Windows)، rdev (نفس الجهاز على Windows)، الحجم، آخر وصول</p>
+{
+  "file_name": "tclFilesystem.md",
+  "sections": [
+    {
+      "title": "TCL_FILESYSTEM STRUCTURE",
+      "id": "TCL_FILESYSTEM STRUCTURE",
+      "content": "The Tcl_Filesystem structure is used to define a filesystem to Tcl. The structure is passed to Tcl_RegisterFilesystem.",
+      "subsections": []
+    },
+    {
+      "title": "FILESYSTEM INFRASTRUCTURE",
+      "id": "FILESYSTEM_INFRASTRUCTURE",
+      "content": "These fields contain basic information about the filesystem structure and addresses of functions which are used to associate a particular filesystem with a file path, and deal with the internal handling of path representations, for example copying and freeing such representations.",
+      "subsections": [
+        {
+          "title": "TYPENAME",
+          "id": "TYPENAME",
+          "content": "The typeName field contains a null-terminated string that identifies the type of the filesystem implemented, e.g. \"native\", \"zip\" or \"vfs\".",
+          "code_blocks": []
+        },
+        {
+          "title": "STRUCTURE LENGTH",
+          "id": "STRUCTURE_LENGTH",
+          "content": "The structureLength field is generally implemented as sizeof(Tcl_Filesystem), and is there to allow easier binary backwards compatibility if the size of the structure changes in a future Tcl release.",
+          "code_blocks": []
+        },
+        {
+          "title": "VERSION",
+          "id": "VERSION",
+          "content": "The version field should be set to TCL_FILESYSTEM_VERSION_1.",
+          "code_blocks": []
+        },
+        {
+          "title": "PATHINFILESYSTEMPROC",
+          "id": "PATHINFILESYSTEMPROC",
+          "content": "The pathInFilesystemProc field contains the address of a function which is called to determine whether a given path value belongs to this filesystem or not. Tcl will only call the rest of the filesystem functions with a path for which this function has returned TCL_OK. If the path does not belong, -1 should be returned (the behavior of Tcl for any other return value is not defined). If TCL_OK is returned, then the optional clientDataPtr output parameter can be used to return an internal (filesystem specific) representation of the path, which will be cached inside the path value, and may be retrieved efficiently by the other filesystem functions. Tcl will simultaneously cache the fact that this path belongs to this filesystem. Such caches are invalidated when filesystem structures are added or removed from Tcl's internal list of known filesystems.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef int <b>Tcl_FSPathInFilesystemProc</b>(\n        Tcl_Obj *<i>pathPtr</i>,\n        ClientData *<i>clientDataPtr</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "DUPINTERNALREPPROC",
+          "id": "DUPINTERNALREPPROC",
+          "content": "This function makes a copy of a path's internal representation, and is called when Tcl needs to duplicate a path value. If NULL, Tcl will simply not copy the internal representation, which may then need to be regenerated later.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef ClientData <b>Tcl_FSDupInternalRepProc</b>(\n        ClientData <i>clientData</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "FREEINTERNALREPPROC",
+          "id": "FREEINTERNALREPPROC",
+          "content": "Free the internal representation. This must be implemented if internal representations need freeing (i.e. if some memory is allocated when an internal representation is generated), but may otherwise be NULL.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef void <b>Tcl_FSFreeInternalRepProc</b>(\n        ClientData <i>clientData</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "INTERNALTONORMALIZEDPROC",
+          "id": "INTERNALTONORMALIZEDPROC",
+          "content": "Function to convert internal representation to a normalized path. Only required if the filesystem creates pure path values with no string/path representation. The return value is a Tcl value whose string representation is the normalized path.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef Tcl_Obj *<b>Tcl_FSInternalToNormalizedProc</b>(\n        ClientData <i>clientData</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "CREATEINTERNALREPPROC",
+          "id": "CREATEINTERNALREPPROC",
+          "content": "Function to take a path value, and calculate an internal representation for it, and store that native representation in the value. May be NULL if paths have no internal representation, or if the Tcl_FSPathInFilesystemProc for this filesystem always immediately creates an internal representation for paths it accepts.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef ClientData <b>Tcl_FSCreateInternalRepProc</b>(\n        Tcl_Obj *<i>pathPtr</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "NORMALIZEPATHPROC",
+          "id": "NORMALIZEPATHPROC",
+          "content": "Function to normalize a path. Should be implemented for all filesystems which can have multiple string representations for the same path value. In Tcl, every “path” must have a single unique “normalized” string representation. Depending on the filesystem, there may be more than one unnormalized string representation which refers to that path (e.g. a relative path, a path with different character case if the filesystem is case insensitive, a path contain a reference to a home directory such as “~”, a path containing symbolic links, etc). If the very last component in the path is a symbolic link, it should not be converted into the value it points to (but its case or other aspects should be made unique). All other path components should be converted from symbolic links. This one exception is required to agree with Tcl's semantics with file delete, file rename, file copy operating on symbolic links. This function may be called with nextCheckpoint either at the beginning of the path (i.e. zero), at the end of the path, or at any intermediate file separator in the path. It will never point to any other arbitrary position in the path. In the last of the three valid cases, the implementation can assume that the path up to and including the file separator is known and normalized.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef int <b>Tcl_FSNormalizePathProc</b>(\n        Tcl_Interp *<i>interp</i>,\n        Tcl_Obj *<i>pathPtr</i>,\n        int <i>nextCheckpoint</i>);\n"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "FILESYSTEM OPERATIONS",
+      "id": "FILESYSTEM OPERATIONS",
+      "content": "The fields in this section of the structure contain addresses of functions which are called to carry out the basic filesystem operations. A filesystem which expects to be used with the complete standard Tcl command set must implement all of these. If some of them are not implemented, then certain Tcl commands may fail when operating on paths within that filesystem. However, in some instances this may be desirable (for example, a read-only filesystem should not implement the last four functions, and a filesystem which does not support symbolic links need not implement the readlink function, etc. The Tcl core expects filesystems to behave in this way).",
+      "subsections": [
+        {
+          "title": "FILESYSTEMPATHTYPEPROC",
+          "id": "FILESYSTEMPATHTYPEPROC",
+          "content": "Function to determine the type of a path in this filesystem. May be NULL, in which case no type information will be available to users of the filesystem. The “type” is used only for informational purposes, and should be returned as the string representation of the Tcl_Obj which is returned. A typical return value might be “networked”, “zip” or “ftp”. The Tcl_Obj result is owned by the filesystem and so Tcl will increment the reference count of that value if it wishes to retain a reference to it.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef Tcl_Obj *<b>Tcl_FSFilesystemPathTypeProc</b>(\n        Tcl_Obj *<i>pathPtr</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "FILESYSTEMSEPARATORPROC",
+          "id": "FILESYSTEMSEPARATORPROC",
+          "content": "Function to return the separator character(s) for this filesystem. This need only be implemented if the filesystem wishes to use a different separator than the standard string “/”. Amongst other uses, it is returned by the file separator command. The return value should be a value with reference count of zero.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef Tcl_Obj *<b>Tcl_FSFilesystemSeparatorProc</b>(\n        Tcl_Obj *<i>pathPtr</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "STATPROC",
+          "id": "STATPROC",
+          "content": "Function to process a Tcl_FSStat call. Must be implemented for any reasonable filesystem, since many Tcl level commands depend crucially upon it (e.g. file atime, file isdirectory, file size, glob).\nThe Tcl_FSStatProc fills the stat structure statPtr with information about the specified file. You do not need any access rights to the file to get this information but you need search rights to all directories named in the path leading to the file. The stat structure includes info regarding device, inode (always 0 on Windows), privilege mode, nlink (always 1 on Windows), user id (always 0 on Windows), group id (always 0 on Windows), rdev (same as device on Windows), size, last access time, last modification time, and last metadata change time.\nIf the file represented by pathPtr exists, the Tcl_FSStatProc returns 0 and the stat structure is filled with data. Otherwise, -1 is returned, and no stat info is given.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef int <b>Tcl_FSStatProc</b>(\n        Tcl_Obj *<i>pathPtr</i>,\n        Tcl_StatBuf *<i>statPtr</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "ACCESSPROC",
+          "id": "ACCESSPROC",
+          "content": "Function to process a Tcl_FSAccess call. Must be implemented for any reasonable filesystem, since many Tcl level commands depend crucially upon it (e.g. file exists, file readable).\nThe Tcl_FSAccessProc checks whether the process would be allowed to read, write or test for existence of the file (or other filesystem object) whose name is in pathPtr. If the pathname refers to a symbolic link, then the permissions of the file referred by this symbolic link should be tested.\nOn success (all requested permissions granted), zero is returned. On error (at least one bit in mode asked for a permission that is denied, or some other error occurred), -1 is returned.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef int <b>Tcl_FSAccessProc</b>(\n        Tcl_Obj *<i>pathPtr</i>,\n        int <i>mode</i>);\n"
+            }
+          ]
+        },
+        {
+          "title": "OPENFILECHANNELPROC",
+          "id": "OPENFILECHANNELPROC",
+          "content": "Function to process a Tcl_FSOpenFileChannel call. Must be implemented for any filesystem that wishes to support the Tcl IO channel commands on files within that filesystem. This is the most complex operation, and is used to get a channel handle for a file.",
+          "code_blocks": [
+            {
+              "language": "c",
+              "code": "typedef Tcl_Channel <b>Tcl_FSOpenFileChannelProc</b>(\n        Tcl_Interp *<i>interp</i>,\n        Tcl_Obj *<i>pathPtr</i>,\n        const char *<i>mode</i>,\n        int <i>permissions</i>);\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+<h2><a name='CREATEDIRECTORYPROC'>CREATEDIRECTORYPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSCreateDirectory</b>. يجب
+    تنفيذها ما لم يكن نظام الملفات للقراءة فقط.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSCreateDirectoryProc</b>(
+        Tcl_Obj *<i>pathPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء العملية. في حالة النجاح، يجب أن يكون قد تم إنشاء دليل جديد في نظام
+    الملفات في الموقع المحدد بواسطة <i>pathPtr</i>.</p>
+</section>
+<section class="Ss">
+<h2><a name='REMOVEDIRECTORYPROC'>REMOVEDIRECTORYPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSRemoveDirectory</b>. يجب
+    تنفيذها ما لم يكن نظام الملفات للقراءة فقط.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSRemoveDirectoryProc</b>(
+        Tcl_Obj *<i>pathPtr</i>,
+        int <i>recursive</i>,
+        Tcl_Obj **<i>errorPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء العملية. في حالة النجاح، يجب أن يكون الدليل المحدد بواسطة <i>pathPtr</i>
+    قد تم حذفه من نظام الملفات. إذا تم توفير العلامة <i>recursive</i>، فيجب
+    حذف دليل غير فارغ دون حدوث خطأ. إذا لم يتم توفير هذه العلامة وكان الدليل
+    غير فارغ، فيجب الإبلاغ عن خطأ POSIX "EEXIST". إذا حدث خطأ، فيجب وضع اسم
+    الملف أو الدليل الذي تسبب في الخطأ في <i>errorPtr</i>.</p>
+</section>
+<section class="Ss">
+<h2><a name='DELETEFILEPROC'>DELETEFILEPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSDeleteFile</b>. يجب
+    تنفيذها ما لم يكن نظام الملفات للقراءة فقط.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSDeleteFileProc</b>(
+        Tcl_Obj *<i>pathPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء العملية. في حالة النجاح، يجب أن يكون الملف المحدد بواسطة <i>pathPtr</i>
+    قد تم حذفه من نظام الملفات. ملاحظة، إذا كان نظام الملفات يدعم الروابط
+    الرمزية، فسيقوم Tcl دائمًا باستدعاء هذه الوظيفة وليس Tcl_FSRemoveDirectoryProc
+    عند الحاجة إلى حذفها (حتى لو كانت روابط رمزية لأدلة).</p>
+</section>
+</section>
+<section class="Sh">
+<h1><a name='FILESYSTEM_EFFICIENCY'>كفاءة نظام الملفات</a></h1>
+<p class="Pp">لا يلزم تنفيذ هذه الوظائف لنظام ملفات معين لأن النواة لديها
+    تنفيذ احتياطي متاح. انظر كل وصف فردي لمعرفة عواقب ترك الحقل NULL.</p>
+<section class="Ss">
+<h2><a name='LSTATPROC'>LSTATPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSLstat</b>. إذا لم يتم تنفيذها،
+    فسيحاول Tcl استخدام <i>statProc</i> المحدد أعلاه بدلاً من ذلك. لذلك، لا
+    يلزم تنفيذها إلا إذا كان نظام الملفات يمكنه التمييز بين استدعاءات
+    <b>stat</b> و <b>lstat</b>.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSLstatProc</b>(
+        Tcl_Obj *<i>pathPtr</i>,
+        Tcl_StatBuf *<i>statPtr</i>);</pre>
+</div>
+<p class="Pp">سلوك هذه الوظيفة مشابه جدًا لسلوك <b>Tcl_FSStatProc</b>
+    المحددة أعلاه، باستثناء أنه إذا تم تطبيقها على رابط رمزي، فإنها ترجع
+    معلومات حول الرابط، وليس حول الملف المستهدف.</p>
+</section>
+<section class="Ss">
+<h2><a name='COPYFILEPROC'>COPYFILEPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSCopyFile</b>. إذا لم يتم
+    تنفيذها، فسيعتمد Tcl على <b>open</b>-r و <b>open</b>-w و <b>fcopy</b>
+    كآلية نسخ. لذلك، لا يلزم تنفيذها إلا إذا كان نظام الملفات يمكنه أداء هذا
+    الإجراء بكفاءة أكبر.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSCopyFileProc</b>(
+        Tcl_Obj *<i>srcPathPtr</i>,
+        Tcl_Obj *<i>destPathPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء عملية النسخ. ملاحظة، <i>destPathPtr</i> هو اسم الملف الذي سيصبح
+    نسخة من <i>srcPathPtr</i>. إنه ليس أبدًا اسم دليل يمكن نسخ
+    <i>srcPathPtr</i> إليه (أي، الوظيفة أبسط بكثير من الأمر الفرعي <b>file
+    copy</b> على مستوى Tcl). ملاحظة، إذا كان نظام الملفات يدعم الروابط
+    الرمزية، فسيقوم Tcl دائمًا باستدعاء هذه الوظيفة وليس <i>copyDirectoryProc</i>
+    عند الحاجة إلى نسخها (حتى لو كانت روابط رمزية لأدلة). أخيرًا، إذا قرر
+    نظام الملفات أنه لا يمكنه دعم إجراء <b>file copy</b>، فإن استدعاء
+    <b>Tcl_SetErrno(EXDEV)</b> وإرجاع نتيجة غير <b>TCL_OK</b> سيخبر Tcl
+    باستخدام آلياته الاحتياطية القياسية.</p>
+</section>
+<section class="Ss">
+<h2><a name='RENAMEFILEPROC'>RENAMEFILEPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSRenameFile</b>. إذا لم يتم
+    تنفيذها، فسيعتمد Tcl على آلية نسخ وحذف. لذلك، لا يلزم تنفيذها إلا إذا كان
+    نظام الملفات يمكنه أداء هذا الإجراء بكفاءة أكبر.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSRenameFileProc</b>(
+        Tcl_Obj *<i>srcPathPtr</i>,
+        Tcl_Obj *<i>destPathPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء عملية إعادة التسمية. إذا قرر نظام الملفات أنه لا يمكنه دعم إجراء
+    <b>file rename</b>، فإن استدعاء <b>Tcl_SetErrno(EXDEV)</b> وإرجاع نتيجة
+    غير <b>TCL_OK</b> سيخبر Tcl باستخدام آلياته الاحتياطية القياسية.</p>
+</section>
+<section class="Ss">
+<h2><a name='COPYDIRECTORYPROC'>COPYDIRECTORYPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSCopyDirectory</b>. إذا لم يتم
+    تنفيذها، فسيعتمد Tcl على آلية <b>file mkdir</b> و <b>file copy</b>
+    التعاودية. لذلك، لا يلزم تنفيذها إلا إذا كان نظام الملفات يمكنه أداء هذا
+    الإجراء بكفاءة أكبر.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSCopyDirectoryProc</b>(
+        Tcl_Obj *<i>srcPathPtr</i>,
+        Tcl_Obj *<i>destPathPtr</i>,
+        Tcl_Obj **<i>errorPtr</i>);</pre>
+</div>
+<p class="Pp">القيمة المرجعة هي نتيجة Tcl قياسية تشير إلى ما إذا كان قد حدث خطأ
+    أثناء عملية النسخ. إذا حدث خطأ، فيجب وضع اسم الملف أو الدليل الذي تسبب في
+    الخطأ في <i>errorPtr</i>. ملاحظة، <i>destPathPtr</i> هو اسم الدليل الذي
+    سيصبح صورة مرآة لـ <i>srcPathPtr</i>. إنه ليس اسم دليل يمكن نسخ
+    <i>srcPathPtr</i> إليه (أي، الوظيفة أبسط بكثير من الأمر الفرعي <b>file
+    copy</b> على مستوى Tcl). أخيرًا، إذا قرر نظام الملفات أنه لا يمكنه دعم
+    إجراء نسخ الدليل، فإن استدعاء <b>Tcl_SetErrno(EXDEV)</b> وإرجاع نتيجة
+    غير <b>TCL_OK</b> سيخبر Tcl باستخدام آلياته الاحتياطية القياسية.</p>
+</section>
+<section class="Ss">
+<h2><a name='LOADFILEPROC'>LOADFILEPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSLoadFile</b>. إذا لم يتم
+    تنفيذها، فسيعتمد Tcl على النسخ إلى ملف مؤقت أصلي ثم استدعاء
+    <b>Tcl_FSLoadFile</b> على هذا النسخة المؤقتة. لذلك، لا يلزم تنفيذها إلا إذا
+    كان نظام الملفات يمكنه تحميل الكود مباشرة، أو يمكن تنفيذه ببساطة لإرجاع
+    <b>TCL_ERROR</b> لتعطيل وظيفة التحميل في نظام الملفات هذا تمامًا.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSLoadFileProc</b>(
+        Tcl_Interp *<i>interp</i>,
+        Tcl_Obj *<i>pathPtr</i>,
+        Tcl_LoadHandle *<i>handlePtr</i>,
+        Tcl_FSUnloadFileProc *<i>unloadProcPtr</i>);</pre>
+</div>
+<p class="Pp">ترجع رمز إكمال Tcl قياسي. إذا حدث خطأ، يتم ترك رسالة خطأ في نتيجة
+    <i>interp</i>. تقوم الوظيفة بتحميل ملف كود ثنائي ديناميكيًا في الذاكرة. عند
+    التحميل بنجاح، يجب ملء <i>handlePtr</i> برمز للملف الذي تم تحميله ديناميكيًا،
+    ويجب ملء <i>unloadProcPtr</i> بعنوان إجراء. سيتم استدعاء إجراء إلغاء
+    التحميل مع <b>Tcl_LoadHandle</b> المعطى كمعلمته الوحيدة عندما يحتاج Tcl
+    إلى إلغاء تحميل الملف. على سبيل المثال، بالنسبة لنظام الملفات الأصلي، فإن
+    <b>Tcl_LoadHandle</b> الذي تم إرجاعه هو حاليًا رمز يمكن استخدامه في
+    <b>TclpFindSymbol</b> الخاص للوصول إلى الوظائف في الكود الجديد. لكل نظام
+    ملفات الحرية في تعريف <b>Tcl_LoadHandle</b> كما يتطلب. أخيرًا، إذا قرر
+    نظام الملفات أنه لا يمكنه دعم إجراء تحميل الملف، فإن استدعاء
+    <b>Tcl_SetErrno(EXDEV)</b> وإرجاع نتيجة غير <b>TCL_OK</b> سيخبر Tcl
+    باستخدام آلياته الاحتياطية القياسية.</p>
+</section>
+<section class="Ss">
+<h2><a name='UNLOADFILEPROC'>UNLOADFILEPROC</a></h2>
+<p class="Pp">وظيفة لإلغاء تحميل ملف تم تحميله بنجاح سابقًا. إذا تم تنفيذ
+    التحميل، فيجب أيضًا تنفيذ هذا، إذا كان هناك أي إجراء تنظيف مطلوب.</p>
+<div class="Bd-indent">
+<pre>typedef void <b>Tcl_FSUnloadFileProc</b>(
+        Tcl_LoadHandle <i>loadHandle</i>);</pre>
+</div>
+</section>
+<section class=" Ss">
+<h2><a name='GETCWDPROC'>GETCWDPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSGetCwd</b>. لا تحتاج معظم
+    أنظمة الملفات إلى تنفيذ هذا. عادةً ما يتم استدعاؤه مرة واحدة فقط، إذا تم
+    استدعاء <b>getcwd</b> قبل <b>chdir</b>. يمكن أن تكون NULL.</p>
+<div class="Bd-indent">
+<pre>typedef Tcl_Obj *<b>Tcl_FSGetCwdProc</b>(
+        Tcl_Interp *<i>interp</i>);</pre>
+</div>
+<p class="Pp">إذا كان نظام الملفات يدعم مفهومًا أصليًا لدليل العمل الحالي
+    (والذي قد يتغير بشكل مستقل عن Tcl)، فيجب أن ترجع هذه الوظيفة هذا الدليل
+    الحالي كنتيجة، أو NULL إذا لم يكن من الممكن تحديد الدليل الحالي (على سبيل
+    المثال، لا يمتلك المستخدم الأذونات المناسبة على دليل العمل الحالي). إذا تم
+    إرجاع NULL، يتم ترك رسالة خطأ في نتيجة <i>interp</i>.</p>
+</section>
+<section class="Ss">
+<h2><a name='CHDIRPROC'>CHDIRPROC</a></h2>
+<p class="Pp">وظيفة لمعالجة استدعاء <b>Tcl_FSChdir</b>. إذا لم تقم أنظمة
+    الملفات بتنفيذ هذا، فسيتم محاكاته بواسطة سلسلة من فحوصات الوصول إلى الدليل.
+    بخلاف ذلك، تحتاج أنظمة الملفات الافتراضية التي تنفذ هذا فقط إلى الاستجابة
+    بنتيجة إرجاع إيجابية إذا كان <i>pathPtr</i> دليلاً صالحًا ومتاحًا في نظام
+    ملفاتها. لا تحتاج إلى تذكر النتيجة، حيث سيتم تذكرها تلقائيًا للاستخدام بواسطة
+    <b>Tcl_FSGetCwd</b>. يجب على أنظمة الملفات الحقيقية تنفيذ الإجراء الصحيح
+    (أي، استدعاء واجهة برمجة تطبيقات نظام <b>chdir</b> الصحيحة).</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_FSChdirProc</b>(
+        Tcl_Obj *<i>pathPtr</i>);</pre>
+</div>
+<p class="Pp"><b>Tcl_FSChdirProc</b> يغير دليل العمل الحالي للتطبيق إلى
+    القيمة المحددة في <i>pathPtr</i>. ترجع الوظيفة -1 عند حدوث خطأ أو 0 عند
+    النجاح.</p>
+</section>
+</section>
+<section class="Sh">
+<h1><a name='SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp">cd(n), file(n), filename(n), load(n), open(n), pwd(n), source(n),
+    unload(n)</p>
+</section>
+<section class="Sh">
+<h1><a name='KEYWORDS'>الكلمات المفتاحية</a></h1>
+<p class="Pp">stat, access, filesystem, vfs, virtual filesystem</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">8.4</td>
+    <td class="foot-os">Tcl</td>
+  </tr>
+</table>
+
+</section>
+<aside id="sidebar">
+    
+    <section class="search">
+        <form action="/search" class="search direct-search" role="search">
+            <input type="search" placeholder="بحث عن صفحة دليل" name="q" value=""
+                 />
+            <input type="submit" name="go" value="انتقل" />
+        </form>
+    </section>
+
+    <section class="package-info">
+        <p>معلومات الحزمة:</p>
+        <dl>
+            <dt>اسم الحزمة:</dt>
+            <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+            <dt>الإصدار:</dt>
+            <dd>8.6.16-1</dd>
+            <dt>المصدر:</dt>
+            <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+            <dt>التراخيص:</dt>
+            <dd>TCL</dd>
+            <dt>الأدلة:</dt>
+            <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+        </dl>
+    </section>
+
+    <details>
+        <summary>جدول المحتويات</summary>
+        <nav class="toc">
+            <ul>
+                <li><a href="#NAME">الاسم</a></li>
+                <li><a href="#SYNOPSIS">الملخص</a></li>
+                <li><a href="#ARGUMENTS">المعاملات</a></li>
+                <li><a href="#DESCRIPTION">الوصف</a></li>
+                <li><a href="#THE_VIRTUAL_FILESYSTEM_API">واجهة نظام الملفات الافتراضي</a></li>
+                <li><a href="#FILESYSTEM_INFRASTRUCTURE">البنية التحتية لنظام الملفات</a></li>
+                <li><a href="#FILESYSTEM_OPERATIONS">عمليات نظام الملفات</a></li>
+                <li><a href="#FILESYSTEM_EFFICIENCY">كفاءة نظام الملفات</a></li>
+                <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+                <li><a href="#KEYWORDS">الكلمات المفتاحية</a></li>
+            </ul>
+        </nav>
+    </details>
+
+    <nav class="other-formats">
+        <p>تنسيقات أخرى:
+            
+            <a href="/man/Tcl_FSDeleteFile.3.en.txt">txt</a>, 
+            
+            <a href="/man/Tcl_FSDeleteFile.3.en.raw">raw</a>
+            
+        </p>
+    </nav>
+</aside>
+
+    </body>
+</html>

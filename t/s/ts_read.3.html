@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ts_read(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ts_read(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tslib/">tslib</a></p>
+<p class="lic">التراخيص: LGPL-2.1-only</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">TS_READ(3)</td>
+    <td class="head-vol">tslib</td>
+    <td class="head-rtitle">TS_READ(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp"><b>ts_read</b>, <b>ts_read_raw</b>, <b>ts_read_mt</b>, <b>ts_read_raw_mt</b> - قراءة عينات اللمس من tslib</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre><b>#include &lt;tslib.h&gt;</b>
+
+<b>int ts_read(struct tsdev *</b><i>dev</i><b>, struct ts_sample *</b><i>samp</i><b>, int </b><i>nr</i><b>);</b>
+
+<b>int ts_read_raw(struct tsdev *</b><i>dev</i><b>, struct ts_sample *</b><i>samp</i><b>, int </b><i>nr</i><b>);</b>
+
+<b>int ts_read_mt(struct tsdev *</b><i>dev</i><b>, struct ts_sample_mt **</b><i>samp</i><b>, int </b><i>slots</i><b>, int </b><i>nr</i><b>);</b>
+
+<b>int ts_read_raw_mt(struct tsdev *</b><i>dev</i><b>, struct ts_sample_mt **</b><i>samp</i><b>, int </b><i>slots</i><b>, int </b><i>nr</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تقوم الدالة <b>ts_read</b>() بقراءة <b>nr</b> من عينات الإدخال مع تطبيق عوامل تصفية tslib. يتم تعريف <b>struct ts_sample</b> على النحو التالي:</p>
+<pre>struct ts_sample {
+        int             x;
+        int             y;
+        unsigned int    pressure;
+        struct timeval  tv;
+};</pre>
+<p class="Pp">تقوم الدالة <b>ts_read_mt</b>() بقراءة <b>nr</b> * <b>slots</b> من عينات الإدخال مع تطبيق عوامل تصفية tslib. يتم تعريف <b>struct ts_sample_mt</b> على النحو التالي:</p>
+<pre>struct ts_sample_mt {
+        /* رموز أحداث ABS_MT_* الأخيرة.
+         * انظر linux/input.h للأوصاف */
+        int             x;
+        int             y;
+        unsigned int    pressure;
+        int             slot;
+        int             tracking_id;
+        int             tool_type;
+        int             tool_x;
+        int             tool_y;
+        unsigned int    touch_major;
+        unsigned int    width_major;
+        unsigned int    touch_minor;
+        unsigned int    width_minor;
+        int             orientation;
+        int             distance;
+        int             blob_id;
+        struct timeval  tv;
+        /* حالة BTN_TOUCH */
+        short           pen_down;
+        /* يتم تعيين بت TSLIB_MT_VALID في valid إذا كانت هذه العينة
+         * تحتوي على بيانات جديدة؛
+	 * يتم تعيين valid إلى 0 بخلاف ذلك */
+        short           valid;
+};</pre>
+<p class="Pp">يجب على المستخدم توفير كمية الذاكرة الموصوفة في <b>nr</b> و <b>slots</b> لاحتوائها.</p>
+<p class="Pp">تقوم الدالتان <b>ts_read_raw</b>() و <b>ts_read_raw_mt</b>() بنفس الشيء بدون تطبيق عوامل تصفية tslib.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">يتم إرجاع عدد العينات المقروءة فعليًا. بشكل خاص عند الفتح في وضع غير حاجب، انظر <b>ts_setup()</b>، قد يكون هذا أقل من المطلوب في الاستدعاء. عند الفشل، يتم إرجاع رقم خطأ سالب.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<p class="Pp">يقوم البرنامج التالي بقراءة عينات الإدخال متعددة اللمس من tslib باستمرار وطباعة قيم الفتحة والموضع إلى المخرج القياسي عند لمس شاشة اللمس.</p>
+<pre>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;tslib.h&gt;
+#define READ_SAMPLES 1
+#define MAX_SLOTS 5
+int main(int argc, char **argv)
+{
+        struct tsdev *ts;
+        struct ts_sample_mt **samp_mt = NULL;
+        int i, j;
+        int ret;
+        ts = ts_setup(NULL, 0);
+        if (!ts)
+                return -1;
+        samp_mt = malloc(READ_SAMPLES * sizeof(struct ts_sample_mt **));
+        if (!samp_mt)
+                return -1;
+        for (i = 0; i &lt; READ_SAMPLES; i++) {
+                samp_mt[i] = calloc(MAX_SLOTS, sizeof(struct ts_sample_mt));
+                if (!samp_mt[i])
+                        return -1;
+        }
+        while(1) {
+                ret = ts_read_mt(ts, samp_mt, MAX_SLOTS, READ_SAMPLES);
+                for (i = 0; i &lt; ret; i++) {
+                        printf(&quot;sample nr %d0, i);
+                        for (j = 0; i &lt; MAX_SLOTS; j++) {
+                                if (!(samp_mt[i][j].valid &amp; TSLIB_MT_VALID))
+                                        continue;
+                                printf(&quot;slot %d: X:%d Y: %d0,
+                                       samp_mt[i][j].slot,
+                                       samp_mt[i][j].x,
+                                       samp_mt[i][j].y);
+                        }
+                }
+        }
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/ts_setup.3.en'>ts_setup(3)</a>, <a href='/man/ts_config.3.en'>ts_config(3)</a>, <a href='/man/ts_open.3.en'>ts_open(3)</a>,
+    <a href='/man/ts_close.3.en'>ts_close(3)</a>, <a href='/man/ts.conf.5.en'>ts.conf(5)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tslib/">extra/tslib</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.24-1</dd>
+        <dt>المشروع الأصلي:</dt>
+        <dd><a href="https://github.com/kergoth/tslib">https://github.com/kergoth/tslib</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>LGPL-2.1-only</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/tslib/">/listing/extra/tslib/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/ts_read.3.en.txt">txt</a>, 
+        
+            <a href="/man/ts_read.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

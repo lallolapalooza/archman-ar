@@ -1,0 +1,2070 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">nft(8)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "file_structure": {
+    "sections": [
+      {
+        "title": "ADDRESS FAMILIES",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "All nftables objects exist in address family specific namespaces, therefore all identifiers include an address family. If an identifier is specified without an address family, the \"ip\" family is used by default."
+          },
+          {
+            "type": "subsection",
+            "title": "IPV4/IPV6/INET ADDRESS FAMILIES",
+            "id": "IPV4/IPV6/INET_ADDRESS_FAMILIES",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "The IPv4/IPv6/Inet address families handle IPv4, IPv6 or both types of packets. They contain five hooks at different packet processing stages in the network stack."
+              },
+              {
+                "type": "paragraph",
+                "text": "Table 1. IPv4/IPv6/Inet address family hooks"
+              },
+              {
+                "type": "table",
+                "headers": [
+                  "Hook",
+                  "Description"
+                ],
+                "rows": [
+                  {
+                    "Hook": "prerouting",
+                    "Description": "All packets entering the system are processed by the prerouting hook. It is invoked before the routing process and is used for early filtering or changing packet attributes that affect routing."
+                  },
+                  {
+                    "Hook": "input",
+                    "Description": "Packets delivered to the local system are processed by the input hook."
+                  },
+                  {
+                    "Hook": "forward",
+                    "Description": "Packets forwarded to a different host are processed by the forward hook."
+                  },
+                  {
+                    "Hook": "output",
+                    "Description": "Packets sent by local processes are processed by the output hook."
+                  },
+                  {
+                    "Hook": "postrouting",
+                    "Description": "All packets leaving the system are processed by the postrouting hook."
+                  },
+                  {
+                    "Hook": "ingress",
+                    "Description": "All packets entering the system are processed by this hook. It is invoked before layer 3 protocol handlers, hence before the prerouting hook, and it can be used for filtering and policing. Ingress is only available for Inet family (since Linux kernel 5.10)."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "subsection",
+            "title": "ARP ADDRESS FAMILY",
+            "id": "ARP_ADDRESS_FAMILY",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "The ARP address family handles ARP packets received and sent by the system. It is commonly used to mangle ARP packets for clustering."
+              },
+              {
+                "type": "paragraph",
+                "text": "Table 2. ARP address family hooks"
+              },
+              {
+                "type": "table",
+                "headers": [
+                  "Hook",
+                  "Description"
+                ],
+                "rows": [
+                  {
+                    "Hook": "input",
+                    "Description": "Packets delivered to the local system are processed by the input hook."
+                  },
+                  {
+                    "Hook": "output",
+                    "Description": "Packets send by the local system are processed by the output hook."
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "subsection",
+            "title": "BRIDGE ADDRESS FAMILY",
+            "id": "BRIDGE_ADDRESS_FAMILY",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "The bridge address family handles Ethernet packets traversing bridge devices."
+              },
+              {
+                "type": "paragraph",
+                "text": "The list of supported hooks is identical to IPv4/IPv6/Inet address families above."
+              }
+            ]
+          },
+          {
+            "type": "subsection",
+            "title": "NETDEV ADDRESS FAMILY",
+            "id": "NETDEV_ADDRESS_FAMILY",
+            "content": [
+              {
+                "type": "paragraph",
+                "text": "The Netdev address family handles packets from the device ingress and egress path. This family allows you to filter packets of any ethertype such as ARP, VLAN 802.1q, VLAN 802.1ad (Q-in-Q) as well as IPv4 and IPv6 packets."
+              },
+              {
+                "type": "paragraph",
+                "text": "Table 3. Netdev address family hooks"
+              },
+              {
+                "type": "table",
+                "headers": [
+                  "Hook",
+                  "Description"
+                ],
+                "rows": [
+                  {
+                    "Hook": "ingress",
+                    "Description": "All packets entering the system are processed by this hook. It is invoked after the network taps (ie. tcpdump), right after tc ingress and before layer 3 protocol handlers, it can be used for early filtering and policing."
+                  },
+                  {
+                    "Hook": "egress",
+                    "Description": "All packets leaving the system are processed by this hook. It is invoked after layer 3 protocol handlers and before tc egress. It can be used for late filtering and policing."
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "text": "Tunneled packets (such as vxlan) are processed by netdev family hooks both in decapsulated and encapsulated (tunneled) form. So a packet can be filtered on the overlay network as well as on the underlying network."
+              },
+              {
+                "type": "paragraph",
+                "text": "Note that the order of netfilter and tc is mirrored on ingress versus egress. This ensures symmetry for NAT and other packet mangling."
+              },
+              {
+                "type": "paragraph",
+                "text": "Ingress packets which are redirected out some other interface are only processed by netfilter on egress if they have passed through netfilter ingress processing before. Thus, ingress packets which are redirected by tc are not subjected to netfilter. But they are if they are redirected by netfilter on ingress. Conceptually, tc and netfilter can be thought of as layers, with netfilter layered above tc: If the packet hasn’t been passed up from the tc layer to the netfilter layer, it’s not subjected to netfilter on egress."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "RULESET",
+        "id": "RULESET",
+        "content": [
+          {
+            "type": "code",
+            "text": "{list | flush} ruleset [family]"
+          },
+          {
+            "type": "paragraph",
+            "text": "The ruleset keyword is used to identify the whole set of tables, chains, etc. currently in place in kernel. The following ruleset commands exist:"
+          },
+          {
+            "type": "table",
+            "rows": [
+              {
+                "list": "Print the ruleset in human-readable format."
+              },
+              {
+                "flush": "Clear the whole ruleset. Note that, unlike iptables, this will remove all tables and whatever they contain, effectively leading to an empty ruleset - no packet filtering will happen anymore, so the kernel accepts any valid packet it receives."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "text": "It is possible to limit list and flush to a specific address family only. For a list of valid family names, see the section called “ADDRESS FAMILIES” above."
+          },
+          {
+            "type": "paragraph",
+            "text": "By design, list ruleset command output may be used as input to nft -f. Effectively, this is the nft-equivalent of iptables-save and iptables-restore."
+          }
+        ]
+      },
+      {
+        "title": "TABLES",
+        "id": "TABLES",
+        "content": [
+          {
+            "type": "code",
+            "text": "{add | create} table [family] table [ { [comment comment ;] [flags flags ;] } ]\n{delete | destroy | list | flush} table [family] table\nlist tables [family]\ndelete table [family] handle handle\ndestroy table [family] handle handle"
+          },
+          {
+            "type": "paragraph",
+            "text": "Tables are containers for chains, sets and stateful objects. They are identified by their address family and their name. The address family must be one of ip, ip6, inet, arp, bridge, netdev. The inet address family is a dummy family which is used to create hybrid IPv4/IPv6 tables. The meta expression nfproto keyword can be used to test which family (ipv4 or ipv6) context the packet is being processed in. When no address family is specified, ip is used by default. The only difference between add and create is that the former will not return an error if the specified table already exists while create will return an error."
+          },
+          {
+            "type": "paragraph",
+            "text": "Table 4. Table flags"
+          },
+          {
+            "type": "table",
+            "headers": [
+              "Flag",
+              "Description"
+            ],
+            "rows": [
+              {
+                "Flag": "dormant",
+                "Description": "table is not evaluated any more (base chains are unregistered)."
+              },
+              {
+                "Flag": "owner",
+                "Description": "table is owned by the creating process."
+              },
+              {
+                "Flag": "persist",
+                "Description": "table shall outlive the owning process."
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "text": "Creating a table with flag owner excludes other processes from manipulating it or its contents. By default, it will be removed when the process exits. Setting flag persist will prevent this and the resulting orphaned table will accept a new owner, e.g. a restarting daemon maintaining the table."
+          },
+          {
+            "type": "paragraph",
+            "text": "Add, change, delete a table."
+          },
+          {
+            "type": "code",
+            "text": "# start nft in interactive mode\nft --interactive\n# create a new table.\ncreate table inet mytable\n# add a new base chain: get input packets\nadd chain inet mytable myin { type filter hook input priority filter; }\n# add a single counter to the chain\nadd rule inet mytable myin counter\n# disable the table temporarily -- rules are not evaluated anymore\nadd table inet mytable { flags dormant; }\n# make table active again:\nadd table inet mytable"
+          },
+          {
+            "type": "table",
+            "rows": [
+              {
+                "add": "Add a new table for the given family with the given name."
+              },
+              {
+                "delete": "Delete the specified table."
+              },
+              {
+                "destroy": "Delete the specified table, it does not fail if it does not exist."
+              },
+              {
+                "list": "List all chains and rules of the specified table."
+              },
+              {
+                "flush": "Flush all chains and rules of the specified table."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "CHAINS",
+        "id": "CHAINS",
+        "content": [
+          {
+            "type": "code",
+            "text": "{add | create} chain [family] table chain [ { type type hook hook [device device] priority priority ; [policy policy ;] [comment comment ;] } ]\n{delete | destroy | list | flush} chain [family] table chain\nlist chains [family]\ndelete chain [family] table handle handle\ndestroy chain [family] table handle"
+          }
+        ]
+      }
+    ]
+  }
+}
+ <i>handle</i>
+<b>rename chain</b> [<i>family</i>] <i>table</i> <i>chain</i> <i>newname</i></pre>
+</div>
+<p class="Pp">Chains are containers for rules. They exist in two kinds, base
+    chains and regular chains. A base chain is an entry point for packets from
+    the networking stack, a regular chain may be used as jump target and is used
+    for better rule organization. Regular chains can be anonymous, see
+    <b>VERDICT STATEMENT</b> examples for details.</p>
+<table class="tbl">
+  <tr>
+    <td style="vertical-align: top;"><b>add</b></td>
+    <td style="vertical-align: top;">إضافة سلسلة جديدة في الجدول المحدد.
+      عند تحديد خطاف وقيمة أولوية، يتم إنشاء السلسلة كسلسلة أساسية وربطها
+      بمكدس الشبكات.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>create</b></td>
+    <td style="vertical-align: top;">على غرار أمر <b>add</b>، ولكن
+      يعيد خطأ إذا كانت السلسلة موجودة بالفعل.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>delete</b></td>
+    <td style="vertical-align: top;">حذف السلسلة المحددة. يجب ألا تحتوي السلسلة على أي قواعد أو
+      يتم استخدامها كهدف للقفز.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>destroy</b></td>
+    <td style="vertical-align: top;">حذف السلسلة المحددة، ولا تفشل إذا لم تكن موجودة. يجب ألا تحتوي السلسلة على أي قواعد أو
+      يتم استخدامها كهدف للقفز.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>rename</b></td>
+    <td style="vertical-align: top;">إعادة تسمية السلسلة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>list</b></td>
+    <td style="vertical-align: top;">سرد جميع قواعد السلسلة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>flush</b></td>
+    <td style="vertical-align: top;">مسح جميع قواعد السلسلة المحددة.</td>
+  </tr>
+</table>
+<p class="Pp">بالنسبة للسلاسل الأساسية، تكون معلمات <b>type</b> و <b>hook</b> و
+    <b>priority</b> إلزامية.</p>
+<p class="Pp"><b>جدول&#x00A0;5.&#x00A0;أنواع السلاسل المدعومة</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+    <td style="vertical-align: top;"><b>العائلات</b></td>
+    <td style="vertical-align: top;"><b>الخطافات</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">filter</td>
+    <td style="vertical-align: top;">all</td>
+    <td style="vertical-align: top;">all</td>
+    <td style="vertical-align: top;">نوع سلسلة قياسي للاستخدام عند الشك.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">nat</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">prerouting, input, output, postrouting</td>
+    <td style="vertical-align: top;">تقوم سلاسل هذا النوع بترجمة العناوين الأصلية بناءً على إدخالات conntrack.
+      الرزمة الأولى فقط للاتصال تمر عبر هذه السلسلة - عادةً ما تحدد قواعدها
+      تفاصيل إدخال conntrack الذي تم إنشاؤه (بيانات NAT على سبيل المثال).</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">route</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">output</td>
+    <td style="vertical-align: top;">إذا مرت رزمة عبر سلسلة من هذا النوع وكانت على وشك
+      القبول، يتم إجراء بحث توجيه جديد إذا تم تغيير أجزاء ذات صلة من رأس IP.
+      هذا يسمح بتنفيذ محددات توجيه السياسة في nftables على سبيل المثال.</td>
+  </tr>
+</table>
+<p class="Pp">بصرف النظر عن الحالات الخاصة الموضحة أعلاه (على سبيل المثال، نوع
+    <b>nat</b> لا يدعم خطاف <b>forward</b> أو نوع <b>route</b> يدعم فقط خطاف
+    <b>output</b>)، هناك ثلاث ملاحظات إضافية جديرة بالملاحظة:</p>
+<div class="Bd-indent">&#x2022;عائلة netdev تدعم مجموعتين فقط، وهما نوع
+  <b>filter</b> مع خطاف <b>ingress</b> ونوع <b>filter</b> مع خطاف <b>egress</b>.
+  تتطلب السلاسل الأساسية في هذه العائلة أيضًا أن يكون المعلمة <b>device</b> موجودة
+  لأنها توجد لكل واجهة فقط.</div>
+<div class="Bd-indent">&#x2022;عائلة arp تدعم فقط خطافات <b>input</b> و
+    <b>output</b>، وكلاهما في سلاسل من نوع <b>filter</b>.</div>
+<div class="Bd-indent">&#x2022;تدعم عائلة inet أيضًا خطاف <b>ingress</b> (منذ نواة Linux 5.10)،
+    لتصفية حزم IPv4 و IPv6 في نفس موقع خطاف <b>ingress</b> الخاص بـ netdev. يسمح
+    خطاف inet هذا بمشاركة المجموعات والخرائط بين خطافات
+    <b>prerouting</b> و <b>input</b> و <b>forward</b> و <b>output</b> و
+    <b>postrouting</b> القياسية وهذا الخطاف <b>ingress</b>.</div>
+<p class="Pp">تقبل المعلمة <b>device</b> اسم واجهة شبكة كسلسلة نصية، وهي مطلوبة
+    عند إضافة سلسلة أساسية تقوم بتصفية حركة المرور على خطافات ingress أو egress.
+    ستقوم أي سلاسل ingress أو egress بتصفية حركة المرور فقط من الواجهة المحددة في
+    المعلمة <b>device</b>.</p>
+<p class="Pp">تقبل المعلمة <b>priority</b> قيمة عدد صحيح موقعة أو اسم أولوية قياسي
+    يحدد الترتيب الذي يتم به اجتياز السلاسل التي لها نفس قيمة <b>hook</b>. الترتيب
+    تصاعدي، أي أن قيم الأولوية الأقل لها الأسبقية على القيم الأعلى.</p>
+<p class="Pp">مع سلاسل نوع <b>nat</b>، يوجد حد أدنى للاستبعاد قدره -200 لقيم
+    <b>priority</b>، لأن خطافات conntrack بهذه الأولوية وتتطلب NAT ذلك.</p>
+<p class="Pp">يمكن استبدال قيم الأولوية القياسية بأسماء سهلة التذكر. لا تكون جميع
+    الأسماء منطقية في كل عائلة مع كل خطاف (انظر مصفوفات التوافق أدناه)، ولكن لا يزال
+    يمكن استخدام قيمتها الرقمية لتحديد أولويات السلاسل.</p>
+<p class="Pp">تستند هذه الأسماء والقيم إلى أولويات xtables عند تسجيل سلاسلها الافتراضية.</p>
+<p class="Pp">تستخدم معظم العائلات نفس القيم، ولكن bridge يستخدم قيمًا مختلفة عن
+    غيرها. انظر الجداول التالية التي تصف القيم والتوافق.</p>
+<p class="Pp"><b>جدول&#x00A0;6.&#x00A0;مصفوفة توافق أسماء الأولوية القياسية والعائلات والخطافات</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الاسم</b></td>
+    <td style="vertical-align: top;"><b>القيمة</b></td>
+    <td style="vertical-align: top;"><b>العائلات</b></td>
+    <td style="vertical-align: top;"><b>الخطافات</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">raw</td>
+    <td style="vertical-align: top;">-300</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">all</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">mangle</td>
+    <td style="vertical-align: top;">-150</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">all</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">dstnat</td>
+    <td style="vertical-align: top;">-100</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">prerouting</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">filter</td>
+    <td style="vertical-align: top;">0</td>
+    <td style="vertical-align: top;">ip, ip6, inet, arp, netdev</td>
+    <td style="vertical-align: top;">all</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">security</td>
+    <td style="vertical-align: top;">50</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">all</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">srcnat</td>
+    <td style="vertical-align: top;">100</td>
+    <td style="vertical-align: top;">ip, ip6, inet</td>
+    <td style="vertical-align: top;">postrouting</td>
+  </tr>
+</table>
+<p class="Pp"><b>جدول&#x00A0;7.&#x00A0;أسماء الأولوية القياسية وتوافق الخطاف لعائلة bridge</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;">الاسم</td>
+    <td style="vertical-align: top;">القيمة</td>
+    <td style="vertical-align: top;">الخطافات</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">dstnat</td>
+    <td style="vertical-align: top;">-300</td>
+    <td style="vertical-align: top;">prerouting</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">filter</td>
+    <td style="vertical-align: top;">-200</td>
+    <td style="vertical-align: top;">all</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">out</td>
+    <td style="vertical-align: top;">100</td>
+    <td style="vertical-align: top;">output</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">srcnat</td>
+    <td style="vertical-align: top;">300</td>
+    <td style="vertical-align: top;">postrouting</td>
+  </tr>
+</table>
+<p class="Pp">يمكن أيضًا تحقيق التعبيرات الحسابية الأساسية (الجمع والطرح) باستخدام
+    هذه الأسماء القياسية لتسهيل تحديد الأولويات النسبية، على سبيل المثال،
+    <b>mangle - 5</b> تعني <b>-155</b>. ستتم طباعة القيم أيضًا بهذه الطريقة حتى
+    تكون القيمة ليست أبعد من 10 عن القيمة القياسية.</p>
+<p class="Pp">تسمح السلاسل الأساسية أيضًا بتعيين <b>policy</b> السلسلة، أي ما
+    يحدث للحزم التي لم يتم قبولها أو رفضها صراحةً في القواعد الموجودة. قيم السياسة
+    المدعومة هي <b>accept</b> (وهو الافتراضي) أو <b>drop</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RULES'><a class='permalink' href='#RULES'>القواعد</a></h1>
+<div class="Bd-indent">
+<pre>{<b>add</b> | <b>insert</b>} <b>rule</b> [<i>family</i>] <i>table</i> <i>chain</i> [<b>handle</b> <i>handle</i> | <b>index</b> <i>index</i>] <i>statement</i> ... [<b>comment</b> <i>comment</i>]
+<b>replace rule</b> [<i>family</i>] <i>table</i> <i>chain</i> <b>handle</b> <i>handle</i> <i>statement</i> ... [<b>comment</b> <i>comment</i>]
+{<b>delete</b> | <b>reset</b>} <b>rule</b> [<i>family</i>] <i>table</i> <i>chain</i> <b>handle</b> <i>handle</i>
+<b>destroy rule</b> [<i>family</i>] <i>table</i> <i>chain</i> <b>handle</b> <i>handle</i>
+<b>reset rules</b> [<i>family</i>] [<i>table</i> [<i>chain</i>]]</pre>
+</div>
+<p class="Pp">تتم إضافة القواعد إلى السلاسل في الجدول المحدد. إذا لم يتم تحديد
+    العائلة، يتم استخدام عائلة ip. تتكون القواعد من نوعين من المكونات وفقًا لمجموعة
+    من القواعد النحوية: التعابير والبيانات.</p>
+<p class="Pp">تدعم أوامر add و insert محدد موقع اختياري، وهو إما <i>handle</i>
+    أو <i>index</i> (يبدأ من الصفر) لقاعدة موجودة. داخليًا، يتم دائمًا تحديد مواقع
+    القواعد بواسطة <i>handle</i> ويتم إجراء الترجمة من <i>index</i> في مساحة
+    المستخدم. هذا له آثار محتملة في حالة حدوث تغيير متزامن في مجموعة القواعد بعد
+    انتهاء الترجمة: قد يتغير فهرس القاعدة الفعلي إذا تم إدراج قاعدة أو حذفها قبل
+    القاعدة المشار إليها. إذا تم حذف القاعدة المشار إليها، يتم رفض الأمر بواسطة
+    النواة كما لو تم تقديم <i>handle</i> غير صالح.</p>
+<p class="Pp"><i>comment</i> هو كلمة واحدة أو سلسلة متعددة الكلمات محاطة بعلامات
+    اقتباس مزدوجة (") يمكن استخدامها لتدوين ملاحظات حول القاعدة الفعلية.
+    **ملاحظة:** إذا كنت تستخدم bash لإضافة قواعد، فيجب عليك إلغاء علامات الاقتباس،
+    على سبيل المثال، \&quot;enable ssh for servers\&quot;.</p>
+<table class="tbl">
+  <tr>
+    <td style="vertical-align: top;"><b>add</b></td>
+    <td style="vertical-align: top;">إضافة قاعدة جديدة موصوفة بقائمة البيانات. يتم إلحاق القاعدة
+      بالسلسلة المحددة ما لم يتم تحديد موقع، وفي هذه الحالة يتم إدراج القاعدة بعد
+      القاعدة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>insert</b></td>
+    <td style="vertical-align: top;">نفس أمر <b>add</b> باستثناء أن القاعدة
+      تُدرج في بداية السلسلة أو قبل القاعدة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>replace</b></td>
+    <td style="vertical-align: top;">على غرار أمر <b>add</b>، ولكن القاعدة
+      القديمة...</td>
+  </tr>
+</table>
+le
+      يستبدل القاعدة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>delete</b></td>
+    <td style="vertical-align: top;">حذف القاعدة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>destroy</b></td>
+    <td style="vertical-align: top;">حذف القاعدة المحددة، لا يفشل إذا لم تكن موجودة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>reset</b></td>
+    <td style="vertical-align: top;">إعادة تعيين الحالة الموجودة في القاعدة، مثل
+      قيم عدادات وبيانات الحصص.</td>
+  </tr>
+</table>
+<p class="Pp"><b>إضافة قاعدة إلى سلسلة إخراج جدول ip</b>.</p>
+<div class="Bd-indent">
+<pre>nft add rule filter output ip daddr 192.168.0.0/24 accept # 'ip filter' مفترض
+# نفس الأمر، مع تفصيل طفيف
+nft add rule ip filter output ip daddr 192.168.0.0/24 accept</pre>
+</div>
+<p class="Pp"><b>حذف قاعدة من جدول inet</b>.</p>
+<div class="Bd-indent">
+<pre># nft -a list ruleset
+table inet filter {
+        chain input {
+                type filter hook input priority filter; policy accept;
+                ct state established,related accept # معالج 4
+                ip saddr 10.1.1.1 tcp dport ssh accept # معالج 5
+          ...
+# حذف القاعدة ذات المعالج 5
+nft delete rule inet filter input handle 5</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SETS'><a class='permalink' href='#SETS'>المجموعات</a></h1>
+<p class="Pp">تقدم nftables نوعين من مفاهيم المجموعات. المجموعات المجهولة هي
+    مجموعات ليس لها اسم محدد. يتم إغلاق أعضاء المجموعة بين أقواس متعرجة، مع
+    فواصل لفصل العناصر عند إنشاء القاعدة التي تستخدم المجموعة. بمجرد إزالة تلك
+    القاعدة، تتم إزالة المجموعة أيضًا. لا يمكن تحديثها، أي بمجرد الإعلان عن مجموعة
+    مجهولة، لا يمكن تغييرها بعد ذلك إلا عن طريق إزالة/تعديل القاعدة التي تستخدم
+    المجموعة المجهولة.</p>
+<p class="Pp"><b>استخدام مجموعات مجهولة لقبول شبكات فرعية ومنافذ معينة</b>.</p>
+<div class="Bd-indent">
+<pre>nft add rule filter input ip saddr { 10.0.0.0/8, 192.168.0.0/16 } tcp dport { 22, 443 } accept</pre>
+</div>
+<p class="Pp">المجموعات المسماة هي مجموعات تحتاج إلى تعريف أولاً قبل أن يمكن
+    الإشارة إليها في القواعد. على عكس المجموعات المجهولة، يمكن إضافة عناصر إلى
+    مجموعة مسماة أو إزالتها منها في أي وقت. تتم الإشارة إلى المجموعات من القواعد
+    باستخدام علامة @ مسبوقة باسم المجموعة.</p>
+<p class="Pp"><b>استخدام مجموعات مسماة لقبول عناوين ومنافذ</b>.</p>
+<div class="Bd-indent">
+<pre>nft add rule filter input ip saddr @allowed_hosts tcp dport @allowed_ports accept</pre>
+</div>
+<p class="Pp">تحتاج المجموعات allowed_hosts و allowed_ports إلى الإنشاء أولاً.
+    يصف القسم التالي بناء جملة مجموعات nft بمزيد من التفصيل.</p>
+<div class="Bd-indent">
+<pre><b>add set</b> [<i>family</i>] <i>table</i> <i>set</i> <b>{ type</b> <i>type</i> | <b>typeof</b> <i>expression</i> <b>;</b> [<b>flags</b> <i>flags</i> <b>;</b>] [<b>timeout</b> <i>timeout</i> <b>;</b>] [<b>gc-interval</b> <i>gc-interval</i> <b>;</b>] [<b>elements = {</b> <i>element</i>[<b>,</b> ...] <b>} ;</b>] [<b>size</b> <i>size</i> <b>;</b>] [<b>comment</b> <i>comment</i> <b>;</b><i>] [</i><i></i><b>policy</b><i> 'policy</i> <b>;</b>] [<b>auto-merge ;</b>] <b>}</b>
+{<b>delete</b> | <b>destroy</b> | <b>list</b> | <b>flush</b> | <b>reset</b> } <b>set</b> [<i>family</i>] <i>table</i> <i>set</i>
+<b>list sets</b> [<i>family</i>] [<i>table</i>]
+<b>delete set</b> [<i>family</i>] <i>table</i> <b>handle</b> <i>handle</i>
+{<b>add</b> | <b>delete</b> | <b>destroy</b> } <b>element</b> [<i>family</i>] <i>table</i> <i>set</i> <b>{</b> <i>element</i>[<b>,</b> ...] <b>}</b></pre>
+</div>
+<p class="Pp">المجموعات هي حاويات عناصر من نوع بيانات معرف من قبل المستخدم، يتم
+    تحديدها بشكل فريد باسم معرف من قبل المستخدم وإرفاقها بالجداول. يمكن تعديل
+    سلوكها باستخدام الأعلام التي يمكن تحديدها في وقت إنشاء المجموعة.</p>
+<p class="Pp">راجع أعلام المجموعات والخرائط أدناه لمزيد من التفاصيل.</p>
+<table class="tbl">
+  <tr>
+    <td style="vertical-align: top;"><b>add</b></td>
+    <td style="vertical-align: top;">إضافة مجموعة جديدة في الجدول المحدد. انظر
+      جدول مواصفات المجموعة أدناه لمزيد من المعلومات حول كيفية تحديد خصائص
+      المجموعة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>delete</b></td>
+    <td style="vertical-align: top;">حذف المجموعة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>destroy</b></td>
+    <td style="vertical-align: top;">حذف المجموعة المحددة، لا يفشل إذا لم تكن
+      موجودة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>list</b></td>
+    <td style="vertical-align: top;">عرض العناصر في المجموعة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>flush</b></td>
+    <td style="vertical-align: top;">إزالة جميع العناصر من المجموعة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>reset</b></td>
+    <td style="vertical-align: top;">إعادة تعيين الحالة في جميع العناصر المحتواة،
+      مثل قيم عدادات وبيانات الحصص.</td>
+  </tr>
+</table>
+<p class="Pp"><b>الجدول 8. مواصفات المجموعات</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>كلمة مفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">نوع بيانات عناصر المجموعة</td>
+    <td style="vertical-align: top;">سلسلة: ipv4_addr, ipv6_addr, ether_addr,
+      inet_proto, inet_service, mark</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">typeof</td>
+    <td style="vertical-align: top;">نوع بيانات عنصر المجموعة</td>
+    <td style="vertical-align: top;">تعبير لاستنتاج نوع البيانات منه</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">flags</td>
+    <td style="vertical-align: top;">أعلام المجموعة</td>
+    <td style="vertical-align: top;">سلسلة: constant, dynamic, interval,
+      timeout. تستخدم لوصف خصائص المجموعة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">timeout</td>
+    <td style="vertical-align: top;">الوقت الذي يبقى فيه العنصر في المجموعة، إلزامي
+      إذا تم إضافة المجموعة من مسار الحزمة (قواعد).</td>
+    <td style="vertical-align: top;">سلسلة، رقم عشري متبوع بوحدة. الوحدات هي:
+      d, h, m, s</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">gc-interval</td>
+    <td style="vertical-align: top;">فترة جمع القمامة، متاحة فقط عندما تكون المهلة
+      أو علامة المهلة نشطة.</td>
+    <td style="vertical-align: top;">سلسلة، رقم عشري متبوع بوحدة. الوحدات هي:
+      d, h, m, s</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">elements</td>
+    <td style="vertical-align: top;">العناصر التي تحتوي عليها المجموعة</td>
+    <td style="vertical-align: top;">نوع بيانات المجموعة</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">size</td>
+    <td style="vertical-align: top;">الحد الأقصى لعدد العناصر في المجموعة، إلزامي
+      إذا تم إضافة المجموعة من مسار الحزمة (قواعد).</td>
+    <td style="vertical-align: top;">عدد صحيح غير سالب (64 بت)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">policy</td>
+    <td style="vertical-align: top;">سياسة المجموعة</td>
+    <td style="vertical-align: top;">سلسلة: performance [افتراضي], memory</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">auto-merge</td>
+    <td style="vertical-align: top;">دمج تلقائي للعناصر المتجاورة/المتداخلة في
+      المجموعة (فقط لمجموعات الفترات)</td>
+    <td style="vertical-align: top;"></td>
+  </tr>
+</table>
+<p class="Pp"><b>gc-interval</b> لا يؤثر على مهلة العنصر، ولكنه يؤثر على
+    استعادة الذاكرة. يمكن لمجموعة كبيرة نادرًا ما تنتهي صلاحية عناصرها استخدام
+    جمع قمامة أعلى (أقل تكرارًا) لتوفير وقت وحدة المعالجة المركزية، بينما تستفيد
+    المجموعات التي تشهد العديد من التحديثات مع عناصر قصيرة العمر من فترة أقل.
+    تضمن الفترات الأقل بقاء المجموعة أقل من حجمها الأقصى. داخليًا، يبقى الإدخال
+    الذي انتهت صلاحيته حتى تتم إزالته بواسطة جامع القمامة، والذي يقلل أيضًا من
+    عدد عناصر المجموعة. هذا يعني أيضًا أنه من الممكن أن يكون لديك مجموعة لا
+    يمكنها استيعاب المزيد من العناصر، حتى لو انتهت صلاحية جميع العناصر، إذا تم
+    تعيين <b>gc-interval</b> على قيمة كبيرة جدًا.</p>
+<p class="Pp"><b>size</b> يحدد الحد الأعلى لكمية العناصر التي يمكن للمجموعة
+    دعمها. إلزامي للمجموعات التي تتم إضافتها من مجموعة القواعد باستخدام
+    الكلمتين المفتاحيتين <b>add</b> و <b>update</b>. يوفر توفير الكلمة
+    المفتاحية <b>size</b> للمجموعات التي تتم إضافتها فقط عبر <b>nft add
+    element</b> استخدام تنفيذ مجموعة أكثر إحكامًا (يحافظ على الذاكرة)، ولكنه
+    غير مطلوب.</p>
+<p class="Pp">يمكن استخدام الكلمة المفتاحية الاختيارية <b>policy</b> لطلب
+    تنفيذ مجموعة أكثر حفاظًا على الذاكرة.</p>
+<p class="Pp"><b>auto-merge</b> يوجه واجهة nftables لدمج النطاقات المتجاورة
+    والمتداخلة. مثال: عندما تحتوي المجموعة على النطاق <b>1.2.3.1-1.2.3.4</b>،
+    فإن إضافة العنصر <b>1.2.3.2</b> لا يكون لها أي تأثير. إضافة
+    <b>1.2.3.5</b> يغير النطاق الحالي ليغطي
+    <b>1.2.3.1-1.2.3.5</b>. بدون هذا العلم، لا يمكن إضافة
+    <b>1.2.3.2</b> ويتم إدراج <b>1.2.3.5</b> كإدخال جديد.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MAPS'><a class='permalink' href='#MAPS'>الخرائط</a></h1>
+<div class="Bd-indent">
+<pre><b>add map</b> [<i>family</i>] <i>table</i> <i>map</i> <b>{ type</b> <i>type</i> | <b>typeof</b> <i>expression</i> [<b>flags</b> <i>flags</i> <b>;</b>] [<b>elements = {</b> <i>element</i>[<b>,</b> ...] <b>} ;</b>] [<b>size</b> <i>size</i> <b>;</b>] [<b>comment</b> <i>comment</i> <b>;</b><i>] [</i><i></i><b>policy</b><i> 'policy</i> <b>;</b>] <b>}</b>
+{<b>delete</b> | <b>destroy</b> | <b>list</b> | <b>flush</b> | <b>reset</b> } <b>map</b> [<i>family</i>] <i>table</i> <i>map</i>
+<b>list maps</b> [<i>family</i>] [<i>table</i>]</pre>
+</div>
+<p class="Pp">تقوم الخرائط بتخزين البيانات بناءً على مفتاح محدد يستخدم كمدخل.
+    يتم تحديدها بشكل فريد باسم معرف من قبل المستخدم وإرفاقها بالجداول.</p>
+<table class="tbl">
+  <tr>
+    <td style="vertical-align: top;"><b>add</b></td>
+    <td style="vertical-align: top;">إضافة خريطة جديدة في الجدول المحدد.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>delete</b></td>
+    <td style="vertical-align: top;">حذف الخريطة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>destroy</b></td>
+    <td style="vertical-align: top;">حذف الخريطة المحددة، لا يفشل إذا لم تكن
+      موجودة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>list</b></td>
+    <td style="vertical-align: top;">عرض العناصر في الخريطة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>flush</b></td>
+    <td style="vertical-align: top;">إزالة جميع العناصر من الخريطة المحددة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>reset</b></td>
+    <td style="vertical-align: top;">إعادة تعيين الحالة في جميع العناصر المحتواة،
+      مثل قيم عدادات وبيانات الحصص.</td>
+  </tr>
+</table>
+<p class="Pp"><b>الجدول 9. مواصفات الخرائط</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>كلمة مفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">نوع بيانات عناصر الخريطة</td>
+    <td style="vertical-align: top;">سلسلة: ipv4_addr, ipv6_addr, ether_addr,
+      inet_proto, inet_service, mark, counter, quota. لا يمكن استخدام
+      counter و quota كمفاتيح.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">typeof</td>
+    <td style="vertical-align: top;">نوع بيانات عنصر المجموعة</td>
+    <td style="vertical-align: top;">تعبير لاستنتاج نوع البيانات</td>
+  </tr>
+<h2 class="Section" id='FIB_EXPRESSIONS'><a class='permalink' href='#FIB_EXPRESSIONS'>تعبيرات FIB</a></h2>
+<div class="Bd-indent">
+<pre><b>fib</b> <i>FIB_TUPLE</i> <i>FIB_RESULT</i>
+<i>FIB_TUPLE</i> := { <b>saddr</b> | <b>daddr</b>} [ <b>.</b> { <b>iif</b> | <b>oif</b> } <b>.</b> <b>mark</b> ]
+<i>FIB_RESULT</i>  := { <b>oif</b> | <b>oifname</b> | <b>check</b> | <b>type</b> }</pre>
+</div>
+<p class="Pp">يعبر تعبير fib عن استعلام قاعدة معلومات التوجيه (fib) للحصول على معلومات مثل فهرس واجهة الإخراج.</p>
+<p class="Pp">الوسائط الأولى لتعبير <b>fib</b> هي المفاتيح المدخلة التي سيتم تمريرها إلى دالة بحث fib. يجب تحديد واحد من <b>saddr</b> أو <b>daddr</b>، وهما متعارضان.</p>
+<p class="Pp">الكلمات المفتاحية <b>mark</b> و <b>iif</b> و <b>oif</b> هي معدلات اختيارية للتأثير على نتيجة البحث، انظر جدول الكلمات المفتاحية <b>FIB_TUPLE</b> أدناه للحصول على وصف. الكلمات المفتاحية للجملة <b>iif</b> و <b>oif</b> متعارضة أيضًا.</p>
+<p class="Pp">الوسيط الأخير لتعبير <b>fib</b> هو نوع النتيجة المطلوب.</p>
+<p class="Pp">يطلب <b>oif</b> الحصول على فهرس الواجهة الذي سيتم استخدامه لإرسال الحزم إلى مصدر الحزمة (مفتاح <b>saddr</b>) أو وجهتها (مفتاح <b>daddr</b>). إذا لم يتم العثور على إدخال توجيه، فإن فهرس الواجهة المعادة هو 0.</p>
+<p class="Pp"><b>oifname</b> يشبه <b>oif</b>، ولكنه يملأ اسم الواجهة بدلاً من ذلك. هذا مفيد للتحقق من الواجهات الديناميكية مثل أجهزة ppp. إذا لم يتم العثور على إدخال، يتم إرجاع اسم واجهة فارغ.</p>
+<p class="Pp"><b>type</b> يعيد نوع العنوان مثل unicast أو multicast. يمكن عرض قائمة كاملة بأنواع العناوين المدعومة باستخدام <b>nft</b> <b>describe</b> <b>fib_addrtype</b>.</p>
+<p class="Pp"><b>الجدول 31. الكلمات المفتاحية لـ FIB_TUPLE</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">daddr</td>
+    <td style="vertical-align: top;">إجراء بحث عادي في التوجيه: البحث في fib عن مسار إلى <b>عنوان الوجهة</b> للحزمة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">saddr</td>
+    <td style="vertical-align: top;">إجراء بحث عكسي في التوجيه: البحث في fib عن مسار إلى <b>عنوان المصدر</b> للحزمة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">mark</td>
+    <td style="vertical-align: top;">أخذ علامة الحزمة (nfmark) في الاعتبار عند الاستعلام عن fib.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">iif</td>
+    <td style="vertical-align: top;">إذا قدمت بحث fib مسارًا، فقم بالتحقق من أن واجهة الإخراج الخاصة به متطابقة مع واجهة <b>الإدخال</b> للحزمة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">oif</td>
+    <td style="vertical-align: top;">إذا قدمت بحث fib مسارًا، فقم بالتحقق من أن واجهة الإخراج الخاصة به متطابقة مع واجهة <b>الإخراج</b> للحزمة. يمكن استخدام هذه العلامة فقط مع نتيجة <b>type</b>.</td>
+  </tr>
+</table>
+<p class="Pp"><b>الجدول 32. الكلمات المفتاحية لـ FIB_RESULT</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>نوع النتيجة</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">oif</td>
+    <td style="vertical-align: top;">فهرس واجهة الإخراج</td>
+    <td style="vertical-align: top;">iface_index</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">check</td>
+    <td style="vertical-align: top;">التحقق من واجهة الإخراج</td>
+    <td style="vertical-align: top;">boolean</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">oifname</td>
+    <td style="vertical-align: top;">اسم واجهة الإخراج</td>
+    <td style="vertical-align: top;">ifname</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">نوع العنوان</td>
+    <td style="vertical-align: top;">fib_addrtype (انظر <b>nft</b> <b>describe</b> <b>fib_addrtype</b> للحصول على قائمة)</td>
+  </tr>
+</table>
+<p class="Pp">نتيجة <b>oif</b> و <b>oifname</b> صالحة فقط في خطافات <b>prerouting</b> و <b>input</b> و <b>forward</b>. يمكن الاستعلام عن <b>type</b> من أي من خطافات <b>prerouting</b> و <b>input</b> و <b>forward</b> و <b>output</b> و <b>postrouting</b>.</p>
+<p class="Pp">بالنسبة لـ <b>type</b>، فإن وجود الكلمة المفتاحية <b>iif</b> في معدلات <i>FIB_TUPLE</i> يحد من الخطافات المتاحة لتلك التي ترتبط فيها الحزمة بواجهة إدخال، أي <b>prerouting</b> و <b>input</b> و <b>forward</b>. وبالمثل، فإن الكلمة المفتاحية <b>oif</b> في قائمة معدلات <i>FIB_TUPLE</i> سيحد من الخطافات المتاحة إلى <b>forward</b> و <b>output</b> و <b>postrouting</b>.</p>
+<p class="Pp"><b>استخدام تعبيرات fib</b>.</p>
+<div class="Bd-indent">
+<pre># إسقاط الحزم التي لا تحتوي على مسار عكسي
+filter prerouting fib saddr . iif oif missing drop
+في هذا المثال، يبحث 'saddr . iif' عن مسار إلى *عنوان المصدر* للحزمة ويقصر النتائج المطابقة على الواجهة التي وصلت منها الحزمة، ثم يخزن فهرس واجهة الإخراج من نتيجة fib التي تم الحصول عليها.
+إذا لم يتم العثور على مسار لمزيج عنوان المصدر/واجهة الإدخال، فإن فهرس واجهة الإخراج هو صفر.
+وبالتالي، ستسقط هذه القاعدة جميع الحزم التي لا تحتوي على مسار عكسي صارم (الحزمة الردية الافتراضية سترسل عبر الواجهة التي وصلت منها الحزمة المختبرة).
+إذا تم استخدام 'saddr oif' فقط كمفتاح إدخال، فإن هذه القاعدة ستسقط فقط الحزم التي لا يمكن لـ fib العثور على مسار لها. في معظم الإعدادات، لن تسقط هذه القاعدة أي حزم لأن المسار الافتراضي هو الذي يتم إرجاعه.
+# إسقاط الحزم إذا لم يكن عنوان IP الوجهة مهيئًا على الواجهة الواردة
+filter prerouting fib daddr . iif type != { local, broadcast, multicast } drop
+هذا يستعلم عن fib بناءً على عنوان الوجهة للحزمة الحالية وواجهة الإدخال.
+إذا تم إرسال الحزمة إلى عنوان unicast مهيأ على واجهة مختلفة، فسيتم إسقاط الحزمة نظرًا لأن مثل هذا العنوان سيتم تصنيفه على أنه نوع 'unicast'.
+بدون المعدل 'iif'، فإن أي عنوان مهيأ على الجهاز المحلي هو 'local'، وعناوين unicast غير المهيأة على أي واجهة ستعيد النوع 'unicast'.
+# إجراء بحث في جدول "blackhole" محدد (0xdead، يحتاج إلى قاعدة ip مناسبة)
+filter prerouting meta mark set 0xdead fib daddr . mark type vmap { blackhole : drop, prohibit : jump prohibited, unreachable : drop }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ROUTING_EXPRESSIONS'><a class='permalink' href='#ROUTING_EXPRESSIONS'>تعبيرات التوجيه</a></h2>
+<div class="Bd-indent">
+<pre><b>rt</b> [<b>ip</b> | <b>ip6</b>] {<b>classid</b> | <b>nexthop</b> | <b>mtu</b> | <b>ipsec</b>}</pre>
+</div>
+<p class="Pp">يشير تعبير التوجيه إلى بيانات التوجيه المرتبطة بحزمة.</p>
+<p class="Pp"><b>الجدول 33. أنواع تعبيرات التوجيه</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">classid</td>
+    <td style="vertical-align: top;">منطقة التوجيه</td>
+    <td style="vertical-align: top;">realm</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">nexthop</td>
+    <td style="vertical-align: top;">القفزة التالية للتوجيه</td>
+    <td style="vertical-align: top;">ipv4_addr/ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">mtu</td>
+    <td style="vertical-align: top;">أقصى حجم مقطع TCP للمسار</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">ipsec</td>
+    <td style="vertical-align: top;">التوجيه عبر نفق ipsec أو النقل</td>
+    <td style="vertical-align: top;">boolean</td>
+  </tr>
+</table>
+<p class="Pp"><b>الجدول 34. أنواع تعبيرات التوجيه المحددة</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">realm</td>
+    <td style="vertical-align: top;">منطقة التوجيه (رقم 32 بت). يمكن تحديدها رقميًا أو كاسم رمزي معرف في /etc/iproute2/rt_realms.</td>
+  </tr>
+</table>
+<p class="Pp"><b>استخدام تعبيرات التوجيه</b>.</p>
+<div class="Bd-indent">
+<pre># تعبير rt مستقل عن عائلة IP
+filter output rt classid 10
+# تعبيرات rt معتمدة على عائلة IP
+filter output rt nexthop 192.168.0.1
+ip6 filter output rt nexthop fd00::1
+inet filter output rt ip nexthop 192.168.0.1
+inet filter output rt ip6 nexthop fd00::1
+# سيتم تغليف/تشفير الحزمة الصادرة بواسطة ipsec
+filter output rt ipsec exists</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IPSEC_EXPRESSIONS'><a class='permalink' href='#IPSEC_EXPRESSIONS'>تعبيرات IPSEC</a></h2>
+<div class="Bd-indent">
+<pre><b>ipsec</b> {<b>in</b> | <b>out</b>} [ <b>spnum</b> <i>NUM</i> ]  {<b>reqid</b> | <b>spi</b>}
+<b>ipsec</b> {<b>in</b> | <b>out</b>} [ <b>spnum</b> <i>NUM</i> ]  {<b>ip</b> | <b>ip6</b>} {<b>saddr</b> | <b>daddr</b>}</pre>
+</div>
+<p class="Pp">يشير تعبير ipsec إلى بيانات ipsec المرتبطة بحزمة.</p>
+<p class="Pp">يجب استخدام الكلمة المفتاحية <i>in</i> أو <i>out</i> لتحديد ما إذا كان التعبير يجب أن يفحص السياسات الواردة أو الصادرة. يمكن استخدام الكلمة المفتاحية <i>in</i> في خطافات prerouting و input و forward. تنطبق الكلمة المفتاحية <i>out</i> على خطافات forward و output و postrouting. يمكن استخدام الكلمة المفتاحية الاختيارية spnum لمطابقة حالة معينة في سلسلة، وهي افتراضيًا 0.</p>
+<p class="Pp"><b>الجدول 35. أنواع تعبيرات Ipsec</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">reqid</td>
+    <td style="vertical-align: top;">معرف الطلب</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">spi</td>
+    <td style="vertical-align: top;">مؤشر معلمات الأمان</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">saddr</td>
+    <td style="vertical-align: top;">عنوان مصدر النفق</td>
+    <td style="vertical-align: top;">ipv4_addr/ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">daddr</td>
+    <td style="vertical-align: top;">عنوان وجهة النفق</td>
+    <td style="vertical-align: top;">ipv4_addr/ipv6_addr</td>
+  </tr>
+</table>
+<p class="Pp"><b>ملاحظة:</b> عند استخدام xfrm_interface، لا يمكن استخدام هذا التعبير في خطاف الإخراج حيث أن الحزمة العادية لا تمر عبره مع معلومات IPsec المرفقة - استخدم سلسلة في خطاف postrouting بدلاً من ذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='NUMGEN_EXPRESSION'><a class='permalink' href='#NUMGEN_EXPRESSION'>تعبير NUMGEN</a></h2>
+<div class="Bd-indent">
+<pre><b>numgen</b> {<b>inc</b> | <b>random</b>} <b>mod</b> <i>NUM</i> [ <b>offset</b> <i>NUM</i> ]</pre>
+</div>
+<p class="Pp">إنشاء مولد أرقام. تتحكم الكلمات المفتاحية <b>inc</b> أو <b>random</b> في وضع التشغيل الخاص به: في وضع <b>inc</b>، يتم ببساطة زيادة القيمة الأخيرة التي تم إرجاعها. في وضع <b>random</b>، يتم إرجاع رقم عشوائي جديد. تحدد القيمة بعد الكلمة المفتاحية <b>mod</b> حدًا علويًا (اقرأ: معامل) لا تصل إليه الأرقام التي تم إرجاعها. **Offset** الاختياري</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ICMP_HEADER_EXPRESSION'><a class='permalink' href='#ICMP_HEADER_EXPRESSION'>تعبير رأس ICMP</a></h2>
+<div class="Bd-indent">
+<pre><b>icmp</b> {<b>type</b> | <b>code</b> | <b>checksum</b> | <b>id</b> | <b>sequence</b> | <b>gateway</b> | <b>mtu</b>}</pre>
+</div>
+<p class="Pp">يشير هذا التعبير إلى حقول رأس ICMP. عند استخدامه في عائلات
+    <code>inet</code> أو <code>bridge</code> أو <code>netdev</code>، فإنه سيؤدي إلى
+    إنشاء تبعية ضمنية لـ IPv4. لمطابقة الحالات غير العادية مثل ICMP عبر IPv6،
+    يجب إضافة تطابق <code>meta protocol ip6</code> صريح للقاعدة.</p>
+<p class="Pp"><b>الجدول 41. تعبير رأس ICMP</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">حقل نوع ICMP</td>
+    <td style="vertical-align: top;">icmp_type</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">code</td>
+    <td style="vertical-align: top;">حقل رمز ICMP</td>
+    <td style="vertical-align: top;">integer (8 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">checksum</td>
+    <td style="vertical-align: top;">حقل تدقيق ICMP</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">id</td>
+    <td style="vertical-align: top;">معرف طلب/استجابة الصدى</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">sequence</td>
+    <td style="vertical-align: top;">رقم تسلسل طلب/استجابة الصدى</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">gateway</td>
+    <td style="vertical-align: top;">بوابة عمليات إعادة التوجيه</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">mtu</td>
+    <td style="vertical-align: top;">MTU لاكتشاف مسار MTU</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+</table>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IGMP_HEADER_EXPRESSION'><a class='permalink' href='#IGMP_HEADER_EXPRESSION'>تعبير رأس IGMP</a></h2>
+<div class="Bd-indent">
+<pre><b>igmp</b> {<b>type</b> | <b>mrt</b> | <b>checksum</b> | <b>group</b>}</pre>
+</div>
+<p class="Pp">يشير هذا التعبير إلى حقول رأس IGMP. عند استخدامه في عائلات
+    <code>inet</code> أو <code>bridge</code> أو <code>netdev</code>، فإنه سيؤدي إلى
+    إنشاء تبعية ضمنية لـ IPv4. لمطابقة الحالات غير العادية مثل IGMP عبر IPv6،
+    يجب إضافة تطابق <code>meta protocol ip6</code> صريح للقاعدة.</p>
+<p class="Pp"><b>الجدول 41. تعبير رأس IGMP</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">حقل نوع IGMP</td>
+    <td style="vertical-align: top;">igmp_type</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">mrt</td>
+    <td style="vertical-align: top;">حقل وقت الاستجابة الأقصى لـ IGMP</td>
+    <td style="vertical-align: top;">integer (8 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">checksum</td>
+    <td style="vertical-align: top;">حقل تدقيق IGMP</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">group</td>
+    <td style="vertical-align: top;">عنوان المجموعة</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+</table>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IPV6_HEADER_EXPRESSION'><a class='permalink' href='#IPV6_HEADER_EXPRESSION'>تعبير رأس IPv6</a></h2>
+<div class="Bd-indent">
+<pre><b>ip6</b> {<b>version</b> | <b>dscp</b> | <b>ecn</b> | <b>flowlabel</b> | <b>length</b> | <b>nexthdr</b> | <b>hoplimit</b> | <b>saddr</b> | <b>daddr</b>}</pre>
+</div>
+<p class="Pp">يشير هذا التعبير إلى حقول رأس ipv6. توخ الحذر عند استخدام
+    <code>ip6 nexthdr</code>، القيمة تشير فقط إلى الرأس التالي، أي أن
+    <code>ip6 nexthdr tcp</code> ستطابق فقط إذا كانت حزمة ipv6 لا تحتوي على أي رؤوس
+    ملحقة. الحزم المجزأة أو التي تحتوي على رؤوس ملحقة للتوجيه مثلاً لن تتم
+    مطابقتها. يرجى استخدام <code>meta l4proto</code> إذا كنت ترغب في مطابقة رأس
+    النقل الحقيقي وتجاهل أي رؤوس ملحقة إضافية بدلاً من ذلك.</p>
+<p class="Pp"><b>الجدول 42. تعبير رأس IPv6</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">version</td>
+    <td style="vertical-align: top;">إصدار رأس IP (6)</td>
+    <td style="vertical-align: top;">integer (4 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">dscp</td>
+    <td style="vertical-align: top;">نقطة رمز الخدمات المتمايزة</td>
+    <td style="vertical-align: top;">dscp</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">ecn</td>
+    <td style="vertical-align: top;">الإشعار الصريح بالازدحام</td>
+    <td style="vertical-align: top;">ecn</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">flowlabel</td>
+    <td style="vertical-align: top;">تسمية التدفق</td>
+    <td style="vertical-align: top;">integer (20 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">length</td>
+    <td style="vertical-align: top;">طول الحمولة</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">nexthdr</td>
+    <td style="vertical-align: top;">بروتوكول الرأس التالي</td>
+    <td style="vertical-align: top;">inet_proto</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">hoplimit</td>
+    <td style="vertical-align: top;">حد القفز</td>
+    <td style="vertical-align: top;">integer (8 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">saddr</td>
+    <td style="vertical-align: top;">عنوان المصدر</td>
+    <td style="vertical-align: top;">ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">daddr</td>
+    <td style="vertical-align: top;">عنوان الوجهة</td>
+    <td style="vertical-align: top;">ipv6_addr</td>
+  </tr>
+</table>
+<p class="Pp">كن حذرًا عند المطابقة على <code>ip6 length</code>: إذا تم تمكين
+    GRO/GSO، فقد يقوم نواة Linux بتجميع عدة حزم في حزمة كبيرة واحدة أكبر من MTU.
+    علاوة على ذلك، إذا كان حجم GRO/GSO الأقصى أكبر من 65535 (انظر man
+    ip-link(8)، وتحديداً gro_ipv6_max_size و gso_ipv6_max_size)، فقد يكون
+    <code>ip6 length</code> يساوي 0 لمثل هذه الحزم الضخمة. يتيح لك <code>meta
+    length</code> المطابقة على طول الحزمة بما في ذلك حجم رأس IP. إذا كنت تريد
+    إجراء تحليلات على حقل <code>ip6 length</code>، فقم بتعطيل GRO/GSO.
+  <br/>
+</p>
+<p class="Pp"><b>استخدام تعبيرات رأس ip6</b>.</p>
+<div class="Bd-indent">
+<pre># المطابقة إذا كان الرأس الملحق الأول يشير إلى جزء
+ip6 nexthdr ipv6-frag</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ICMPV6_HEADER_EXPRESSION'><a class='permalink' href='#ICMPV6_HEADER_EXPRESSION'>تعبير رأس ICMPv6</a></h2>
+<div class="Bd-indent">
+<pre><b>icmpv6</b> {<b>type</b> | <b>code</b> | <b>checksum</b> | <b>parameter-problem</b> | <b>packet-too-big</b> | <b>id</b> | <b>sequence</b> | <b>max-delay</b> | <b>taddr</b> | <b>daddr</b>}</pre>
+</div>
+<p class="Pp">يشير هذا التعبير إلى حقول رأس ICMPv6. عند استخدامه في عائلات
+    <code>inet</code> أو <code>bridge</code> أو <code>netdev</code>، فإنه سيؤدي إلى
+    إنشاء تبعية ضمنية لـ IPv6. لمطابقة الحالات غير العادية مثل ICMPv6 عبر IPv4،
+    يجب إضافة تطابق <code>meta protocol ip</code> صريح للقاعدة.</p>
+<p class="Pp"><b>الجدول 43. تعبير رأس ICMPv6</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">type</td>
+    <td style="vertical-align: top;">حقل نوع ICMPv6</td>
+    <td style="vertical-align: top;">icmpv6_type</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">code</td>
+    <td style="vertical-align: top;">حقل رمز ICMPv6</td>
+    <td style="vertical-align: top;">integer (8 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">checksum</td>
+    <td style="vertical-align: top;">حقل تدقيق ICMPv6</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">parameter-problem</td>
+    <td style="vertical-align: top;">مؤشر للمشكلة</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">packet-too-big</td>
+    <td style="vertical-align: top;">MTU كبير جدًا</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">id</td>
+    <td style="vertical-align: top;">معرف طلب/استجابة الصدى</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">sequence</td>
+    <td style="vertical-align: top;">رقم تسلسل طلب/استجابة الصدى</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">max-delay</td>
+    <td style="vertical-align: top;">أقصى تأخير استجابة لاستعلامات MLD</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">taddr</td>
+    <td style="vertical-align: top;">عنوان الهدف لطلب/إعلان الجار، أو إعادة التوجيه، أو MLD</td>
+    <td style="vertical-align: top;">ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">daddr</td>
+    <td style="vertical-align: top;">عنوان الوجهة لإعادة التوجيه</td>
+    <td style="vertical-align: top;">ipv6_addr</td>
+  </tr>
+</table>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='TCP_HEADER_EXPRESSION'><a class='permalink' href='#TCP_HEADER_EXPRESSION'>تعبير رأس TCP</a></h2>
+<div class="Bd-indent">
+<pre><b>tcp</b> {<b>sport</b> | <b>dport</b> | <b>sequence</b> | <b>ackseq</b> | <b>doff</b> | <b>reserved</b> | <b>flags</b> | <b>window</b> | <b>checksum</b> | <b>urgptr</b>}</pre>
+</div>
+<p class="Pp"><b>الجدول 44. تعبير رأس TCP</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>الكلمة المفتاحية</b></td>
+    <td style="vertical-align: top;"><b>الوصف</b></td>
+    <td style="vertical-align: top;"><b>النوع</b></td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">sport</td>
+    <td style="vertical-align: top;">منفذ المصدر</td>
+    <td style="vertical-align: top;">inet_service</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">dport</td>
+    <td style="vertical-align: top;">منفذ الوجهة</td>
+    <td style="vertical-align: top;">inet_service</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">sequence</td>
+    <td style="vertical-align: top;">رقم التسلسل</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">ackseq</td>
+    <td style="vertical-align: top;">رقم الإقرار</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">doff</td>
+    <td style="vertical-align: top;">إزاحة البيانات</td>
+    <td style="vertical-align: top;">integer (4 bit) FIXME scaling</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">reserved</td>
+    <td style="vertical-align: top;">منطقة محجوزة</td>
+    <td style="vertical-align: top;">integer (4 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">flags</td>
+    <td style="vertical-align: top;">علامات TCP</td>
+    <td style="vertical-align: top;">tcp_flag</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">window</td>
+    <td style="vertical-align: top;">النافذة</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">checksum</td>
+    <td style="vertical-align: top;">التدقيق</td>
+<td style="vertical-align: top;">expiration</td>
+    <td style="vertical-align: top;">وقت انتهاء الاتصال</td>
+    <td style="vertical-align: top;">time</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">helper</td>
+    <td style="vertical-align: top;">المساعد المرتبط بالاتصال</td>
+    <td style="vertical-align: top;">string</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">label</td>
+    <td style="vertical-align: top;">بت تسمية تتبع الاتصال أو اسم رمزي
+      معرف في connlabel.conf في مسار تضمين nftables</td>
+    <td style="vertical-align: top;">ct_label</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">l3proto</td>
+    <td style="vertical-align: top;">بروتوكول الطبقة 3 للاتصال</td>
+    <td style="vertical-align: top;">nf_proto</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">saddr</td>
+    <td style="vertical-align: top;">عنوان المصدر للاتصال للاتجاه المحدد</td>
+    <td style="vertical-align: top;">ipv4_addr/ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">daddr</td>
+    <td style="vertical-align: top;">عنوان الوجهة للاتصال للاتجاه المحدد</td>
+    <td style="vertical-align: top;">ipv4_addr/ipv6_addr</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">protocol</td>
+    <td style="vertical-align: top;">بروتوكول الطبقة 4 للاتصال للاتجاه المحدد</td>
+    <td style="vertical-align: top;">inet_proto</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">proto-src</td>
+    <td style="vertical-align: top;">مصدر بروتوكول الطبقة 4 للاتجاه المحدد</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">proto-dst</td>
+    <td style="vertical-align: top;">وجهة بروتوكول الطبقة 4 للاتجاه المحدد</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">packets</td>
+    <td style="vertical-align: top;">عدد الحزم التي شوهدت في الاتجاه المحدد أو
+      مجموع الأصلية والرد</td>
+    <td style="vertical-align: top;">integer (64 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">bytes</td>
+    <td style="vertical-align: top;">عدد البايتات التي شوهدت، انظر الوصف
+      لكلمة المفتاح <b>packets</b></td>
+    <td style="vertical-align: top;">integer (64 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">avgpkt</td>
+    <td style="vertical-align: top;">متوسط البايتات لكل حزمة، انظر الوصف
+      لكلمة المفتاح <b>packets</b></td>
+    <td style="vertical-align: top;">integer (64 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">zone</td>
+    <td style="vertical-align: top;">منطقة تتبع الاتصال</td>
+    <td style="vertical-align: top;">integer (16 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">count</td>
+    <td style="vertical-align: top;">عدد الاتصالات الحالية</td>
+    <td style="vertical-align: top;">integer (32 bit)</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;">id</td>
+    <td style="vertical-align: top;">معرف الاتصال</td>
+    <td style="vertical-align: top;">ct_id</td>
+  </tr>
+</table>
+<p class="Pp"><b>تقييد عدد الاتصالات المتوازية إلى
+  خادم</b>.</p>
+<div class="Bd-indent">
+<pre>nft add set filter ssh_flood '{ type ipv4_addr; flags dynamic; }'
+nft add rule filter input tcp dport 22 add @ssh_flood '{ ip saddr ct count over 2 }' reject</pre>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STATEMENTS'><a class='permalink' href='#STATEMENTS'>الجمل</a></h1>
+<p class="Pp">تمثل الجمل إجراءات يتم اتخاذها. يمكنها تغيير تدفق التحكم (العودة، القفز إلى سلسلة مختلفة، قبول الحزمة أو إسقاطها) أو يمكنها تنفيذ إجراءات، مثل تسجيل الحزمة، أو رفضها، وما إلى ذلك.</p>
+<p class="Pp">توجد الجمل في نوعين. الجمل الطرفية تنهي تقييم القاعدة الحالية دون قيد أو شرط، والجمل غير الطرفية إما تنهي تقييم القاعدة الحالية بشكل مشروط أو لا تنهيها أبدًا، بعبارة أخرى، إنها سلبية من منظور تقييم مجموعة القواعد. يمكن أن يكون هناك عدد تعسفي من الجمل غير الطرفية في قاعدة، ولكن جملة طرفية واحدة فقط كعبارة نهائية.</p>
+<section class="Ss">
+<h2 class="Ss" id='VERDICT_STATEMENT'><a class='permalink' href='#VERDICT_STATEMENT'>جملة الحكم</a></h2>
+<p class="Pp">تغير جملة الحكم تدفق التحكم في مجموعة القواعد وتصدر قرارات سياسة للحزم.</p>
+<div class="Bd-indent">
+<pre>{<b>accept</b> | <b>drop</b> | <b>queue</b> | <b>continue</b> | <b>return</b>}
+{<b>jump</b> | <b>goto</b>} <i>CHAIN</i>
+<i>CHAIN</i> := <i>chain_name</i> | <b>{</b> <i>statement</i> ... <b>}</b></pre>
+</div>
+<p class="Pp"><b>accept</b> و <b>drop</b> هي أحكام مطلقة - تنهي تقييم مجموعة القواعد فورًا.</p>
+<table class="tbl">
+  <tr>
+    <td style="vertical-align: top;"><b>accept</b></td>
+    <td style="vertical-align: top;">إنهاء تقييم مجموعة القواعد وقبول الحزمة. لا تزال الحزمة قابلة للإسقاط لاحقًا بواسطة خطاف آخر، على سبيل المثال، القبول في خطاف forward لا يزال يسمح بإسقاط الحزمة لاحقًا في خطاف postrouting، أو سلسلة أساسية forward أخرى لها رقم أولوية أعلى ويتم تقييمها لاحقًا في مسار المعالجة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>drop</b></td>
+    <td style="vertical-align: top;">إنهاء تقييم مجموعة القواعد وإسقاط الحزمة. يحدث الإسقاط فورًا، ولا يتم تقييم أي سلاسل أو خطافات أخرى. لا يمكن قبول الحزمة في سلسلة لاحقة مرة أخرى، حيث لم يتم تقييمها بعد للحزمة.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>queue</b></td>
+    <td style="vertical-align: top;">إنهاء تقييم مجموعة القواعد ووضع الحزمة في قائمة انتظار لمساحة المستخدم. يجب على مساحة المستخدم توفير حكم إسقاط أو قبول. في حالة القبول، تستأنف المعالجة مع خطاف السلسلة الأساسية التالية، وليس مع القاعدة التي تلي حكم قائمة الانتظار.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>continue</b></td>
+    <td style="vertical-align: top;">متابعة تقييم مجموعة القواعد مع القاعدة التالية. هذا هو السلوك الافتراضي في حالة عدم إصدار قاعدة لحكم.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>return</b></td>
+    <td style="vertical-align: top;">العودة من السلسلة الحالية ومتابعة التقييم في القاعدة التالية في السلسلة الأخيرة. إذا تم إصداره في سلسلة أساسية، فهو يعادل سياسة السلسلة الأساسية.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>jump</b> <i>CHAIN</i></td>
+    <td style="vertical-align: top;">متابعة التقييم في القاعدة الأولى في <i>CHAIN</i>. يتم دفع الموضع الحالي في مجموعة القواعد إلى مكدس استدعاء وسيستمر التقييم هناك عند تقييم السلسلة الجديدة بالكامل أو إصدار حكم <b>return</b>. في حالة إصدار حكم مطلق بواسطة قاعدة في السلسلة، تنتهي تقييم مجموعة القواعد فورًا ويتم اتخاذ الإجراء المحدد.</td>
+  </tr>
+  <tr>
+    <td style="vertical-align: top;"><b>goto</b> <i>CHAIN</i></td>
+    <td style="vertical-align: top;">على غرار <b>jump</b>، ولكن الموضع الحالي لا يتم دفعه إلى مكدس الاستدعاء، مما يعني أنه بعد تقييم السلسلة الجديدة، ستستمر المعالجة في السلسلة الأخيرة بدلاً من السلسلة التي تحتوي على عبارة goto.</td>
+  </tr>
+</table>
+<p class="Pp">بديل لتحديد اسم سلسلة عادية موجودة في <i>CHAIN</i> هو تحديد سلسلة مجهولة عند الحاجة. مثل المجموعات المجهولة، لا يمكن الرجوع إليها من قاعدة أخرى وسيتم إزالتها مع القاعدة التي تحتوي عليها.</p>
+<p class="Pp"><b>استخدام جمل الأحكام</b>.</p>
+<div class="Bd-indent">
+<pre># process packets from eth0 and the internal network in from_lan
+# chain, drop all packets from eth0 with different source addresses.
+filter input iif eth0 ip saddr 192.168.0.0/24 jump from_lan
+filter input iif eth0 drop
+# jump and goto statements support anonymous chain creation
+filter input iif eth0 jump { ip saddr 192.168.0.0/24 drop ; udp dport domain drop; }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='PAYLOAD_STATEMENT'><a class='permalink' href='#PAYLOAD_STATEMENT'>جملة الحمولة</a></h2>
+<div class="Bd-indent">
+<pre><i>payload_expression</i> <b>set</b> <i>value</i></pre>
+</div>
+<p class="Pp">تغير جملة الحمولة محتوى الحزمة. يمكن استخدامها على سبيل المثال لتعيين حقل رأس DSCP (diffserv) IP أو تسميات التدفق IPv6.</p>
+<p class="Pp"><b>توجيه بعض الحزم بدلاً من الجسر</b>.</p>
+<div class="Bd-indent">
+<pre># redirect tcp:http from 192.160.0.0/16 to local machine for routing instead of bridging
+# assumes 00:11:22:33:44:55 is local MAC address.
+bridge input meta iif eth0 ip saddr 192.168.0.0/16 tcp dport 80 meta pkttype set host ether daddr set 00:11:22:33:44:55</pre>
+</div>
+<p class="Pp"><b>تعيين حقل رأس DSCP لـ IPv4</b>.</p>
+<div class="Bd-indent">
+<pre>ip forward ip dscp set 42</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='EXTENSION_HEADER_STATEMENT'><a class='permalink' href='#EXTENSION_HEADER_STATEMENT'>جملة رأس الامتداد</a></h2>
+<div class="Bd-indent">
+<pre><i>extension_header_expression</i> <b>set</b> <i>value</i></pre>
+</div>
+<p class="Pp">تغير جملة رأس الامتداد محتوى الحزمة في رؤوس متغيرة الحجم. يمكن استخدام هذا حاليًا لتغيير الحد الأقصى لحجم مقطع TCP للحزم، بشكل مشابه لهدف TCPMSS في iptables.</p>
+<p class="Pp"><b>تغيير حجم TCP</b>.</p>
+<div class="Bd-indent">
+<pre>tcp flags syn tcp option maxseg size set 1360
+# set a size based on route information:
+tcp flags syn tcp option maxseg size set rt mtu</pre>
+</div>
+<p class="Pp">يمكنك أيضًا إزالة خيارات TCP عبر الكلمة المفتاحية reset.</p>
+<p class="Pp"><b>إزالة خيار TCP</b>.</p>
+<div class="Bd-indent">
+<pre>tcp flags syn reset tcp option sack-perm</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LOG_STATEMENT'><a class='permalink' href='#LOG_STATEMENT'>جملة التسجيل</a></h2>
+<div class="Bd-indent">
+<pre><b>log</b> [<b>prefix</b> <i>quoted_string</i>] [<b>level</b> <i>syslog-level</i>] [<b>flags</b> <i>log-flags</i>]
+<b>log</b> <b>group</b> <i>nflog_group</i> [<b>prefix</b> <i>quoted_string</i>] [<b>queue-threshold</b> <i>value</i>] [<b>snaplen</b> <i>size</i>]
+<b>log level audit</b></pre>
+</div>
+<p class="Pp">تمكّن جملة التسجيل من تسجيل الحزم المطابقة. عند استخدام هذه الجملة من قاعدة، سيقوم نواة Linux بطباعة بعض المعلومات حول جميع الحزم المطابقة، مثل حقول الرأس، عبر سجل النواة (حيث يمكن قراءتها باستخدام dmesg(1) أو قراءتها في syslog).</p>
+<p class="Pp">في الشكل الثاني للاستدعاء (إذا تم تحديد <i>nflog_group</i>)، سيمرر نواة Linux الحزمة إلى nfnetlink_log الذي سيرسل السجل عبر مقبس netlink إلى المجموعة المحددة. يمكن لعملية واحدة في مساحة المستخدم الاشتراك في المجموعة لتلقي السجلات، انظر man(8) ulogd للحصول على معلومات حول جهاز تسجيل Netfilter في مساحة المستخدم ووثائق libnetfilter_log في حالة رغبتك في تطوير برنامج مخصص لمعالجة سجلاتك.</p>
+<p class="Pp">في الشكل الثالث للاستدعاء (إذا تم تحديد level audit)، يكتب نواة Linux رسالة في مخزن التدقيق بتنسيق مناسب للقراءة مع auditd. لذلك لا يُسمح بخيارات تنسيق أخرى (مثل prefix أو flags) في هذا الوضع.</p>
+<p class="Pp">هذه جملة غير طرفية، لذا يستمر تقييم القاعدة بعد تسجيل الحزمة.</p>
+<p class="Pp"><b>الجدول 61. خيارات جملة التسجيل</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td style="vertical-align: top;"><b>Keyword</b></td>
+    <td style="vertical-align: top;"><b>Description</b></td>
+    <td style="vertical-align: top;"><b>Typ{
+  "section": {
+    "title": "LOG STATEMENT",
+    "content": [
+      {
+        "type": "table",
+        "caption": "Table 61. log statement options",
+        "headers": [
+          "Option",
+          "Description",
+          "Type"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "prefix",
+              "Log message prefix",
+              "quoted string"
+            ]
+          },
+          {
+            "columns": [
+              "level",
+              "Syslog level of logging",
+              "string: emerg, alert, crit, err, warn [default], notice, info, debug, audit"
+            ]
+          },
+          {
+            "columns": [
+              "group",
+              "NFLOG group to send messages to",
+              "unsigned integer (16 bit)"
+            ]
+          },
+          {
+            "columns": [
+              "snaplen",
+              "Length of packet payload to include in netlink message",
+              "unsigned integer (32 bit)"
+            ]
+          },
+          {
+            "columns": [
+              "queue-threshold",
+              "Number of packets to queue inside the kernel before sending them to userspace",
+              "unsigned integer (32 bit)"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "table",
+        "caption": "Table 62. log-flags",
+        "headers": [
+          "Flag",
+          "Description"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "tcp sequence",
+              "Log TCP sequence numbers."
+            ]
+          },
+          {
+            "columns": [
+              "tcp options",
+              "Log options from the TCP packet header."
+            ]
+          },
+          {
+            "columns": [
+              "ip options",
+              "Log options from the IP/IPv6 packet header."
+            ]
+          },
+          {
+            "columns": [
+              "skuid",
+              "Log the userid of the process which generated the packet."
+            ]
+          },
+          {
+            "columns": [
+              "ether",
+              "Decode MAC addresses and protocol."
+            ]
+          },
+          {
+            "columns": [
+              "all",
+              "Enable all log flags listed above."
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": "Using log statement"
+      },
+      {
+        "type": "code",
+        "content": "# log the UID which generated the packet and ip options\nip filter output log flags skuid flags ip options\n# log the tcp sequence numbers and tcp options from the TCP packet\nip filter output log flags tcp sequence,options\n# enable all supported log flags\nip6 filter output log flags all"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "section": {
+    "title": "REJECT STATEMENT",
+    "content": [
+      {
+        "type": "code",
+        "content": "reject [ with REJECT_WITH ]\nREJECT_WITH := icmp icmp_reject_code |\nicmpv6 icmpv6_reject_code |\nicmpx icmpx_reject_code |\ntcp reset"
+      },
+      {
+        "type": "paragraph",
+        "content": "A reject statement is used to send back an error packet in response to the matched packet otherwise it is equivalent to drop so it is a terminating statement, ending rule traversal. This statement is only valid in base chains using the prerouting, input, forward or output hooks, and user-defined chains which are only called from those chains."
+      },
+      {
+        "type": "table",
+        "caption": "Table 63. Keywords may be used to reject when specifying the ICMP code",
+        "headers": [
+          "Keyword",
+          "Value"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "net-unreachable",
+              "0"
+            ]
+          },
+          {
+            "columns": [
+              "host-unreachable",
+              "1"
+            ]
+          },
+          {
+            "columns": [
+              "prot-unreachable",
+              "2"
+            ]
+          },
+          {
+            "columns": [
+              "port-unreachable",
+              "3"
+            ]
+          },
+          {
+            "columns": [
+              "frag-needed",
+              "4"
+            ]
+          },
+          {
+            "columns": [
+              "net-prohibited",
+              "9"
+            ]
+          },
+          {
+            "columns": [
+              "host-prohibited",
+              "10"
+            ]
+          },
+          {
+            "columns": [
+              "admin-prohibited",
+              "13"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "table",
+        "caption": "Table 64. keywords may be used to reject when specifying the ICMPv6 code",
+        "headers": [
+          "Keyword",
+          "Value"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "no-route",
+              "0"
+            ]
+          },
+          {
+            "columns": [
+              "admin-prohibited",
+              "1"
+            ]
+          },
+          {
+            "columns": [
+              "addr-unreachable",
+              "3"
+            ]
+          },
+          {
+            "columns": [
+              "port-unreachable",
+              "4"
+            ]
+          },
+          {
+            "columns": [
+              "policy-fail",
+              "5"
+            ]
+          },
+          {
+            "columns": [
+              "reject-route",
+              "6"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": "The ICMPvX Code type abstraction is a set of values which overlap between ICMP and ICMPv6 Code types to be used from the inet family."
+      },
+      {
+        "type": "table",
+        "caption": "Table 65. keywords may be used when specifying the ICMPvX code",
+        "headers": [
+          "Keyword",
+          "Value"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "no-route",
+              "0"
+            ]
+          },
+          {
+            "columns": [
+              "port-unreachable",
+              "1"
+            ]
+          },
+          {
+            "columns": [
+              "host-unreachable",
+              "2"
+            ]
+          },
+          {
+            "columns": [
+              "admin-prohibited",
+              "3"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": "The common default ICMP code to reject is port-unreachable."
+      },
+      {
+        "type": "paragraph",
+        "content": "Note that in bridge family, reject statement is only allowed in base chains which hook into input or prerouting."
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "section": {
+    "title": "COUNTER STATEMENT",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": "A counter statement sets the hit count of packets along with the number of bytes."
+      },
+      {
+        "type": "code",
+        "content": "counter packets number bytes number\ncounter { packets number | bytes number }"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "section": {
+    "title": "CONNTRACK STATEMENT",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": "The conntrack statement can be used to set the conntrack mark and conntrack labels."
+      },
+      {
+        "type": "code",
+        "content": "ct {mark | event | label | zone} set value"
+      },
+      {
+        "type": "paragraph",
+        "content": "The ct statement sets meta data associated with a connection. The zone id has to be assigned before a conntrack lookup takes place, i.e. this has to be done in prerouting and possibly output (if locally generated packets need to be placed in a distinct zone), with a hook priority of raw (-300)."
+      },
+      {
+        "type": "paragraph",
+        "content": "Unlike iptables, where the helper assignment happens in the raw table, the helper needs to be assigned after a conntrack entry has been found, i.e. it will not work when used with hook priorities equal or before -200."
+      },
+      {
+        "type": "table",
+        "caption": "Table 66. Conntrack statement types",
+        "headers": [
+          "Keyword",
+          "Description",
+          "Value"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "event",
+              "conntrack event bits",
+              "bitmask, integer (32 bit)"
+            ]
+          },
+          {
+            "columns": [
+              "helper",
+              "name of ct helper object to assign to the connection",
+              "quoted string"
+            ]
+          },
+          {
+            "columns": [
+              "mark",
+              "Connection tracking mark",
+              "mark"
+            ]
+          },
+          {
+            "columns": [
+              "label",
+              "Connection tracking label",
+              "label"
+            ]
+          },
+          {
+            "columns": [
+              "zone",
+              "conntrack zone",
+              "integer (16 bit)"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": "save packet nfmark in conntrack."
+      },
+      {
+        "type": "code",
+        "content": "ct mark set meta mark"
+      },
+      {
+        "type": "heading",
+        "level": "set zone mapped via interface."
+      },
+      {
+        "type": "code",
+        "content": "table inet raw {\n  chain prerouting {\n      type filter hook prerouting priority raw;\n      ct zone set iif map { \"eth1\" : 1, \"veth1\" : 2 }\n  }\n  chain output {\n      type filter hook output priority raw;\n      ct zone set oif map { \"eth1\" : 1, \"veth1\" : 2 }\n  }\n}"
+      },
+      {
+        "type": "heading",
+        "level": "restrict events reported by ctnetlink."
+      },
+      {
+        "type": "code",
+        "content": "ct event set new,related,destroy"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "section": {
+    "title": "NOTRACK STATEMENT",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": "The notrack statement allows one to disable connection tracking for certain packets."
+      },
+      {
+        "type": "code",
+        "content": "notrack"
+      },
+      {
+        "type": "paragraph",
+        "content": "Note that for this statement to be effective, it has to be applied to packets before a conntrack lookup happens. Therefore, it needs to sit in a chain with either prerouting or output hook and a hook priority of -300 (raw) or less."
+      },
+      {
+        "type": "paragraph",
+        "content": "See SYNPROXY STATEMENT for an example usage."
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "section": {
+    "title": "META STATEMENT",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": "A meta statement sets the value of a meta expression. The existing meta fields are: priority, mark, pkttype, nftrace."
+      },
+      {
+        "type": "code",
+        "content": "meta {mark | priority | pkttype | nftrace | broute} set value"
+      },
+      {
+        "type": "paragraph",
+        "content": "A meta statement sets meta data associated with a packet."
+      },
+      {
+        "type": "table",
+        "caption": "Table 67. Meta statement types",
+        "headers": [
+          "Keyword",
+          "Description",
+          "Value"
+        ],
+        "rows": [
+          {
+            "columns": [
+              "priority",
+              "TC packet priority",
+              "tc_handle"
+            ]
+          },
+          {
+            "columns": [
+              "mark",
+              "Netfilter mark",
+              "mark"
+            ]
+          },
+          {
+            "columns": [
+              "pkttype",
+              "Packet type",
+              "pkttype"
+            ]
+          },
+          {
+            "columns": [
+              "nftrace",
+              "Packet tracing",
+              "nftrace"
+            ]
+          },
+          {
+            "columns": [
+              "broute",
+              "Bridged packet",
+              "boolean"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+gateways
+dup to ip daddr map { 192.168.7.1 : "eth0", 192.168.7.2 : "eth1" }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='FWD_STATEMENT'><a class='permalink' href='#FWD_STATEMENT'>عبارة FWD</a></h2>
+<p class="Pp">تُستخدم عبارة fwd لإعادة توجيه حزمة خام إلى واجهة أخرى. وهي متاحة فقط في الخطافات الداخلية والخارجية لشبكة netdev. إنها تشبه عبارة dup باستثناء عدم إنشاء نسخة.</p>
+<p class="Pp">يمكنك أيضًا تحديد عنوان النقطة التالية والجهاز الذي سيتم إعادة توجيه الحزمة إليه. يقوم هذا بتحديث عنوان MAC المصدر والوجهة للحزمة عن طريق إرسالها عبر الطبقة المجاورة. هذا أيضًا يقلل من حقل ttl لحزمة IP. يوفر هذا طريقة لتجاوز مسار إعادة التوجيه الكلاسيكي بشكل فعال، وبالتالي تخطي بحث fib (قاعدة معلومات إعادة التوجيه).</p>
+<div class="Bd-indent">
+<pre><b>fwd to</b> <i>device</i>
+<b>fwd</b> [<b>ip</b> | <b>ip6</b>] <b>to</b> <i>address</i> <b>device</b> <i>device</i></pre>
+</div>
+<p class="Pp"><b>استخدام عبارة fwd</b>.</p>
+<div class="Bd-indent">
+<pre># إعادة توجيه حزمة خام إلى الجهاز
+netdev ingress fwd to "eth0"
+# إعادة توجيه الحزمة إلى النقطة التالية 192.168.200.1 عبر الجهاز eth0
+netdev ingress ether saddr set fwd ip to 192.168.200.1 device "eth0"</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SET_STATEMENT'><a class='permalink' href='#SET_STATEMENT'>عبارة SET</a></h2>
+<p class="Pp">تُستخدم عبارة set لإضافة أو تحديث العناصر ديناميكيًا في مجموعة (set) من مسار الحزمة. يجب أن تكون المجموعة setname موجودة بالفعل في الجدول المحدد وأن تكون قد تم إنشاؤها باستخدام إحدى العلامتين الديناميكية (dynamic) أو المهلة (timeout) أو كلتيهما. العلامة dynamic مطلوبة إذا كان تعبير عبارة set يتضمن كائنًا له حالة (stateful object). ضمنيًا، يتم استخدام العلامة timeout إذا تم إنشاء المجموعة بمهلة، وهي مطلوبة إذا قامت عبارة set بتحديث العناصر بدلاً من إضافتها. علاوة على ذلك، يجب أن تحدد هذه المجموعات حجمًا أقصى للمجموعة (لمنع استنفاد الذاكرة)، ويجب أن يكون لعناصرها مهلة (بحيث لا ينمو عددها بلا حدود) إما من تعريف المجموعة أو من العبارة التي تضيفها أو تحدثها. يمكن استخدام عبارة set، على سبيل المثال، لإنشاء قوائم حظر ديناميكية.</p>
+<p class="Pp">يتم أيضًا دعم التحديثات الديناميكية باستخدام الخرائط (maps). في هذه الحالة، يجب أن يوفر قاعدة <b>add</b> أو <b>update</b> كل من المفتاح وعنصر البيانات (القيمة)، مفصولين بواسطة <i>:</i>.</p>
+<div class="Bd-indent">
+<pre>{<b>add</b> | <b>update</b>} <b>@</b><i>setname</i> <b>{</b> <i>expression</i> [<b>timeout</b> <i>timeout</i>] [<b>comment</b> <i>string</i>] <b>}</b></pre>
+</div>
+<p class="Pp"><b>مثال لقائمة حظر بسيطة</b>.</p>
+<div class="Bd-indent">
+<pre># تعريف مجموعة، مرتبطة بالجدول "filter"، في العائلة "ip".
+# المهلة والحجم إلزاميين لأننا سنضيف عناصر من مسار الحزمة.
+# ستنتهي صلاحية الإدخالات بعد دقيقة واحدة، وبعد ذلك قد تتم
+# إضافتها مرة أخرى إذا استمر شرط الحد.
+nft add set ip filter blackhole \
+    "{ type ipv4_addr; flags dynamic; timeout 1m; size 65536; }"
+# تعريف مجموعة لتخزين الحد الأقصى لكل عنوان مصدر.
+# يجب فصل هذا عن blackhole لأن المهلة مختلفة
+nft add set ip filter flood \
+    "{ type ipv4_addr; flags dynamic; timeout 10s; size 128000; }"
+# السماح بالمرور لواجهة داخلية.
+nft add rule ip filter input meta iifname "internal" accept
+# إسقاط الحزم الواردة من عناوين IP المحظورة.
+nft add rule ip filter input ip saddr @blackhole counter drop
+# إضافة عناوين IP المصدر إلى قائمة الحظر إذا حدثت أكثر من 10 اتصالات TCP
+# طلبات في الثانية وعنوان IP.
+nft add rule ip filter input tcp flags syn tcp dport ssh \
+    add @flood { ip saddr limit rate over 10/second } \
+    add @blackhole { ip saddr } \
+    drop
+# فحص حالة المجموعات.
+nft list set ip filter flood
+nft list set ip filter blackhole
+# إضافة عنوانين يدويًا إلى قائمة الحظر.
+nft add element filter blackhole { 10.2.3.4, 10.23.1.42 }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='MAP_STATEMENT'><a class='permalink' href='#MAP_STATEMENT'>عبارة MAP</a></h2>
+<p class="Pp">تُستخدم عبارة map للبحث عن بيانات بناءً على مفتاح إدخال محدد.</p>
+<div class="Bd-indent">
+<pre><i>expression</i> <b>map</b> <b>{</b> <i>MAP_ELEMENTS</i> <b>}</b>
+<i>MAP_ELEMENTS</i> := <i>MAP_ELEMENT</i> [<b>,</b> <i>MAP_ELEMENTS</i>]
+<i>MAP_ELEMENT</i>  := <i>key</i> <b>:</b> <i>value</i></pre>
+</div>
+<p class="Pp"><i>key</i> هو قيمة يتم إرجاعها بواسطة <i>expression</i>.</p>
+<p class="Pp"><b>استخدام عبارة map</b>.</p>
+<div class="Bd-indent">
+<pre># تحديد هدف DNAT بناءً على منفذ TCP الوجهة:
+# يتم إعادة توجيه الاتصالات إلى المنفذ 80 إلى 192.168.1.100،
+# يتم إعادة توجيه الاتصالات إلى المنفذ 8888 إلى 192.168.1.101
+nft add rule ip nat prerouting dnat tcp dport map { 80 : 192.168.1.100, 8888 : 192.168.1.101 }
+# SNAT بناءً على عنوان المصدر:
+# ستبدو الحزم من الشبكة 192.168.1.0/24 وكأنها صادرة من 10.0.0.1،
+# ستبدو الحزم من الشبكة 192.168.2.0/24 وكأنها صادرة من 10.0.0.2
+nft add rule ip nat postrouting snat to ip saddr map { 192.168.1.0/24 : 10.0.0.1, 192.168.2.0/24 : 10.0.0.2 }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='VMAP_STATEMENT'><a class='permalink' href='#VMAP_STATEMENT'>عبارة VMAP</a></h2>
+<p class="Pp">تعمل عبارة خريطة النتائج (vmap) بشكل مشابه لعبارة map، ولكنها تحتوي على نتائج (verdicts) كقيم.</p>
+<div class="Bd-indent">
+<pre><i>expression</i> <b>vmap</b> <b>{</b> <i>VMAP_ELEMENTS</i> <b>}</b>
+<i>VMAP_ELEMENTS</i> := <i>VMAP_ELEMENT</i> [<b>,</b> <i>VMAP_ELEMENTS</i>]
+<i>VMAP_ELEMENT</i>  := <i>key</i> <b>:</b> <i>verdict</i></pre>
+</div>
+<p class="Pp"><b>استخدام عبارة vmap</b>.</p>
+<div class="Bd-indent">
+<pre># القفز إلى سلاسل مختلفة اعتمادًا على نوع بروتوكول الطبقة 4:
+nft add rule ip filter input ip protocol vmap { tcp : jump tcp-chain, udp : jump udp-chain , icmp : jump icmp-chain }</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='XT_STATEMENT'><a class='permalink' href='#XT_STATEMENT'>عبارة XT</a></h2>
+<p class="Pp">تمثل هذه عبارة xt من واجهة التوافق xtables. إنها حل بديل إذا كان الترجمة غير متاحة أو غير مكتملة.</p>
+<div class="Bd-indent">
+<pre><b>xt</b> <i>TYPE</i> <i>NAME</i>
+<i>TYPE</i> := <b>match</b> | <b>target</b> | <b>watcher</b></pre>
+</div>
+<p class="Pp">رؤية هذا يعني أن مجموعة القواعد (أو أجزاء منها) تم إنشاؤها بواسطة <b>iptables-nft</b> ويجب استخدام هذا لإدارتها.</p>
+<p class="Pp"><b>تحذير:</b> لن يقوم nftables باستعادة هذه العبارات.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ADDITIONAL_COMMANDS'><a class='permalink' href='#ADDITIONAL_COMMANDS'>أوامر إضافية</a></h1>
+<p class="Pp">هذه بعض الأوامر الإضافية المضمنة في nft.</p>
+<section class="Ss">
+<h2 class="Ss" id='LIST_HOOKS'><a class='permalink' href='#LIST_HOOKS'>قائمة الخطافات (HOOKS)</a></h2>
+<p class="Pp">يعرض هذا قائمة الوظائف التي تم تسجيلها لعائلة البروتوكول المحددة، بما في ذلك الوظائف التي تم تسجيلها ضمنيًا بواسطة وحدات النواة مثل nf_conntrack.</p>
+<div class="Bd-indent">
+<pre><b>list hooks</b> [<i>family</i>]
+<b>list hooks netdev</b> [ <b>device</b> <i>DEVICE_NAME</i> ]</pre>
+</div>
+<p class="Pp"><b>list hooks</b> كافٍ لعرض كل ما هو نشط على النظام. ترتبط الخطافات في عائلة netdev بجهاز شبكة. إذا لم يتم توفير اسم جهاز، فسيقوم nft بالاستعلام عن جميع أجهزة الشبكة في مساحة اسم الشبكة الحالية. مثال على الاستخدام:</p>
+<p class="Pp"><b>قائمة بجميع خطافات netfilter النشطة في مكدس ip أو ip6</b>.</p>
+<div class="Bd-indent">
+<pre>% nft list hooks inet
+family ip {
+        hook prerouting {
+                -0000000400 ipv4_conntrack_defrag [nf_defrag_ipv4]
+                -0000000200 ipv4_conntrack_in [nf_conntrack]
+                -0000000100 nf_nat_ipv4_pre_routing [nf_nat]
+        }
+        hook input {
+                 0000000000 chain inet filter input [nf_tables]
+                +0000000100 nf_nat_ipv4_local_in [nf_nat]
+[..]</pre>
+</div>
+<p class="Pp">يُظهر ما ورد أعلاه مضيفًا تم تمكين nat و conntrack وإلغاء تجزئة حزم ipv4. لكل موقع خطاف لعائلة البروتوكول المطلوبة، سيتم عرض قائمة بالخطافات النشطة باستخدام التنسيق</p>
+<p class="Pp"><b>priority</b> <b>identifier</b> [<b>module_name</b>]</p>
+<p class="Pp">سيتم عرضه.</p>
+<p class="Pp">تحدد قيمة <b>priority</b> الترتيب الذي يتم به استدعاء الخطافات. يتم فرز القائمة، ويتم تشغيل الرقم الأقل أولاً.</p>
+<p class="Pp">لا يمكن تغيير قيمة أولوية الخطافات المسجلة بواسطة النواة. بالنسبة للسلاسل الأساسية المسجلة بواسطة nftables، تقابل هذه القيمة قيمة <b>priority</b> المحددة في تعريف السلسلة الأساسية.</p>
+<p class="Pp">بعد القيمة الرقمية، يتم عرض معلومات حول الخطاف. بالنسبة للسلاسل الأساسية المعرفة في nftables، يتضمن ذلك عائلة الجدول واسم الجدول واسم السلاسل الأساسية. بالنسبة للخطافات الواردة من وحدات النواة، يتم استخدام اسم الدالة بدلاً من ذلك.</p>
+<p class="Pp">إذا تم توفير <b>module name</b>، فقد تم تسجيل الخطاف بواسطة وحدة النواة بهذا الاسم. يمكنك استخدام <i>modinfo </i><i></i><b>module name</b> للحصول على مزيد من المعلومات حول الوحدة.</p>
+<p class="Pp">تتطلب هذه الوظيفة نواة تم بناؤها مع تمكين الخيار CONFIG_NETFILTER_NETLINK_HOOK، إما كوحدة أو مدمج. اسم الوحدة هو <b>nfnetlink_hook</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='MONITOR'><a class='permalink' href='#MONITOR'>المراقبة (MONITOR)</a></h2>
+<p class="Pp">يسمح لك أمر monitor بالاستماع إلى أحداث Netlink التي تنتجها `nf_tables` subsystem. تتعلق هذه إما بإنشاء وحذف الكائنات أو بالحزم التي تم تمكين <b>meta nftrace</b> لها. عند حدوثها، سيقوم nft بطباعة الأحداث التي تتم مراقبتها إلى الإخراج القياسي بتنسيق JSON أو بتنسيق nft الأصلي.</p>
+<div class="Bd-indent">
+<pre><b>monitor</b> [<b>new</b> | <b>destroy</b>] <i>MONITOR_OBJECT</i>
+<b>monitor</b> <b>trace</b>
+<i>MONITOR_OBJECT</i> := <b>tables</b> | <b>chains</b> | <b>sets</b> | <b>rules</b> | <b>elements</b> | <b>ruleset</b></pre>
+</div>
+<p class="Pp">لتصفية الأحداث المتعلقة بكائن ملموس، استخدم إحدى الكلمات المفتاحية في <i>MONITOR_OBJECT</i>.</p>
+<p class="Pp">لتصفية الأحداث المتعلقة بإجراء ملموس، استخدم الكلمة المفتاحية <b>new</b> أو <b>destroy</b>.</p>
+<p class="Pp">الشكل الثاني للاستدعاء لا يأخذ خيارات إضافية ويقوم فقط بطباعة الأحداث التي تم إنشاؤها للحزم التي تم تمكين <b>nftrace</b> لها.</p>
+<p class="Pp">اضغط ^C لإنهاء عملية المراقبة.</p>
+<p class="Pp"><b>الاستماع إلى جميع الأحداث، والإبلاغ بتنسيق nft الأصلي</b>.</p>
+<div class="Bd-indent">
+<pre>% nft monitor</pre>
+</div>
+<p class="Pp"><b>الاستماع إلى القواعد المحذوفة، والإبلاغ بتنسيق JSON</b>.</p>
+<div class="Bd-indent">
+<pre>% nft -j monitor destroy rules</pre>
+</div>
+<p class="Pp"><b>الاستماع إلى كل من السلاسل الجديدة والمحذوفة، بتنسيق nft الأصلي</b>.</p>
+<div class="Bd-indent">
+<pre>% nft monitor chains</pre>
+</div>
+<p class="Pp"><b>الاستماع إلى أحداث مجموعة القواعد مثل الجدول والسلسلة والقاعدة والمجموعة والعدادات والحصص، بتنسيق nft الأصلي</b>.</p>
+<div class="Bd-indent">
+<pre>% nft monitor ruleset</pre>
+</div>
+<p class="Pp"><b>تتبع الحزم الواردة من المضيف 10.0.0.1</b>.</p>
+<div class="Bd-indent">
+<pre>% nft add rule filter input ip saddr 10.0.0.1 meta nftrace set 1
+% nft monitor trace</pre>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERROR_REPORTING'><a class='permalink' href='#ERROR_REPORTING'>الإبلاغ عن الأخطاء</a></h1>
+<p class="Pp">عند اكتشاف خطأ، يعرض nft الأسطر التي تحتوي على الخطأ، وموضع الأجزاء الخاطئة في تيار الإدخال، ويحدد الأجزاء الخاطئة باستخدام علامات (carets ^). إذا كان الخطأ ناتجًا عن مزيج من تعبيرين أو عبارتين، فإن الجزء</p>

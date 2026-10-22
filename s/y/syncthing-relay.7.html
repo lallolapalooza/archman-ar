@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>syncthing-relay(7) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">syncthing-relay(7)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/syncthing/">syncthing</a></p>
+<p class="lic">التراخيص: MPL-2.0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SYNCTHING-RELAY(7)</td>
+    <td class="head-vol">Syncthing</td>
+    <td class="head-rtitle">SYNCTHING-RELAY(7)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">syncthing-relay - بروتوكول الترحيل v1</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WHAT_IS_A_RELAY?'><a class='permalink' href='#WHAT_IS_A_RELAY?'>ما هو المرحل؟</a></h1>
+<p class="Pp">المرحل هو خدمة تقوم بإعادة توجيه البيانات بين جهازين لا يمكنهما الاتصال ببعضهما البعض مباشرة. يحدث هذا عادةً لأن كلا الجهازين خلف NAT ولا يمكن لأي جانب فتح منفذ يمكن الوصول إليه مباشرة من الإنترنت.</p>
+<p class="Pp">تم تصميم المرحل لإعادة توجيه بروتوكول BEP، ومن هنا جاء الاعتماد على معرفات الأجهزة في مواصفات البروتوكول، ولكن في نفس الوقت هو عام بما يكفي لإعادة استخدامه بواسطة بروتوكولات أو تطبيقات أخرى، حيث أن البيانات المنقولة بين جهازين يستخدمان مرحلًا تكون غامضة تمامًا ولا تؤثر على عملية الترحيل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPERATION_MODES'><a class='permalink' href='#OPERATION_MODES'>أوضاع التشغيل</a></h1>
+<p class="Pp">يستمع المرحل على مقبس TCP واحد، ولكنه يحتوي على وضعين مختلفين للاتصال، حيث يعد وضع الاتصال مجموعة محددة مسبقًا من الرسائل التي يتوقع المرحل والجهاز تبادلها.</p>
+<p class="Pp">الوضع الأول هو وضع <i>البروتوكول</i> الذي يسمح للعميل بالتفاعل مع المرحل، على سبيل المثال الانضمام إلى المرحل، أو طلب الاتصال بجهاز، نظرًا لتوفره على المرحل. على غرار BEP، يتطلب وضع البروتوكول من الجهاز الاتصال عبر TLS باستخدام مجموعة قوية من خوارزميات التشفير (نفس BEP)، مما يسمح للمرحل بالتحقق من هوية الجهاز (معرف الجهاز) واشتقاقها.</p>
+<p class="Pp">الوضع الثاني هو وضع <i>الجلسة</i> الذي بعد بضع رسائل أولية يربط جهازين مباشرة ببعضهما البعض عبر المرحل، وهو بروتوكول نص عادي، حيث لكل بايت مكتوب بواسطة جهاز واحد، يرسل نفس مجموعة البايتات إلى الجهاز الآخر والعكس صحيح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='IDENTIFYING_THE_CONNECTION_MODE'><a class='permalink' href='#IDENTIFYING_THE_CONNECTION_MODE'>تحديد وضع الاتصال</a></h1>
+<p class="Pp">نظرًا لأن كلا وضعي الاتصال يعملان عبر نفس المقبس الواحد، هناك حاجة إلى طريقة لاكتشاف وضع الاتصال.</p>
+<p class="Pp">عندما يتصل عميل جديد بالمرحل، يتحقق المرحل من البايت الأول الذي أرسله العميل، وإذا كان يتطابق مع 0x16، فهذا يعني لنا أن الاتصال هو اتصال بوضع البروتوكول، نظرًا لأن 0x16 هو البايت الأول في مصافحة TLS، واتصالات وضع البروتوكول فقط هي التي تستخدم TLS.</p>
+<p class="Pp">إذا كان البايت الأول ليس 0x16، فإننا نفترض أن الاتصال هو اتصال بوضع الجلسة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PROTOCOL_MODE'><a class='permalink' href='#PROTOCOL_MODE'>وضع البروتوكول</a></h1>
+<p class="Pp">يستخدم وضع البروتوكول TLS واسم البروتوكول المحدد بواسطة رأس TLS يجب أن يكون <i>bep-relay</i>.</p>
+<p class="Pp">وضع البروتوكول له وضعان فرعيان: 1. وضع بروتوكول دائم - الانضمام إلى المرحل، والانتظار للحصول على رسائل من المرحل تطلب الاتصال بجهاز ما مهتم بإنشاء جلسة معك. 2. وضع بروتوكول مؤقت - يستخدم فقط لطلب جلسة مع جهاز متصل بالمرحل باستخدام وضع البروتوكول الدائم.</p>
+<section class="Ss">
+<h2 class="Ss" id='Permanent_protocol_submode'><a class='permalink' href='#Permanent_protocol_submode'>وضع البروتوكول الفرعي الدائم</a></h2>
+<p class="Pp">يبدأ وضع البروتوكول الفرعي الدائم بإرسال العميل رسالة JoinRelayRequest، والتي يرد عليها المرحل إما برسالة ResponseSuccess أو ResponseAlreadyConnected إذا كان عميل بنفس معرف الجهاز موجودًا بالفعل.</p>
+<p class="Pp">بعد انضمام العميل، لا يتم تبادل المزيد من الرسائل بخلاف رسائل Ping/Pong للتحقق من استمرارية الاتصال.</p>
+<p class="Pp">من هذه النقطة فصاعدًا، يقف العميل في وضع الاستعداد وينتظر رسائل SessionInvitation من المرحل، مما يعني أن جهازًا آخر يحاول الاتصال بك. تحتوي رسالة SessionInvitation على مفتاح الجلسة الفريد الذي يمكن استخدامه بعد ذلك لإنشاء اتصال بوضع الجلسة.</p>
+<p class="Pp">إذا فشل العميل في إرسال رسالة JoinSessionRequest خلال فترة Ping الأولى، يتم إنهاء الاتصال. إذا فشل العميل في إرسال رسالة (حتى لو كانت رسالة ping) كل دقيقة (افتراضيًا)، يتم إنهاء الاتصال.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Temporary_protocol_submode'><a class='permalink' href='#Temporary_protocol_submode'>وضع البروتوكول الفرعي المؤقت</a></h2>
+<p class="Pp">يبدأ وضع البروتوكول الفرعي المؤقت برسالة ConnectRequest، والتي يرد عليها المرحل برسالة ResponseNotFound إذا كان الجهاز الذي يبحث عنه العميل غير متاح، أو برسالة RelayFull إذا وصل المرحل إلى حدوده، أو برسالة SessionInvitation، التي تحتوي على مفتاح الجلسة الفريد الذي يمكن استخدامه بعد ذلك لإنشاء اتصال بوضع الجلسة.</p>
+<p class="Pp">يتم إنهاء الاتصال فورًا بعد ذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">مثال على التبادل</h2>
+<p class="Pp">العميل A - وضع البروتوكول الفرعي الدائم العميل B - وضع البروتوكول الفرعي المؤقت</p>
+<table class="tbl" style="border-style: solid;">
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">#</td>
+    <td style="border-right-style: solid;">العميل (A)</td>
+    <td style="border-right-style: solid;">المرحل</td>
+    <td>العميل (B)</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">1</td>
+    <td style="border-right-style: solid;">JoinRelayRequest-&gt;</td>
+    <td style="border-right-style: solid;"></td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">2</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-ResponseSuccess</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">3</td>
+    <td style="border-right-style: solid;">Ping-&gt;</td>
+    <td style="border-right-style: solid;"></td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">4</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-Pong</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">5</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;"></td>
+    <td>&lt;-ConnectRequest(A)</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">6</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">SessionInvitation(A)-&gt;</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">7</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-SessionInvitation(B)</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">8</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;"></td>
+    <td>(قطع الاتصال)</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">9</td>
+    <td style="border-right-style: solid;">Ping-&gt;</td>
+    <td style="border-right-style: solid;"></td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">10</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-Pong</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">11</td>
+    <td style="border-right-style: solid;">Ping-&gt;</td>
+    <td style="border-right-style: solid;"></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="border-right-style: solid;">12</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-Pong</td>
+    <td></td>
+  </tr>
+</table>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SESSION_MODE'><a class='permalink' href='#SESSION_MODE'>وضع الجلسة</a></h1>
+<p class="Pp">الرسالة الأولى والوحيدة التي يرسلها العميل في وضع الجلسة هي رسالة JoinSessionRequest التي تحتوي على مفتاح الجلسة الذي يحدد الجلسة التي تحاول الانضمام إليها. يرد المرحل بإحدى الرسائل التالية:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>ResponseNotFound - مفتاح الجلسة غير صالح</dd>
+  <dt>2.</dt>
+  <dd>ResponseAlreadyConnected - الجلسة ممتلئة (كلا الطرفين متصلان بالفعل)</dd>
+  <dt>3.</dt>
+  <dd>ResponseSuccess - لقد انضممت بنجاح إلى الجلسة</dd>
+  <dt>4.</dt>
+  <dd>RelayFull - حدود المرحل صارمة جدًا بحيث لا يمكنك الانضمام إلى الجلسة. ينهي المرحل الاتصال فورًا بعد إرسال هذا.</dd>
+</dl>
+</div>
+<p class="Pp">بعد الاستجابة الناجحة، سيتم إعادة توجيه جميع البايتات المكتوبة والمستلمة بين الجهازين في الجلسة مباشرة.</p>
+<section class="Ss">
+<h2 class="Ss">مثال على التبادل</h2>
+<p class="Pp">العميل A هو أول من ينضم إلى الجلسة.</p>
+<p class="Pp">العميل B هو ثاني من ينضم إلى الجلسة.</p>
+<p class="Pp">كلاهما في وضع الجلسة.</p>
+<table class="tbl" style="border-style: solid;">
+  <tr style="border-bottom-style: solid;">
+    <td style="borde
+<section class="Sh">
+<h1 class="Sh" id='flowchart'><a class='permalink' href='#flowchart'>Flowchart</a></h1>
+<table border="1" style="border-collapse: collapse;">
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">#</td>
+    <td style="border-right-style: solid;">Client (A)</td>
+    <td style="border-right-style: solid;">Relay</td>
+    <td>Client (B)</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">1</td>
+    <td style="border-right-style: solid;">JoinSessionRequest(A)-&gt;</td>
+    <td style="border-right-style: solid;"></td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">2</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-ResponseSuccess</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">3</td>
+    <td style="border-right-style: solid;">Data-&gt;</td>
+    <td style="border-right-style: solid;">(Buffers data)</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">4</td>
+    <td style="border-right-style: solid;">Data-&gt;</td>
+    <td style="border-right-style: solid;">(Buffers data)</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">5</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;"></td>
+    <td>&lt;-JoinSessionRequest(B)</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">6</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">ResponseSuccess-&gt;</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">7</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">Relays data -&gt;</td>
+    <td></td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">8</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">Relays data -&gt;</td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="border-right-style: solid;">9</td>
+    <td style="border-right-style: solid;"></td>
+    <td style="border-right-style: solid;">&lt;-Relays data</td>
+    <td>&lt;-Data</td>
+  </tr>
+</table>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MESSAGES'><a class='permalink' href='#MESSAGES'>الرسائل</a></h1>
+<p class="Pp">تسبق جميع الرسائل رسالة رأس. تحتوي رسالة الرأس على القيمة السحرية
+    0x9E79BC40، ورقم تعريف نوع الرسالة، وطول الرسالة.</p>
+<p class="Pp"><b>تحذير:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">بعض الرسائل ليس لها محتوى، بخلاف الرأس الضمني الذي يسمح لنا
+    بتحديد نوع الرسالة.</div>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Header_structure'><a class='permalink' href='#Header_structure'>هيكل الرأس</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                             Magic                             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Message Type                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Message Length                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct Header {
+        unsigned int Magic;
+        int MessageType;
+        int MessageLength;
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Ping_message_(Type_=_0)'><a class='permalink' href='#Ping_message_(Type_=_0)'>رسالة Ping (النوع = 0)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct Ping {
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Pong_message_(Type_=_1)'><a class='permalink' href='#Pong_message_(Type_=_1)'>رسالة Pong (النوع = 1)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct Pong {
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='JoinRelayRequest_message_(Type_=_2)'><a class='permalink' href='#JoinRelayRequest_message_(Type_=_2)'>رسالة JoinRelayRequest (النوع = 2)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct JoinRelayRequest {
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='JoinSessionRequest_message_(Type_=_3)'><a class='permalink' href='#JoinSessionRequest_message_(Type_=_3)'>رسالة JoinSessionRequest (النوع = 3)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Length of Key                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                     Key (variable length)                     \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct JoinSessionRequest {
+        opaque Key&lt;32&gt;;
+}</pre>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>: Key</b></dt>
+  <dd>هذا هو مفتاح جلسة عشوائي فريد تم إنشاؤه بواسطة خادم الوسيط. يستخدم لتحديد
+      الجلسة التي تحاول الاتصال بها.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Response_message_(Type_=_4)'><a class='permalink' href='#Response_message_(Type_=_4)'>رسالة الاستجابة (النوع = 4)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                             Code                              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Length of Message                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                   Message (variable length)                   \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct Response {
+        int Code;
+        string Message&lt;&gt;;
+}</pre>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>: Code</b></dt>
+  <dd>عدد صحيح يمثل رمز الحالة.</dd>
+  <dt><b>: Message</b></dt>
+  <dd>رسالة مرتبطة بالرمز.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>ResponseSuccess           = Response{0, &quot;success&quot;}
+ResponseNotFound          = Response{1, &quot;not found&quot;}
+ResponseAlreadyConnected  = Response{2, &quot;already connected&quot;}
+ResponseInternalError     = Response{99, &quot;internal error&quot;}
+ResponseUnexpectedMessage = Response{100, &quot;unexpected message&quot;}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ConnectRequest_message_(Type_=_5)'><a class='permalink' href='#ConnectRequest_message_(Type_=_5)'>رسالة ConnectRequest (النوع = 5)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Length of ID                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                     ID (variable length)                      \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct ConnectRequest {
+        opaque ID&lt;32&gt;;
+}</pre>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>: ID</b></dt>
+  <dd>معرف الجهاز الذي يرغب العميل في الاتصال به.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SessionInvitation_message_(Type_=_6)'><a class='permalink' href='#SessionInvitation_message_(Type_=_6)'>رسالة SessionInvitation (النوع = 6)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Length of From                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                    From (variable length)                     \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                         Length of Key                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                     Key (variable length)                     \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Length of Address                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/                                                               /
+\                   Address (variable length)                   \
+/                                                               /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|            0x0000             |             Port              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  Server Socket (V=0 or 1)                   |V|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct SessionInvitation {
+        opaque From&lt;32&gt;;
+        opaque Key&lt;32&gt;;
+        opaque Address&lt;32&gt;;
+        unsigned int Port;
+        bool ServerSocket;
+}</pre>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>: From</b></dt>
+  <dd>معرف الجهاز يحدد من ستتصل به.</dd>
+  <dt><b>: Key</b></dt>
+  <dd>مفتاح جلسة عشوائي فريد تم إنشاؤه بواسطة خادم الوسيط. يستخدم لتحديد
+      الجلسة التي تحاول الاتصال بها.</dd>
+  <dt><b>: Address</b></dt>
+  <dd>عنوان IP اختياري يتوقع خادم الوسيط منك الاتصال به، لبدء اتصال في وضع
+      الجلسة. يجب استبدال عنوان IP الفارغ/الصفري بعنوان IP العام للوسيط الذي تم
+      استخدامه عند إنشاء اتصال وضع البروتوكول.</dd>
+  <dt><b>: Port</b></dt>
+  <dd>المنفذ الذي يتوقع خادم الوسيط منك الاتصال به، لبدء اتصال في وضع
+      الجلسة.</dd>
+  <dt><b>: Server Socket</b></dt>
+  <dd>نظرًا لأن كلا الطرفين المتصلين بالوسيط يستخدمان جانب العميل من المقبس،
+      وبعض البروتوكولات تتصرف بشكل مختلف اعتمادًا على ما إذا كان الاتصال يبدأ على</dd>
+</dl>
+</div>
+</section>
+<!DOCTYPE html>
+<html lang="ar">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>syncthing-relay.7</title>
+        <link rel="stylesheet" href="/css/style.css" type="text/css">
+        <link rel="stylesheet" href="/css/man.css" type="text/css">
+    </head>
+    <body>
+        <main>
+            <article>
+                
+<section class="Sh">
+<h1 class="Sh" id="syncthing-relay.7"><a class="permalink" href="#syncthing-relay.7">syncthing-relay.7</a></h1>
+<p class="Nd">Syncthing relay protocol</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="In">syncthing-relay</p>
+<p class="Nd">Syncthing relay protocol</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="WHAT_IS_A_RELAY?"><a class="permalink" href="#WHAT_IS_A_RELAY?">WHAT IS A RELAY?</a></h1>
+<p class="Pp">Syncthing is a decentralized synchronization program. It is
+    file synchronization that works between two or more computers specified by a
+    user, without requiring any intermediate server. This means you can
+    synchronize files between your desktop and your laptop, your server, and
+    your home machine, etc. All communication is secured with TLS. Device IDs are
+    long, random strings, which means that the risk of somebody else trying to
+    connect to your machine is extremely small.</p>
+<p class="Pp">Syncthing uses relays to enable communication between devices
+    that cannot reach each other directly. This is typically due to one or both
+    devices being behind a NAT or firewall.</p>
+<p class="Pp">The relay is a simple TCP server that allows two devices to
+    connect to it, and then tunnels traffic between them. It does not inspect
+    any of the traffic passing through it.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="OPERATION_MODES"><a class="permalink" href="#OPERATION_MODES">OPERATION MODES</a></h1>
+<p class="Pp">Syncthing has two main connection modes: direct connection and
+    relay connection.</p>
+<p class="Pp">A direct connection is established when two devices are able to
+    reach each other directly over the internet. This is the preferred method as
+    it offers the best performance.</p>
+<p class="Pp">A relay connection is established when two devices cannot reach
+    each other directly. In this case, a relay server is used as an intermediary
+    to facilitate the connection.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="IDENTIFYING_THE_CONNECTION_MODE"><a class="permalink" href="#IDENTIFYING_THE_CONNECTION_MODE">IDENTIFYING THE CONNECTION MODE</a></h1>
+<p class="Pp">Syncthing uses a discovery mechanism to determine the best way to
+    connect two devices. This mechanism checks if a direct connection is
+    possible. If not, it attempts to establish a relay connection.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="PROTOCOL_MODE"><a class="permalink" href="#PROTOCOL_MODE">PROTOCOL MODE</a></h1>
+<p class="Pp">The protocol mode is indicated by the first byte of the message.
+    It can be either:</p>
+<dl class="Bl-tag">
+  <dt>0x00</dt>
+  <dd>Plain TCP connection.</dd>
+  <dt>0x01</dt>
+  <dd>TLS encrypted connection.</dd>
+</dl>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="SESSION_MODE"><a class="permalink" href="#SESSION_MODE">SESSION MODE</a></h1>
+<p class="Pp">The session mode is indicated by the second byte of the message. It
+    can be either:</p>
+<dl class="Bl-tag">
+  <dt>0x00</dt>
+  <dd>New session.</dd>
+  <dt>0x01</dt>
+  <dd>Existing session.</dd>
+</dl>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="MESSAGES"><a class="permalink" href="#MESSAGES">MESSAGES</a></h1>
+<dl class="Bl-tag">
+  <dt><a id="SessionIntroduction">SessionIntroduction (Type = 1)</a></dt>
+  <dd>This message is sent by a client to introduce itself to the relay. It
+      contains the client's device ID and a public key.</dd>
+  <dt><a id="SessionAccept">SessionAccept (Type = 2)</a></dt>
+  <dd>This message is sent by the relay to accept a client's introduction. It
+      contains the relay's public key and a shared secret.</dd>
+  <dt><a id="SessionConnect">SessionConnect (Type = 3)</a></dt>
+  <dd>This message is sent by a client to request a connection to another
+      device. It contains the target device's ID and a signature.</dd>
+  <dt><a id="SessionEstablished">SessionEstablished (Type = 4)</a></dt>
+  <dd>This message is sent by the relay to confirm that a connection has been
+      established between two devices. It contains the public key of the
+      other device.</dd>
+  <dt><a id="SessionClosed">SessionClosed (Type = 5)</a></dt>
+  <dd>This message is sent by a client or the relay to indicate that the
+      session has been closed.</dd>
+  <dt><a id="RelayRequest">RelayRequest (Type = 6)</a></dt>
+  <dd>This message is sent by a client to request relaying of data to another
+      device. It contains the target device's ID and the data to be sent.</dd>
+  <dt><a id="RelayData">RelayData (Type = 7)</a></dt>
+  <dd>This message is sent by the relay to forward data to a client. It contains
+      the data received from the other device.</dd>
+  <dt><a id="SessionInvitation">SessionInvitation</a></dt>
+  <dd>
+    <p class="Pp">This message is sent by a Syncthing device to invite another
+        device to establish a connection. It contains information about the
+        inviting device, including its ID, listen addresses, and a shared
+        secret.</p>
+    <p class="Pp">The <code>ServerSocket</code> boolean indicates whether the
+        receiving device should act as the server socket or the client socket.
+        This is used to ensure that one device always acts as the server and the
+        other as the client, regardless of the connection direction. The value is
+        inverted in the invitation sent to the other device.</p>
+    <div class="Bd-indent">
+    <div class="Bd-indent">
+    <pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|     Type      |                        Sender ID                |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                        Recipient ID                         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     Public Key (optional)                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                  Shared Secret (optional)                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|          Listen Addresses (optional)        | ServerSocket  |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ </pre>
+    </div>
+    </div>
+    <p class="Pp"><code>Type</code>: The type of the message. For
+        SessionInvitation, this is 7.</p>
+    <p class="Pp"><code>Sender ID</code>: The device ID of the sender.</p>
+    <p class="Pp"><code>Recipient ID</code>: The device ID of the recipient.</p>
+    <p class="Pp"><code>Public Key</code>: The sender's public key (optional).</p>
+    <p class="Pp"><code>Shared Secret</code>: A shared secret for key
+        establishment (optional).</p>
+    <p class="Pp"><code>Listen Addresses</code>: A list of listen addresses
+        of the sender (optional).</p>
+    <p class="Pp"><code>ServerSocket</code>: A boolean indicating whether the
+        receiving device should act as the server socket or the client socket.
+        This boolean indicates which side of the connection this client should
+        assume it’s getting. The value is inverted in the invitation which is
+        sent to the other device, so that there is always one client socket, and
+        one server socket.</p>
+  <dt><a id="RelayFull">RelayFull message (Type = 7)</a></dt>
+  <dd>
+    <div class="Bd-indent">
+    <div class="Bd-indent">
+    <pre> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+struct RelayFull {
+}</pre>
+    </div>
+    </div>
+  </dd>
+</dl>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="HOW_SYNCTHING_USES_RELAYS,_AND_GENERAL_SECURITY"><a class="permalink" href="#HOW_SYNCTHING_USES_RELAYS,_AND_GENERAL_SECURITY">HOW SYNCTHING USES RELAYS, AND GENERAL SECURITY</a></h1>
+<p class="Pp">In the case of Syncthing and BEP, when two devices connect via
+    relay, they start their standard TLS connection encapsulated within the
+    relay’s plain-text session connection, effectively upgrading the
+    plain-text connection to a TLS connection.</p>
+<p class="Pp">Even though the relay could be used for man-in-the-middle attack,
+    using TLS at the application/BEP level ensures that all the traffic is
+    safely encrypted, and is completely meaningless to the relay. Furthermore,
+    the secure suite of ciphers used by BEP provides forward secrecy, meaning
+    that even if the relay did capture all the traffic, and even if the attacker
+    did get their hands on the device keys, they would still not be able to
+    recover/decrypt any traffic which was transported via the relay.</p>
+<p class="Pp">After establishing a relay session, Syncthing looks at the
+    SessionInvitation message, and depending which side it has received, wraps
+    the raw socket in either a TLS client socket or a TLS server socket
+    depending on the ServerSocket boolean value in the SessionInvitation, and
+    starts the TLS handshake.</p>
+<p class="Pp">From that point onwards it functions exactly the same way as if
+    Syncthing was establishing a direct connection with the other device over
+    the internet, performing device ID validation, and full TLS encryption, and
+    provides the same security properties as it would provide when connecting
+    over the internet.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES_OF_STRONG_CIPHER_SUITES"><a class="permalink" href="#EXAMPLES_OF_STRONG_CIPHER_SUITES">EXAMPLES OF STRONG CIPHER SUITES</a></h1>
+<table class="tbl" style="border-style: solid;">
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">ID</td>
+    <td style="border-right-style: solid;">Name</td>
+    <td>Description</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0x009F</td>
+    <td style="border-right-style: solid;">DHE-RSA-AES256-GCM-SHA384</td>
+    <td>TLSv1.2 DH RSA AESGCM(256) AEAD</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0x006B</td>
+    <td style="border-right-style: solid;">DHE-RSA-AES256-SHA256</td>
+    <td>TLSv1.2 DH RSA AES(256) SHA256</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0xC030</td>
+    <td style="border-right-style: solid;">ECDHE-RSA-AES256-GCM-SHA384</td>
+    <td>TLSv1.2 ECDH RSA AESGCM(256) AEAD</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0xC028</td>
+    <td style="border-right-style: solid;">ECDHE-RSA-AES256-SHA384</td>
+    <td>TLSv1.2 ECDH RSA AES(256) SHA384</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0x009E</td>
+    <td style="border-right-style: solid;">DHE-RSA-AES128-GCM-SHA256</td>
+    <td>TLSv1.2 DH RSA AESGCM(128) AEAD</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0x0067</td>
+    <td style="border-right-style: solid;">DHE-RSA-AES128-SHA256</td>
+    <td>TLSv1.2 DH RSA AES(128) SHA256</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">0xC02F</td>
+    <td style="border-right-style: solid;">ECDHE-RSA-AES128-GCM-SHA256</td>
+    <td>TLSv1.2 ECDH RSA AESGCM(128) AEAD</td>
+  </tr>
+  <tr>
+    <td style="border-right-style: solid;">0xC027</td>
+    <td style="border-right-style: solid;">ECDHE-RSA-AES128-SHA256</td>
+    <td>TLSv1.2 ECDH RSA AES(128) SHA256</td>
+  </tr>
+</table>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">AUTHOR</a></h1>
+<p class="Pp">The Syncthing Authors</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="COPYRIGHT"><a class="permalink" href="#COPYRIGHT">COPYRIGHT</a></h1>
+<p class="Pp">2014-2025, The Syncthing Authors</p>
+</section>
+
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 23, 2025</td>
+    <td class="foot-os">v2.0.0</td>
+  </tr>
+</table>
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/syncthing/">extra/syncthing</a></dd>
+        <dt>Version:</dt>
+        <dd>2.0.12-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://syncthing.net/">https://syncthing.net/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>MPL-2.0</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/syncthing/">/listing/extra/syncthing/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#WHAT_IS_A_RELAY?">WHAT IS A RELAY?</a></li>
+        
+            <li><a href="#OPERATION_MODES">OPERATION MODES</a></li>
+        
+            <li><a href="#IDENTIFYING_THE_CONNECTION_MODE">IDENTIFYING THE CONNECTION MODE</a></li>
+        
+            <li><a href="#PROTOCOL_MODE">PROTOCOL MODE</a></li>
+        
+            <li><a href="#SESSION_MODE">SESSION MODE</a></li>
+        
+            <li><a href="#MESSAGES">MESSAGES</a></li>
+        
+            <li><a href="#HOW_SYNCTHING_USES_RELAYS,_AND_GENERAL_SECURITY">HOW SYNCTHING USES RELAYS, AND GENERAL SECURITY</a></li>
+        
+            <li><a href="#EXAMPLES_OF_STRONG_CIPHER_SUITES">EXAMPLES OF STRONG CIPHER SUITES</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/syncthing-relay.7.en.txt">txt</a>, 
+        
+            <a href="/man/syncthing-relay.7.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

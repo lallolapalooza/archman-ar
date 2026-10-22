@@ -1,0 +1,388 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">SD_BUS_METHOD_WITH_NAMES(3)</h1>
+<link rel="stylesheet" href="basic.css">
+Mantén toda la estructura del archivo.
+يتم تحديد المؤشر الذي تم تمريره إلى دوال معالجاتك بطريقة مختلفة قليلاً: بدلاً من إضافة معلمة الإزاحة في سجل vtable إلى مؤشر المستخدم المحدد أثناء تسجيل vtable، يتم تمرير الإزاحة مباشرة، محولة إلى مؤشر، دون أخذ مؤشر المستخدم المحدد أثناء تسجيل vtable في الاعتبار.
+
+SD_BUS_VTABLE_CAPABILITY(
+  <i>capability</i>
+)
+يُسمح بالوصول إلى إدخال vtable هذا إذا كان لدى العملية المتصلة القدرة <i>capability</i>، كما هو موضح في sd_bus_query_sender_privilege(3). إذا تم استخدامه لـ SD_BUS_VTABLE_START()، فإنه يوفر قيمة افتراضية لجميع الإدخالات في المصفوفة. إذا لم يتم تحديده، يتم التحقق افتراضيًا من CAP_SYS_ADMIN لكل إدخال فردي أو المصفوفة بأكملها. راجع capabilities(7) للحصول على معلومات حول القدرات.
+
+ملاحظة: يمكن تمييز إدخالات vtable على أنها غير مميزة، ويمكن تمييز الناقل بأكمله على أنه موثوق به، كما نوقش في SD_BUS_VTABLE_UNPRIVILEGED أدناه.
+
+SD_BUS_VTABLE_UNPRIVILEGED
+قم بتمييز إدخال vtable هذا على أنه غير مميز. يقتصر الوصول إلى الإدخالات المميزة على المستخدمين الذين لديهم القدرات المناسبة، كما هو موضح أعلاه. في الممارسة العملية، يتم تمييز العديد من إدخالات vtable على أنها غير مميزة، ويمكن أن تكون مفتوحة للجميع أو يتم اتخاذ قرار السماح بالوصول لاحقًا، على سبيل المثال، عن طريق التفويض إلى polkit[2].
+
+يمكن تمييز الناقل بأكمله على أنه موثوق به، وفي هذه الحالة يتم تجاهل التعليقات التوضيحية على مستوى الإدخال، كما هو موضح في sd_bus_set_trusted(3).
+
+عندما لا يتم تحديده، سيتم عرض التعليق التوضيحي org.freedesktop.systemd1.Privileged بالقيمة "true" في بيانات الفحص.
+
+قد لا ينطبق SD_BUS_VTABLE_UNPRIVILEGED على خصائص القراءة فقط، ولكن الوصول (إلى كل من خصائص القراءة فقط والقابلة للتعديل) مقيد دائمًا.
+
+ملاحظة: تصف هذه الصفحة الضوابط المنفذة في عميل D-Bus. يحتوي خادم D-Bus على سياسة إضافية قد تسمح أو ترفض الاتصالات، راجع "CONFIGURACIÓN FILE" في dbus-daemon(1).
+
+### مثال
+**مثال 1. إنشاء مستمع بسيط على الناقل**
+
+```c
+/* SPDX-License-Identifier: MIT-0 */
+#define _GNU_SOURCE 1
+#include <errno.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <systemd/sd-bus.h>
+#define _cleanup_(f) __attribute__((cleanup(f)))
+typedef struct object {
+  char *name;
+  uint32_t number;
+} object;
+static int method(sd_bus_message *m, void *userdata, sd_bus_error *error) {
+  int r;
+  printf("Got called with userdata=%p\n", userdata);
+  if (sd_bus_message_is_method_call(m,
+                                    "org.freedesktop.systemd.VtableExample",
+                                    "Method4"))
+    return 1;
+  const char *string;
+  r = sd_bus_message_read(m, "s", &string);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_message_read() failed: %s\n", strerror(-r));
+    return 0;
+  }
+  r = sd_bus_reply_method_return(m, "s", string);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_reply_method_return() failed: %s\n", strerror(-r));
+    return 0;
+  }
+  return 1;
+}
+static const sd_bus_vtable vtable[] = {
+        SD_BUS_VTABLE_START(0),
+        SD_BUS_METHOD("Method1", "s", "s", method, 0),
+        SD_BUS_METHOD_WITH_NAMES_OFFSET("Method2",
+            "so", SD_BUS_PARAM(string) SD_BUS_PARAM(path),
+            "s", SD_BUS_PARAM(returnstring),
+            method, offsetof(object, number),
+            SD_BUS_VTABLE_DEPRECATED),
+        SD_BUS_METHOD_WITH_ARGS_OFFSET("Method3",
+            SD_BUS_ARGS("s", string, "o", path),
+            SD_BUS_RESULT("s", returnstring),
+            method, offsetof(object, number),
+            SD_BUS_VTABLE_UNPRIVILEGED),
+        SD_BUS_METHOD_WITH_ARGS("Method4",
+            SD_BUS_NO_ARGS,
+            SD_BUS_NO_RESULT,
+            method,
+            SD_BUS_VTABLE_UNPRIVILEGED),
+        SD_BUS_SIGNAL("Signal1", "so", 0),
+        SD_BUS_SIGNAL_WITH_NAMES("Signal2",
+            "so", SD_BUS_PARAM(string) SD_BUS_PARAM(path),
+            0),
+        SD_BUS_SIGNAL_WITH_ARGS("Signal3",
+            SD_BUS_ARGS("s", string, "o", path),
+            0),
+        SD_BUS_WRITABLE_PROPERTY("AutomaticStringProperty", "s", NULL, NULL,
+            offsetof(object, name),
+            SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+        SD_BUS_WRITABLE_PROPERTY("AutomaticIntegerProperty", "u", NULL, NULL,
+            offsetof(object, number),
+            SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION),
+        SD_BUS_VTABLE_END
+};
+int main(int argc, char **argv) {
+  _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
+  int r;
+  sd_bus_default(&amp;bus);
+  object object = { .number = 666 };
+  object.name = strdup("name");
+  if (!object.name) {
+    fprintf(stderr, "OOM\n");
+    return EXIT_FAILURE;
+  }
+  r = sd_bus_add_object_vtable(bus, NULL,
+                               "/org/freedesktop/systemd/VtableExample",
+                               "org.freedesktop.systemd.VtableExample",
+                               vtable,
+                               &amp;object);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_add_object_vtable() failed: %s\n", strerror(-r));
+    return EXIT_FAILURE;
+  }
+  r = sd_bus_request_name(bus,
+                          "org.freedesktop.systemd.VtableExample",
+                          0);
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_request_name() failed: %s\n", strerror(-r));
+    return EXIT_FAILURE;
+  }
+  for (;;) {
+    r = sd_bus_wait(bus, UINT64_MAX);
+    if (r < 0) {
+      fprintf(stderr, "sd_bus_wait() failed: %s\n", strerror(-r));
+      return EXIT_FAILURE;
+    }
+    r = sd_bus_process(bus, NULL);
+    if (r < 0) {
+      fprintf(stderr, "sd_bus_process() failed: %s\n", strerror(-r));
+      return EXIT_FAILURE;
+    }
+  }
+  r = sd_bus_release_name(bus, "org.freedesktop.systemd.VtableExample");
+  if (r < 0) {
+    fprintf(stderr, "sd_bus_release_name() failed: %s\n", strerror(-r));
+    return EXIT_FAILURE;
+  }
+  free(object.name);
+  return 0;
+}
+```
+
+ينشئ هذا عميلاً بسيطًا على الناقل (ناقل المستخدم، عند تشغيله كمستخدم عادي). يمكننا استخدام استدعاء D-Bus <b>org.freedesktop.DBus.Introspectable.Introspect</b> للحصول على وصف XML للواجهة:
+
+```xml
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD ON-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="xml_data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface_name" direction="in" type="s"/>
+   <arg name="property_name" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface_name" direction="in" type="s"/>
+   <arg name="props" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface_name" direction="in" type="s"/>
+   <arg name="property_name" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface_name"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ <interface name="org.freedesktop.systemd.VtableExample">
+  <method name="Method1">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Method2">
+   <arg type="s" name="string" direction="in"/>
+   <arg type="o" name="path" direction="in"/>
+   <arg type="s" name="returnstring" direction="out"/>
+   <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
+  </method>
+  <property name="AutomaticStringProperty" type="s" access="readwrite"/>
+  <property name="AutomaticIntegerProperty" type="u" access="readwrite">
+   <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="invalidates"/>
+  </property>
+ </interface>
+</node>
+```
+
+### إرجاع
+عند النجاح، تُرجع sd_bus_add_object_vtable() و sd_bus_add_fallback_vtable() رقمًا غير سالب. عند الخطأ، تُرجع رمز خطأ سالبًا.
+
+### أخطاء
+قد تشير الأخطاء المرتجعة إلى المشاكل التالية:
+
+- EINVAL
+أحد المعلمات المطلوبة هو NULL أو غير صالح. تم تمرير واجهة D-Bus محجوزة كمعلمة <i>interface</i>.
+
+- ENOPKG
+لا يمكن حل الناقل.
+
+- ECHILD
+تم إنشاء الناقل في عملية أو مكتبة أو وحدة مختلفة.
+
+- ENOMEM
+فشل تخصيص الذاكرة.
+
+- EPROTOTYPE
+تم استدعاء sd_bus_add_object_vtable() و sd_bus_add_fallback_vtable() لنفس كائن الناقل بمسارات مختلفة، وهو أمر غير مسموح به.
+
+- EEXIST
+تم بالفعل تسجيل vtable هذا للواجهة <i>interface</i> والمسار <i>path</i>.
+
+### ملاحظات
+الوظائف الموصوفة هنا هي
+{
+  "main_content": [
+    {
+      "type": "section",
+      "id": "HISTORY",
+      "title": "HISTORY",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "<b>sd_bus_property_get_t()</b>، <b>sd_bus_property_set_t()</b>، <b>sd_bus_object_find_t()</b>، <b>sd_bus_add_object()</b>، <b>sd_bus_add_fallback()</b>، <b>sd_bus_add_object_vtable()</b>، <b>sd_bus_add_fallback_vtable()</b>، و <b>sd_bus_add_filter()</b> تمت إضافتها في الإصدار 221."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "SEE_ALSO",
+      "title": "SEE ALSO",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "<a href='/man/sd-bus.3.en'>sd-bus(3)</a>، <a href='/man/busctl.1.en'>busctl(1)</a>، <a href='/man/sd_bus_emit_properties_changed.3.en'>sd_bus_emit_properties_changed(3)</a>، <a href='/man/sd_bus_emit_object_added.3.en'>sd_bus_emit_object_added(3)</a>"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "NOTES_2",
+      "title": "NOTES",
+      "content": [
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "tag": "1.",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "D-Bus annotations\n"
+                },
+                {
+                  "type": "link",
+                  "href": "https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format",
+                  "text": "https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format"
+                }
+              ]
+            },
+            {
+              "type": "list_item",
+              "tag": "2.",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "polkit\n"
+                },
+                {
+                  "type": "link",
+                  "href": "https://www.freedesktop.org/software/polkit/docs/latest/",
+                  "text": "https://www.freedesktop.org/software/polkit/docs/latest/"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "header": {
+    "title": "SD_BUS_METHOD_WITH_NAMES",
+    "subtitle": "3",
+    "date": "",
+    "os": "systemd 258.2"
+  },
+  "sidebar": {
+    "search": {
+      "placeholder": "Search manual page",
+      "button_text": "Go"
+    },
+    "package_info": {
+      "title": "Package information:",
+      "items": [
+        {
+          "term": "Package name:",
+          "description": "<a href=\"https://www.archlinux.org/packages/core/x86_64/systemd-libs/\">core/systemd-libs</a>"
+        },
+        {
+          "term": "Version:",
+          "description": "258.2-2"
+        },
+        {
+          "term": "Upstream:",
+          "description": "<a href=\"https://www.github.com/systemd/systemd\">https://www.github.com/systemd/systemd</a>"
+        },
+        {
+          "term": "Licenses:",
+          "description": "LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later WITH Linux-syscall-note"
+        },
+        {
+          "term": "Manuals:",
+          "description": "<a href=\"/listing/core/systemd-libs/\">/listing/core/systemd-libs/</a>"
+        }
+      ]
+    },
+    "table_of_contents": {
+      "title": "Table of contents",
+      "items": [
+        {
+          "id": "NAME",
+          "text": "NAME"
+        },
+        {
+          "id": "SYNOPSIS",
+          "text": "SYNOPSIS"
+        },
+        {
+          "id": "DESCRIPTION",
+          "text": "DESCRIPTION"
+        },
+        {
+          "id": "EXAMPLES",
+          "text": "EXAMPLES"
+        },
+        {
+          "id": "RETURN_VALUE",
+          "text": "RETURN VALUE"
+        },
+        {
+          "id": "NOTES",
+          "text": "NOTES"
+        },
+        {
+          "id": "HISTORY",
+          "text": "HISTORY"
+        },
+        {
+          "id": "SEE_ALSO",
+          "text": "SEE ALSO"
+        },
+        {
+          "id": "NOTES_2",
+          "text": "NOTES"
+        }
+      ]
+    },
+    "other_formats": {
+      "title": "Other formats:",
+      "links": [
+        {
+          "text": "txt",
+          "href": "/man/SD_BUS_METHOD_WITH_NAMES.3.en.txt"
+        },
+        {
+          "text": "raw",
+          "href": "/man/SD_BUS_METHOD_WITH_NAMES.3.en.raw"
+        }
+      ]
+    }
+  },
+  "footer": {
+    "powered_by": "Powered by <a href=\"https://gitlab.archlinux.org/archlinux/archmanweb\">archmanweb</a>,\n               using <a href=\"https://mandoc.bsd.lv/\">mandoc</a> for the conversion of manual pages.",
+    "license": "The website is available under the terms of the <a href=\"https://www.gnu.org/licenses/gpl-3.0.en.html\">GPL-3.0</a>\n               license, except for the contents of the manual pages, which have their own license\n               specified in the corresponding Arch Linux package."
+  }
+}

@@ -1,0 +1,340 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">tracecmd_follow_missed_events(3)</h1>
+<link rel="stylesheet" href="basic.css">
+-
+  parts:
+    -
+      content: |
+        <h2>Tracecmd API (3)</h2>
+        <h1>tracecmd_iterate_events</h1>
+        
+        <p>Functions to iterate over trace events in a trace file.</p>
+      
+      type: section
+    -
+      content: |
+        <h3>SYNOPSIS</h3>
+        <p><strong><code>#include &lt;trace-cmd.h&gt;</code></strong></p>
+        <pre>
+        int <strong>tracecmd_iterate_events</strong>(struct tracecmd_input *handle,
+                                        const cpu_set_t *cpuset,
+                                        size_t cpusetsize,
+                                        tracecmd_callback_func callback,
+                                        void *data);
+        int <strong>tracecmd_iterate_events_reverse</strong>(struct tracecmd_input *handle,
+                                                const cpu_set_t *cpuset,
+                                                size_t cpusetsize,
+                                                tracecmd_callback_func callback,
+                                                void *data);
+        int <strong>tracecmd_iterate_events_multi</strong>(struct tracecmd_input **handles,
+                                                int nr_handles,
+                                                tracecmd_callback_func callback,
+                                                void *data);
+        void <strong>tracecmd_iterate_reset</strong>(struct tracecmd_input *handle);
+        int <strong>tracecmd_filter_add</strong>(struct tracecmd_input *handle,
+                                    const char *filter_str, bool neg);
+        int <strong>tracecmd_follow_event</strong>(struct tracecmd_input *handle,
+                                        const cpu_set_t *cpuset,
+                                        const char *event,
+                                        tracecmd_event_callback_func callback,
+                                        void *data);
+        int <strong>tracecmd_follow_missed_events</strong>(struct tracecmd_input *handle,
+                                                tracecmd_event_callback_func callback,
+                                                void *data);
+        </pre>
+      
+      type: section
+    -
+      content: |
+        <h3>DESCRIPTION</h3>
+        <p>The <strong>tracecmd_iterate_events()</strong> function iterates over all the events
+        in the trace file specified by <i>handle</i>. It can be limited to specific CPUs using
+        <i>cpuset</i> and <i>cpusetsize</i>. If <i>cpuset</i> is NULL, all CPUs are used.
+        The <i>callback</i> function is called for each event. If <i>callback</i> is NULL,
+        the default print function is used. The <i>data</i> pointer is passed to the
+        <i>callback</i> function.</p>
+        <p>The <strong>tracecmd_iterate_events_reverse()</strong> function iterates over the events
+        in reverse order.</p>
+        <p>The <strong>tracecmd_iterate_events_multi()</strong> function iterates over the events
+        from multiple trace files specified by the <i>handles</i> array. <i>nr_handles</i>
+        specifies the number of handles in the array.</p>
+        <p>The <i>callback</i> function has the following signature:</p>
+        <pre>
+        int callback(struct tracecmd_input *handle, struct tep_record *record,
+                     int cpu, void *data);
+        </pre>
+        <p>The <i>callback</i> function is called before any of the other <i>callbacks</i> and any
+        filters that were added by <b>tracecmd_filter_add()</b> are ignored. If
+        <i>callback</i> returns a non zero, it will stop the iterator before it
+        calls any of the other iterator callbacks for the given record.</p>
+        <p>The <b>tracecmd_filter_add()</b> function, adds a filter to
+        <i>handle</i> that affects both <b>tracecmd_iterate_events()</b> and
+        <b>tracecmd_iterate_events_multi()</b>. The <i>filter_str</i> is a character
+        string defining a filter in a format that is defined by
+        <a href="/man/tep_filter_add_filter_str.3.en">tep_filter_add_filter_str(3)</a>. If <i>neg</i> is true, then the events
+        that match the filter will be skipped, otherwise the events that match will
+        execute the <i>callback()</i> function in the iterators.</p>
+        <p>The <b>tracecmd_iterate_reset()</b> sets the <i>handle</i> back to
+        start at the beginning, so that the next call to
+        <b>tracecmd_iterate_events()</b> starts back at the first event again,
+        instead of continuing where it left off.</p>
+      
+      type: section
+    -
+      content: |
+        <h2>RETURN VALUE</h2>
+        <p>Both <b>tracecmd_iterate_events()</b>,
+        <b>tracecmd_iterate_events_reverse()</b> and
+        <b>tracecmd_iterate_events_multi()</b> return zero if they successfully
+        iterated all events (handling the follow and filters appropriately). Or an
+        error value, which can include returning a non-zero result from the
+        <i>callback()</i> function.</p>
+        <p><b>tracecmd_iterate_reset()</b> returns 0 on success and -1 if an
+        error occurred. Note, if -1 is returned, a partial reset may have also
+        happened.</p>
+      
+      type: section
+    -
+      content: |
+        <h2>EXAMPLE</h2>
+        <pre>
+        #define _GNU_SOURCE
+        #include &lt;sched.h&gt;
+        #include &lt;stdlib.h&gt;
+        #include &lt;getopt.h&gt;
+        #include &lt;trace-cmd.h&gt;
+        struct private_data {
+                int             cpu;
+                const char      *file;
+        };
+        static int print_events(struct tracecmd_input *handle, struct tep_record *record, int cpu, void *data)
+        {
+                static struct trace_seq seq;
+                struct tep_handle *tep = tracecmd_get_tep(handle);
+                struct private_data *pdata = tracecmd_get_private(handle);
+                /* For multi handles we need this */
+                if (pdata-&gt;cpu &gt;= 0 &amp;&amp; pdata-&gt;cpu != record-&gt;cpu)
+                        return 0;
+                if (!seq.buffer)
+                        trace_seq_init(&amp;seq);
+                trace_seq_reset(&amp;seq);
+                trace_seq_printf(&amp;seq, &quot;%s: &quot;, pdata-&gt;file);
+                tep_print_event(tep, &amp;seq, record, &quot;%6.1000d [%03d] %s-%d %s: %s\n&quot;,
+                                TEP_PRINT_TIME, TEP_PRINT_CPU, TEP_PRINT_COMM, TEP_PRINT_PID,
+                                TEP_PRINT_NAME, TEP_PRINT_INFO);
+                trace_seq_terminate(&amp;seq);
+                trace_seq_do_printf(&amp;seq);
+                return 0;
+        }
+        static int print_event(struct tracecmd_input *handle, struct tep_event *event,
+                               struct tep_record *record, int cpu, void *data)
+        {
+                return print_events(handle, record, cpu, data);
+        }
+        static int missed_events(struct tracecmd_input *handle, struct tep_event *event,
+                                 struct tep_record *record, int cpu, void *data)
+        {
+                if (record-&gt;missed_events &gt; 0)
+                        printf(&quot;CPU [%03d] has %d missed events\n&quot;,
+                                 record-&gt;cpu, record-&gt;missed_events);
+                else
+                        printf(&quot;CPU [%03d] has missed events\n&quot;, record-&gt;cpu);
+                return 0;
+        }
+        static void usage(const char *argv0)
+        {
+                printf(&quot;usage: [-c cpu][-f filter][-e event] %s trace.dat [trace.dat ...]\n&quot;,
+                       argv0);
+                exit(-1);
+        }
+        int main(int argc, char **argv)
+        {
+                struct tracecmd_input **handles = NULL;
+                const char *filter_str = NULL;
+                const char *argv0 = argv[0];
+                struct private_data *priv;
+                cpu_set_t *cpuset = NULL;
+                char *event = NULL;
+                size_t cpusize = 0;
+                int nr_handles = 0;
+                int cpu = -1;
+                int i;
+                int c;
+                while ((c = getopt(argc, argv, &quot;c:f:e:&quot;)) &gt;= 0) {
+                        switch (c) {
+                        case 'c':
+                                /* filter all trace data to this one CPU. */
+                                cpu = atoi(optarg);
+                                break;
+                        case 'f':
+                                filter_str = optarg;
+                                break;
+                        case 'e':
+                                event = optarg;
+                                break;
+                        default:
+                                usage(argv0);
+                        }
+                }
+                argc -= optind;
+                argv += optind;
+                if (argc == 0)
+                        usage(argv0);
+                for (i = 0; i &lt; argc; i++) {
+                        handles = realloc(handles, sizeof(*handles) * (nr_handles + 1));
+                        if (!handles)
+                                exit(-1);
+                        handles[nr_handles] = tracecmd_open(argv[i], 0);
+                        if (!handles[nr_handles]) {
+                                perror(argv[i]);
+                                exit(-1);
+                        }
+                        if (filter_str) {
+                                if (tracecmd_filter_add(handles[nr_handles], filter_str, false) == NULL) {
+                                        perror(&quot;adding filter&quot;);
+                                        exit(-1);
+                                }
+                        }
+                        priv = calloc(1, sizeof(*priv));
+                        if (!priv)
+                                exit(-1);
+                        priv-&gt;file = argv[i];
+                        priv-&gt;cpu = cpu;
+                        tracecmd_set_private(handles[nr_handles], priv);
+                        if (event) {
+                                if (tracecmd_follow_event(handles[nr_handles], NULL, event, print_event, NULL) &lt; 0) {
+                                        printf(&quot;Could not follow event %s for file %s\n&quot;, event, argv[i]);
+                                        exit(-1);
+                                }
+                        }
+                        tracecmd_follow_missed_events(handles[nr_handles], missed_events, NULL);
+                        nr_handles++;
+                }
+                /* Shortcut */
+                if (nr_handles == 1) {
+                        if (cpu &gt;= 0) {
+                                cpuset = CPU_ALLOC(cpu + 1);
+                                if (!cpuset)
+                                        exit(-1);
+                                cpusize = CPU_ALLOC_SIZE(cpu + 1);
+                                CPU_SET_S(cpu, cpusize, cpuset);
+                        }
+                        if (event)
+                                tracecmd_iterate_events(handles[0], cpuset, cpusize, NULL, NULL);
+                        else
+                                tracecmd_iterate_events(handles[0], cpuset, cpusize, print_events, NULL);
+                } else {
+                        if (event)
+                                tracecmd_iterate_events_multi(handles, nr_handles, NULL, NULL);
+                        else
+                                tracecmd_iterate_events_multi(handles, nr_handles, print_events, NULL);
+                }
+                for (i = 0; i &lt; nr_handles; i++) {
+                        priv = tracecmd_get_private(handles[i]);
+                        free(priv);
+                        tracecmd_close(handles[i]);
+                }
+                free(handles);
+        }
+        </pre>
+      
+      type: section
+    -
+      content: |
+        <h3>FILES</h3>
+        <pre>
+        <b>trace-cmd.h</b>
+                Header file to include in order to have access to the library APIs.
+        <b>-ltracecmd</b>
+                Linker switch to add when building a program that uses the library.
+        </pre>
+      
+      type: section
+    -
+      content: |
+        <h3>SEE ALSO</h3>
+        <p><a href="/man/libtracefs.3.en">libtracefs(3)</a>, <a href="/man/libtraceevent.3.en">libtraceevent(3)</a>, <a href="/man/trace-cmd.1.en">trace-cmd(1)</a>
+        <a href="/man/trace-cmd.dat.5.en">trace-cmd.dat(5)</a></p>
+      
+      type: section
+    -
+      content: |
+        <h3>AUTHOR</h3>
+        <pre>
+        <b>Steven Rostedt</b> &lt;<b>rostedt@goodmis.org</b>[1]>
+        <b>Tzvetomir Stoyanov</b> &lt;<b>tz.stoyanov@gmail.com</b>[2]>
+        </pre>
+      
+      type: section
+    -
+      content: |
+        <h3>REPORTING BUGS</h3>
+        <p>Report bugs to
+        &lt;<b>linux-trace-devel@vger.kernel.org</b>[3]></p>
+      
+      type: section
+    -
+      content: |
+        <h3>LICENSE</h3>
+        <p>libtracecmd is Free Software licensed under the GNU LGPL 2.1</p>
+      
+      type: section
+    -
+      content: |
+        <h3>RESOURCES</h3>
+        <p><a href="https://git.kernel.org/pub/scm/utils/trace-cmd/trace-cmd.git/">https://git.kernel.org/pub/scm/utils/trace-cmd/trace-cmd.git/</a></p>
+      
+      type: section
+    -
+      content: |
+        <h3>COPYING</h3>
+        <p>Copyright (C) 2020 VMware, Inc. Free use of this software is
+        granted under the terms of the GNU Public License (GPL).</p>
+      
+      type: section
+    -
+      content: |
+        <h3>NOTES</h3>
+        <dl class="Bl-tag">
+          <dt> 1.</dt>
+          <dd>rostedt@goodmis.org</dd>
+        </dl>
+        <div class="Bd-indent">mailto:rostedt@goodmis.org</div>
+        <dl class="Bl-tag">
+          <dt> 2.</dt>
+          <dd>tz.stoyanov@gmail.com</dd>
+        </dl>
+        <div class="Bd-indent">mailto:tz.stoyanov@gmail.com</div>
+        <dl class="Bl-tag">
+          <dt> 3.</dt>
+          <dd>linux-trace-devel@vger.kernel.org</dd>
+        </dl>
+        <div class="Bd-indent">mailto:linux-trace-devel@vger.kernel.org</div>
+      
+      type: section
+  
+  header:
+    date: "08/02/2025"
+    title: "tracecmd_iterate_events"
+    man: "3"
+    section: "libtracefs"
+
+            <a href="/man/tracecmd_follow_missed_events.3.en.txt">نص</a>، 
+        
+            <a href="/man/tracecmd_follow_missed_events.3.en.raw">خام</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها رخصتها الخاصة
+               المحددة في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

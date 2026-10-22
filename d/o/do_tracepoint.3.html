@@ -1,0 +1,301 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">do_tracepoint(3)</h1>
+<link rel="stylesheet" href="basic.css">
+   <td style="vertical-align: top;">اسم ملف رابط التصحيح.</td>
+  </tr>
+</table>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Detect_if_LTTng-UST_is_loaded'><a class='permalink' href='#Detect_if_LTTng-UST_is_loaded'>اكتشاف ما إذا كان LTTng-UST محملًا</a></h2>
+<p class="Pp">لاكتشاف ما إذا كانت <b>liblttng-ust</b> محملة من تطبيق:</p>
+<div class="Bd-indent"> 1.عرّف الرمز الضعيف <b>lttng_ust_loaded</b> عالميًا:
+<div class="Bd-indent">
+<pre>int lttng_ust_loaded __attribute__((weak));</pre>
+</div>
+<p class="Pp">يتم تعيين هذا الرمز الضعيف بواسطة مُنشئ <b>liblttng-ust</b>.</p>
+</div>
+<div class="Bd-indent"> 2.اختبر <b>lttng_ust_loaded</b> عند الحاجة:
+<div class="Bd-indent">
+<pre>/* ... */
+if (lttng_ust_loaded) {
+    /* LTTng-UST is loaded */
+} else {
+    /* LTTng-UST is NOT loaded */
+}
+/* ... */</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<div class="Bd-indent">
+<br/>
+<b>ملاحظة</b>
+<p class="Pp">تتوفر بعض الأمثلة في دليل <b>doc/examples</b>
+  <a href='https://github.com/lttng/lttng-ust/tree/stable-2.14/doc/examples'>https://github.com/lttng/lttng-ust/tree/stable-2.14/doc/examples</a>
+  لشجرة مصدر LTTng-UST.</p>
+</div>
+<p class="Pp">يوضح هذا المثال جميع الميزات الموثقة في الأقسام السابقة. يتم اختيار
+    طريقة <i>الربط الثابت</i> هنا لربط التطبيق بموفر نقاط التتبع.</p>
+<p class="Pp">يمكنك تجميع ملفات المصدر وربطها معًا بشكل ثابت على النحو التالي:</p>
+<div class="Bd-indent">
+<pre>$ cc -c -I. tp.c
+$ cc -c app.c
+$ cc -o app tp.o app.o -llttng-ust -ldl</pre>
+</div>
+<p class="Pp">باستخدام أداة <a href='/man/lttng.1.en'>lttng(1)</a>، قم بإنشاء جلسة تتبع LTTng، وتمكين جميع الأحداث الخاصة بموفر نقاط التتبع هذا، وبدء التتبع:</p>
+<div class="Bd-indent">
+<pre>$ lttng create my-session
+$ lttng enable-event --userspace 'my_provider:*'
+$ lttng start</pre>
+</div>
+<p class="Pp">يمكنك أيضًا تمكين أحداث محددة:</p>
+<div class="Bd-indent">
+<pre>$ lttng enable-event --userspace my_provider:big_event
+$ lttng enable-event --userspace my_provider:event_instance2</pre>
+</div>
+<p class="Pp">قم بتشغيل التطبيق:</p>
+<div class="Bd-indent">
+<pre>$ ./app some arguments</pre>
+</div>
+<p class="Pp">قم بإيقاف جلسة التتبع الحالية وفحص الأحداث المسجلة:</p>
+<div class="Bd-indent">
+<pre>$ lttng stop
+$ lttng view</pre>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Tracepoint_provider_header_file'><a class='permalink' href='#Tracepoint_provider_header_file'>ملف رأس موفر نقطة التتبع</a></h2>
+<p class="Pp"><b>tp.h</b>:</p>
+<div class="Bd-indent">
+<pre>#undef LTTNG_UST_TRACEPOINT_PROVIDER
+#define LTTNG_UST_TRACEPOINT_PROVIDER my_provider
+#undef LTTNG_USTTRACEPOINT_INCLUDE
+#define LTTNG_USTTRACEPOINT_INCLUDE &quot;./tp.h&quot;
+#if !defined(_TP_H) || \
+    defined(LTTNG_UST_TRACEPOINT_HEADER_MULTI_READ)
+#define _TP_H
+#include &lt;lttng/tracepoint.h&gt;
+#include &lt;stdio.h&gt;
+#include &quot;app.h&quot;
+LTTNG_UST_TRACEPOINT_EVENT(
+    my_provider,
+    simple_event,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        const char *, my_string_arg
+    ),
+    LTTNG_UST_TP_FIELDS(
+        lttng_ust_field_string(argc, my_string_arg)
+        lttng_ust_field_integer(int, argv, my_integer_arg)
+    )
+)
+LTTNG_UST_TRACEPOINT_ENUM(
+    my_provider,
+    my_enum,
+    LTTNG_UST_TP_ENUM_VALUES(
+        lttng_ust_field_enum_value(&quot;ZERO&quot;, 0)
+        lttng_ust_field_enum_value(&quot;ONE&quot;, 1)
+        lttng_ust_field_enum_value(&quot;TWO&quot;, 2)
+        lttng_ust_field_enum_range(&quot;A RANGE&quot;, 52, 125)
+        lttng_ust_field_enum_value(&quot;ONE THOUSAND&quot;, 1000)
+    )
+)
+LTTNG_UST_TRACEPOINT_EVENT(
+    my_provider,
+    big_event,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        const char *, my_string_arg,
+        FILE *, stream,
+        double, flt_arg,
+        int *, array_arg
+    ),
+    LTTNG_UST_TP_FIELDS(
+        lttng_ust_field_integer(int, int_field1, my_integer_arg * 2)
+        lttng_ust_field_integer_hex(long int, stream_pos,
+                                    ftell(stream))
+        lttng_ust_field_float(double, float_field, flt_arg)
+        lttng_ust_field_string(string_field, my_string_arg)
+        lttng_ust_field_array(int, array_field, array_arg, 7)
+        lttng_ust_field_array_text(char, array_text_field,
+                                   array_arg, 5)
+        lttng_ust_field_sequence(int, seq_field, array_arg, unsigned int,
+                                 my_integer_arg / 10)
+        lttng_ust_field_sequence_text(char, seq_text_field,
+                                      array_arg, unsigned int,
+                                      my_integer_arg / 5)
+        lttng_ust_field_enum(my_provider, my_enum, int,
+                             enum_field, array_arg[1])
+    )
+)
+LTTNG_UST_TRACEPOINT_LOGLEVEL(my_provider, big_event,
+                              LTTNG_UST_TRACEPOINT_LOGLEVEL_WARNING)
+LTTNG_UST_TRACEPOINT_EVENT_CLASS(
+    my_provider,
+    my_tracepoint_class,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        struct app_struct *, app_struct_arg
+    ),
+    LTTNG_UST_TP_FIELDS(
+        lttng_ust_field_integer(int, a, my_integer_arg)
+        lttng_ust_field_integer(unsigned long, b, app_struct_arg-&gt;b)
+        lttng_ust_field_string(c, app_struct_arg-&gt;c)
+    )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(
+    my_provider,
+    my_tracepoint_class,
+    my_provider,
+    event_instance1,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        struct app_struct *, app_struct_arg
+    )
+)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(
+    my_provider,
+    my_tracepoint_class,
+    my_provider,
+    event_instance2,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        struct app_struct *, app_struct_arg
+    )
+)
+LTTNG_UST_TRACEPOINT_LOGLEVEL(my_provider, event_instance2,
+                              LTTNG_UST_TRACEPOINT_LOGLEVEL_INFO)
+LTTNG_UST_TRACEPOINT_EVENT_INSTANCE(
+    my_provider,
+    my_tracepoint_class,
+    my_provider,
+    event_instance3,
+    LTTNG_UST_TP_ARGS(
+        int, my_integer_arg,
+        struct app_struct *, app_struct_arg
+    )
+)
+#endif /* _TP_H */
+#include &lt;lttng/tracepoint-event.h&gt;</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Tracepoint_provider_source_file'><a class='permalink' href='#Tracepoint_provider_source_file'>ملف مصدر موفر نقطة التتبع</a></h2>
+<p class="Pp"><b>tp.c</b>:</p>
+<div class="Bd-indent">
+<pre>#define LTTNG_UST_TRACEPOINT_CREATE_PROBES
+#define LTTNG_UST_TRACEPOINT_DEFINE
+#include &quot;tp.h&quot;</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Application_header_file'><a class='permalink' href='#Application_header_file'>ملف رأس التطبيق</a></h2>
+<p class="Pp"><b>app.h</b>:</p>
+<div class="Bd-indent">
+<pre>#ifndef _APP_H
+#define _APP_H
+struct app_struct {
+    unsigned long b;
+    const char *c;
+    double d;
+};
+#endif /* _APP_H */</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Application_source_file'><a class='permalink' href='#Application_source_file'>ملف مصدر التطبيق</a></h2>
+<p class="Pp"><b>app.c</b>:</p>
+<div class="Bd-indent">
+<pre>#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &quot;tp.h&quot;
+#include &quot;app.h&quot;
+static int array_of_ints[] = {
+    100, -35, 1, 23, 14, -6, 28, 1001, -3000,
+};
+int main(int argc, char* argv[])
+{
+    FILE *stream;
+    struct app_struct app_struct;
+    lttng_ust_tracepoint(my_provider, simple_event, argc, argv[0]);
+    stream = fopen(&quot;/tmp/app.txt&quot;, &quot;w&quot;);
+    if (!stream) {
+        fprintf(stderr,
+                &quot;Error: Cannot open /tmp/app.txt for writing\n&quot;);
+        return EXIT_FAILURE;
+    }
+    if (fprintf(stream, &quot;0123456789&quot;) != 10) {
+        fclose(stream);
+        fprintf(stderr, &quot;Error: Cannot write to /tmp/app.txt\n&quot;);
+        return EXIT_FAILURE;
+    }
+    lttng_ust_tracepoint(my_provider, big_event, 35,
+                         &quot;hello tracepoint&quot;, stream, -3.14,
+                         array_of_ints);
+    fclose(stream);
+    app_struct.b = argc;
+    app_struct.c = &quot;[the string]&quot;;
+    lttng_ust_tracepoint(my_provider, event_instance1, 23,
+                         &amp;app_struct);
+    app_struct.b = argc * 5;
+    app_struct.c = &quot;[other string]&quot;;
+    lttng_ust_tracepoint(my_provider, event_instance2, 17,
+                         &amp;app_struct);
+    app_struct.b = 23;
+    app_struct.c = &quot;nothing&quot;;
+    lttng_ust_tracepoint(my_provider, event_instance3, -52,
+                         &amp;app_struct);
+    return EXIT_SUCCESS;
+}</pre>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT_VARIABLES'><a class='permalink' href='#ENVIRONMENT_VARIABLES'>متغيرات البيئة</a></h1>
+<p class="Pp"><b>LTTNG_HOME</b></p>
+<div class="Bd-indent">دليل منزل المستخدم البديل. هذا المتغير مفيد عندما يكون لدى المستخدم
+  الذي يشغل التطبيق المُقاس دليل منزل غير قابل للكتابة. هذا المسار هو المكان الذي توجد فيه
+  مقابس Unix للتواصل مع خادم الجلسات الخاص بالمستخدم.</div>
+<p class="Pp"><b>LTTNG_UST_ABORT_ON_CRITICAL</b></p>
+<div class="Bd-indent">إذا تم تعيينه، قم بإنهاء التطبيق المُقاس عند رسالة خطأ حرجة.</div>
+<p class="Pp"><b>LTTNG_UST_ALLOW_BLOCKING</b></p>
+<div class="Bd-indent">إذا تم تعيينه، اسمح للتطبيق بإعادة محاولة تتبع الأحداث عندما لا
+  يكون هناك مساحة كافية لسجل الحدث في المخزن المؤقت الفرعي، وبالتالي منع التطبيق فعليًا
+  حتى يتم توفير مساحة أو الوصول إلى المهلة المحددة.
+<p class="Pp">للسماح للتطبيق بالتعليق أثناء التتبع، تحتاج أيضًا إلى تحديد
+    مهلة تعليق عند إنشاء قناة باستخدام الخيار <b>--blocking-timeout</b>
+    من الأمر <a href='/man/lttng-enable-channel.1.en'>lttng-enable-channel(1)</a>.</p>
+<p class="Pp">قد يكون هذا الخيار مفيدًا في أعباء العمل التي تولد معدل نقل بيانات تتبع
+    كبيرة جدًا، حيث يكون تعليق التطبيق مقايضة مقبولة لمنع تجاهل سجلات الأحداث.</p>
+<div class="Bd-indent">
+<br/>
+<b>تحذير</b>
+<br/>
+قد يؤثر تعيين متغير البيئة هذا بشكل كبير على توقيت التطبيق.
+</div>
+</div>
+<p class="Pp"><b>LTTNG_UST_APP_PATH</b></p>
+<div class="Bd-indent">مسار الدليل الذي يُتوقع من خادم جلسات LTTng وضع الملفات التالية فيه
+  لتلقي طلبات اتصال التطبيق المُقاس:
+<div class="Bd-indent">&#x2022؛ مقبس تسجيل التطبيق.</div>
+<div class="Bd-indent">&#x2022؛ ملفات الذاكرة المشتركة "الانتظار" لإيقاظ التطبيقات
+  المُقاسة التي تنتظر بدء خادم جلسة.</div>
+<div class="Bd-indent">&#x2022؛ ملف منفذ الوكيل.
+<p class="Pp">يحتوي هذا الملف على منفذ TCP الذي يجب على الوكلاء الاتصال به لتمكين
+    تتبع LTTng.</p>
+</div>
+<p class="Pp">يجب أن يكون هذا الدليل موجودًا عند بدء التطبيق لتمكين تتبع LTTng.</p>
+<p class="Pp">عند تعيين <b>LTTNG_UST_APP_PATH</b>، فإن liblttng-ust:</p>
+<div class="Bd-indent">&#x2022؛ يأخذ هذا المسار فقط للاتصال بخادم الجلسة.</div>
+<div class="Bd-indent">&#x2022؛ لن يتصل بخوادم الجلسات الجذر والمستخدم/والمستخدم كما هو
+  معتاد.</div>
+<p class="Pp">راجع متغير البيئة المقابل <b>LTTNG_UST_CTL_PATH</b> في
+    <a href='/man/lttng-sessiond.8.en'>lttng-sessiond(8)</a>.</p>
+</div>
+<p class="Pp"><b>LTTNG_UST_CLOCK_PLUGIN</b></p>
+<div class="Bd-indent">مسار الكائن المشترك الذي يعمل كملحق تجاوز الساعة. يمكن العثور على مثال
+  لهذا الملحق في وثائق LTTng-UST ضمن <b>examples/clock-override</b>
+  <a href='https://github.com/lttng/lttng-ust/tree/stable-2.14/doc/examples/clock-override'>https://github.com/lttng/lttng-ust/tree/stable-2.14/doc/examples/clock-override</a>.</div>
+<p cla

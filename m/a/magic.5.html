@@ -1,0 +1,664 @@
+<dl class="Bl-tag">
+<dt id="description"><a class="permalink" href="#description"><code class="Dv">description</code></a></dt>
+<dd>The magic file format is described below. All magic files consist of a sequence of
+    test descriptions. Each test description consists of a number of lines. The
+    first line is the test itself. Subsequent lines are appended to the first
+    line if they start with a tab, or if the first line starts with a tab and they
+    start with a space.&#x20;
+<p class="Pp">A line starting with a tab is a continuation line. The first
+    line is the magic entry. The magic entry determines if a file matches a
+    particular file type.&#x20;
+<p class="Pp">The magic entry format is:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>offset   type   &lt;&=!>  test   [:#message]</pre>
+</div>
+<p class="Pp">Where:</p>
+<dl class="Bl-tag">
+<dt id="offset"><a class="permalink" href="#offset"><code class="Dv">offset</code></a></dt>
+<dd>This field specifies the offset into the file where the test should be
+      performed. It is a string of decimal digits, which may be preceded by
+      <code class="Dv">0x</code> for hexadecimal, or <code class="Dv">0</code>
+      for octal. The offset may be preceded by one or more <code class="Dv">&gt;</code>
+      characters, which specifies that this test is conditional on the previous
+      test at the previous level. A level 0 test has no preceding <code class="Dv">&gt;</code>.
+      The offset may be prefixed by <code class="Dv">(</code> to indicate an
+      indirect offset. See below for more details.</dd>
+<dt id="type"><a class="permalink" href="#type"><code class="Dv">type</code></a></dt>
+<dd>This field specifies the type of the data at the given offset. It is a
+      string from the following list:
+      <ul class="Bl-bullet">
+        <li><code class="Dv">byte</code>: A single character.</li>
+        <li><code class="Dv">char</code>: Same as byte.</li>
+        <li><code class="Dv">short</code>: A 16-bit signed integer.</li>
+        <li><code class="Dv">ushort</code>: A 16-bit unsigned integer.</li>
+        <li><code class="Dv">long</code>: A 32-bit signed integer.</li>
+        <li><code class="Dv">ulong</code>: A 32-bit unsigned integer.</li>
+        <li><code class="Dv">quad</code>: A 64-bit signed integer.</li>
+        <li><code class="Dv">uquad</code>: A 64-bit unsigned integer.</li>
+        <li><code class="Dv">float</code>: A 32-bit floating point number.</li>
+        <li><code class="Dv">double</code>: A 64-bit floating point number.</li>
+        <li><code class="Dv">octal</code>: An octal number.</li>
+        <li><code class="Dv">hex</code>: A hexadecimal number.</li>
+        <li><code class="Dv">string</code>: A string of characters.</li>
+        <li><code class="Dv">date</code>: A 32-bit unsigned integer representing seconds since the epoch.</li>
+        <li><code class="Dv">ascii_date</code>: A 32-bit unsigned integer representing seconds since the epoch, formatted as an ASCII string.</li>
+        <li><code class="Dv">regex</code>: A regular expression.</li>
+        <li><code class="Dv">search</code>: Same as regex.</li>
+        <li><code class="Dv">user</code>: A user-defined type.</li>
+        <li><code class="Dv">bestmagic</code>: This type will attempt to find the best match using the magic entries.</li>
+      </ul>
+      In addition, the type specifiers <code class="Dv">dI</code>, <code class="Dv">dL</code>,
+      and <code class="Dv">d4</code> are equivalent to <code class="Dv">long</code>,
+      the type specifiers <code class="Dv">uI</code>, <code class="Dv">uL</code>,
+      and <code class="Dv">u4</code> are equivalent to
+      <code class="Dv">ulong</code>, the type specifier
+      <code class="Dv">d8</code> is equivalent to
+      <code class="Dv">quad</code>, the type specifier
+      <code class="Dv">u8</code> is equivalent to
+      <code class="Dv">uquad</code>, and the type specifier
+      <code class="Dv">s</code> is equivalent to
+      <code class="Dv">string</code>. In addition, the type specifier
+      <code class="Dv">dQ</code> is equivalent to <code class="Dv">quad</code>
+      and the type specifier <code class="Dv">uQ</code> is equivalent to
+      <code class="Dv">uquad</code>.</p>
+    <p class="Pp">Each top-level magic pattern (see below for an explanation of
+        levels) is classified as text or binary according to the types used.
+        Types &#x201C;regex&#x201D; and &#x201C;search&#x201D; are classified as
+        text tests, unless non-printable characters are used in the pattern. All
+        other tests are classified as binary. A top-level pattern is considered
+        to be a test text when all its patterns are text patterns; otherwise, it
+        is considered to be a binary pattern. When matching a file, binary
+        patterns are tried first; if no match is found, and the file looks like
+        text, then its encoding is determined and the text patterns are
+      tried.</p>
+    <p class="Pp">The numeric types may optionally be followed by
+        <code class="Dv">&amp;</code> and a numeric value, to specify that the
+        value is to be AND'ed with the numeric value before any comparisons are
+        done. Prepending a <code class="Dv">u</code> to the type indicates that
+        ordered comparisons should be unsigned.</p>
+  </dd>
+  <dt id="test"><a class="permalink" href="#test"><code class="Dv">test</code></a></dt>
+  <dd>The value to be compared with the value from the file. If the type is
+      numeric, this value is specified in C form; if it is a string, it is
+      specified as a C string with the usual escapes permitted (e.g. \n for
+      new-line).
+    <p class="Pp" id="not">Numeric values may be preceded by a character
+        indicating the operation to be performed. It may be
+        <code class="Dv">=</code>, to specify that the value from the file must
+        equal the specified value, <code class="Dv">&lt;</code>, to specify that
+        the value from the file must be less than the specified value,
+        <code class="Dv">&gt;</code>, to specify that the value from the file
+        must be greater than the specified value, <code class="Dv">&amp;</code>,
+        to specify that the value from the file must have set all of the bits
+        that are set in the specified value, <code class="Dv">^</code>, to
+        specify that the value from the file must have clear any of the bits
+        that are set in the specified value, or <code class="Dv">~</code>, the
+        value specified after is negated before tested.
+        <code class="Dv">x</code>, to specify that any value will match. If the
+        character is omitted, it is assumed to be <code class="Dv">=</code>.
+        Operators <code class="Dv">&amp;</code>, <code class="Dv">^</code>, and
+        <code class="Dv">~</code> don't work with floats and doubles. The
+        operator <code class="Dv">!</code> specifies that the line matches if
+        the test does <a class="permalink" href="#not"><i class="Em">not</i></a>
+        succeed.</p>
+    <p class="Pp">Numeric values are specified in C form; e.g.
+        <code class="Dv">13</code> is decimal, <code class="Dv">013</code> is
+        octal, and <code class="Dv">0x13</code> is hexadecimal.</p>
+    <p class="Pp">Numeric operations are not performed on date types, instead
+        the numeric value is interpreted as an offset.</p>
+    <p class="Pp">For string values, the string from the file must match the
+        specified string. The operators <code class="Dv">=</code>,
+        <code class="Dv">&lt;</code> and <code class="Dv">&gt;</code> (but not
+        <code class="Dv">&amp;</code>) can be applied to strings. The length
+        used for matching is that of the string argument in the magic file. This
+        means that a line can match any non-empty string (usually used to then
+        print the string), with <i class="Em">&gt;\0</i> (because all non-empty
+        strings are greater than the empty string).</p>
+    <p class="Pp">Dates are treated as numerical values in the respective
+        internal representation.</p>
+    <p class="Pp">The special test <i class="Em">x</i> always evaluates to
+      true.</p>
+  </dd>
+  <dt id="message"><a class="permalink" href="#message"><code class="Dv">message</code></a></dt>
+  <dd>The message to be printed if the comparison succeeds. If the string
+      contains a <a class="Xr" href="/man/printf.3.en">printf(3)</a> format
+      specification, the value from the file (with any specified masking
+      performed) is printed using the message as the format string. If the
+      string begins with &#x201C;\b&#x201D;, the message printed is the
+      remainder of the string with no whitespace added before it: multiple
+      matches are normally separated by a single space.</dd>
+</dl>
+<p class="Pp">An APPLE 4+4 character APPLE creator and type can be specified
+  as:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>!:apple	CREATYPE</pre>
+</div>
+<p class="Pp">A slash-separated list of commonly found filename extensions can
+    be specified as:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>!:ext	ext[/ext...]</pre>
+</div>
+<p class="Pp">i.e. the literal string &#x201C;!:ext&#x201D; followed by a
+    slash-separated list of commonly found extensions; for example for JPEG
+    images:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>!:ext jpeg/jpg/jpe/jfif</pre>
+</div>
+<p class="Pp">A MIME type is given on a separate line, which must be the next
+    non-blank or comment line after the magic line that identifies the file
+    type, and has the following format:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>!:mime	MIMETYPE</pre>
+</div>
+<p class="Pp">i.e. the literal string &#x201C;!:mime&#x201D; followed by the
+    MIME type.</p>
+<p class="Pp">An optional strength can be supplied on a separate line which
+    refers to the current magic description using the following format:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>!:strength OP VALUE</pre>
+</div>
+<p class="Pp">The operand <code class="Dv">OP</code> can be:
+    <code class="Dv">+</code>, <code class="Dv">-</code>,
+    <code class="Dv">*</code>, or <code class="Dv">/</code> and
+    <code class="Dv">VALUE</code> is a constant between 0 and 255. This constant
+    is applied using the specified operand to the currently computed default
+    magic strength.</p>
+<p class="Pp" id="n+1">Some file formats contain additional information which is
+    to be printed along with the file type or need additional tests to determine
+    the true file type. These additional tests are introduced by one or more
+    <i class="Em">&gt;</i> characters preceding the offset. The number of
+    <i class="Em">&gt;</i> on the line indicates the level of the test; a line
+    with no <i class="Em">&gt;</i> at the beginning is considered to be at level
+    0. Tests are arranged in a tree-like hierarchy: if the test on a line at
+    level <i class="Em">n</i> succeeds, all following tests at level
+    <a class="permalink" href="#n+1"><i class="Em">n+1</i></a> are performed,
+    and the messages printed if the tests succeed, until a line with level
+    <i class="Em">n</i> (or less) appears. For more complex files, one can use
+    empty messages to get just the &quot;if/then&quot; effect, in the following
+    way:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0      string    MZ
+&gt;0x18  uleshort  &lt;0x40   MS-DOS executable
+&gt;0x18  uleshort  &gt;0x3f   extended PC executable (e.g., MS Windows)</pre>
+</div>
+<p class="Pp" id="(">Offsets do not need to be constant, but can also be read
+    from the file being examined. If the first character following the last
+    <i class="Em">&gt;</i> is a
+    <a class="permalink" href="#("><i class="Em">(</i></a> then the string after
+    the parenthesis is interpreted as an indirect offset. That means that the
+    number after the parenthesis is used as an offset in the file. The value at
+    that offset is read, and is used again as an offset in the file. Indirect
+    offsets are of the form: (<i class="Em">x [[.,][bBcCeEfFgGhHiIlmosSqQ]][+-][
+    y ])</i>. The value of <i class="Em">x</i> is used as an offset in the file.
+    A byte, id3 length, short or long is read at that offset depending on the
+    <a class="permalink" href="#_bBcCeEfFgGhHiIlLmsSqQ_"><i class="Em" id="_bBcCeEfFgGhHiIlLmsSqQ_">[bBcCeEfFgGhHiIlLmsSqQ]</i></a>
+    type specifier. The value is treated as signed if &#x201C;,&#x201D; is
+    specified or unsigned if &#x201C;.&#x201D; is specified. The capitalized
+    types interpret the number as a big endian value, whereas the small letter
+    versions interpret the number as a little endian value; the
+    <a class="permalink" href="#m"><i class="Em" id="m">m</i></a> type
+    interprets the number as a middle endian (PDP-11) value. To that number the
+    value of <a class="permalink" href="#y"><i class="Em" id="y">y</i></a> is
+    added and the result is used as an offset in the file. The default type if
+    one is not specified is long. The following types are recognized:</p>
+<table class="Bl-column Bd-indent">
+  <tr id="Type">
+    <td><a class="permalink" href="#Type"><b class="Sy">Type</b></a></td>
+    <td>Sy Mnemonic</td>
+    <td>Sy Endian</td>
+    <td>Sy Size</td>
+  </tr>
+  <tr>
+    <td>bcBC</td>
+    <td>Byte/Char</td>
+    <td>N/A</td>
+    <td>1</td>
+  </tr>
+  <tr>
+    <td>efg</td>
+    <td>Double</td>
+    <td>Little</td>
+    <td>8</td>
+  </tr>
+  <tr>
+    <td>EFG</td>
+    <td>Double</td>
+    <td>Big</td>
+    <td>8</td>
+  </tr>
+  <tr>
+    <td>hs</td>
+    <td>Half/Short</td>
+    <td>Little</td>
+    <td>2</td>
+  </tr>
+  <tr>
+    <td>HS</td>
+    <td>Half/Short</td>
+    <td>Big</td>
+    <td>2</td>
+  </tr>
+  <tr>
+    <td>i</td>
+    <td>ID3</td>
+    <td>Little</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>I</td>
+    <td>ID3</td>
+    <td>Big</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>l</td>
+    <td>Long</td>
+    <td>Little</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>L</td>
+    <td>Long</td>
+    <td>Big</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>m</td>
+    <td>Middle</td>
+    <td>Middle</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>o</td>
+    <td>Octal</td>
+    <td>Textual</td>
+    <td>Variable</td>
+  </tr>
+  <tr>
+    <td>q</td>
+    <td>Quad</td>
+    <td>Little</td>
+    <td>8</td>
+  </tr>
+  <tr>
+    <td>Q</td>
+    <td>Quad</td>
+    <td>Big</td>
+    <td>8</td>
+  </tr>
+</table>
+<p class="Pp">That way variable length structures can be examined:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre># MS Windows executables are also valid MS-DOS executables
+0           string   MZ
+&gt;0x18       uleshort &lt;0x40  MZ executable (MS-DOS)
+# skip the whole block below if it is not an extended executable
+&gt;0x18       uleshort &gt;0x3f
+&gt;&gt;(0x3c.l)  string   PE\0\0 PE executable (MS-Windows)
+&gt;&gt;(0x3c.l)  string   LX\0\0 LX executable (OS/2)</pre>
+</div>
+<p class="Pp">This strategy of examining has a drawback: you must make sure that
+    you eventually print something, or users may get empty output (such as when
+    there is neither PE\0\0 nor LE\0\0 in the above example).</p>
+<p class="Pp" id="_+-*/_&amp;___number">If this indirect offset cannot be used
+    directly, simple calculations are possible: appending
+    <a class="permalink" href="#_+-*/_&amp;___number"><i class="Em">[+-*/%&amp;|^]number</i></a>
+    to the indirect offset value.</p>
+</dd>
+</dl>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <title>magic(5) — Arch Linux manual pages</title>
+        <link rel="stylesheet" href="/styles/main.css" />
+        <link rel="stylesheet" href="/styles/man.css" />
+        <link rel="stylesheet" href="/styles/header.css" />
+        <link rel="stylesheet" href="/styles/footer.css" />
+        <link rel="stylesheet" href="/styles/sidebar.css" />
+        <link rel="icon" type="image/png" href="/images/archlinux-logo.png" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">magic(5)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/file/">file</a></p>
+<p class="lic">التراخيص: custom</p>
+
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Nm">magic - file format		file	magic(5)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">This file describes the magic numbers of various executable file
+    formats. When the <a class="Xr" href="/man/file.1.en">file(1)</a> command
+    is invoked without any options, it consults the magic file to determine the
+    type of files it is examining. The file is divided into sections, each
+    beginning with a <span class="Dv">.&lt;number&gt;</span> line, where <span
+    class="Dv">.&lt;number&gt;</span> indicates the level of indentation. A
+    continuation level indicates the level of indentation into a file structure.
+    The first entry is at level 0. A string which is not preceded by any
+    indentation is at level 0. A string preceded by one tab is at level 1. A
+    string preceded by two tabs is at level 2, and so on.</p>
+<p class="Pp">Each line in the magic file has the format:</p>
+<p class="Pp"><code>[<em>indent</em>] [<em>strength</em>] <em>type</em> <em>test</em> [<em>offset</em>] [<em>mesg</em>]</code></p>
+<p class="Pp">The <span class="Dv">indent</span> is specified by the number of
+    tab characters at the beginning of the line. The first entry must be at
+    level 0.</p>
+<p class="Pp">The <span class="Dv">strength</span> is an optional field that
+    specifies the strength of this magic number. The strength is a number from
+    0 to 9. The default strength is 4. A higher strength means that this magic
+    number is more likely to be the correct type.</p>
+<p class="Pp">The <span class="Dv">type</span> is the data type of the field
+    to be tested. The valid types are:</p>
+<dl class="Bl-tag">
+    <dt><code>string</code></dt>
+    <dd>A string of characters. The string is specified in the <span
+        class="Dv">test</span> field. The string comparison is case-sensitive
+        unless the <span class="Dv">U</span> (uppercase) flag is used.</dd>
+    <dt><code>boolean</code></dt>
+    <dd>A boolean value (0 or 1). The value is specified in the <span
+        class="Dv">test</span> field.</dd>
+    <dt><code>byte</code></dt>
+    <dd>An 8-bit unsigned integer. The value is specified in the <span
+        class="Dv">test</span> field.</dd>
+    <dt><code>short</code></dt>
+    <dd>A 16-bit unsigned integer. The value is specified in the <span
+        class="Dv">test</span> field. The byte order is determined by the
+        <a class="Xr" href="/man/file.1.en">file(1)</a> command's locale.</dd>
+    <dt><code>long</code></dt>
+    <dd>A 32-bit unsigned integer. The value is specified in the <span
+        class="Dv">test</span> field. The byte order is determined by the
+        <a class="Xr" href="/man/file.1.en">file(1)</a> command's locale.</dd>
+    <dt><code>quad</code></dt>
+    <dd>A 64-bit unsigned integer. The value is specified in the <span
+        class="Dv">test</span> field. The byte order is determined by the
+        <a class="Xr" href="/man/file.1.en">file(1)</a> command's locale.</dd>
+    <dt><code>float</code></dt>
+    <dd>A 32-bit floating-point number. The value is specified in the <span
+        class="Dv">test</span> field. The byte order is determined by the
+        <a class="Xr" href="/man/file.1.en">file(1)</a> command's locale.</dd>
+    <dt><code>double</code></dt>
+    <dd>A 64-bit floating-point number. The value is specified in the <span
+        class="Dv">test</span> field. The byte order is determined by the
+        <a class="Xr" href="/man/file.1.en">file(1)</a> command's locale.</dd>
+    <dt><code>beshort</code></dt>
+    <dd>A 16-bit unsigned integer in big-endian format. The value is specified
+        in the <span class="Dv">test</span> field.</dd>
+    <dt><code>ledevshort</code></dt>
+    <dd>A 16-bit unsigned integer in little-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>belong</code></dt>
+    <dd>A 32-bit unsigned integer in big-endian format. The value is specified
+        in the <span class="Dv">test</span> field.</dd>
+    <dt><code>ledevlong</code></dt>
+    <dd>A 32-bit unsigned integer in little-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>bequad</code></dt>
+    <dd>A 64-bit unsigned integer in big-endian format. The value is specified
+        in the <span class="Dv">test</span> field.</dd>
+    <dt><code>ledevquad</code></dt>
+    <dd>A 64-bit unsigned integer in little-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>befloat</code></dt>
+    <dd>A 32-bit floating-point number in big-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>ledevfloat</code></dt>
+    <dd>A 32-bit floating-point number in little-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>bedouble</code></dt>
+    <dd>A 64-bit floating-point number in big-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>ledevdouble</code></dt>
+    <dd>A 64-bit floating-point number in little-endian format. The value is
+        specified in the <span class="Dv">test</span> field.</dd>
+    <dt><code>search</code></dt>
+    <dd>A string of characters. The string is specified in the <span
+        class="Dv">test</span> field. The <span class="Dv">offset</span> field
+        specifies the offset to start searching from. The search is case-sensitive
+        unless the <span class="Dv">U</span> flag is used.</dd>
+    <dt><code>regex</code></dt>
+    <dd>A regular expression. The regular expression is specified in the <span
+        class="Dv">test</span> field. The <span class="Dv">offset</span> field
+        specifies the offset to start searching from. The search is case-sensitive
+        unless the <span class="Dv">U</span> flag is used.</dd>
+    <dt><code>otland</code></dt>
+    <dd>A sequence of tests. If the first test fails, the second test is
+        attempted. The tests are separated by commas.</dd>
+    <dt><code>and</code></dt>
+    <dd>A sequence of tests. All tests must succeed. The tests are separated by
+        commas.</dd>
+    <dt><code>clear</code></dt>
+    <dd>Clears the magic number entries at the specified continuation level.</dd>
+    <dt><code>default</code></dt>
+    <dd>Specifies a default magic number entry. This entry is used if no other
+        magic number entries match.</dd>
+</dl>
+<p class="Pp">The <span class="Dv">test</span> is the value to be tested. The
+    format of the test depends on the <span class="Dv">type</span>. For
+    <code class="Dv">string</code>, the test is a string literal. For numeric
+    types, the test is a number in decimal, hexadecimal (prefixed with
+    <code>0x</code>), or octal (prefixed with <code>0</code>). For <code
+    class="Dv">search</code> and <code class="Dv">regex</code>, the test is a
+    string literal or a regular expression.</p>
+<p class="Pp">The <span class=" Dv">offset</span> is an optional field that
+    specifies the offset from the beginning of the file to the field to be
+    tested. If not specified, the offset is assumed to be 0.</p>
+<p class="Pp">The <span class="Dv">mesg</span> is the message to be printed
+    if the test succeeds. It can contain format specifiers that will be replaced
+    by the values read from the file.</p>
+<p class="Pp">The <code class="Dv">file</code> format uses indentation to
+    represent a hierarchy of tests. A line indented with one tab is a test that
+    is performed only if the preceding line's test succeeded. This allows for
+    complex file structures to be described.</p>
+<p class="Pp">You can also specify offsets relative to the end of the
+    previous field using a caret (<code class="Dv">^</code>) prefix, or relative
+    to the start of the current match using an ampersand (<code class="Dv">&amp;</code>)
+    prefix. Parentheses can be used to group expressions or perform calculations.
+    For example, <code class="Dv">(4.s*512)</code> multiplies the value of the
+    field at offset 4 by 512.</p>
+<p class="Pp">The following examples illustrate the use of these features:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre># MS Windows executables are also valid MS-DOS executables
+0           string   MZ
+# sometimes, the value at 0x18 is less that 0x40 but there's still an
+# extended executable, simply appended to the file
+&gt;0x18       uleshort &lt;0x40
+&gt;&gt;(4.s*512) leshort  0x014c  COFF executable (MS-DOS, DJGPP)
+&gt;&gt;(4.s*512) leshort  !0x014c MZ executable (MS-DOS)</pre>
+</div>
+<p class="Pp">Sometimes you do not know the exact offset as this depends on the
+    length or position (when indirection was used before) of preceding fields.
+    You can specify an offset relative to the end of the last up-level field
+    using &#x2018;&amp;&#x2019; as a prefix to the offset:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0           string   MZ
+&gt;0x18       uleshort &gt;0x3f
+&gt;&gt;(0x3c.l)  string   PE\0\0    PE executable (MS-Windows)
+# immediately following the PE signature is the CPU type
+&gt;&gt;&gt;&amp;0       leshort  0x14c     for Intel 80386
+&gt;&gt;&gt;&amp;0       leshort  0x8664    for x86-64
+&gt;&gt;&gt;&amp;0       leshort  0x184     for DEC Alpha</pre>
+</div>
+<p class="Pp">Indirect and relative offsets can be combined:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0             string   MZ
+&gt;0x18         uleshort &lt;0x40
+&gt;&gt;(4.s*512)   leshort  !0x014c MZ executable (MS-DOS)
+# if it's not COFF, go back 512 bytes and add the offset taken
+# from byte 2/3, which is yet another way of finding the start
+# of the extended executable
+&gt;&gt;&gt;&amp;(2.s-514) string   LE      LE executable (MS Windows VxD driver)</pre>
+</div>
+<p class="Pp">Or the other way around:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0                 string   MZ
+&gt;0x18             uleshort &gt;0x3f
+&gt;&gt;(0x3c.l)        string   LE\0\0  LE executable (MS-Windows)
+# at offset 0x80 (-4, since relative offsets start at the end
+# of the up-level match) inside the LE header, we find the absolute
+# offset to the code area, where we look for a specific signature
+&gt;&gt;&gt;(&amp;0x7c.l+0x26) string   UPX     \b, UPX compressed</pre>
+</div>
+<p class="Pp">Or even both!</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0                string   MZ
+&gt;0x18            uleshort &gt;0x3f
+&gt;&gt;(0x3c.l)       string   LE\0\0 LE executable (MS-Windows)
+# at offset 0x58 inside the LE header, we find the relative offset
+# to a data area where we look for a specific signature
+&gt;&gt;&gt;&amp;(&amp;0x54.l-3)  string   UNACE  \b, ACE self-extracting archive</pre>
+</div>
+<p class="Pp">If you have to deal with offset/length pairs in your file, even
+    the second value in a parenthesized expression can be taken from the file
+    itself, using another set of parentheses. Note that this additional indirect
+    offset is always relative to the start of the main indirect offset.</p>
+<div class="Bd Pp Bd-indent Li">
+<pre>0                 string       MZ
+&gt;0x18             uleshort     &gt;0x3f
+&gt;&gt;(0x3c.l)        string       PE\0\0 PE executable (MS-Windows)
+# search for the PE section called &quot;.idata&quot;...
+&gt;&gt;&gt;&amp;0xf4          search/0x140 .idata
+# ...and go to the end of it, calculated from start+length;
+# these are located 14 and 10 bytes after the section name
+&gt;&gt;&gt;&gt;(&amp;0xe.l+(-4)) string       PK\3\4 \b, ZIP self-extracting archive</pre>
+</div>
+<p class="Pp">If you have a list of known values at a particular continuation
+    level, and you want to provide a switch-like default case:</p>
+<div class="Bd Pp Bd-indent Li">
+<pre># clear that continuation level match
+&gt;18	clear	x
+&gt;18	lelong	1	one
+&gt;18	lelong	2	two
+&gt;18	default	x
+# print default match
+&gt;&gt;18	lelong	x	unmatched 0x%x</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="/man/file.1.en">file(1)</a> - the command that
+    reads this file.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">The formats <code class="Dv">long</code>,
+    <code class="Dv">belong</code>, <code class="Dv">lelong</code>,
+    <code class="Dv">melong</code>, <code class="Dv">short</code>,
+    <code class="Dv">beshort</code>, and <code class="Dv">leshort</code> do not
+    depend on the length of the C data types <code class="Dv">short</code> and
+    <code class="Dv">long</code> on the platform, even though the Single
+    <span class="Ux">UNIX</span> Specification implies that they do. However, as
+    OS X Mountain Lion has passed the Single <span class="Ux">UNIX</span>
+    Specification validation suite, and supplies a version of
+    <a class="Xr" href="/man/file.1.en">file(1)</a> in which they do not depend
+    on the sizes of the C data types and that is built for a 64-bit environment
+    in which <code class="Dv">long</code> is 8 bytes rather than 4 bytes,
+    presumably the validation suite does not test whether, for example
+    <code class="Dv">long</code> refers to an item with the same size as the C
+    data type <code class="Dv">long</code>. There should probably be
+    <code class="Dv">type</code> names <code class="Dv">int8</code>,
+    <code class="Dv">uint8</code>, <code class="Dv">int16</code>,
+    <code class="Dv">uint16</code>, <code class="Dv">int32</code>,
+    <code class="Dv">uint32</code>, <code class="Dv">int64</code>, and
+    <code class="Dv">uint64</code>, and specified-byte-order variants of them,
+    to make it clearer that those types have specified widths.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">November 27, 2024</td>
+    <td class="foot-os">Linux 6.17.8-arch1-1</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/file/">core/file</a></dd>
+        <dt>Version:</dt>
+        <dd>5.46-5</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.darwinsys.com/file/">https://www.darwinsys.com/file/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>custom</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/file/">/listing/core/file/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>In other languages:</p>
+    <ul>
+    
+        <li><a href="/man/magic.5.pl">pl</a></li>
+    
+        <li><a href="/man/magic.5.ro">ro</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/magic.5.en.txt">txt</a>, 
+        
+            <a href="/man/magic.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

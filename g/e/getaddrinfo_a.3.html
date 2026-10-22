@@ -1,0 +1,367 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">getaddrinfo_a(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+<link rel="stylesheet" href="basic.css">
+order-style: solid;">
+  <tr>
+    <td><b>الواجهة</b></td>
+    <td><b>السمة</b></td>
+    <td><b>القيمة</b></td>
+  </tr>
+  <tr>
+    <td>getaddrinfo_a()، gai_suspend()، gai_error()، gai_cancel()</td>
+    <td>أمان مؤشر الترابط</td>
+    <td>MT-Safe</td>
+  </tr>
+</table>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STANDARDS'><a class='permalink' href='#STANDARDS'>المعايير</a></h1>
+<p class="Pp">GNU.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp">glibc 2.2.3.</p>
+<p class="Pp">تم تصميم واجهة <b>getaddrinfo_a</b>() على غرار واجهة <a href='/man/lio_listio.3.en'>lio_listio(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">تم تقديم مثالين: مثال بسيط يقوم بحل العديد من الطلبات بشكل متوازٍ بشكل متزامن، ومثال معقد يوضح بعض القدرات غير المتزامنة.</p>
+<section class="Ss">
+<h2 class="Ss" id='Synchronous_example'><a class='permalink' href='#Synchronous_example'>مثال متزامن</a></h2>
+<p class="Pp">يقوم البرنامج أدناه ببساطة بحل العديد من أسماء المضيفين بالتوازي، مما يوفر تسريعًا مقارنة بحل أسماء المضيفين بالتتابع باستخدام <a href='/man/getaddrinfo.3.en'>getaddrinfo(3)</a>. يمكن استخدام البرنامج على النحو التالي:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./a.out mirrors.kernel.org enoent.linuxfoundation.org gnu.org</b>;
+mirrors.kernel.org: 139.178.88.99
+enoent.linuxfoundation.org: Name or service not known
+gnu.org: 209.51.188.116</pre>
+<p class="Pp">هذا هو رمز مصدر البرنامج</p>
+<pre>#define _GNU_SOURCE
+#include &lt;err.h&gt;
+#include &lt;netdb.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#define MALLOC(n, type)  ((type *) reallocarray(NULL, n, sizeof(type)))
+int
+main(int argc, char *argv[])
+{
+    int ret;
+    struct gaicb *reqs[argc - 1];
+    char host[NI_MAXHOST];
+    struct addrinfo *res;
+    if (argc &lt; 2) {
+        fprintf(stderr, &quot;Usage: %s HOST...\n&quot;, argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    for (size_t i = 0; i &lt; argc - 1; i++) {
+        reqs[i] = MALLOC(1, struct gaicb);
+        if (reqs[i] == NULL)
+            err(EXIT_FAILURE, &quot;malloc&quot;);
+        memset(reqs[i], 0, sizeof(*reqs[0]));
+        reqs[i]-&gt;ar_name = argv[i + 1];
+    }
+    ret = getaddrinfo_a(GAI_WAIT, reqs, argc - 1, NULL);
+    if (ret != 0) {
+        fprintf(stderr, &quot;getaddrinfo_a() failed: %s\n&quot;,
+                gai_strerror(ret));
+        exit(EXIT_FAILURE);
+    }
+    for (size_t i = 0; i &lt; argc - 1; i++) {
+        printf(&quot;%s: &quot;, reqs[i]-&gt;ar_name);
+        ret = gai_error(reqs[i]);
+        if (ret == 0) {
+            res = reqs[i]-&gt;ar_result;
+            ret = getnameinfo(res-&gt;ai_addr, res-&gt;ai_addrlen,
+                              host, sizeof(host),
+                              NULL, 0, NI_NUMERICHOST);
+            if (ret != 0) {
+                fprintf(stderr, &quot;getnameinfo() failed: %s\n&quot;,
+                        gai_strerror(ret));
+                exit(EXIT_FAILURE);
+            }
+            puts(host);
+        } else {
+            puts(gai_strerror(ret));
+        }
+    }
+    exit(EXIT_SUCCESS);
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Asynchronous_example'><a class='permalink' href='#Asynchronous_example'>مثال غير متزامن</a></h2>
+<p class="Pp">يوضح هذا المثال واجهة أمامية بسيطة تفاعلية لـ <b>getaddrinfo_a</b>(). لم يتم توضيح آلية الإشعار.</p>
+<p class="Pp">قد يبدو مثال جلسة العمل كالتالي:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./a.out</b>;
+&gt; a mirrors.kernel.org enoent.linuxfoundation.org gnu.org
+&gt; c 2
+[2] gnu.org: Request not canceled
+&gt; w 0 1
+[00] mirrors.kernel.org: Finished
+&gt; l
+[00] mirrors.kernel.org: 139.178.88.99
+[01] enoent.linuxfoundation.org: Processing request in progress
+[02] gnu.org: 209.51.188.116
+&gt; l
+[00] mirrors.kernel.org: 139.178.88.99
+[01] enoent.linuxfoundation.org: Name or service not known
+[02] gnu.org: 209.51.188.116</pre>
+<p class="Pp">مصدر البرنامج هو كالتالي:</p>
+<pre>#define _GNU_SOURCE
+#include &lt;assert.h&gt;
+#include &lt;err.h&gt;
+#include &lt;netdb.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#define CALLOC(n, type)  ((type *) calloc(n, sizeof(type)))
+#define REALLOCF(ptr, n, type)                                          \
+({                                                                      \
+    static_assert(__builtin_types_compatible_p(typeof(ptr), type *));   \
+                                                                        \
+    (type *) reallocarrayf(ptr, n, sizeof(type));                       \
+})
+static struct gaicb **reqs = NULL;
+static size_t nreqs = 0;
+static inline void *
+reallocarrayf(void *p, size_t n, size_t size)
+{
+    void  *q;
+    q = reallocarray(p, n, size);
+    if (q == NULL &amp;&amp; n != 0 &amp;&amp; size != 0)
+        free(p);
+    return q;
+}
+static char *
+getcmd(void)
+{
+    static char buf[256];
+    fputs(&quot;&gt; &quot;, stdout);
+    fflush(stdout);
+    if (fgets(buf, sizeof(buf), stdin) == NULL)
+        return NULL;
+    if (buf[strlen(buf) - 1] == '\n')
+        buf[strlen(buf) - 1] = 0;
+    return buf;
+}
+/* Add requests for specified hostnames.  */
+static void
+add_requests(void)
+{
+    size_t nreqs_base = nreqs;
+    char *host;
+    int ret;
+    while ((host = strtok(NULL, &quot; &quot;))) {
+        nreqs++;
+        reqs = REALLOCF(reqs, nreqs, struct gaicb *);
+        if (reqs == NULL)
+            err(EXIT_FAILURE, &quot;reallocf&quot;);
+        reqs[nreqs - 1] = CALLOC(1, struct gaicb);
+        if (reqs[nreqs - 1] == NULL)
+            err(EXIT_FAILURE, &quot;calloc&quot;);
+        reqs[nreqs - 1]-&gt;ar_name = strdup(host);
+    }
+    /* Queue nreqs_base..nreqs requests.  */
+    ret = getaddrinfo_a(GAI_NOWAIT, &amp;reqs[nreqs_base],
+                        nreqs - nreqs_base, NULL);
+    if (ret) {
+        fprintf(stderr, &quot;getaddrinfo_a() failed: %s\n&quot;,
+                gai_strerror(ret));
+        exit(EXIT_FAILURE);
+    }
+}
+/* Wait until at least one of specified requests completes.  */
+static void
+wait_requests(void)
+{
+    char *id;
+    int ret;
+    size_t n;
+    struct gaicb const **wait_reqs;
+    wait_reqs = CALLOC(nreqs, const struct gaicb *);
+    if (wait_reqs == NULL)
+        err(EXIT_FAILURE, &quot;calloc&quot;);
+                /* NULL elements are ignored by gai_suspend().  */
+    while ((id = strtok(NULL, &quot; &quot;)) != NULL) {
+        n = atoi(id);
+        if (n &gt;= nreqs) {
+            printf(&quot;Bad request number: %s\n&quot;, id);
+            return;
+        }
+        wait_reqs[n] = reqs[n];
+    }
+    ret = gai_suspend(wait_reqs, nreqs, NULL);
+    if (ret) {
+        printf(&quot;gai_suspend(): %s\n&quot;, gai_strerror(ret));
+        return;
+    }
+    for (size_t i = 0; i &lt; nreqs; i++) {
+        if (wait_reqs[i] == NULL)
+            continue;
+        ret = gai_error(reqs[i]);
+        if (ret == EAI_INPROGRESS)
+            continue;
+        printf(&quot;[%02zu] %s: %s\n&quot;, i, reqs[i]-&gt;ar_name,
+               ret == 0 ? &quot;Finished&quot; : gai_strerror(ret));
+    }
+}
+/* Cancel specified requests.  */
+static void
+cancel_requests(void)
+{
+    char *id;
+    int ret;
+    size_t n;
+    while ((id = strtok(NULL, &quot; &quot;)) != NULL) {
+        n = atoi(id);
+        if (n &gt;= nreqs) {
+            printf(&quot;Bad request number: %s\n&quot;, id);
+            return;
+        }
+        ret = gai_cancel(reqs[n]);
+        printf(&quot;[%s] %s: %s\n&quot;, id, reqs[atoi(id)]-&gt;ar_name,
+               gai_strerror(ret));
+    }
+}
+/* List all requests.  */
+static void
+list_requests(void)
+{
+    int ret;
+    char host[NI_MAXHOST];
+    struct addrinfo *res;
+    for (size_t i = 0; i &lt; nreqs; i++) {
+        printf(&quot;[%02zu] %s: &quot;, i, reqs[i]-&gt;ar_name);
+        ret = gai_error(reqs[i]);
+        if (!ret) {
+            res = reqs[i]-&gt;ar_result;
+            ret = getnameinfo(res-&gt;ai_addr, res-&gt;ai_addrlen,
+                              host, sizeof(host),
+                              NULL, 0, NI_NUMERICHOST);
+            if (ret) {
+                fprintf(stderr, &quot;getnameinfo() failed: %s\n&quot;,
+                        gai_strerror(ret));
+                exit(EXIT_FAILURE);
+            }
+            puts(host);
+        } else {
+            puts(gai_strerror(ret));
+        }
+    }
+}
+int
+main(void)
+{
+    char *cmdline;
+    char *cmd;
+    while ((cmdline = getcmd()) != NULL) {
+        cmd = strtok(cmdline, &quot; &quot;);
+        if (cmd == NULL) {
+            list_requests();
+        } else {
+            switch (cmd[0]) {
+            case 'a':
+                add_requests();
+                break;
+            case 'w':
+                wait_requests();
+                break;
+            case 'c':
+                cancel_requests();
+                break;
+            case 'l':
+                list_requests();
+                break;
+            default:
+                fprintf(stderr, &quot;Bad command: %c\n&quot;, cmd[0]);
+                break;
+            }
+        }
+    }
+    exit(EXIT_SUCCESS);
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/getaddrinfo.3.en'>getaddrinfo(3)</a>، <a href='/man/inet.3.en'>inet(3)</a>، <a href='/man/lio_listio.3.en'>lio_listio(3)</a>،
+    <a href='/man/hostname.7.en'>hostname(7)</a>، <a href='/man/ip.7.en'>ip(7)</a>، <b>sigevent</b>(3type)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-09-21</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>Version:</dt>
+        <dd>6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#LIBRARY">LIBRARY</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#RETURN_VALUE">RETURN VALUE</a></li>
+        
+            <li><a href="#ATTRIBUTES">ATTRIBUTES</a></li>
+        
+            <li><a href="#STANDARDS">STANDARDS</a></li>
+        
+            <li><a href="#HISTORY">HISTORY</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>In o

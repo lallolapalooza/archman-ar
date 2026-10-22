@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef(3pm) — صفحات دليل آرتش</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Perl__Critic__Policy__BuiltinFunctions__ProhibitShiftRef(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-perl-critic/">perl-perl-critic</a></p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef(3pm)</td>
+    <td class="head-vol">وثائق Perl المساهمة من المستخدم</td>
+    <td class="head-rtitle">Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef(3pm)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef - منع استخدام <span class="Li">&quot;\shift&quot;</span> في الكود</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AFFILIATION'><a class='permalink' href='#AFFILIATION'>الانتماء</a></h1>
+<p class="Pp">هذه السياسة جزء من التوزيع الأساسي لـ Perl::Critic.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">منع استخدام <span class="Li">&quot;\shift&quot;</span>، نظرًا لارتباطه بأخطاء في Perl ووحداته.</p>
+<section class="Ss">
+<h2 class="Ss" id='Background'><a class='permalink' href='#Background'>خلفية</a></h2>
+<p class="Pp">في كثير من الأحيان، يتم استخدام <span class="Li">&quot;\shift&quot;</span> لإنشاء مراجع تعمل بشكل مشابه للأسماء المستعارة. من خلال إنشاء اسم مستعار مسمى، يصبح الكود أكثر قابلية للقراءة. على سبيل المثال،</p>
+<pre>sub routine {
+    my $longstring = \shift;
+    print $$longstring;
+}</pre>
+<p class="Pp">أكثر قابلية للقراءة من</p>
+<pre>sub routine {
+    print $_[0];    # longstring
+}</pre>
+<p class="Pp">للأسف، هذه القابلية للقراءة الإضافية تأتي مع مشاكل جديدة ومثيرة، مفصلة في القسم التالي.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Problems_with_&amp;quot;\shift&amp;quot;'><a class='permalink' href='#Problems_with_&amp;quot;\shift&amp;quot;'>مشاكل مع &quot;\shift&quot;</a></h2>
+<p class="Pp">من خلال تجنب <span class="Li">&quot;\shift&quot;</span>، يمكن تجنب العديد من المشكلات في Perl، بما في ذلك:</p>
+<dl class="Bl-tag">
+  <dt id="Memory"><a class="permalink" href="#Memory">تسرب الذاكرة منذ Perl 5.22</a></dt>
+  <dd>تم تقديم المشكلة #126676 في Perl 5.21.4 ويتم تشغيلها عند استخدام <span class="Li">&quot;\shift&quot;</span>. لم يتم حل الخطأ حتى الآن في Perl 5.28.
+    <p class="Pp">باختصار، يتسبب الخطأ في زيادة عداد المراجع للمتغير المسمى عند تشغيل الروتين الفرعي، ولكنه لا يتم إنقاصه لاحقًا بعد عودة الروتين الفرعي. بالإضافة إلى تسرب الذاكرة، يمكن أن يؤخر هذا الخطأ أيضًا تنظيف الكائنات حتى التدمير الشامل (Global Destruction)، مما قد يتسبب في مشاكل إضافية.</p>
+    <p class="Pp">لمزيد من المعلومات، انظر <a href='https://rt.perl.org/Public/Bug/Display.html?id=126676'>https://rt.perl.org/Public/Bug/Display.html?id=126676</a>.</p>
+  </dd>
+  <dt id="Devel::Cover"><a class="permalink" href="#Devel::Cover">تعطل Devel::Cover</a></dt>
+  <dd>يسبب خطأ منفصل وطويل الأمد في Devel::Cover (منذ 1.21 على الأقل)، تعطل الكود الاختبارى أحيانًا. هذا يمنع كتابة بيانات التغطية، مما يؤدي إلى مقاييس غير صحيحة.
+    <p class="Pp">الخطأ نفسه ليس ناتجًا بالفعل عن <span class="Li">&quot;\shift&quot;</span>، ولكنه يظهر في كود مثل التالي:</p>
+        <pre>sub myopen {
+    open ${ \$_[0] }, &quot;&gt;test&quot;;
+}</pre>
+    <p class="Pp">ومع ذلك، نادرًا ما يتم رؤية هذا الكود في الإنتاج. من المرجح أن يظهر مع <span class="Li">&quot;\shift&quot;</span>، كما هو الحال أدناه:</p>
+        <pre>sub myopen {
+    my $fh = \shift;
+    open $$fh, &quot;&gt;test&quot;;
+}</pre>
+    <p class="Pp">لذلك، بينما <span class="Li">&quot;\shift&quot;</span> ليس السبب، إلا أنه يرتبط غالبًا بالمشكلة.</p>
+    <p class="Pp">لمزيد من المعلومات، انظر <a href='https://github.com/pjcj/Devel--Cover/issues/125'>https://github.com/pjcj/Devel--Cover/issues/125</a>.</p>
+  </dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CONFIGURATION'><a class='permalink' href='#CONFIGURATION'>التكوين</a></h1>
+<p class="Pp">هذه السياسة غير قابلة للتكوين باستثناء الخيارات القياسية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='https://rt.perl.org/Public/Bug/Display.html?id=126676'>https://rt.perl.org/Public/Bug/Display.html?id=126676</a></p>
+<p class="Pp"><a href='https://github.com/pjcj/Devel--Cover/issues/125'>https://github.com/pjcj/Devel--Cover/issues/125</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Chris Lindee &lt;chris.lindee@cpanel.net&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright (c) 2018 cPanel, L.L.C.</p>
+<p class="Pp">جميع الحقوق محفوظة.</p>
+<p class="Pp">هذا البرنامج هو برنامج مجاني؛ يمكنك إعادة توزيعه و/أو تعديله بنفس الشروط التي ينطبق عليها Perl نفسه.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-14</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-perl-critic/">extra/perl-perl-critic</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.156-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://metacpan.org/release/Perl-Critic">https://metacpan.org/release/Perl-Critic</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-perl-critic/">/listing/extra/perl-perl-critic/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#AFFILIATION">الانتماء</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CONFIGURATION">التكوين</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Perl::Critic::Policy::BuiltinFunctions::ProhibitShiftRef.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص محدد في حزمة آرتش لينكس المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

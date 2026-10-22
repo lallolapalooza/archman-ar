@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>pg_rewind(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pg_rewind(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/postgresql/">postgresql</a></p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PG_REWIND(1)</td>
+    <td class="head-vol">وثائق PostgreSQL 18.1</td>
+    <td class="head-rtitle">PG_REWIND(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">pg_rewind - مزامنة دليل بيانات PostgreSQL مع دليل بيانات آخر تم إنشاؤه منه</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp HP"><b>pg_rewind</b> [<i>خيار</i>...] {<b>-D</b> |
+    <b>--target-pgdata</b>}<i> دليل</i>
+    {<b>--source-pgdata=</b><b></b><i>دليل</i> |
+    <b>--source-server=</b><b></b><i>سلسلة_اتصال</i>}</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">pg_rewind هي أداة لمزامنة مجموعة PostgreSQL مع نسخة أخرى من نفس المجموعة، بعد أن تفرعت خطوط زمن المجموعات. السيناريو النموذجي هو إعادة تشغيل خادم أساسي قديم بعد الفشل كخادم احتياطي يتبع الخادم الأساسي الجديد.</p>
+<p class="Pp">بعد إعادة تشغيل ناجحة، تكون حالة دليل البيانات المستهدف مشابهة لنسخة احتياطية أساسية لدليل البيانات المصدر. على عكس أخذ نسخة احتياطية أساسية جديدة أو استخدام أداة مثل rsync، لا تتطلب pg_rewind مقارنة أو نسخ كتل العلاقة غير المتغيرة في المجموعة. يتم نسخ الكتل المتغيرة فقط من ملفات العلاقة الموجودة؛ يتم نسخ جميع الملفات الأخرى، بما في ذلك ملفات العلاقة الجديدة، وملفات التكوين، وشرائح WAL، بالكامل. على هذا النحو، تكون عملية إعادة التشغيل أسرع بكثير من الأساليب الأخرى عندما تكون قاعدة البيانات كبيرة ويختلف جزء صغير فقط من الكتل بين المجموعات.</p>
+<p class="Pp">تفحص pg_rewind سجلات خطوط الزمن للمجموعتين المصدر والهدف لتحديد النقطة التي تفرعت فيها، وتتوقع العثور على WAL في دليل pg_wal للمجموعة الهدف يصل إلى نقطة التفرع. يمكن العثور على نقطة التفرع إما في خط الزمن المستهدف، أو خط الزمن المصدر، أو سلفهما المشترك. في سيناريو الفشل النموذجي حيث تم إيقاف تشغيل المجموعة المستهدفة بعد فترة وجيزة من التفرع، لا يمثل هذا مشكلة، ولكن إذا استمرت المجموعة المستهدفة في العمل لفترة طويلة بعد التفرع، فقد لا تكون ملفات WAL القديمة موجودة. في هذه الحالة، يمكنك نسخها يدويًا من أرشيف WAL إلى دليل pg_wal، أو تشغيل pg_rewind مع الخيار -c لاستعادتها تلقائيًا من أرشيف WAL. لا يقتصر استخدام pg_rewind على الفشل، على سبيل المثال، يمكن ترقية خادم احتياطي، وتشغيل بعض معاملات الكتابة، ثم إعادة تشغيله ليصبح خادمًا احتياطيًا مرة أخرى.</p>
+<p class="Pp">بعد تشغيل pg_rewind، تحتاج إعادة تشغيل WAL إلى الاكتمال لتكون دليل البيانات في حالة متسقة. عند بدء تشغيل الخادم الهدف مرة أخرى، سيدخل في وضع استعادة الأرشيف وسيعيد تشغيل جميع WAL التي تم إنشاؤها في الخادم المصدر من آخر نقطة تدقيق قبل نقطة التفرع. إذا كانت بعض WAL لم تعد متاحة في الخادم المصدر عند تشغيل pg_rewind، وبالتالي لم يكن من الممكن نسخها بواسطة جلسة pg_rewind، فيجب جعلها متاحة عند بدء تشغيل الخادم الهدف. يمكن القيام بذلك عن طريق إنشاء ملف recovery.signal في دليل البيانات الهدف وتكوين restore_command مناسب في postgresql.conf.</p>
+<p class="Pp">تتطلب pg_rewind أن يكون الخادم الهدف قد قام بتمكين خيار wal_log_hints في postgresql.conf أو تمكين ملخصات البيانات عند تهيئة المجموعة باستخدام initdb. لا يوجد أي منهما افتراضيًا حاليًا. يجب أيضًا تعيين full_page_writes على تشغيل، ولكنه ممكّن افتراضيًا.</p>
+<div class="Bd-indent">
+<br/>
+<b>تحذير: حالات الفشل أثناء إعادة التشغيل</b>
+<br/>
+<p class="Pp">إذا فشلت pg_rewind أثناء المعالجة، فإن مجلد بيانات الهدف من المحتمل أن يكون في حالة لا يمكن استردادها. في مثل هذه الحالة، يوصى بأخذ نسخة احتياطية جديدة.</p>
+<p class="Pp">نظرًا لأن pg_rewind تقوم بنسخ ملفات التكوين بالكامل من المصدر، فقد يكون من الضروري تصحيح التكوين المستخدم للاستعادة قبل إعادة تشغيل الخادم الهدف، خاصة إذا تمت إعادة إدخال الهدف كخادم احتياطي للمصدر. إذا قمت بإعادة تشغيل الخادم بعد انتهاء عملية إعادة التشغيل ولكن دون تكوين الاستعادة، فقد ينحرف الهدف مرة أخرى عن الخادم الأساسي.</p>
+<p class="Pp">ستفشل pg_rewind على الفور إذا وجدت ملفات لا يمكنها الكتابة إليها مباشرة. يمكن أن يحدث هذا على سبيل المثال عندما تستخدم الخوادم المصدر والهدف نفس تعيين الملفات لمفاتيح وشهادات SSL للقراءة فقط. إذا كانت هذه الملفات موجودة في الخادم الهدف، فمن المستحسن إزالتها قبل تشغيل pg_rewind. بعد إجراء إعادة التشغيل، قد يتم نسخ بعض هذه الملفات من المصدر، وفي هذه الحالة قد يكون من الضروري إزالة البيانات المنسوخة واستعادة مجموعة الروابط المستخدمة قبل إعادة التشغيل.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>خيارات</a></h1>
+<p class="Pp">تقبل pg_rewind وسيطات سطر الأوامر التالية:</p>
+<p class="Pp"><b>-D </b><b></b><i>دليل</i>
+  <br/>
+  <b>--target-pgdata=</b><b></b><i>دليل</i></p>
+<div class="Bd-indent">يحدد هذا الخيار دليل البيانات الهدف الذي تتم مزامنته مع المصدر. يجب إيقاف تشغيل الخادم الهدف بشكل نظيف قبل تشغيل pg_rewind</div>
+<p class="Pp"><b>--source-pgdata=</b><b></b><i>دليل</i></p>
+<div class="Bd-indent">يحدد المسار في نظام الملفات لدليل بيانات الخادم المصدر للمزامنة معه. يتطلب هذا الخيار إيقاف تشغيل الخادم المصدر بشكل نظيف.</div>
+<p class="Pp"><b>--source-server=</b><b></b><i>سلسلة_اتصال</i></p>
+<div class="Bd-indent">يحدد سلسلة اتصال libpq للاتصال بخادم PostgreSQL المصدر للمزامنة معه. يجب أن يكون الاتصال اتصالًا عاديًا (غير نسخ متماثل) مع دور يمتلك الأذونات الكافية لتنفيذ الدوال التي تستخدمها pg_rewind على الخادم المصدر (راجع قسم الملاحظات للتفاصيل) أو دور مستخدم خارق. يتطلب هذا الخيار أن يكون الخادم المصدر قيد التشغيل ويقبل الاتصالات.</div>
+<p class="Pp"><b>-R</b>
+  <br/>
+  <b>--write-recovery-conf</b></p>
+<div class="Bd-indent">إنشاء standby.signal وإلحاق إعدادات الاتصال بـ postgresql.auto.conf في دليل الإخراج. سيتم تسجيل dbname فقط إذا تم تحديد dbname بشكل صريح في سلسلة الاتصال أو متغير البيئة. --source-server إلزامي مع هذا الخيار.</div>
+<p class="Pp"><b>-n</b>
+  <br/>
+  <b>--dry-run</b></p>
+<div class="Bd-indent">قم بكل شيء باستثناء تعديل الدليل الهدف فعليًا.</div>
+<p class="Pp"><b>-N</b>
+  <br/>
+  <b>--no-sync</b></p>
+<div class="Bd-indent">بشكل افتراضي، ستنتظر <b>pg_rewind</b> حتى تتم كتابة جميع الملفات بأمان على القرص. يتسبب هذا الخيار في عودة <b>pg_rewind</b> دون انتظار، مما يجعله أسرع، ولكنه يعني أن عطل نظام تشغيل لاحق يمكن أن يترك دليل البيانات تالفًا. بشكل عام، هذا الخيار مفيد للاختبار ولكن لا ينبغي استخدامه في تثبيت إنتاجي.</div>
+<p class="Pp"><b>-P</b>
+  <br/>
+  <b>--progress</b></p>
+<div class="Bd-indent">تمكين الإبلاغ عن التقدم. سيؤدي تشغيل هذا إلى تقديم تقرير تقدم تقريبي أثناء نسخ البيانات من المجموعة المصدر.</div>
+<p class="Pp"><b>-c</b>
+  <br/>
+  <b>--restore-target-wal</b></p>
+<div class="Bd-indent">استخدم <i>restore_command</i> المحدد في تكوين المجموعة الهدف لاسترداد ملفات WAL من أرشيف WAL إذا لم تعد هذه الملفات متاحة في دليل pg_wal.</div>
+<p class="Pp"><b>--config-file=</b><b></b><i>اسم_الملف</i></p>
+<div class="Bd-indent">استخدم ملف تكوين الخادم الرئيسي المحدد للمجموعة الهدف. يؤثر هذا على pg_rewind عندما يستخدم داخليًا أمر postgres لإعادة التشغيل على هذه المجموعة (عند استرداد <i>restore_command</i> باستخدام الخيار <b>-c/--restore-target-wal</b> وعند فرض إكمال استعادة الأعطال).</div>
+<p class="Pp"><b>--debug</b></p>
+<div class="Bd-indent">طباعة مخرجات تصحيح الأخطاء المطولة المفيدة في الغالب للمطورين الذين يصححون pg_rewind.</div>
+<p class="Pp"><b>--no-ensure-shutdown</b></p>
+<div class="Bd-indent">تتطلب pg_rewind أن يتم إيقاف تشغيل الخادم الهدف بشكل نظيف قبل إعادة التشغيل. افتراضيًا، إذا لم يتم إيقاف تشغيل الخادم الهدف بشكل نظيف، فستقوم pg_rewind ببدء تشغيل الخادم في وضع المستخدم الفردي لإكمال استعادة الأعطال أولاً، ثم إيقافه. عن طريق تمرير هذا الخيار، تتجاوز pg_rewind هذا وتتوقف فورًا إذا لم يتم إيقاف تشغيل الخادم بشكل نظيف. يتوقع من المستخدمين التعامل مع الموقف بأنفسهم في هذه الحالة.</div>
+<p class="Pp"><b>--sync-method=</b><b></b><i>طريقة</i></p>
+<div class="Bd-indent">عند تعيينها على fsync، وهو الافتراضي، ستقوم <b>pg_rewind</b> بفتح ومزامنة جميع الملفات في دليل البيانات بشكل متكرر. سيتبع البحث عن الملفات الروابط الرمزية لدليل WAL وكل مساحة جدول تم تكوينها.
+<p class="Pp">على Linux، يمكن استخدام syncfs بدلاً من ذلك لطلب نظام التشغيل مزامنة أنظمة الملفات بأكملها التي تحتوي على دليل البيانات وملفات WAL وكل مساحة جدول. انظر recovery_init_sync_method للحصول على معلومات حول التحذيرات التي يجب الانتباه إليها عند استخدام syncfs.</p>
+<p class="Pp">ليس لهذا الخيار تأثير عند استخدام <b>--no-sync</b>.</p>
+</div>
+<p class="Pp"><b>-V</b>
+  <br/>
+  <b>--version</b></p>
+<div class="Bd-indent">عرض معلومات الإصدار، ثم الخروج.</div>
+<p class="Pp"><b>-?</b>
+  <br/>
+  <b>--help</b></p>
+<div class="Bd-indent">إظهار المساعدة، ثم الخروج.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>البيئة</a></h1>
+<p class="Pp">عند استخدام الخيار <b>--source-server</b>، تستخدم pg_rewind أيضًا متغير البيئة</p>
+</div>
+</section>
+
+</article>
+                
+            </article>
+        </main>
+    </body>
+</html>
+s المدعومة بواسطة libpq (انظر القسم 32.15).</p>
+<p class="Pp">يحدد متغير البيئة <b>PG_COLOR</b> ما إذا كان سيتم استخدام
+    الألوان في رسائل التشخيص. القيم الممكنة هي دائمًا، تلقائي، و
+    أبدًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">عند تنفيذ pg_rewind باستخدام مجموعة تشغيلية كمصدر، يمكن استخدام دور
+    يتمتع بصلاحيات كافية لتنفيذ الوظائف التي تستخدمها pg_rewind على المجموعة المصدر
+    بدلاً من المستخدم الخارق. إليك كيفية إنشاء مثل هذا الدور، المسمى rewind_user
+    هنا:</p>
+<div class="Bd-indent">
+<pre>CREATE USER rewind_user LOGIN;
+GRANT EXECUTE ON function pg_catalog.pg_ls_dir(text, boolean, boolean) TO rewind_user;
+GRANT EXECUTE ON function pg_catalog.pg_stat_file(text, boolean) TO rewind_user;
+GRANT EXECUTE ON function pg_catalog.pg_read_binary_file(text) TO rewind_user;
+GRANT EXECUTE ON function pg_catalog.pg_read_binary_file(text, bigint, bigint, boolean) TO rewind_user;</pre>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='How_It_Works'><a class='permalink' href='#How_It_Works'>كيف يعمل</a></h2>
+<p class="Pp">الفكرة الأساسية هي نسخ جميع تغييرات مستوى نظام الملفات من المجموعة
+    المصدر إلى المجموعة المستهدفة:</p>
+<div class="Bd-indent"> 1. مسح سجل WAL للمجموعة المستهدفة، بدءًا من آخر نقطة فحص قبل
+    النقطة التي انحرفت فيها سجلات خط الزمن للمجموعة المصدر عن المجموعة المستهدفة. لكل
+    سجل WAL، قم بتسجيل كل كتلة بيانات تم لمسها. ينتج عن هذا قائمة بجميع كتل
+    البيانات التي تم تغييرها في المجموعة المستهدفة، بعد انحراف المجموعة المصدر. إذا لم تعد
+    بعض ملفات WAL متاحة، حاول إعادة تشغيل pg_rewind مع الخيار <b>-c</b> للبحث عن
+    الملفات المفقودة في أرشيف WAL.</div>
+<div class="Bd-indent"> 2. نسخ جميع الكتل المتغيرة هذه من المجموعة المصدر إلى
+    المجموعة المستهدفة، إما باستخدام وصول مباشر لنظام الملفات (<b>--source-pgdata</b>)
+    أو SQL (<b>--source-server</b>). تكون ملفات العلاقات الآن في حالة مكافئة للحظة
+    آخر نقطة فحص مكتملة قبل النقطة التي انحرفت فيها خطوط زمن WAL للمصدر والمستهدف
+    بالإضافة إلى الحالة الحالية على المصدر لأي كتل تم تغييرها على المستهدف بعد
+    ذلك الانحراف.</div>
+<div class="Bd-indent"> 3. نسخ جميع الملفات الأخرى، بما في ذلك ملفات
+    العلاقات الجديدة، وشرائح WAL، و pg_xact، وملفات التكوين من المجموعة المصدر إلى
+    المجموعة المستهدفة. وبالمثل لنسخ النسخ الاحتياطي الأساسي، يتم استثناء محتويات
+    الدلائل pg_dynshmem/, pg_notify/, pg_replslot/, pg_serial/, pg_snapshots/,
+    pg_stat_tmp/, و pg_subtrans/ من البيانات التي تم نسخها من المجموعة المصدر. يتم
+    استثناء الملفات backup_label، tablespace_map، pg_internal.init، postmaster.opts،
+    postmaster.pid و .DS_Store، بالإضافة إلى أي ملف أو دليل يبدأ بـ
+    pgsql_tmp.</div>
+<div class="Bd-indent"> 4. إنشاء ملف backup_label لبدء إعادة تشغيل WAL عند نقطة
+    الفحص التي تم إنشاؤها عند الفشل، وتكوين ملف pg_control مع حد أدنى من LSN
+    للاتساق يتم تعريفه كنتيجة لـ pg_current_wal_insert_lsn() عند التراجع من مصدر
+    حي أو LSN نقطة الفحص الأخيرة عند التراجع من مصدر متوقف.</div>
+<div class="Bd-indent"> 5. عند بدء تشغيل المجموعة المستهدفة، تقوم PostgreSQL بإعادة
+    تشغيل جميع سجلات WAL المطلوبة، مما يؤدي إلى دليل بيانات في حالة متسقة.</div>
+</section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025</td>
+    <td class="foot-os">PostgreSQL 18.1</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث عن صفحة يدوية" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/postgresql/">extra/postgresql</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>18.1-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.postgresql.org/">https://www.postgresql.org/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>PostgreSQL</dd>
+        <dt>الأدلة اليدوية:</dt>
+        <dd><a href="/listing/extra/postgresql/">/listing/extra/postgresql/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#OPTIONS">الخيارات</a></li>
+        
+            <li><a href="#ENVIRONMENT">البيئة</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/pg_rewind.1.en.txt">txt</a>, 
+        
+            <a href="/man/pg_rewind.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات الصفحات اليدوية، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

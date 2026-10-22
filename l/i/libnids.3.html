@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>libnids(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">libnids(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libnids/">libnids</a></p>
+<p class="lic">التراخيص: GPL</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">LIBNIDS(3)</td>
+    <td class="head-vol">دليل وظائف المكتبة</td>
+    <td class="head-rtitle">LIBNIDS(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">libnids - مكتبة صندوق E لنظام كشف التسلل الشبكي</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>#include &lt;nids.h&gt;
+extern struct nids_prm <i>nids_params</i>;
+extern char <i>nids_errbuf</i>[];
+int
+<b>nids_init</b>(void);
+void
+<b>nids_register_ip_frag</b>(void (*ip_frag_func)(struct ip *pkt, int len));
+void
+<b>nids_unregister_ip_frag</b>(void (*ip_frag_func)(struct ip *pkt, int len));
+void
+<b>nids_register_ip</b>(void (*ip_func)(struct ip *pkt, int len));
+void
+<b>nids_unregister_ip</b>(void (*ip_func)(struct ip *pkt, int len));
+void
+<b>nids_register_udp</b>(void (*udp_func)(struct tuple4 *addr, u_char *data, int len, struct ip *pkt));
+void
+<b>nids_unregister_udp</b>(void (*udp_func)(struct tuple4 *addr, u_char *data, int len, struct ip *pkt));
+void
+<b>nids_register_tcp</b>(void (*tcp_func)(struct tcp_stream *ts, void **param));
+void
+<b>nids_unregister_tcp</b>(void (*tcp_func)(struct tcp_stream *ts, void **param));
+void
+<b>nids_killtcp</b>(struct tcp_stream *ts);
+void
+<b>nids_discard</b>(struct tcp_stream *ts, int numbytes);
+void
+<b>nids_run</b>(void);
+int
+<b>nids_dispatch</b>(int cnt);
+int
+<b>nids_next</b>(void);
+int
+<b>nids_getfd</b>(void);
+int
+<b>nids_register_chksum_ctl</b>(struct nids_chksum_ctl *, int);
+void
+<b>nids_pcap_handler</b>(u_char *par, struct pcap_pkthdr *hdr, u_char *data);
+struct tcp_stream *
+<b>nids_find_tcp_stream</b>(struct tuple4 *addr);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp"><b>libnids</b> توفر وظائف مكون صندوق E لنظام كشف التسلل الشبكي (NIDS). تقوم حاليًا بما يلي:</p>
+<pre>1. إلغاء تجزئة IP
+2. إعادة تجميع تدفقات TCP
+3. كشف مسح المنافذ TCP</pre>
+<p class="Pp"><b>libnids</b> تقوم بإعادة تجميع TCP/IP بنفس الطريقة تمامًا التي تعمل بها نواة Linux 2.0.36، وتتعامل بشكل صحيح مع جميع الهجمات المطبقة في fragrouter(8) (بالإضافة إلى العديد من الهجمات الأخرى).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ROUTINES'><a class='permalink' href='#ROUTINES'>الإجراءات</a></h1>
+<p class="Pp"><b>nids_init</b>() تهيئ التطبيق للتنصت، بناءً على القيم المحددة في المتغير العام <i>nids_params</i>، والمعلن كما يلي:</p>
+<pre>struct nids_prm {
+	int	n_tcp_streams;
+	int	n_hosts;
+	char	*device;
+	char	*filename;
+	int	sk_buff_size;
+	int	dev_addon;
+	void	(*syslog)(int type, int err, struct ip *iph, void *data);
+	int	syslog_level;
+	int	scan_num_hosts;
+	int	scan_num_ports;
+	int	scan_delay;
+	void	(*no_mem)(void);
+	int	(*ip_filter)(struct ip *iph);
+	char	*pcap_filter;
+	int	promisc;
+	int	one_loop_less;
+	int	pcap_timeout;
+	int	multiproc;
+	int	queue_limit;
+	int	tcp_workarounds;
+	pcap_t	*pcap_desc;
+} nids_params;</pre>
+<p class="Pp">أعضاء هذا الهيكل هم:</p>
+<dl class="Bl-tag">
+  <dt id="n_tcp_streams"><a class="permalink" href="#n_tcp_streams"><i>n_tcp_streams</i></a></dt>
+  <dd>حجم جدول الهاش المستخدم لتخزين معلومات اتصال TCP (سيتم تتبع ما يصل إلى 3/4 * <i>n_tcp_streams</i> اتصالات TCP في وقت واحد). القيمة الافتراضية: 1024</dd>
+  <dt id="n_hosts"><a class="permalink" href="#n_hosts"><i>n_hosts</i></a></dt>
+  <dd>حجم جدول الهاش المستخدم لتخزين معلومات إلغاء تجزئة IP. القيمة الافتراضية: 256</dd>
+  <dt id="filename"><a class="permalink" href="#filename"><i>filename</i></a></dt>
+  <dd>إذا تم تعيين هذا المتغير، فستقوم libnids باستدعاء pcap_open_offline مع هذا المتغير كوسيط (بدلاً من pcap_open_live()). القيمة الافتراضية: NULL</dd>
+  <dt id="device"><a class="permalink" href="#device"><i>device</i></a></dt>
+  <dd>الواجهة للمراقبة. القيمة الافتراضية: NULL (في هذه الحالة، يتم تحديد جهاز مناسب تلقائيًا). إذا تم تعيين قيمة هذا المتغير إلى <b>all</b>، فستحاول libnids التقاط حزم على جميع الواجهات (وهو ما يعمل على Linux فقط)</dd>
+  <dt id="sk_buff_size"><a class="permalink" href="#sk_buff_size"><i>sk_buff_size</i></a></dt>
+  <dd>حجم <i>struct sk_buff</i> (المستخدم لتخزين الحزم في قائمة انتظار)، والذي يجب أن يتطابق مع القيمة الموجودة على المضيفين الذين تتم مراقبتهم. القيمة الافتراضية: 168</dd>
+  <dt id="dev_addon"><a class="permalink" href="#dev_addon"><i>dev_addon</i></a></dt>
+  <dd>عدد البايتات في <i>struct sk_buff</i> المحجوزة لمعلومات طبقة الارتباط. القيمة الافتراضية: -1 (في هذه الحالة، يتم تحديد الإزاحة المناسبة تلقائيًا بناءً على نوع طبقة الارتباط)</dd>
+  <dt id="syslog"><a class="permalink" href="#syslog"><i>syslog</i></a></dt>
+  <dd>وظيفة رد اتصال syslog، تستخدم للإبلاغ عن الظروف غير العادية، مثل محاولات مسح المنافذ، وعلامات رأس TCP غير الصالحة، وما إلى ذلك. القيمة الافتراضية: <i>nids_syslog</i> (الذي يسجل الرسائل عبر syslog(3) بغض النظر عن معدل الرسائل في الثانية أو مساحة القرص المتاحة)</dd>
+  <dt id="syslog_level"><a class="permalink" href="#syslog_level"><i>syslog_level</i></a></dt>
+  <dd>مستوى التسجيل المستخدم بواسطة <i>nids_syslog</i> للإبلاغ عن الأحداث عبر syslog(3). القيمة الافتراضية: LOG_ALERT</dd>
+  <dt id="scan_num_hosts"><a class="permalink" href="#scan_num_hosts"><i>scan_num_hosts</i></a></dt>
+  <dd>حجم جدول الهاش المستخدم لتخزين معلومات مسح المنافذ (الحد الأقصى لعدد عمليات مسح المنافذ التي سيتم اكتشافها في وقت واحد). إذا تم تعيينه إلى 0، فسيتم تعطيل اكتشاف مسح المنافذ. القيمة الافتراضية: 256</dd>
+  <dt id="scan_num_ports"><a class="permalink" href="#scan_num_ports"><i>scan_num_ports</i></a></dt>
+  <dd>الحد الأدنى لعدد المنافذ التي يجب مسحها من نفس المضيف المصدر قبل اعتباره جزءًا من مسح منافذ. القيمة الافتراضية: 10</dd>
+  <dt id="scan_delay"><a class="permalink" href="#scan_delay"><i>scan_delay</i></a></dt>
+  <dd>الحد الأقصى للتأخير (بالمللي ثانية) بين الاتصالات بالمنافذ المختلفة لتحديدها كجزء من مسح منافذ. القيمة الافتراضية: 3000</dd>
+  <dt id="no_mem"><a class="permalink" href="#no_mem"><i>no_mem</i></a></dt>
+  <dd>وظيفة رد اتصال نفاد الذاكرة، تستخدم لإنهاء العملية المستدعية بأمان.</dd>
+  <dt id="ip_filter"><a class="permalink" href="#ip_filter"><i>ip_filter</i></a></dt>
+  <dd>وظيفة رد اتصال تصفية IP، تستخدم للتخلص بشكل انتقائي من حزم IP، ويتم فحصها بعد إعادة التجميع. إذا أعادت الوظيفة قيمة غير صفرية، فسيتم معالجة الحزمة؛ وإلا، فسيتم التخلص منها. القيمة الافتراضية: <i>nids_ip_filter</i> (التي تعيد دائمًا 1)</dd>
+  <dt id="pcap_filter"><a class="permalink" href="#pcap_filter"><i>pcap_filter</i></a></dt>
+  <dd>سلسلة مرشح pcap(3) المطبقة على طبقة الارتباط (حزم خام، غير مجمعة). **ملاحظة**: المرشحات مثل ``tcp dst port 23'' لن تتعامل بشكل صحيح مع حركة المرور المجزأة بشكل مناسب، على سبيل المثال، أجزاء IP بحجم 8 بايت؛ يجب إضافة ``or (ip[6:2] &amp; 0x1fff != 0)'' في نهاية المرشح لمعالجة الحزم المعاد تجميعها. القيمة الافتراضية: NULL</dd>
+  <dt id="promisc"><a class="permalink" href="#promisc"><i>promisc</i></a></dt>
+  <dd>إذا كانت غير صفرية، فستقوم libnids بضبط الواجهة (الواجهات) التي تستمع إليها في الوضع المختلط (promiscuous mode). القيمة الافتراضية: 1</dd>
+  <dt id="one_loop_less"><a class="permalink" href="#one_loop_less"><i>one_loop_less</i></a></dt>
+  <dd>معطل افتراضيًا؛ راجع التعليقات في ملف API.html</dd>
+  <dt id="pcap_timeout"><a class="permalink" href="#pcap_timeout"><i>pcap_timeout</i></a></dt>
+  <dd>يحدد مهلة قراءة pcap، والتي قد تكون أو لا تكون مدعومة من قبل منصتك. القيمة الافتراضية: 1024.</dd>
+  <dt id="multiproc"><a class="permalink" href="#multiproc"><i>multiproc</i></a></dt>
+  <dd>إذا كانت غير صفرية، فستقوم بإنشاء خيط منفصل لمعالجة الحزم. انظر API.html. القيمة الافتراضية: 0.</dd>
+  <dt id="queue_limit"><a class="permalink" href="#queue_limit"><i>queue_limit</i></a></dt>
+  <dd>إذا كانت multiproc غير صفرية، فهذا هو الحد الأقصى لعدد الحزم الموضوعة في قائمة انتظار في الخيط الذي يقرأ الحزم من libpcap. القيمة الافتراضية: 20000</dd>
+  <dt id="tcp_workarounds"><a class="permalink" href="#tcp_workarounds"><i>tcp_workarounds</i></a></dt>
+  <dd>تتيح فحوصات إضافية للتنفيذات الخاطئة لـ TCP مثل تلك التي تسمح بإغلاق الاتصالات على الرغم من أنه يجب أن تكون هناك إعادة إرسال للحزم المفقودة أولاً (كما هو مذكور في RFC 793، القسم 3.5). إذا كانت غير صفرية، فستقوم libnids بتعيين الحالة NIDS_TIMED_OUT للاتصالات المغلقة بوحشية. القيمة الافتراضية: 0</dd>
+  <dt id="pcap_desc"><a class="permalink" href="#pcap_desc"><i>pcap_desc</i></a></dt>
+  <dd>إذا تم تعيين هذا المتغير، فلن تستدعي libnids لا pcap_open_live ولا pcap_open_offline، ولكنها ستستخدم واصف PCAP مفتوح مسبقًا؛ استخدم هذا مع nids_pcap_handler() للتفاعل مع تغذية الحزم إلى libnids. القيمة الافتراضية: NULL</dd>
+</dl>
+<p class="Pp">يعيد 1 عند النجاح، 0 عند الفشل (في هذه الحالة، يحتوي <b>nids_errbuf</b> على رسالة خطأ مناسبة).</p>
+<p class="Pp"><b>nids_register_ip_frag</b>() يسجل وظيفة رد اتصال معرفة من قبل المستخدم لمعالجة جميع حزم IP الواردة (بما في ذلك أجزاء IP، والحزم ذات المجموع الاختباري غير الصالح، إلخ).</p>
+<p class="Pp"><b>nids_unregister_ip_frag</b>() يلغي تسجيل وظيفة رد اتصال معرفة من قبل المستخدم لمعالجة جميع حزم IP.</p>
+<p class="Pp"><b>nids_register_ip</b>() يسجل وظيفة رد اتصال معرفة من قبل المستخدم لمعالجة حزم IP التي تم التحقق من صحتها وإعادة تجميعها بواسطة <b>libnids</b>.</p>
+<p class="Pp"><b>nids_unregister_ip</b>() يلغي تسجيل وظيفة رد اتصال معرفة من قبل المستخدم لمعالجة حزم IP.</p>
+<p class="Pp"><b>nids_register_udp</b>() يسجل وظيفة رد اتصال معرفة من قبل المستخدم لمعالجة حزم UDP التي تم التحقق من صحتها وإعادة تجميعها بواسطة <b>libnids</b>.</p>
+<p class="Pp"><b>nids_unregister_udp</b>() يلغي تسجيل وظيفة رد اتصال معرفة من قبل المستخدم</p>
+</section>
+</div>
+</section>
+                
+            </article>
+            
+            <aside id="content-right">
+                
+            </aside>
+            
+        </main>
+        <footer>
+            
+            
+        </footer>
+    </body>
+</html>
+<article class="man-page">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">الاسم</a></h1>
+<p class="Pp">nids_register_udp، nids_register_tcp، nids_unregister_tcp، nids_killtcp، nids_discard، nids_run، nids_dispatch، nids_next، nids_getfd، nids_register_chksum_ctl، nids_pcap_handler، nids_find_tcp_stream، nids_free_tcp_stream - معالجة بيانات الشبكة باستخدام libnids</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">الملخص</a></h1>
+<p class="Pp"><b>#include &lt;sys/types.h&gt;</b><br/>
+    <b>#include &lt;netinet/in.h&gt;</b><br/>
+    <b>#include &lt;tcp.h&gt;</b><br/>
+    <b>#include &lt;nids.h&gt;</b></p>
+<pre>
+void nids_register_udp(udp_proc callback);
+void nids_register_tcp(tcp_stream_proc callback);
+void nids_unregister_tcp(tcp_stream_proc callback);
+void nids_killtcp(struct tuple4 *tuple);
+void nids_discard(int discard);
+int nids_run(void);
+int nids_dispatch(int cnt);
+int nids_next(void);
+int nids_getfd(void);
+int nids_register_chksum_ctl(struct nids_chksum_ctl *ctl, int len);
+void nids_pcap_handler(const u_char *user, const struct pcap_pkthdr *h, const u_char *bytes);
+struct tcp_stream *nids_find_tcp_stream(struct tuple4 *tuple);
+void nids_free_tcp_stream(struct tcp_stream *stream);
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">الوصف</a></h1>
+<p class="Pp">تسمح مكتبة libnids للتطبيقات بتتبع اتصالات TCP وإعادة تجميع حزم TCP و UDP. وهي توفر واجهة برمجة تطبيقات لتسجيل وظائف الاستدعاء التي يتم استدعاؤها عند وصول البيانات أو عند إنشاء اتصالات جديدة أو عند إغلاق الاتصالات.</p>
+<p class="Pp"><b>nids_register_udp</b>() يسجل وظيفة استدعاء معرفة من قبل المستخدم لمعالجة حزم UDP.</p>
+<p class="Pp"><b>nids_register_tcp</b>() يسجل وظيفة استدعاء معرفة من قبل المستخدم لمعالجة تدفقات TCP التي تم التحقق منها وإعادة تجميعها بواسطة <b>libnids</b>. يتم تعريف الهيكل <i>tcp_stream</i> على النحو التالي:</p>
+<pre>
+struct tcp_stream {
+	struct tuple4 {
+		u_short source;
+		u_short	dest;
+		u_int	saddr;
+		u_int	daddr;
+	} addr;
+	char			nids_state;
+	struct half_stream {
+		char	state;
+		char	collect;
+		char	collect_urg;
+		char	*data;
+		u_char	urgdata;
+		int	count;
+		int	offset;
+		int	count_new;
+		char	count_new_urg;
+		...
+	} client;
+	struct half_stream	server;
+	...
+	void			*user;
+};
+</pre>
+<p class="Pp">تحدد الأعضاء في الهيكل <i>tuple4</i> اتصال TCP فريدًا:</p>
+<dl class="Bl-tag">
+  <dt id="source"><a class="permalink" href="#source"><i>source</i>، <i>dest</i></a></dt>
+  <dd>أرقام منافذ العميل والخادم</dd>
+  <dt id="saddr"><a class="permalink" href="#saddr"><i>saddr</i>، <i>daddr</i></a></dt>
+  <dd>عناوين IP للعميل والخادم</dd>
+</dl>
+<p class="Pp">تصف الأعضاء في الهيكل <i>half_stream</i> كل نصف من اتصال TCP (العميل والخادم):</p>
+<dl class="Bl-tag">
+  <dt id="state"><a class="permalink" href="#state"><i>state</i></a></dt>
+  <dd>حالة المقبس (مثل TCP_ESTABLISHED).</dd>
+  <dt id="collect"><a class="permalink" href="#collect"><i>collect</i></a></dt>
+  <dd>قيمة منطقية تحدد ما إذا كان سيتم جمع البيانات لهذا النصف من الاتصال في المخزن المؤقت <i>data</i>.</dd>
+  <dt id="collect_urg"><a class="permalink" href="#collect_urg"><i>collect_urg</i></a></dt>
+  <dd>قيمة منطقية تحدد ما إذا كان سيتم جمع البيانات العاجلة التي يشير إليها مؤشر TCP العاجل لهذا النصف من الاتصال في المخزن المؤقت <i>urgdata</i>.</dd>
+  <dt id="data"><a class="permalink" href="#data"><i>data</i></a></dt>
+  <dd>مخزن مؤقت للبيانات العادية.</dd>
+  <dt id="urgdata"><a class="permalink" href="#urgdata"><i>urgdata</i></a></dt>
+  <dd>مخزن مؤقت بحجم بايت واحد للبيانات العاجلة.</dd>
+  <dt id="count"><a class="permalink" href="#count"><i>count</i></a></dt>
+  <dd>عدد البايتات المضافة إلى <i>data</i> منذ إنشاء الاتصال.</dd>
+  <dt id="offset"><a class="permalink" href="#offset"><i>offset</i></a></dt>
+  <dd>الإزاحة الحالية من البايت الأول المخزن في المخزن المؤقت <i>data</i>، مما يحدد بداية البيانات المستلمة حديثًا.</dd>
+  <dt id="count_new"><a class="permalink" href="#count_new"><i>count_new</i></a></dt>
+  <dd>عدد البايتات المضافة إلى <i>data</i> منذ آخر استدعاء لوظيفة استدعاء TCP (إذا كان 0، لم تصل بيانات جديدة).</dd>
+  <dt id="count_new_urg"><a class="permalink" href="#count_new_urg"><i>count_new_urg</i></a></dt>
+  <dd>عدد البايتات المضافة إلى <i>urgdata</i> منذ آخر استدعاء لوظيفة استدعاء TCP (إذا كان 0، لم تصل بيانات عاجلة جديدة).</dd>
+</dl>
+<p class="Pp">توفر قيمة الحقل <i>nids_state</i> معلومات حول حالة اتصال TCP، ليتم استخدامها بواسطة وظيفة استدعاء TCP:</p>
+<dl class="Bl-tag">
+  <dt id="NIDS_JUST_EST"><a class="permalink" href="#NIDS_JUST_EST">NIDS_JUST_EST</a></dt>
+  <dd>تم إنشاء الاتصال للتو. معلمات الاتصال في الهيكل <i>addr</i> متاحة للفحص. إذا كان الاتصال مثيرًا للاهتمام، فقد تحدد وظيفة استدعاء TCP البيانات التي ترغب في تلقيها في المستقبل عن طريق تعيين قيم غير صفرية للمتغيرات <i>collect</i> أو <i>collect_urg</i> في أعضاء الهيكل المناسبة لنصف <i>client</i> أو <i>server</i> half_stream.</dd>
+  <dt id="NIDS_DATA"><a class="permalink" href="#NIDS_DATA">NIDS_DATA</a></dt>
+  <dd>وصلت بيانات جديدة على اتصال. تحتوي هياكل <i>half_stream</i> على مخازن مؤقتة للبيانات.</dd>
+  <dt id="NIDS_CLOSE,"><a class="permalink" href="#NIDS_CLOSE,">NIDS_CLOSE، NIDS_RESET، NIDS_TIMED_OUT</a></dt>
+  <dd>تم إغلاق الاتصال. يجب على وظيفة استدعاء TCP تحرير أي موارد ربما خصصتها لهذا الاتصال.</dd>
+</dl>
+<p class="Pp">قد يتم تعيين المؤشر <i>param</i> الذي تمرره libnids كوسيطة لوظيفة استدعاء TCP لحفظ مؤشر إلى بيانات محددة من قبل المستخدم خاصة بالاتصال لتمريرها إلى استدعاءات لاحقة لوظيفة استدعاء TCP (مثل الدليل الحالي لعمل اتصال تحكم FTP، إلخ).</p>
+<p class="Pp">المؤشر <i>user</i> في الهيكل tcp_stream له نفس الغرض ولكنه عالمي للتدفق، بينما المؤشر <i>param</i> يختلف من وظيفة استدعاء إلى أخرى حتى لو تم استدعاؤها لنفس التدفق.</p>
+<p class="Pp"><b>nids_unregister_tcp</b>() يلغي تسجيل وظيفة استدعاء معرفة من قبل المستخدم لمعالجة تدفقات TCP.</p>
+<p class="Pp"><b>nids_killtcp</b>() ينهي اتصال TCP المحدد بحزم RST متناظرة بين العميل والخادم.</p>
+<p class="Pp">يمكن استدعاء <b>nids_discard</b>() من وظيفة استدعاء TCP لتحديد عدد البايتات التي يجب تجاهلها من بداية المخزن المؤقت <i>data</i> (تحديث قيمة <i>offset</i> وفقًا لذلك) بعد خروج وظيفة استدعاء TCP. بخلاف ذلك، سيتم تجاهل البيانات الجديدة (بإجمالي <i>count_new</i> بايت) افتراضيًا.</p>
+<p class="Pp"><b>nids_run</b>() يبدأ التطبيق المدفوع بالحزم، ويقرأ الحزم في حلقة لا نهائية، ويستدعي وظائف الاستدعاء المسجلة لمعالجة البيانات الجديدة عند وصولها. هذه الوظيفة لا تعود.</p>
+<p class="Pp"><b>nids_dispatch</b>() يحاول معالجة <b>cnt</b> حزمة قبل العودة، مع فهم قيمة cnt بقيمة -1 على أنها جميع الحزم المتاحة في مخزن pcap واحد مؤقتًا، أو جميع الحزم في ملف عند القراءة دون اتصال. عند النجاح، يعود عدد الحزم المعالجة، والتي قد تكون صفرًا عند نهاية الملف (قراءة دون اتصال) أو عند الوصول إلى <i>pcap_timeout</i> (إذا كان مدعومًا من قبل منصتك). عند الفشل، يعود -1، ويضع رسالة خطأ مناسبة في <b>nids_errbuf</b>.</p>
+<p class="Pp"><b>nids_next</b>() يعالج الحزمة التالية المتاحة قبل العودة. يعود 1 عند النجاح، 0 إذا لم تتم معالجة أي حزمة، مع تعيين <b>nids_effbuf</b> بشكل مناسب إذا منع خطأ معالجة الحزمة.</p>
+<p class="Pp">يمكن استخدام <b>nids_getfd</b>() بواسطة تطبيق نائم في select(2) للتسلل إلى واصف ملف مقبس موجود في مجموعة read fd_set. يعود واصف الملف عند النجاح، -1 عند الفشل (في هذه الحالة، يحتوي <b>nids_errbuf</b> على رسالة خطأ مناسبة).</p>
+<p class="Pp"><b>nids_register_chksum_ctl</b>() يأخذ كوسيطات مصفوفة من عناصر <i>struct nids_chksum_ctl</i> وعدد العناصر في المصفوفة. يتم تعريف عنصر <i>nids_chksum_ctl</i> على النحو التالي:</p>
+<pre>
+struct nids_chksum_ctl {
+	u_int netaddr;
+	u_int mask;
+	u_int action;
+	/* private members */
+};
+</pre>
+<p class="Pp">ستقوم وظائف التحقق الداخلي من المجموع الاختباري بفحص عناصر هذه المصفوفة واحدًا تلو الآخر أولاً، وإذا كان عنوان IP المصدر SRCIP للحزمة الحالية يفي بالشرط</p>
+<p class="Pp">
+  <br/>
+   (SRCIP&amp;chksum_ctl_array[i].mask)==chksum_ctl_array[i].netaddr</p>
+<p class="Pp">ثم إذا كان الحقل <i>action</i> هو <b>NIDS_DO_CHKSUM</b>، فسيتم إجراء التحقق من المجموع الاختباري للحزمة؛ إذا كان الحقل <i>action</i> هو <b>NIDS_DONT_CHKSUM</b>، فلن يتم إجراء التحقق من المجموع الاختباري للحزمة. إذا لم تتطابق الحزمة مع أي من عناصر المصفوفة، فسيكون الإجراء الافتراضي هو إجراء التحقق من المجموع الاختباري.</p>
+<p class="Pp">يمكن استخدام <b>nids_pcap_handler</b>() بواسطة تطبيق يقوم بالفعل بتشغيل التقاط باستخدام libpcap، لتمرير الإطارات إلى libnids بشكل تفاعلي (إطار تلو الآخر) بدلاً من جعل libnids نفسه يقوم بالالتقاط.</p>
+<p class="Pp"><b>nids_find_tcp_stream</b>() يعود بمؤشر إلى الهيكل tcp_stream المقابل للـ tuple الممرر كوسيطة إذا كانت libnids تعرف بالفعل عن اتصال TCP هذا، وإلا فإنه يعود بـ NULL.</p>
+<p class="Pp"><b>nids_free_tcp_stream</b>() يزيل تدفق tcp_stream المحدد من قائمة التدفقات التي تتعقبها libnids. تحذير: قد يؤدي استخدامه إلى أعطال! انظر التعليقات في ملف API.html.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp">pcap(3)، libnet(3)، fragrouter(8)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Rafal Wojtczuk &lt;nergal@icm.edu.pl&gt;</p>
+<p class="Pp">صفحة الرجل بواسطة Dug Song &lt;dugsong@monkey.org&gt;، تحديثات طفيفة بواسطة Michael Pomraning &lt;mjp@pilcrow.madison.wi.us&gt;</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libnids/">extra/libnids</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.26-5</dd>
+        <dt>المصدر الرئيسي:</dt>
+        <dd><a href="http://libnids.sourceforge.net/">http://libnids.sourceforge.net/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/libnids/">/listing/extra/libnids/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#ROUTINES"></a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/libnids.3.en.txt">txt</a>, 
+        
+            <a href="/man/libnids.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

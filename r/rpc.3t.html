@@ -1,0 +1,861 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">rpc(3t)</h1>
+<link rel="stylesheet" href="basic.css">
+/*
+ * Copyright (c) 1986, 1989, 1990 by Sun Microsystems, Inc.
+ * All rights reserved.
+ */
+/*
+ * Copyright (c) 1990 Regents of the University of California.
+ * All rights reserved.
+ */
+
+#ident "@(#)rpc.h	1.17 06/24/97"
+
+#ifndef _RPC_RPC_H
+#define _RPC_RPC_H
+
+#include <rpc/types.h>
+#include <sys/cdefs.h>
+#include <sys/param.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <rpc/xdr.h>
+
+/*
+ * rpcbind/portmapper version numbers
+ */
+#define RPCBIND_PORT		111
+#define PMAPVERSION		(unsigned int)2
+
+/*
+ * Status codes
+ */
+#define RPC_SUCCESS		0
+#define RPC_FAILED		-1
+
+/*
+ * Basic RPC structure
+ */
+typedef struct {
+	unsigned long	RCS_Program;	/* program number */
+	unsigned long	RCS_Version;	/* version number */
+	unsigned long	RCS_Proc;		/* procedure number */
+	XDR		RCS_XDR;		/* XDR handle for this call */
+	struct sockaddr_in RCS_Addr;	/* address of client */
+	int		RCS_Comm;		/* comms descriptor */
+	char		*RCS_String;	/* message string */
+} remote_call_t;
+
+/*
+ * Routines for clnt.c
+ */
+/*
+ * Rpc prog/vers array.
+ * Each entry specifies the highest acceptable version of the rpc
+ * program, and links to the next structure.
+ */
+struct rpc_vers {
+	unsigned long	rpc_vers;	/* version number */
+	struct rpc_vers	*rpc_next;	/* next version */
+};
+
+/*
+ * Rpc program entry.
+ * Each entry specifies the program number, and links to the first
+ * version structure.
+ */
+struct rpc_program {
+	unsigned long	rpc_prog;	/* program number */
+	struct rpc_vers	*rpc_vers;	/* list of versions */
+};
+
+/*
+ * Rpc broadcast state
+ */
+#define RPC_BROADCAST_WAIT_SEC		3	/* seconds to wait for broadcast */
+#define RPC_BROADCAST_MAX_FAILURES	5	/* max failures before giving up */
+
+/*
+ * Header structure for RPC messages
+ */
+struct rpc_msg {
+	unsigned long	rm_xid;		/* transaction id */
+	enum msg_type	rm_direction;	/* TYPE_REQUEST, TYPE_REPLY */
+	union {
+		struct {
+			unsigned long	rm_call.cb_rpcvers;	/* rpc version */
+			unsigned long	rm_call.cb_prog;	/* program */
+			unsigned long	rm_call.cb_vers;	/* version */
+			unsigned long	rm_call.cb_proc;	/* procedure */
+			struct opaque_auth rm_call.cb_cred;	/* authenticator */
+			struct opaque_auth rm_call.cb_verf;	/* verifier */
+		} rpcmessage_call;
+		struct {
+			struct opaque_auth rm_reply.cb_cred;	/* authenticator */
+			struct opaque_auth rm_reply.cb_verf;	/* verifier */
+		} rpcmessage_reply;
+	} rm_args;
+	/*
+	 * We can either use struct rpc_msg::rm_args.rpcmessage_call.rm_call.cb_cred
+	 * or struct rpc_msg::rm_args.rpcmessage_reply.rm_reply.cb_cred.
+	 * This is because the cb_cred field is at the same offset within
+	 * rm_call and rm_reply structures.
+	 */
+	/* struct opaque_auth	rm_auth; */ /* Authenticator and Verifier */
+};
+
+/*
+ * RPC message types
+ */
+enum msg_type {
+	REQUEST,
+	REPLY
+};
+#define TYPE_REQUEST	REQUEST
+#define TYPE_REPLY	REPLY
+
+/*
+ * Authentication stuff
+ */
+#define AUTH_NONE	0
+#define AUTH_UNIX	1
+#define AUTH_SHORT	0x25308471 /* some private auth */
+
+/*
+ * Public key authentication
+ */
+#define AUTH_DES	3
+
+/*
+ * struct opaque_auth
+ */
+struct opaque_auth {
+	auth_flavor	oa_flavor;	/* flavor */
+	caddr_t		oa_base;	/* base of authoritization data */
+	u_int		oa_length;	/* length of */
+};
+
+/*
+ * Maximum length of network name or service name
+ */
+#define MAX_NETNAMELEN	255
+#define MAX_SRVCNAMELEN	255
+
+/*
+ * The XDR handle.
+ * Contains operation which is being applied to the stream,
+ * an operations vector for the particular implementation
+ */
+typedef struct {
+	enum xdr_op	x_op;		/* operation; fast additional param */
+	struct xdr_ops {
+		bool_t	(*x_getlong)();	/* get a long from underlying stream */
+		bool_t	(*x_putlong)();	/* put a long to underlying stream */
+		bool_t	(*x_getbytes)();	/* get bytes from underlying stream */
+		bool_t	(*x_putbytes)();	/* put bytes to underlying stream */
+		u_int	(*x_getpostn)();	/* returns bytes off from beginning */
+		bool_t	(*x_setpostn)();	/* lets you reposition the stream */
+		long *	(*x_inline)();	/* buf quick ptr to buffered data */
+		void	(*x_destroy)();	/* free privates of this xdr_stream */
+	} *x_ops;
+	caddr_t		x_public;	/* users' data */
+	caddr_t		x_private;	/* pointer to private data */
+	caddr_t		x_base;		/* private used for position info */
+	u_int		x_handy;	/* extra private word */
+} XDR;
+
+/*
+ * The netbuf structure. This structure is defined in &lt;xti.h&gt; on SysV
+ * systems, but NetBSD / FreeBSD do not use XTI.
+ *
+ * Usually, buf will point to a struct sockaddr, and len and maxlen
+ * will contain the length and maximum length of that socket address,
+ * respectively.
+ */
+struct netbuf {
+	unsigned int maxlen;
+	unsigned int len;
+	void *buf;
+};
+
+/*
+ * The format of the address and options arguments of the XTI t_bind call.
+ * Only provided for compatibility, it should not be used other than
+ * as an argument to svc_tli_create().
+ */
+
+struct t_bind {
+	struct netbuf   addr;
+	unsigned int    qlen;
+};
+
+#ifdef _KERNEL
+/*
+ * Kernel XDR routines.
+ */
+void xdr_free(xdrproc_t proc, caddr_t objp);
+bool_t xdr_int(XDR *xdrs, int *ip);
+bool_t xdr_u_int(XDR *xdrs, u_int *up);
+bool_t xdr_long(XDR *xdrs, long *lp);
+bool_t xdr_u_long(XDR *xdrs, u_long *ulp);
+bool_t xdr_quadruple(XDR *xdrs, quad_t *qp);
+bool_t xdr_u_quadruple(XDR *xdrs, u_quad_t *uq);
+bool_t xdr_bool(XDR *xdrs, bool_t *bp);
+bool_t xdr_char(XDR *xdrs, char *cp);
+bool_t xdr_u_char(XDR *xdrs, u_char *cp);
+bool_t xdr_bytes(XDR *xdrs, char **cpp, u_int *zpp, u_int max);
+bool_t xdr_string(XDR *xdrs, char **cpp, u_int max);
+bool_t xdr_opaque(XDR *xdrs, caddr_t cp, u_int cnt);
+bool_t xdr_vector(XDR *xdrs, char *adr, u_int size, xdrproc_t xdr_elem);
+bool_t xdr_reference(XDR *xdrs, caddr_t *addrpp, u_int size, xdrproc_t xdr_elem);
+bool_t xdr_pointer(XDR *xdrs, caddr_t *addrpp, u_int size, xdrproc_t xdr_elem);
+bool_t xdr_wrapstring(XDR *xdrs, char **cpp);
+bool_t xdr_union(XDR *xdrs, enum xdr_op *op, caddr_t xdrs_private,
+    struct xdr_discrim *choices, xdrproc_t func);
+bool_t xdr_enum(XDR *xdrs, enum enum_t *ep);
+bool_t xdr_int_t(XDR *xdrs, int32_t *ip);
+bool_t xdr_u_int32_t(XDR *xdrs, u_int32_t *up);
+bool_t xdr_long_t(XDR *xdrs, int64_t *lp);
+bool_t xdr_u_long_t(XDR *xdrs, u_int64_t *ulp);
+
+/*
+ * Rpc client interface.
+ */
+CLIENT *clnt_create(char *host, u_long prog, u_long vers, char *proto);
+CLIENT *clnt_create_timed(char *host, u_long prog, u_long vers,
+    char *proto, struct timeval *time_out);
+CLIENT *clnt_create_vers(char *host, u_long prog, u_long *versptr,
+    char *proto, struct timeval *time_out);
+CLIENT *clnt_create_vers_timed(char *host, u_long prog, u_long *versptr,
+    char *proto);
+CLIENT *clnt_tp_create(char *host, u_long prog, u_long vers,
+    char *proto);
+CLIENT *clnt_tp_create_timed(char *host, u_long prog, u_long vers,
+    char *proto, struct timeval *time_out);
+CLIENT *clnt_tli_create(char *host, char *nettype,
+    struct netbuf *serv_addr, u_long prog, u_long vers,
+    u_int wait_time, u_int retry_time);
+CLIENT *clnt_dg_create(int sock, struct sockaddr *raddr, u_long prog,
+    u_long vers, u_int wait_time, u_int retry_time);
+CLIENT *clnt_vc_create(int sock, struct sockaddr *raddr, u_long prog,
+    u_long vers, u_int wait_time, u_int retry_time);
+CLIENT *clnt_raw_create(u_long prog, u_long vers);
+CLIENT *clnt_udpcreate(char *host, u_long prog, u_long vers);
+CLIENT *clntudp_bufcreate(char *host, u_long prog, u_long vers,
+    u_int bufsiz);
+CLIENT *clnttcp_create(char *host, u_long prog, u_long vers);
+CLIENT *clnt_spcreateerror(char *errstr);
+CLIENT *clnt_pcreateerror(char *errstr);
+void clnt_destroy(CLIENT *clnt);
+enum clnt_stat clnt_call(CLIENT *clnt, u_long procnum, xdrproc_t xdr_arg,
+    caddr_t arg, xdrproc_t xdr_res, caddr_t res, struct timeval wait_time);
+void clnt_freeres(CLIENT *clnt, xdrproc_t xdr_res, caddr_t res);
+struct rpc_err *clnt_geterr(CLIENT *clnt);
+void clnt_perror(CLIENT *clnt, char *errstr);
+void clnt_sperror(CLIENT *clnt, char *errstr);
+void clnt_perrno(rpc_inline_t prognum);
+void clnt_sperrno(rpc_inline_t prognum);
+bool_t clnt_control(CLIENT *clnt, clnt_stat request, char *value);
+bool_t clnt_broadcast(u_long prog, u_long vers, u_long proc,
+    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res,
+    int (*checkforremote)(char *), int count);
+bool_t rpc_broadcast(u_long prog, u_long vers, u_long proc,
+    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res,
+    int (*checkforremote)(char *), int count);
+bool_t rpc_broadcast_exp(u_long prog, u_long vers, u_long proc,
+    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res,
+    int (*checkforremote)(char *), int count, struct netbuf *netgroup);
+bool_t clnt_broadcast_exp(u_long prog, u_long vers, u_long proc,
+    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res,
+    int (*checkforremote)(char *), int count, struct netbuf *netgroup);
+bool_t clnt_callrpc(char *host, u_long prognum, u_long versnum, u_long procnum,
+    xdrproc_t xdr_arg, caddr_t argp, xdrproc_t xdr_res, caddr_t resp);
+bool_t callrpc(char *host, u_long prognum, u_long versnum, u_long procnum,
+    xdrproc_t xdr_arg, caddr_t argp, xdrproc_t xdr_res, caddr_t resp);
+
+/*
+ * Rpc server interface.
+ */
+SVCXPRT *svc_create(xdrproc_t pfi, u_long prog, u_long vers, char *nettype);
+SVCXPRT *svc_create_timed(xdrproc_t pfi, u_long prog, u_long vers,
+    char *nettype, struct timeval *time_out);
+SVCXPRT *svc_tp_create(xdrproc_t pfi, u_long prog, u_long vers,
+    char *nettype);
+SVCXPRT *svc_tp_create_timed(xdrproc_t pfi, u_long prog, u_long vers,
+    char *nettype, struct timeval *time_out);
+SVCXPRT *svc_tli_create(char *nettype, struct netbuf *addr,
+    struct netbuf *ctladdr, u_long prog, u_long nவுகளில்,
+    u_int wait_time, u_int retry_time);
+SVCXPRT *svc_dg_create(int sock, u_int wait_time, u_int retry_time);
+SVCXPRT *svc_vc_create(int sock, u_long prog, u_long nவுகளில்,
+    u_int wait_time, u_int retry_time);
+SVCXPRT *svc_fd_create(int sock);
+SVCXPRT *svc_raw_create(void);
+SVCXPRT *svc_register(SVCXPRT *transp, u_long prog, u_long vers,
+    xdrproc_t proc, int tcp_flag);
+void svc_unregister(u_long prog, u_long vers);
+bool_t svc_run(void);
+void svc_destroy(SVCXPRT *transp);
+bool_t svc_sendreply(SVCXPRT *transp, xdrproc_t xdr_results, caddr_t results);
+bool_t svc_getargs(SVCXPRT *transp, xdrproc_t xdr_args, caddr_t args);
+bool_t svc_freeargs(SVCXPRT *transp, xdrproc_t xdr_args, caddr_t args);
+bool_t svc_reg(SVCXPRT *transp, u_long prog, u_long vers,
+    xdrproc_t proc, char *nettype);
+bool_t registerrpc(u_long prognum, u_long versnum, u_long procnum,
+    char *(*proc)(), xdrproc_t xdr_arg, xdrproc_t xdr_res);
+void rpc_reg(u_long prognum, u_long versnum, u_long procnum,
+    char *(*proc)(), xdrproc_t xdr_arg, xdrproc_t xdr_res, char *nettype);
+bool_t pmap_set(u_long program, u_long version, char *protocol, u_short port);
+bool_t pmap_unset(u_long program, u_long version);
+bool_t pmap_getmaps(struct sockaddr_in *addr);
+u_short pmap_getport(struct sockaddr_in *addr, u_long program, u_long version,
+    char *protocol);
+bool_t pmap_rmtcall(struct sockaddr_in *addr, u_long program, u_long version,
+    u_long proc, xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res,
+    caddr_t res, struct timeval wait_time, struct sockaddr_in *port_addr);
+void svc_setcaller(SVCXPRT *transp, struct sockaddr_in *addr);
+struct sockaddr_in *svc_getcaller(SVCXPRT *transp);
+int *svc_fds(void);
+bool_t svc_dg_enablecache(SVCXPRT *transp, u_int maxcache);
+bool_t xprt_register(SVCXPRT *xprt);
+void xprt_unregister(SVCXPRT *xprt);
+
+/*
+ * Authentication routines.
+ */
+AUTH *auth_none_create(void);
+AUTH *auth_short_create(void);
+AUTH *authsys_create_default(void);
+AUTH *authunix_create_default(void);
+AUTH *authsys_create(char *machname, uid_t uid, gid_t gid, u_int len,
+    gid_t *groups);
+AUTH *authunix_create(char *machname, uid_t uid, gid_t gid, u_int len,
+    gid_t *groups);
+AUTH *authdes_create(char *servername, u_int credlen, caddr_t cred,
+    char *verf);
+void auth_destroy(AUTH *auth);
+
+/*
+ * Routines for obtaining network addresses.
+ */
+bool_t getnetname(char *netname);
+bool_t hostplusnetname(char *netname, char *hostname, u_int namelen);
+bool_t get_myaddress(struct sockaddr_in *addr);
+
+/*
+ * RPC call arguments structure
+ */
+struct rpc_msg {
+	unsigned long	rm_xid;		/* transaction id */
+	enum msg_type	rm_direction;	/* TYPE_REQUEST, TYPE_REPLY */
+	union {
+		struct {
+			unsigned long	rm_call.cb_rpcvers;	/* rpc version */
+			unsigned long	rm_call.cb_prog;	/* program */
+			unsigned long	rm_call.cb_vers;	/* version */
+			unsigned long	rm_call.cb_proc;	/* procedure */
+			struct opaque_auth rm_call.cb_cred;	/* authenticator */
+			struct opaque_auth rm_call.cb_verf;	/* verifier */
+		} rpcmessage_call;
+		struct {
+			struct opaque_auth rm_reply.cb_cred;	/* authenticator */
+			struct opaque_auth rm_reply.cb_verf;	/* verifier */
+		} rpcmessage_reply;
+	} rm_args;
+};
+
+/*
+ * XXX This struct is here for backwards compatibility.
+ * It should not be used other than as an argument to svc_tli_create().
+ */
+struct tli_to_rpc_argv {
+	char *			tli_nettype;
+	char *			tli_host;
+	unsigned long		tli_prog;
+	unsigned long		tli_vers;
+	unsigned int		tli_wait;
+	unsigned int		tli_retry;
+	int			tli_sock;
+	struct t_bind *		tli_bind;
+};
+
+#endif /* _KERNEL */
+
+
+/*
+ * XDR routines.
+ */
+extern bool_t xdr_bool(XDR *, bool_t *);
+extern bool_t xdr_char(XDR *, char *);
+extern bool_t xdr_u_char(XDR *, u_char *);
+extern bool_t xdr_short(XDR *, short *);
+extern bool_t xdr_u_short(XDR *, u_short *);
+extern bool_t xdr_int(XDR *, int *);
+extern bool_t xdr_u_int(XDR *, u_int *);
+extern bool_t xdr_long(XDR *, long *);
+extern bool_t xdr_u_long(XDR *, u_long *);
+extern bool_t xdr_hyper(XDR *, quad_t *);
+extern bool_t xdr_u_hyper(XDR *, u_quad_t *);
+extern bool_t xdr_float(XDR *, float *);
+extern bool_t xdr_double(XDR *, double *);
+extern bool_t xdr_string(XDR *, char **, u_int);
+extern bool_t xdr_wrapstring(XDR *, char **);
+extern bool_t xdr_array(XDR *, caddr_t *, u_int *, u_int, xdrproc_t);
+extern bool_t xdr_bytes(XDR *, char **, u_int *, u_int);
+extern bool_t xdr_opaque(XDR *, caddr_t, u_int);
+extern bool_t xdr_union(XDR *, enum xdr_op *, char *, struct xdr_discrim *,
+	xdrproc_t);
+extern bool_t xdr_reference(XDR *, caddr_t *, u_int, xdrproc_t);
+extern bool_t xdr_pointer(XDR *, caddr_t *, u_int, xdrproc_t);
+extern bool_t xdr_getlong(XDR *, long *);
+extern bool_t xdr_putlong(XDR *, long *);
+extern bool_t xdr_getbytes(XDR *, char *, u_int);
+extern bool_t xdr_putbytes(XDR *, char *, u_int);
+extern u_int xdr_getpos(XDR *);
+extern bool_t xdr_setpos(XDR *, u_long);
+extern long *xdr_inline(XDR *, u_int);
+extern void xdr_destroy(XDR *);
+extern void xdr_free(xdrproc_t, caddr_t);
+extern XDR *xdr_alloc(void); /* used internally by rpc */
+extern XDR *xdrstdio_create(FILE *, enum xdr_op);
+extern XDR *xdrrec_create(XDR *, u_int, u_int, void (*));
+extern XDR *xdrmem_create(caddr_t, u_int, enum xdr_op);
+extern XDR *xdruds_create(int);
+
+/*
+ * RPC Client Handle
+ */
+struct rpc_msg;
+struct clnt_ops {
+	/* ... */
+};
+
+/*
+ * RPC Dispatch Table Entry
+ */
+struct rpc_discrim {
+	long			pd_value;
+	xdrproc_t		pd_proc;
+};
+
+/*
+ * RPC Authentication Flavors
+ */
+typedef enum {
+	AUTH_NONE = 0,
+	AUTH_UNIX = 1,
+	AUTH_SHORT = 0x25308471,
+	AUTH_DES = 3,
+} auth_flavor;
+
+/*
+ * RPC Call Status Codes
+ */
+typedef enum {
+	RPC_SUCCESS = 0,
+	RPC_FAILED = -1,
+	RPC_TIMEDOUT = -2,
+	RPC_PROGNOTFOUND = -3,
+	RPC_PROGVERSMISMATCH = -4,
+	RPC_PROCUNAVAIL = -5,
+	RPC_AUTH_ERROR = -6,
+	RPC_CANTENCODEARGS = -7,
+	RPC_CANTDECODERES = -8,
+	RPC_INTR = -9,
+	RPC_SYSTEMERROR = -10,
+	RPC_UNKNOWNHOST = -11,
+	RPC_N2AXLATEFAILURE = -12,
+	RPC_LOOP = -13,
+	RPC_OPLOCKED = -14,
+	RPC_ERR_MAX = -15,
+} clnt_stat;
+
+/*
+ * RPC Error structure
+ */
+struct rpc_err {
+	clnt_stat	re_status;
+	union {
+		int			re_errno;	/* RPC_SYSTEMERROR */
+		struct {
+			unsigned long	re_vers.low;
+			unsigned long	re_vers.high;
+		} re_vers;				/* RPC_PROGVERSMISMATCH */
+		caddr_t			re_why;		/* RPC_AUTH_ERROR */
+	}re_why;
+};
+
+/*
+ * XDR Discriminator
+ */
+typedef struct xdr_discrim {
+	long		_value;
+	xdrproc_t	_proc;
+} xdr_discrim_t;
+
+/*
+ * XDR Filter Functions
+ */
+typedef bool_t (*xdrfilter_t)(char *, int);
+
+
+#endif /* _RPC_RPC_H */
+```
+
+```arabic
+```json
+{
+  "title": "ndr.h",
+  "sections": [
+    {
+      "heading": "ndr.h",
+      "content": "/*\n * Copyright (c) 1986, 1989, 1990 by Sun Microsystems, Inc.\n * All rights reserved.\n */\n/*\n * Copyright (c) 1990 Regents of the University of California.\n * All rights reserved.\n */\n\n#ident \"@(#)rpc.h\\t1.17 06/24/97\"\n\n#ifndef _RPC_RPC_H\n#define _RPC_RPC_H\n\n#include <rpc/types.h>\n#include <sys/cdefs.h>\n#include <sys/param.h>\n#include <sys/types.h>\n#include <sys/time.h>\n#include <rpc/xdr.h>\n\n/*\n * rpcbind/portmapper version numbers\n */\n#define RPCBIND_PORT		111\n#define PMAPVERSION		(unsigned int)2\n\n/*\n * Status codes\n */\n#define RPC_SUCCESS		0\n#define RPC_FAILED		-1\n\n/*\n * Basic RPC structure\n */\ntypedef struct {\n\tunsigned long\tRCS_Program; \t/* program number */\n\tunsigned long\tRCS_Version;\t/* version number */\n\tunsigned long\tRCS_Proc;\t\t/* procedure number */\n\tXDR \t\tRCS_XDR;\t\t/* XDR handle for this call */\n\tstruct sockaddr_in RCS_Addr; \t/* address of client */\n\tint\t\tRCS_Comm;\t\t/* comms descriptor */\n\tchar\t\t*RCS_String;\t/* message string */\n} remote_call_t;\n\n/*\n * Routines for clnt.c\n */\n/*\n * Rpc prog/vers array.\n * Each entry specifies the highest acceptable version of the rpc\n * program, and links to the next structure.\n */\nstruct rpc_vers {\n\tunsigned long\trpc_vers; \t/* version number */\n\tstruct rpc_vers\t*rpc_next;\t/* next version */\n};\n\n/*\n * Rpc program entry.\n * Each entry specifies the program number, and links to the first\n * version structure.\n */\nstruct rpc_program {\n\tunsigned long\trpc_prog;\t/* program number */\n\tstruct rpc_vers\t*rpc_vers;\t/* list of versions */\n};\n\n/*\n * Rpc broadcast state\n */\n#define RPC_BROADCAST_WAIT_SEC\t\t3\t/* seconds to wait for broadcast */\n#define RPC_BROADCAST_MAX_FAILURES\t5\t/* max failures before giving up */\n\n/*\n * Header structure for RPC messages\n */\nstruct rpc_msg {\n\tunsigned long\trm_xid;\t\t/* transaction id */\n\tenum msg_type\trm_direction;\t/* TYPE_REQUEST, TYPE_REPLY */\n\tunion {\n\t\tstruct {\n\t\t\tunsigned long\trm_call.cb_rpcvers;\t/* rpc version */\n\t\t\tunsigned long\trm_call.cb_prog;\t/* program */\n\t\t\tunsigned long\trm_call.cb_vers;\t/* version */\n\t\t\tunsigned long\trm_call.cb_proc;\t/* procedure */\n\t\t\tstruct opaque_auth rm_call.cb_cred;/* authenticator */\n\t\t\tstruct opaque_auth rm_call.cb_verf;\t/* verifier */\n\t\t} rpcmessage_call;\n\t\tstruct {\n\t\t\tstruct opaque_auth rm_reply.cb_cred;\t/* authenticator */\n\t\t\tstruct opaque_auth rm_reply.cb_verf;\t/* verifier */\n\t\t} rpcmessage_reply;\n\t} rm_args;\n\t/*\n\t * We can either use struct rpc_msg::rm_args.rpcmessage_call.rm_call.cb_cred\n\t * or struct rpc_msg::rm_args.rpcmessage_reply.rm_reply.cb_cred.\n\t * This is because the cb_cred field is at the same offset within\n\t * rm_call and rm_reply structures.\n\t */\n\t/* struct opaque_auth\trm_auth; */ /* Authenticator and Verifier */\n};\n\n/*\n * RPC message types\n */\nenum msg_type {\n\tREQUEST,\n\tREPLY\n};\n#define TYPE_REQUEST\tREQUEST\n#define TYPE_REPLY\tREPLY\n\n/*\n * Authentication stuff\n */\n#define AUTH_NONE\t0\n#define AUTH_UNIX\t1\n#define AUTH_SHORT\t0x25308471 /* some private auth */\n\n/*\n * Public key authentication\n */\n#define AUTH_DES\t3\n\n/*\n * struct opaque_auth\n */\nstruct opaque_auth {\n\tauth_flavor\to_flavor;\t/* flavor */\n\tcaddr_t\t\to_base;\t\t/* base of authoritization data */\n\tu_int\t\to_length;\t/* length of */\n};\n\n/*\n * Maximum length of network name or service name\n */\n#define MAX_NETNAMELEN\t255\n#define MAX_SRVCNAMELEN\t255\n\n/*\n * The XDR handle.\n * Contains operation which is being applied to the stream,\n * an operations vector for the particular implementation\n */\ntypedef struct {\n\tenum xdr_op\t\tx_op;\t\t/* operation; fast additional param */\n\tstruct xdr_ops {\n\t\tbool_t\t\t(*x_getlong)();\t/* get a long from underlying stream */\n\t\tbool_t\t\t(*x_putlong)();\t/* put a long to underlying stream */\n\t\tbool_t\t\t(*x_getbytes)();\t/* get bytes from underlying stream */\n\t\tbool_t\t\t(*x_putbytes)();\t/* put bytes to underlying stream */\n\t\tu_int\t\t(*x_getpostn)();\t/* returns bytes off from beginning */\n\t\tbool_t\t\t(*x_setpostn)();\t/* lets you reposition the stream */\n\t\tlong *\t\t(*x_inline)();\t/* buf quick ptr to buffered data */\n\t\tvoid\t\t(*x_destroy)();\t/* free privates of this xdr_stream */\n\t} *x_ops;\n\tcaddr_t\t\tx_public;\t/* users' data */\n\tcaddr_t\t\tx_private;\t/* pointer to private data */\n\tcaddr_t\t\tx_base;\t\t/* private used for position info */\n\tu_int\t\tx_handy;\t/* extra private word */\n} XDR;\n\n/*\n * The netbuf structure. This structure is defined in &lt;xti.h&gt; on SysV\n * systems, but NetBSD / FreeBSD do not use XTI.\n *\n * Usually, buf will point to a struct sockaddr, and len and maxlen\n * will contain the length and maximum length of that socket address,\n * respectively.\n */\nstruct netbuf {\n\tunsigned int maxlen;\n\tunsigned int len;\n\tvoid *buf;\n};\n\n/*\n * The format of the address and options arguments of the XTI t_bind call.\n * Only provided for compatibility, it should not be used other than\n * as an argument to svc_tli_create().\n */\n\nstruct t_bind {\n\tstruct netbuf   addr;\n\tunsigned int    qlen;\n};\n\n#ifdef _KERNEL\n/*\n * Kernel XDR routines.\n */\nvoid xdr_free(xdrproc_t proc, caddr_t objp);\nbool_t xdr_int(XDR *xdrs, int *ip);\nbool_t xdr_u_int(XDR *xdrs, u_int *up);\nbool_t xdr_long(XDR *xdrs, long *lp);\nbool_t xdr_u_long(XDR *xdrs, u_long *ulp);\nbool_t xdr_quadruple(XDR *xdrs, quad_t *qp);\nbool_t xdr_u_quadruple(XDR *xdrs, u_quad_t *uq);\nbool_t xdr_bool(XDR *xdrs, bool_t *bp);\nbool_t xdr_char(XDR *xdrs, char *cp);\nbool_t xdr_u_char(XDR *xdrs, u_char *cp);\nbool_t xdr_bytes(XDR *xdrs, char **cpp, u_int *zpp, u_int max);\nbool_t xdr_string(XDR *xdrs, char **cpp, u_int max);\nbool_t xdr_opaque(XDR *xdrs, caddr_t cp, u_int cnt);\nbool_t xdr_vector(XDR *xdrs, char *adr, u_int size, xdrproc_t xdr_elem);\nbool_t xdr_reference(XDR *xdrs, caddr_t *addrpp, u_int size, xdrproc_t xdr_elem);\nbool_t xdr_pointer(XDR *xdrs, caddr_t *addrpp, u_int size, xdrproc_t xdr_elem);\nbool_t xdr_wrapstring(XDR *xdrs, char **cpp);\nbool_t xdr_union(XDR *xdrs, enum xdr_op *op, caddr_t xdrs_private, \n    struct xdr_discrim *choices, xdrproc_t func);\nbool_t xdr_enum(XDR *xdrs, enum enum_t *ep);\nbool_t xdr_int_t(XDR *xdrs, int32_t *ip);\nbool_t xdr_u_int32_t(XDR *xdrs, u_int32_t *up);\nbool_t xdr_long_t(XDR *xdrs, int64_t *lp);\nbool_t xdr_u_long_t(XDR *xdrs, u_int64_t *ulp);\n\n/*\n * Rpc client interface.\n */\nCLIENT *clnt_create(char *host, u_long prog, u_long vers, char *proto);\nCLIENT *clnt_create_timed(char *host, u_long prog, u_long vers, \n    char *proto, struct timeval *time_out);\nCLIENT *clnt_create_vers(char *host, u_long prog, u_long *versptr, \n    char *proto, struct timeval *time_out);\nCLIENT *clnt_create_vers_timed(char *host, u_long prog, u_long *versptr, \n    char *proto);\nCLIENT *clnt_tp_create(char *host, u_long prog, u_long vers, \n    char *proto);\nCLIENT *clnt_tp_create_timed(char *host, u_long prog, u_long vers, \n    char *proto, struct timeval *time_out);\nCLIENT *clnt_tli_create(char *host, char *nettype, \n    struct netbuf *serv_addr, u_long prog, u_long vers, \n    u_int wait_time, u_int retry_time);\nCLIENT *clnt_dg_create(int sock, struct sockaddr *raddr, u_long prog, \n    u_long vers, u_int wait_time, u_int retry_time);\nCLIENT *clnt_vc_create(int sock, struct sockaddr *raddr, u_long prog, \n    u_long vers, u_int wait_time, u_int retry_time);\nCLIENT *clnt_raw_create(u_long prog, u_long vers);\nCLIENT *clnt_udpcreate(char *host, u_long prog, u_long vers);\nCLIENT *clntudp_bufcreate(char *host, u_long prog, u_long vers, \n    u_int bufsiz);\nCLIENT *clnttcp_create(char *host, u_long prog, u_long vers);\nCLIENT *clnt_spcreateerror(char *errstr);\nCLIENT *clnt_pcreateerror(char *errstr);\nvoid clnt_destroy(CLIENT *clnt);\nenum clnt_stat clnt_call(CLIENT *clnt, u_long procnum, xdrproc_t xdr_arg, \n    caddr_t arg, xdrproc_t xdr_res, caddr_t res, struct timeval wait_time);\nvoid clnt_freeres(CLIENT *clnt, xdrproc_t xdr_res, caddr_t res);\nstruct rpc_err *clnt_geterr(CLIENT *clnt);\nvoid clnt_perror(CLIENT *clnt, char *errstr);\nvoid clnt_sperror(CLIENT *clnt, char *errstr);\nvoid clnt_perrno(rpc_inline_t prognum);\nvoid clnt_sperrno(rpc_inline_t prognum);\nbool_t clnt_control(CLIENT *clnt, clnt_stat request, char *value);\nbool_t clnt_broadcast(u_long prog, u_long vers, u_long proc, \n    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res, \n    int (*checkforremote)(char *), int count);\nbool_t rpc_broadcast(u_long prog, u_long vers, u_long proc, \n    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res, \n    int (*checkforremote)(char *), int count);\nbool_t rpc_broadcast_exp(u_long prog, u_long vers, u_long proc, \n    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res, \n    int (*checkforremote)(char *), int count, struct netbuf *netgroup);\nbool_t clnt_broadcast_exp(u_long prog, u_long vers, u_long proc, \n    xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, caddr_t res, \n    int (*checkforremote)(char *), int count, struct netbuf *netgroup);\nbool_t clnt_callrpc(char *host, u_long prognum, u_long versnum, u_long procnum, \n    xdrproc_t xdr_arg, caddr_t argp, xdrproc_t xdr_res, caddr_t resp);\nbool_t callrpc(char *host, u_long prognum, u_long versnum, u_long procnum, \n    xdrproc_t xdr_arg, caddr_t argp, xdrproc_t xdr_res, caddr_t resp);\n\n/*\n * Rpc server interface.\n */\nSVCXPRT *svc_create(xdrproc_t pfi, u_long prog, u_long vers, char *nettype);\nSVCXPRT *svc_create_timed(xdrproc_t pfi, u_long prog, u_long vers, \n    char *nettype, struct timeval *time_out);\nSVCXPRT *svc_tp_create(xdrproc_t pfi, u_long prog, u_long vers, \n    char *nettype);\nSVCXPRT *svc_tp_create_timed(xdrproc_t pfi, u_long prog, u_long vers, \n    char *nettype, struct timeval *time_out);\nSVCXPRT *svc_tli_create(char *nettype, struct netbuf *addr, \n    struct netbuf *ctladdr, u_long prog, u_long nவுகளில், \n    u_int wait_time, u_int retry_time);\nSVCXPRT *svc_dg_create(int sock, u_int wait_time, u_int retry_time);\nSVCXPRT *svc_vc_create(int sock, u_long prog, u_long nவுகளில், \n    u_int wait_time, u_int retry_time);\nSVCXPRT *svc_fd_create(int sock);\nSVCXPRT *svc_raw_create(void);\nSVCXPRT *svc_register(SVCXPRT *transp, u_long prog, u_long vers, \n    xdrproc_t proc, int tcp_flag);\nvoid svc_unregister(u_long prog, u_long vers);\nbool_t svc_run(void);\nvoid svc_destroy(SVCXPRT *transp);\nbool_t svc_sendreply(SVCXPRT *transp, xdrproc_t xdr_results, caddr_t results);\nbool_t svc_getargs(SVCXPRT *transp, xdrproc_t xdr_args, caddr_t args);\nbool_t svc_freeargs(SVCXPRT *transp, xdrproc_t xdr_args, caddr_t args);\nbool_t svc_reg(SVCXPRT *transp, u_long prog, u_long vers, \n    xdrproc_t proc, char *nettype);\nbool_t registerrpc(u_long prognum, u_long versnum, u_long procnum, \n    char *(*proc)(), xdrproc_t xdr_arg, xdrproc_t xdr_res);\nvoid rpc_reg(u_long prognum, u_long versnum, u_long procnum, \n    char *(*proc)(), xdrproc_t xdr_arg, xdrproc_t xdr_res, char *nettype);\nbool_t pmap_set(u_long program, u_long version, char *protocol, u_short port);\nbool_t pmap_unset(u_long program, u_long version);\nbool_t pmap_getmaps(struct sockaddr_in *addr);\nu_short pmap_getport(struct sockaddr_in *addr, u_long program, u_long version, \n    char *protocol);\nbool_t pmap_rmtcall(struct sockaddr_in *addr, u_long program, u_long version, \n    u_long proc, xdrproc_t xdr_arg, caddr_t arg, xdrproc_t xdr_res, \n    caddr_t res, struct timeval wait_time, struct sockaddr_in *port_addr);\nvoid svc_setcaller(SVCXPRT *transp, struct sockaddr_in *addr);\nstruct sockaddr_in *svc_getcaller(SVCXPRT *transp);\nint *svc_fds(void);\nbool_t svc_dg_enablecache(SVCXPRT *transp, u_int maxcache);\nbool_t xprt_register(SVCXPRT *xprt);\nvoid xprt_unregister(SVCXPRT *xprt);\n\n/*\n * Authentication routines.\n */\nAUTH *auth_none_create(void);\nAUTH *auth_short_create(void);\nAUTH *authsys_create_default(void);\nAUTH *authunix_create_default(void);\nAUTH *authsys_create(char *machname, uid_t uid, gid_t gid, u_int len, \n    gid_t *groups);\nAUTH *authunix_create(char *machname, uid_t uid, gid_t gid, u_int len, \n    gid_t *groups);\nAUTH *authdes_create(char *servername, u_int credlen, caddr_t cred, \n    char *verf);\nvoid auth_destroy(AUTH *auth);\n\n/*\n * Routines for obtaining network addresses.\n */\nbool_t getnetname(char *netname);\nbool_t hostplusnetname(char *netname, char *hostname, u_int namelen);\nbool_t get_myaddress(struct sockaddr_in *addr);\n\n/*\n * RPC call arguments structure\n */\nstruct rpc_msg;\nstruct clnt_ops {\n\t/* ... */\n};\n\n/*\n * RPC Dispatch Table Entry\n */\nstruct rpc_discrim {\n\tlong\t\t\tpd_value;\n\txdrproc_t\t\tpd_proc;\n};\n\n/*\n * RPC Authentication Flavors\n */\ntypedef enum {\n\tAUTH_NONE = 0,\n\tAUTH_UNIX = 1,\n\tAUTH_SHORT = 0x25308471,\n\tAUTH_DES = 3,\n} auth_flavor;\n\n/*\n * RPC Call Status Codes\n */\ntypedef enum {\n\tRPC_SUCCESS = 0,\n\tRPC_FAILED = -1,\n\tRPC_TIMEDOUT = -2,\n\tRPC_PROGNOTFOUND = -3,\n\tRPC_PROGVERSMISMATCH = -4,\n\tRPC_PROCUNAVAIL = -5,\n\tRPC_AUTH_ERROR = -6,\n\tRPC_CANTENCODEARGS = -7,\n\tRPC_CANTDECODERES = -8,\n\tRPC_INTR = -9,\n\tRPC_SYSTEMERROR = -10,\n\tRPC_UNKNOWNHOST = -11,\n\tRPC_N2AXLATEFAILURE = -12,\n\tRPC_LOOP = -13,\n\tRPC_OPLOCKED = -14,\n\tRPC_ERR_MAX = -15,\n} clnt_stat;\n\n/*\n * RPC Error structure\n */\nstruct rpc_err {\n\tclnt_stat\tre_status;\n\tunion {\n\t\tint\t\t\tre_errno;       /* RPC_SYSTEMERROR */\n\t\tstruct { \n\t\t\tunsigned long\tre_vers.low;\n\t\t\tunsigned long\tre_vers.high;\n\t\t} re_vers;              /* RPC_PROGVERSMISMATCH */ \n\t\tcaddr_t\t\t\tre_why;         /* RPC_AUTH_ERROR */\n\t}re_why;\n};\n\n/*\n * XDR Discriminator\n */\ntypedef struct xdr_discrim {\n\tlong\t\t\t_value;\n\txdrproc_t\t\t_proc;\n} xdr_discrim_t;\n\n/*\n * XDR Filter Functions\n */\ntypedef bool_t (*xdrfilter_t)(char *, int);\n\n\n#endif /* _RPC_RPC_H */\n"
+    },
+    {
+      "heading": "Index to Routines",
+      "content": "The following table lists RPC routines and the manual reference pages on which they are described:\n\nRPC Routine\t\tManual Reference Page\nauth_destroy()\t\t<a href=\"/man/rpc_clnt_auth.3.en\">rpc_clnt_auth(3)</a>\nauthdes_create()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nauthnone_create()\t<a href=\"/man/rpc_clnt_auth.3.en\">rpc_clnt_auth(3)</a>\nauthsys_create()\t<a href=\"/man/rpc_clnt_auth.3.en\">rpc_clnt_auth(3)</a>\nauthsys_create_default()\t<a href=\"/man/rpc_clnt_auth.3.en\">rpc_clnt_auth(3)</a>\nauthunix_create()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nauthunix_create_default()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\ncallrpc()\t\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nclnt_broadcast()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nclnt_call()\t\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_control()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_create_timed()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_create_vers()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_create_vers_timed()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_destroy()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_dg_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_freeres()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_geterr()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_pcreateerror()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_perrno()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_perror()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_raw_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_spcreateerror()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_sperrno()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_sperror()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nclnt_tli_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_tp_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_tp_create_timed()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclnt_udpcreate()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nclnt_vc_create()\t<a href=\"/man/rpc_clnt_create.3.en\">rpc_clnt_create(3)</a>\nclntraw_create()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nclnttcp_create()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nclntudp_bufcreate()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nget_myaddress()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\npmap_getmaps()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\npmap_getport()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\npmap_rmtcall()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\npmap_set()\t\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\npmap_unset()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nregisterrpc()\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nrpc_broadcast()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nrpc_broadcast_exp()\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nrpc_call()\t\t<a href=\"/man/rpc_clnt_calls.3.en\">rpc_clnt_calls(3)</a>\nrpc_reg()\t\t<a href=\"/man/rpc_svc_calls.3.en\">rpc_svc_calls(3)</a>\nsvc_create()\t<a href=\"/man/rpc_svc_create.3.en\">rpc_svc_create(3)</a>\nsvc_destroy()\t<a href=\"/man/rpc_svc_create.3.en\">rpc_svc_create(3)</a>\nsvc_dg_create()\t<a href=\"/man/rpc_svc_create.3.en\">rpc_svc_create(3)</a>\nsvc_dg_enablecache()\t<a href=\"/man/rpc_svc_calls.3.en\">rpc_svc_calls(3)</a>\nsvc_fd_create()\t<a href=\"/man/rpc_svc_create.3.en\">rpc_svc_create(3)</a>\nsvc_fds()\t\t<a href=\"/man/rpc_soc.3.en\">rpc_soc(3)</a>\nsvc_freeargs()\t<a href=\"/man/rpc_svc_reg.3.en\">rpc_svc_reg(3)</a>\nsvc_getargs()\t<a href=\"/man/rpc_svc_reg.3.en\">rpc_svc_reg(3)</a>\n"
+    }
+  ]
+}
+{
+  "html": "\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Nm">rpc - Remote Procedure Call routines</p>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<p class="Pp"><b>Client Routines</b></p>
+<pre>
+#include &lt;rpc/rpc.h&gt;
+CLIENT *clnt_create(...);
+CLIENT *clnt_create_vers(...);
+CLIENT *clntraw_create(...);
+CLIENT *clnttcp_create(...);
+CLIENT *clntudp_bufcreate(...);
+CLIENT *clntudp_create(...);
+void clnt_destroy(...);
+rpc_err_t clnt_errnum(...);
+char *clnt_sperrno(...);
+char *clnt_spcreateerror(...);
+bool_t clnt_control(...);
+bool_t clnt_call(...);
+void clnt_geterr(...);
+void clnt_perrno(...);
+void clnt_perror(...);
+void clnt_freeres(...);
+AUTH *auth_destroy(...);
+AUTH *authunix_create(...);
+AUTH *authsys_create(...);
+AUTH *authnone_create(...);
+void xdr_free(...);
+bool_t xdr_callmsg(...);
+bool_t xdr_replymsg(...);
+</pre>
+<p class="Pp"><b>Server Routines</b></p>
+<pre>
+#include &lt;rpc/rpc.h&gt;
+void svc_destroy(...);
+bool_t svc_register(...);
+void svc_unregister(...);
+SVCXPRT *svc_create(...);
+SVCXPRT *svcraw_create(...);
+SVCXPRT *svctcp_create(...);
+SVCXPRT *svcudp_bufcreate(...);
+SVCXPRT *svcudp_create(...);
+void svc_getreq(...);
+void svc_getreqset(...);
+void svc_run(...);
+bool_t svc_sendreply(...);
+void svcerr_auth(...);
+void svcerr_decode(...);
+void svcerr_noproc(...);
+void svcerr_noprog(...);
+void svcerr_progvers(...);
+void svcerr_systemerr(...);
+void svcerr_weakauth(...);
+void xdr_accepted_reply(...);
+void xdr_rejected_reply(...);
+void xdr_authunix_parms(...);
+void xdr_authsys_parms(...);
+void xdr_opaque_auth(...);
+void xdr_callhdr(...);
+</pre>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">The routines described in this man page are part of the Sun Microsystems
+    Remote Procedure Call (RPC) library. RPC allows a process on one machine to
+    call a procedure in a process on another machine. This interface is designed
+    to be machine-independent.</p>
+<p class="Pp">The RPC library consists of two main parts: the client side and the
+    server side.</p>
+<p class="Pp">On the client side, routines are used to create a client handle,
+    specify the authentication credentials, and make the remote procedure call.
+    The routines like <code class="Fn">clnt_create</code>, <code class="Fn">clnttcp_create</code>,
+    and <code class="Fn">clntudp_create</code> create a client handle. The handle is
+    then used with <code class="Fn">clnt_call</code> to make the actual RPC. The
+    routines <code class="Fn">clnt_destroy</code> and <code class="Fn">clnt_freeres</code>
+    are used to free resources associated with the client handle.</p>
+<p class="Pp">The authentication routines <code class="Fn">authunix_create</code>,
+    <code class="Fn">authsys_create</code>, and <code class="Fn">authnone_create</code>
+    create authentication credentials that can be associated with a client
+    handle. The <code class="Fn">auth_destroy</code> routine frees the authentication
+    credentials.</p>
+<p class="Pp">The XDR (eXternal Data Representation) routines are used for
+    data serialization and deserialization. Routines like <code class="Fn">xdr_callmsg</code>
+    and <code class="Fn">xdr_replymsg</code> are used to serialize and deserialize
+    RPC call and reply messages. <code class="Fn">xdr_free</code> is used to free
+    memory allocated by XDR.</p>
+<p class="Pp">On the server side, routines are used to register procedures with
+    the RPC system, dispatch incoming calls, and send replies. Routines like
+    <code class="Fn">svc_create</code>, <code class="Fn">svcraw_create</code>,
+    <code class="Fn">svctcp_create</code>, <code class="Fn">svcudp_create</code>,
+    and <code class="Fn">svcudp_bufcreate</code> create server handles. These handles
+    are used to receive and dispatch incoming RPC calls. <code class="Fn">svc_register</code>
+    and <code class="Fn">svc_unregister</code> are used to register and unregister
+    service routines with the RPC dispatcher. <code class="Fn">svc_run</code> dispatches
+    incoming calls. <code class="Fn">svc_sendreply</code> sends a reply to the
+    client. The <code class="Fn">svc_destroy</code> routine frees server resources.</p>
+<p class="Pp">The <code class="Fn">svc_getreq</code> and <code class="Fn">svc_getreqset</code>
+    routines are used by the server to process incoming requests. The routines
+    <code class="Fn">svcerr_auth</code>, <code class="Fn">svcerr_decode</code>,
+    <code class="Fn">svcerr_noproc</code>, <code class="Fn">svcerr_noprog</code>,
+    <code class="Fn">svcerr_progvers</code>, <code class="Fn">svcerr_systemerr</code>,
+    and <code class="Fn">svcerr_weakauth</code> are used to send specific error
+    replies to the client.</p>
+<p class="Pp">The XDR routines <code class="Fn">xdr_accepted_reply</code> and
+    <code class="Fn">xdr_rejected_reply</code> are used to serialize and deserialize
+    RPC accept and reject messages, respectively. <code class="Fn">xdr_authunix_parms</code>
+    and <code class="Fn">xdr_authsys_parms</code> are used for serialization and
+    deserialization of authentication parameters for AUTH_UNIX and AUTH_SYS
+    authentication flavors. <code class="Fn">xdr_opaque_auth</code> serializes and
+    deserializes opaque authentication data. <code class="Fn">xdr_callhdr</code>
+    serializes and deserializes the header of an RPC call message.</p>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='Nettype'><a class='permalink' href='#Nettype'>Nettype</a></h1>
+<p class="Pp">The RPC library supports different transport protocols and network types.
+    The <code class="Fn">clnt_create</code> routine uses the <code class="Pa">NETPATH</code>
+    environment variable or the <code class="Pa">/etc/netconfig</code> file to determine
+    the network type and transport protocol to use. If these are not specified,
+    it defaults to UDP/IP.</p>
+<p class="Pp">The following network types are typically supported:</p>
+<dl class="Bl-tag">
+  <dt><span class="Tt">&#x201c;udp&#x201d;</span></dt>
+  <dd>UDP over IP.</dd>
+  <dt><span class="Tt">&#x201c;tcp&#x201d;</span></dt>
+  <dd>TCP over IP.</dd>
+  <dt><span class="Tt">&#x201c;udp6&#x201d;</span></dt>
+  <dd>UDP over IPv6.</dd>
+  <dt><span class="Tt">&#x201c;tcp6&#x201d;</span></dt>
+  <dd>TCP over IPv6.</dd>
+</dl>
+<p class="Pp">The <code class="Fn">clnt_create_vers</code> routine allows specifying
+    the version of the RPC service to connect to. If version 0 is specified,
+    <code class="Fn">clnt_create_vers</code> tries to find the highest version number
+    supported by the server.</p>
+<p class="Pp">The <code class="Fn">clnt_control</code> routine can be used to set
+    or get various options for a client handle, such as the time-out value or
+    the remote address.</p>
+<p class="Pp">The <code class="Fn">svc_create</code>, <code class="Fn">svcraw_create</code>,
+    <code class="Fn">svctcp_create</code>, <code class="Fn">svcudp_create</code>,
+    and <code class="Fn">svcudp_bufcreate</code> routines create server handles
+    for different transport protocols. <code class="Fn">svcudp_bufcreate</code>
+    allows specifying the send and receive buffer sizes.</p>
+<p class="Pp">The <code class="Fn">svc_register</code> routine registers a program
+    number and version number with the RPC binder service, making the service
+    accessible to clients. <code class="Fn">svc_unregister</code> removes the
+    registration.</p>
+<p class="Pp">The <code class="Fn">svc_getreq</code> and <code class="Fn">svc_getreqset</code>
+    routines are used by the server to process incoming requests. <code class="Fn">svc_run</code>
+    blocks indefinitely, processing requests for all registered services.</p>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='Derived_Types'><a class='permalink' href='#Derived_Types'>Derived Types</a></h1>
+<p class="Pp">The following types are used by the RPC library:</p>
+<dl class="Bl-tag">
+  <dt><a id="AUTH"><b>AUTH</b></a></dt>
+  <dd>Represents authentication credentials.</dd>
+  <dt><a id="CLIENT"><b>CLIENT</b></a></dt>
+  <dd>Represents a client handle, used for making RPC calls.</dd>
+  <dt><a id="SVCXPRT"><b>SVCXPRT</b></a></dt>
+  <dd>Represents a server handle, used for receiving and dispatching RPC calls.</dd>
+  <dt><a id="XDR"><b>XDR</b></a></dt>
+  <dd>Represents an XDR stream, used for data serialization and deserialization.</dd>
+</dl>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='Data_Structures'><a class='permalink' href='#Data_Structures'>Data Structures</a></h1>
+<p class="Pp">The RPC library uses several data structures to represent RPC messages,
+    authentication information, and client/server handles.</p>
+<dl class="Bl-tag">
+  <dt><a id="The_AUTH_Structure"><b>The AUTH Structure</b></a></dt>
+  <dd>The <code class="Nm">AUTH</code> structure contains information about the
+      authentication credentials used for an RPC call. It typically includes the
+      authentication flavor (e.g., AUTH_UNIX, AUTH_NONE) and the corresponding
+      credentials. The exact members depend on the authentication flavor.</dd>
+  <dt><a id="The_CLIENT_Structure"><b>The CLIENT Structure</b></a></dt>
+  <dd>The <code class="Nm">CLIENT</code> structure represents a client handle. It
+      contains information about the connection to the RPC server, including the
+      transport handle, the remote address, and the authentication credentials.
+      This structure is opaque to the user and should only be manipulated through
+      the provided RPC routines.</dd>
+  <dt><a id="The_SVCXPRT_structure"><b>The SVCXPRT structure</b></a></dt>
+  <dd>The <code class="Nm">SVCXPRT</code> structure represents a server handle. It
+      contains information about the transport endpoint used by the RPC server,
+      including the file descriptor, the transport type, and pointers to routines
+      for sending and receiving messages. This structure is also opaque to the
+      user.</dd>
+  <dt><a id="The_svc_reg_structure"><b>The svc_reg structure</b></a></dt>
+  <dd>This structure is used internally by the RPC library to manage registered
+      services. It is not typically accessed directly by applications.</dd>
+  <dt><a id="The_XDR_structure"><b>The XDR structure</b></a></dt>
+  <dd>The <code class="Nm">XDR</code> structure represents an XDR stream. It contains
+      a pointer to the underlying buffer or device, and pointers to routines for
+      performing XDR operations such as serialization, deserialization, and
+      seeking.</dd>
+</dl>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='Index_to_Routines'><a class='permalink' href='#Index_to_Routines'>Index to Routines</a></h1>
+<dl class="Bl-tag">
+  <dt id="auth_destroy"><a class="permalink" href="#auth_destroy"><code class="Fn">auth_destroy</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_auth.3.en">rpc_clnt_auth(3)</a></dd>
+  <dt id="authnone_create"><a class="permalink" href="#authnone_create"><code class="Fn">authnone_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_auth.3.en">rpc_clnt_auth(3)</a></dd>
+  <dt id="authsys_create"><a class="permalink" href="#authsys_create"><code class="Fn">authsys_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_auth.3.en">rpc_clnt_auth(3)</a></dd>
+  <dt id="authunix_create"><a class="permalink" href="#authunix_create"><code class="Fn">authunix_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_auth.3.en">rpc_clnt_auth(3)</a></dd>
+  <dt id="clnt_call"><a class="permalink" href="#clnt_call"><code class="Fn">clnt_call</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_control"><a class="permalink" href="#clnt_control"><code class="Fn">clnt_control</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_create"><a class="permalink" href="#clnt_create"><code class="Fn">clnt_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_create_vers"><a class="permalink" href="#clnt_create_vers"><code class="Fn">clnt_create_vers</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_destroy"><a class="permalink" href="#clnt_destroy"><code class="Fn">clnt_destroy</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_errnum"><a class="permalink" href="#clnt_errnum"><code class="Fn">clnt_errnum</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_freeres"><a class="permalink" href="#clnt_freeres"><code class="Fn">clnt_freeres</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_geterr"><a class="permalink" href="#clnt_geterr"><code class="Fn">clnt_geterr</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_perrno"><a class="permalink" href="#clnt_perrno"><code class="Fn">clnt_perrno</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_perror"><a class="permalink" href="#clnt_perror"><code class="Fn">clnt_perror</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_raw_create"><a class="permalink" href="#clnt_raw_create"><code class="Fn">clnt_raw_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_sperrno"><a class="permalink" href="#clnt_sperrno"><code class="Fn">clnt_sperrno</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_spcreateerror"><a class="permalink" href="#clnt_spcreateerror"><code class="Fn">clnt_spcreateerror</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a></dd>
+  <dt id="clnt_tcp_create"><a class="permalink" href="#clnt_tcp_create"><code class="Fn">clnt_tcp_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_udp_bufcreate"><a class="permalink" href="#clnt_udp_bufcreate"><code class="Fn">clnt_udp_bufcreate</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="clnt_udp_create"><a class="permalink" href="#clnt_udp_create"><code class="Fn">clnt_udp_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a></dd>
+  <dt id="getrpcbyname"><a class="permalink" href="#getrpcbyname"><code class="Fn">getrpcbyname</code></a>()</dt>
+  <dd><a class="Xr" href="/man/getrpcbyname.3.en">getrpcbyname(3)</a></dd>
+  <dt id="getrpcbynumber"><a class="permalink" href="#getrpcbynumber"><code class="Fn">getrpcbynumber</code></a>()</dt>
+  <dd><a class="Xr" href="/man/getrpcbynumber.3.en">getrpcbynumber(3)</a></dd>
+  <dt id="getrpcent"><a class="permalink" href="#getrpcent"><code class="Fn">getrpcent</code></a>()</dt>
+  <dd><a class="Xr" href="/man/getrpcent.3.en">getrpcent(3)</a></dd>
+  <dt id="getrpcinfo"><a class="permalink" href="#getrpcinfo"><code class="Fn">getrpcinfo</code></a>()</dt>
+  <dd><a class="Xr" href="/man/getrpcinfo.3.en">getrpcinfo(3)</a></dd>
+  <dt id="getrpcport"><a class="permalink" href="#getrpcport"><code class="Fn">getrpcport</code></a>()</dt>
+  <dd><a class="Xr" href="/man/getrpcport.3.en">getrpcport(3)</a></dd>
+  <dt id="registerrpc"><a class="permalink" href="#registerrpc"><code class="Fn">registerrpc</code></a>()</dt>
+  <dd><a class="Xr" href="/man/registerrpc.3.en">registerrpc(3)</a></dd>
+  <dt id="rpc_getargs"><a class="permalink" href="#rpc_getargs"><code class="Fn">rpc_getargs</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_reg.3.en">rpc_svc_reg(3)</a></dd>
+  <dt id="svc_getcaller"><a class="permalink" href="#svc_getcaller"><code class="Fn">svc_getcaller</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svc_getreq"><a class="permalink" href="#svc_getreq"><code class="Fn">svc_getreq</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svc_getreqset"><a class="permalink" href="#svc_getreqset"><code class="Fn">svc_getreqset</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+  <dt id="svc_getrpccaller"><a class="permalink" href="#svc_getrpccaller"><code class="Fn">svc_getrpccaller</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+  <dt id="svc_kerb_reg"><a class="permalink" href="#svc_kerb_reg"><code class="Fn">svc_kerb_reg</code></a>()</dt>
+  <dd><a class="Xr" href="/man/kerberos_rpc.3.en">kerberos_rpc(3)</a></dd>
+  <dt id="svc_raw_create"><a class="permalink" href="#svc_raw_create"><code class="Fn">svc_raw_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_create.3.en">rpc_svc_create(3)</a></dd>
+  <dt id="svc_reg"><a class="permalink" href="#svc_reg"><code class="Fn">svc_reg</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+  <dt id="svc_register"><a class="permalink" href="#svc_register"><code class="Fn">svc_register</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svc_run"><a class="permalink" href="#svc_run"><code class="Fn">svc_run</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_reg.3.en">rpc_svc_reg(3)</a></dd>
+  <dt id="svc_sendreply"><a class="permalink" href="#svc_sendreply"><code class="Fn">svc_sendreply</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_reg.3.en">rpc_svc_reg(3)</a></dd>
+  <dt id="svc_tli_create"><a class="permalink" href="#svc_tli_create"><code class="Fn">svc_tli_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_create.3.en">rpc_svc_create(3)</a></dd>
+  <dt id="svc_tp_create"><a class="permalink" href="#svc_tp_create"><code class="Fn">svc_tp_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_create.3.en">rpc_svc_create(3)</a></dd>
+  <dt id="svc_unreg"><a class="permalink" href="#svc_unreg"><code class="Fn">svc_unreg</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+  <dt id="svc_unregister"><a class="permalink" href="#svc_unregister"><code class="Fn">svc_unregister</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svc_vc_create"><a class="permalink" href="#svc_vc_create"><code class="Fn">svc_vc_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_create.3.en">rpc_svc_create(3)</a></dd>
+  <dt id="svcerr_auth"><a class="permalink" href="#svcerr_auth"><code class="Fn">svcerr_auth</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_decode"><a class="permalink" href="#svcerr_decode"><code class="Fn">svcerr_decode</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_noproc"><a class="permalink" href="#svcerr_noproc"><code class="Fn">svcerr_noproc</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_noprog"><a class="permalink" href="#svcerr_noprog"><code class="Fn">svcerr_noprog</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_progvers"><a class="permalink" href="#svcerr_progvers"><code class="Fn">svcerr_progvers</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_systemerr"><a class="permalink" href="#svcerr_systemerr"><code class="Fn">svcerr_systemerr</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcerr_weakauth"><a class="permalink" href="#svcerr_weakauth"><code class="Fn">svcerr_weakauth</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a></dd>
+  <dt id="svcfd_create"><a class="permalink" href="#svcfd_create"><code class="Fn">svcfd_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svcraw_create"><a class="permalink" href="#svcraw_create"><code class="Fn">svcraw_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svctcp_create"><a class="permalink" href="#svctcp_create"><code class="Fn">svctcp_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svcudp_bufcreate"><a class="permalink" href="#svcudp_bufcreate"><code class="Fn">svcudp_bufcreate</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="svcudp_create"><a class="permalink" href="#svcudp_create"><code class="Fn">svcudp_create</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="xdr_accepted_reply"><a class="permalink" href="#xdr_accepted_reply"><code class="Fn">xdr_accepted_reply</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_authsys_parms"><a class="permalink" href="#xdr_authsys_parms"><code class="Fn">xdr_authsys_parms</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_authunix_parms"><a class="permalink" href="#xdr_authunix_parms"><code class="Fn">xdr_authunix_parms</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_soc.3.en">rpc_soc(3)</a></dd>
+  <dt id="xdr_callhdr"><a class="permalink" href="#xdr_callhdr"><code class="Fn">xdr_callhdr</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_callmsg"><a class="permalink" href="#xdr_callmsg"><code class="Fn">xdr_callmsg</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_opaque_auth"><a class="permalink" href="#xdr_opaque_auth"><code class="Fn">xdr_opaque_auth</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_rejected_reply"><a class="permalink" href="#xdr_rejected_reply"><code class="Fn">xdr_rejected_reply</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xdr_replymsg"><a class="permalink" href="#xdr_replymsg"><code class="Fn">xdr_replymsg</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a></dd>
+  <dt id="xprt_register"><a class="permalink" href="#xprt_register"><code class="Fn">xprt_register</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+  <dt id="xprt_unregister"><a class="permalink" href="#xprt_unregister"><code class="Fn">xprt_unregister</code></a>()</dt>
+  <dd><a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a></dd>
+</dl>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='FILES'><a class='permalink' href='#FILES'>FILES</a></h1>
+<dl class="Bl-tag">
+  <dt><span class="Pa">/etc/netconfig</span></dt>
+  <dd style="width: auto;">&#x00A0;</dd>
+</dl>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='AVAILABILITY'><a class='permalink' href='#AVAILABILITY'>AVAILABILITY</a></h1>
+<p class="Pp">These functions are part of libtirpc.</p>
+</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="/man/getnetconfig.3.en">getnetconfig(3)</a>,
+    <a class="Xr" href="/man/getnetpath.3.en">getnetpath(3)</a>,
+    <a class="Xr" href="/man/rpcbind.3.en">rpcbind(3)</a>,
+    <a class="Xr" href="/man/rpc_clnt_auth.3.en">rpc_clnt_auth(3)</a>,
+    <a class="Xr" href="/man/rpc_clnt_calls.3.en">rpc_clnt_calls(3)</a>,
+    <a class="Xr" href="/man/rpc_clnt_create.3.en">rpc_clnt_create(3)</a>,
+    <a class="Xr" href="/man/rpc_svc_calls.3.en">rpc_svc_calls(3)</a>,
+    <a class="Xr" href="/man/rpc_svc_create.3.en">rpc_svc_create(3)</a>,
+    <a class="Xr" href="/man/rpc_svc_err.3.en">rpc_svc_err(3)</a>,
+    <a class="Xr" href="/man/rpc_svc_reg.3.en">rpc_svc_reg(3)</a>,
+    <a class="Xr" href="/man/rpc_xdr.3.en">rpc_xdr(3)</a>,
+    <a class="Xr" href="/man/xdr.3.en">xdr(3)</a>,
+    <a class="Xr" href="/man/netconfig.5.en">netconfig(5)</a></p>
+</section>\n</div>\n<table class=\"foot\">\n  <tr>\n    <td class=\"foot-date\">May 7, 1993</td>\n    <td class=\"foot-os\">Linux 6.17.8-arch1-1</td>\n  </tr>\n</table>\n\n</section>\n\n            </article>\n            <aside id=\"sidebar\">\n                \n<section class=\"search\">\n    <form action=\"/search\" class=\"search direct-search\" role=\"search\">\n    <input type=\"search\" placeholder=\"Search manual page\" name=\"q\" value=\"\"\n         />\n    <input type=\"submit\" name=\"go\" value=\"Go\" />\n</form>\n\n</section>\n\n<section class=\"package-info\">\n    <p>Package information:</p>\n    <dl>\n        <dt>Package name:</dt>\n        <dd><a href=\"https://www.archlinux.org/packages/core/x86_64/libtirpc/\">core/libtirpc</a></dd>\n        <dt>Version:</dt>\n        <dd>1.3.7-1</dd>\n        <dt>Upstream:</dt>\n        <dd><a href=\"http://git.linux-nfs.org/?p=steved/libtirpc.git;a=summary\">http://git.linux-nfs.org/?p=steved/libtirpc.git;a=summary</a></dd>\n        <dt>Licenses:</dt>\n        <dd>SISSL, BSD-3-Clause</dd>\n        <dt>Manuals:</dt>\n        <dd><a href=\"/listing/core/libtirpc/\">/listing/core/libtirpc/</a></dd>\n    </dl>\n</section>\n\n<details>\n    <summary>Table of contents</summary>\n    <nav class=\"toc\">\n        <ul>\n        \n            <li><a href=\"#NAME\">NAME</a></li>\n        \n            <li><a href=\"#SYNOPSIS\">SYNOPSIS</a></li>\n        \n            <li><a href=\"#DESCRIPTION\">DESCRIPTION</a></li>\n        \n            <li><a href=\"#Nettype\">Nettype</a></li>\n        \n            <li><a href=\"#Derived_Types\">Derived Types</a></li>\n        \n            <li><a href=\"#Data_Structures\">Data Structures</a></li>\n        \n            <li><a href=\"#The_AUTH_Structure\">The AUTH Structure</a></li>\n        \n            <li><a href=\"#The_CLIENT_Structure\">The CLIENT Structure</a></li>\n        \n            <li><a href=\"#The_SVCXPRT_structure\">The SVCXPRT structure</a></li>\n        \n            <li><a href=\"#The_svc_reg_structure\">The svc_reg structure</a></li>\n        \n            <li><a href=\"#The_XDR_structure\">The XDR structure</a></li>\n        \n            <li><a href=\"#Index_to_Routines\">Index to Routines</a></li>\n        \n            <li><a href=\"#FILES\">FILES</a></li>\n        \n            <li><a href=\"#AVAILABILITY\">AVAILABILITY</a></li>\n        \n            <li><a href=\"#SEE_ALSO\">SEE ALSO</a></li>\n        \n        </ul>\n    </nav>\n</details>\n\n\n\n\n\n<nav class=\"other-sections\">\n    <p>In other sections:</p>\n    <ul>\n    \n        <li><a href=\"/man/rpc.3.en\">rpc(3)</a></li>\n    \n        <li><a href=\"/man/rpc.5.en\">rpc(5)</a></li>\n    \n    </ul>\n</nav>\n\n\n<nav class=\"other-formats\">\n    <p>Other formats:\n        \n            <a href=\"/man/rpc.3t.en.txt\">txt</a>, \n        \n            <a href=\"/man/rpc.3t.en.raw\">raw</a>\n        \n    </p>\n</nav>\n\n            </aside>\n            \n        </main>\n        <footer>\n            \n            <p>The website is available under the terms of the <a href=\"https://www.gnu.org/licenses/gpl-3.0.en.html\">GPL-3.0</a>\n               license, except for the contents of the manual pages, which have their own license\n               specified in the corresponding Arch Linux package.\n            </p>\n        </footer>\n    </body>\n</html>"
+}

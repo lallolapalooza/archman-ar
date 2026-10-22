@@ -1,0 +1,541 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tcl_GetChannelMode(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tcl/">tcl</a></p>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id="TCL_GETCHANNELHANDLE"><a class="permalink" href="#TCL_GETCHANNELHANDLE">TCL_GETCHANNELHANDLE</a></h1>
+<p class="Pp"><b>Tcl_GetChannelHandle</b> returns the device handle associated with
+    the channel <i>channelPtr</i> for the specified direction <i>direction</i>.
+    The handle is of the type that the channel driver returns. If the channel
+    does not have a device handle for the specified direction, then
+    <b>TCL_ERROR</b> is returned instead. Different channel drivers will return
+    different types of handle. Refer to the manual entries for each driver to
+    determine what type of handle is returned.</p>
+<p class="Pp"><b>Tcl_GetChannelThread</b> returns the id of the thread currently
+    managing the specified <i>channel</i>. This allows channel drivers to send
+    their file events to the correct event queue even for a multi-threaded
+    core.</p>
+<p class="Pp"><b>Tcl_GetChannelMode</b> returns an OR-ed combination of
+    <b>TCL_READABLE</b> and <b>TCL_WRITABLE</b>, indicating whether the channel
+    is open for input and output.</p>
+<p class="Pp"><b>Tcl_GetChannelBufferSize</b> returns the size, in bytes, of
+    buffers allocated to store input or output in <i>channel</i>. If the value
+    was not set by a previous call to <b>Tcl_SetChannelBufferSize</b>, described
+    below, then the default value of 4096 is returned.</p>
+<p class="Pp"><b>Tcl_SetChannelBufferSize</b> sets the size, in bytes, of
+    buffers that will be allocated in subsequent operations on the channel to
+    store input or output. The <i>size</i> argument should be between one and
+    one million, allowing buffers of one byte to one million bytes. If
+    <i>size</i> is outside this range, <b>Tcl_SetChannelBufferSize</b> sets the
+    buffer size to 4096.</p>
+<p class="Pp"><b>Tcl_NotifyChannel</b> is called by a channel driver to indicate
+    to the generic layer that the events specified by <i>mask</i> have occurred
+    on the channel. Channel drivers are responsible for invoking this function
+    whenever the channel handlers need to be called for the channel (or other
+    pending tasks like a write flush should be performed). See <b>WATCHPROC</b>
+    below for more details.</p>
+<p class="Pp"><b>Tcl_BadChannelOption</b> is called from driver specific
+    <i>setOptionProc</i> or <i>getOptionProc</i> to generate a complete error
+    message.</p>
+<p class="Pp"><b>Tcl_ChannelBuffered</b> returns the number of bytes of input
+    currently buffered in the internal buffer (push back area) of the channel
+    itself. It does not report about the data in the overall buffers for the
+    stack of channels the supplied channel is part of.</p>
+<p class="Pp"><b>Tcl_IsChannelShared</b> checks the refcount of the specified
+    <i>channel</i> and returns whether the <i>channel</i> was shared among
+    multiple interpreters (result == 1) or not (result == 0).</p>
+<p class="Pp"><b>Tcl_IsChannelRegistered</b> checks whether the specified
+    <i>channel</i> is registered in the given <i>interp</i>reter (result == 1)
+    or not (result == 0).</p>
+<p class="Pp"><b>Tcl_IsChannelExisting</b> checks whether a channel with the
+    specified name is registered in the (thread)-global list of all channels
+    (result == 1) or not (result == 0).</p>
+<p class="Pp"><b>Tcl_CutChannel</b> removes the specified <i>channel</i> from
+    the (thread)global list of all channels (of the current thread). Application
+    to a channel still registered in some interpreter is not allowed. Also
+    notifies the driver if the <b>Tcl_ChannelType</b> version is
+    <b>TCL_CHANNEL_VERSION_4</b> (or higher), and
+    <b>Tcl_DriverThreadActionProc</b> is defined for it.</p>
+<p class="Pp"><b>Tcl_SpliceChannel</b> adds the specified <i>channel</i> to the
+    (thread)global list of all channels (of the current thread). Application to
+    a channel registered in some interpreter is not allowed. Also notifies the
+    driver if the <b>Tcl_ChannelType</b> version is <b>TCL_CHANNEL_VERSION_4</b>
+    (or higher), and <b>Tcl_DriverThreadActionProc</b> is defined for it.</p>
+<p class="Pp"><b>Tcl_ClearChannelHandlers</b> removes all channel handlers and
+    event scripts associated with the specified <i>channel</i>, thus shutting
+    down all event processing for this channel.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="TCL_CHANNELTYPE"><a class="permalink" href="#TCL_CHANNELTYPE">TCL_CHANNELTYPE</a></h1>
+<p class="Pp">A channel driver provides a <b>Tcl_ChannelType</b> structure that
+    contains pointers to functions that implement the various operations on a
+    channel; these operations are invoked as needed by the generic layer. The
+    structure was versioned starting in Tcl 8.3.2/8.4 to correct a problem with
+    stacked channel drivers. See the <b>OLD CHANNEL TYPES</b> section below for
+    details about the old structure.</p>
+<p class="Pp">The <b>Tcl_ChannelType</b> structure contains the following
+    fields:</p>
+<div class="Bd-indent">
+<pre>typedef struct Tcl_ChannelType {
+        const char *<i>typeName</i>;
+        Tcl_ChannelTypeVersion <i>version</i>;
+        Tcl_DriverCloseProc *<i>closeProc</i>;
+        Tcl_DriverInputProc *<i>inputProc</i>;
+        Tcl_DriverOutputProc *<i>outputProc</i>;
+        Tcl_DriverSeekProc *<i>seekProc</i>;
+        Tcl_DriverSetOptionProc *<i>setOptionProc</i>;
+        Tcl_DriverGetOptionProc *<i>getOptionProc</i>;
+        Tcl_DriverWatchProc *<i>watchProc</i>;
+        Tcl_DriverGetHandleProc *<i>getHandleProc</i>;
+        Tcl_DriverClose2Proc *<i>close2Proc</i>;
+        Tcl_DriverBlockModeProc *<i>blockModeProc</i>;
+        Tcl_DriverFlushProc *<i>flushProc</i>;
+        Tcl_DriverHandlerProc *<i>handlerProc</i>;
+        Tcl_DriverWideSeekProc *<i>wideSeekProc</i>;
+        Tcl_DriverThreadActionProc *<i>threadActionProc</i>;
+        Tcl_DriverTruncateProc *<i>truncateProc</i>;
+} <b>Tcl_ChannelType</b>;</pre>
+</div>
+<p class="Pp">It is not necessary to provide implementations for all channel
+    operations. Those which are not necessary may be set to NULL in the struct:
+    <i>blockModeProc</i>, <i>seekProc</i>, <i>setOptionProc</i>,
+    <i>getOptionProc</i>, <i>getHandleProc</i>, and <i>close2Proc</i>, in
+    addition to <i>flushProc</i>, <i>handlerProc</i>, <i>threadActionProc</i>,
+    and <i>truncateProc</i>. Other functions that cannot be implemented in a
+    meaningful way should return <b>EINVAL</b> when called, to indicate that the
+    operations they represent are not available. Also note that
+    <i>wideSeekProc</i> can be NULL if <i>seekProc</i> is.</p>
+<p class="Pp">The user should only use the above structure for
+    <b>Tcl_ChannelType</b> instantiation. When referencing fields in a
+    <b>Tcl_ChannelType</b> structure, the following functions should be used to
+    obtain the values: <b>Tcl_ChannelName</b>, <b>Tcl_ChannelVersion</b>,
+    <b>Tcl_ChannelBlockModeProc</b>, <b>Tcl_ChannelCloseProc</b>,
+    <b>Tcl_ChannelClose2Proc</b>, <b>Tcl_ChannelInputProc</b>,
+    <b>Tcl_ChannelOutputProc</b>, <b>Tcl_ChannelSeekProc</b>,
+    <b>Tcl_ChannelWideSeekProc</b>, <b>Tcl_ChannelThreadActionProc</b>,
+    <b>Tcl_ChannelTruncateProc</b>, <b>Tcl_ChannelSetOptionProc</b>,
+    <b>Tcl_ChannelGetOptionProc</b>, <b>Tcl_ChannelWatchProc</b>,
+    <b>Tcl_ChannelGetHandleProc</b>, <b>Tcl_ChannelFlushProc</b>, or
+    <b>Tcl_ChannelHandlerProc</b>.</p>
+<p class="Pp">The change to the structures was made in such a way that standard
+    channel types are binary compatible. However, channel types that use stacked
+    channels (i.e. TLS, Trf) have new versions to correspond to the above change
+    since the previous code for stacked channels had problems.</p>
+<section class="Ss">
+<h2 class="Ss" id="TYPENAME"><a class="permalink" href="#TYPENAME">TYPENAME</a></h2>
+<p class="Pp">The <i>typeName</i> field contains a null-terminated string that
+    identifies the type of the device implemented by this driver, e.g.
+    <b>file</b> or <b>socket</b>.</p>
+<p class="Pp">This value can be retrieved with <b>Tcl_ChannelName</b>, which
+    returns a pointer to the string.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="VERSION"><a class="permalink" href="#VERSION">VERSION</a></h2>
+<p class="Pp">The <i>version</i> field should be set to the version of the
+    structure that you require. <b>TCL_CHANNEL_VERSION_2</b> is the minimum
+    recommended. <b>TCL_CHANNEL_VERSION_3</b> must be set to specify the
+    <i>wideSeekProc</i> member. <b>TCL_CHANNEL_VERSION_4</b> must be set to
+    specify the <i>threadActionProc</i> member (includes <i>wideSeekProc</i>).
+    <b>TCL_CHANNEL_VERSION_5</b> must be set to specify the <i>truncateProc</i>
+    members (includes <i>wideSeekProc</i> and <i>threadActionProc</i>). If it is
+    not set to any of these, then this <b>Tcl_ChannelType</b> is assumed to have
+    the original structure. See <b>OLD CHANNEL TYPES</b> for more details. While
+    Tcl will recognize and function with either structures, stacked channels
+    must be of at least <b>TCL_CHANNEL_VERSION_2</b> to function correctly.</p>
+<p class="Pp">This value can be retrieved with <b>Tcl_ChannelVersion</b>, which
+    returns one of <b>TCL_CHANNEL_VERSION_5</b>, <b>TCL_CHANNEL_VERSION_4</b>,
+    <b>TCL_CHANNEL_VERSION_3</b>, <b>TCL_CHANNEL_VERSION_2</b> or
+    <b>TCL_CHANNEL_VERSION_1</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="BLOCKMODEPROC"><a class="permalink" href="#BLOCKMODEPROC">BLOCKMODEPROC</a></h2>
+<p class="Pp">The <i>blockModeProc</i> field contains the address of a function
+    called by the generic layer to set blocking and nonblocking mode on the
+    device. <i>BlockModeProc</i> should match the following prototype:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverBlockModeProc</b>(
+        ClientData <i>instanceData</i>,
+        int <i>mode</i>);</pre>
+</div>
+<p class="Pp">The <i>instanceData</i> is the same as the value passed to
+    <b>Tcl_CreateChannel</b> when this channel was created. The <i>mode</i>
+    argument is either <b>TCL_MODE_BLOCKING</b> or <b>TCL_MODE_NONBLOCKING</b>
+    to set the device into blocking or nonblocking mode. The function should
+    return zero if the operation was successful, or a nonzero POSIX error code
+    if the operation failed.</p>
+<p class="Pp">If the operation is successful, the function can modify the
+    supplied <i>instanceData</i> to record that the channel entered blocking or
+    nonblocking mode and to implement the blocking or nonblocking behavior. For
+    some device types, the blocking and nonblocking behavior can be implemented
+    by the underlying operating system; for other device types, the behavior
+    must be emulated in the channel driver.</p>
+<p class="Pp">This value can be retrieved with <b>Tcl_ChannelBlockModeProc</b>,
+    which returns a pointer to the function.</p>
+<p class="Pp">A channel driver <b>not</b> supplying a <i>blockModeProc</i> has
+    to be very, very careful. It has to tell the generic layer exactly which
+    blocking mode is acceptable to it, and should this also document for the
+    user so that the blocking mode of the channel is not changed to an
+    unacceptable value. Any confusion here may lead the interpreter into a
+    (spurious and difficult to find) deadlock.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="CLOSEPROC_AND_CLOSE2PROC"><a class="permalink" href="#CLOSEPROC_AND_CLOSE2PROC">CLOSEPROC   AND CLOSE2PROC</a></h2>
+<p class="Pp">The <i>closeProc</i> field contains the address of a function
+    called by the generic layer to clean up driver-related information when the
+    channel is closed. <i>CloseProc</i> must match the following prototype:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverCloseProc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_Interp *<i>interp</i>);</pre>
+</div>
+<p class="Pp">The <i>instanceData</i> argument is the same as the value provided
+    to <b>Tcl_CreateChannel</b> when the channel was created. The function
+    should release any storage maintained by the channel driver for this
+    channel, and close the input and output devices encapsulated by this
+    channel. All queued output will have been flushed to the device before this
+    function is called, and no further driver operations will be invoked on this
+    instance after calling the <i>closeProc</i>. If the close operation is
+    successful, the procedure sh</p>
+</section>
+</section>
+<p class="Pp">إذا كانت قيمة الإرجاع صفرًا، فسيتم إرجاع صفر؛ وإلا، فسيتم إرجاع رمز خطأ POSIX غير صفري. بالإضافة إلى ذلك، إذا حدث خطأ و <i>interp</i> لم يكن NULL، فيجب على الإجراء تخزين رسالة خطأ في نتيجة المفسر.</p>
+<p class="Pp">بدلاً من ذلك، يمكن للقنوات التي تدعم إغلاق جانبي القراءة والكتابة بشكل مستقل تعيين <i>closeProc</i> إلى <b>TCL_CLOSE2PROC</b> وتعيين <i>close2Proc</i> إلى عنوان الدالة التي تتطابق مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverClose2Proc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_Interp *<i>interp</i>,
+        int <i>flags</i>);
+</pre>
+</div>
+<p class="Pp">سيتم استدعاء <i>close2Proc</i> مع <i>flags</i> تم تعيينها ك OR لـ <b>TCL_CLOSE_READ</b> أو <b>TCL_CLOSE_WRITE</b> للإشارة إلى أن محرك القناة يجب أن يغلق جانب القراءة و/أو جانب الكتابة للقناة. قد يتم استدعاء محرك القناة لإجراء عمليات إضافية على القناة بعد أن يقوم <i>close2Proc</i> بإغلاق جانب واحد أو كلا جانبي القناة. إذا كان <i>flags</i> صفرًا، فيجب على المحرك إغلاق القناة وفقًا للوضع الموضح أعلاه لـ <i>closeProc</i>. لن يتم إجراء أي عمليات أخرى على هذا المثيل بعد استدعاء <i>close2Proc</i> مع مسح جميع العلامات. في جميع الحالات، يجب أن يعيد <i>close2Proc</i> صفرًا إذا كانت عملية الإغلاق ناجحة؛ وإلا، يجب أن يعيد رمز خطأ POSIX غير صفري. بالإضافة إلى ذلك، إذا حدث خطأ و <i>interp</i> لم يكن NULL، فيجب على الإجراء تخزين رسالة خطأ في نتيجة المفسر.</p>
+<p class="Pp">يمكن الحصول على قيم <i>closeProc</i> و <i>close2Proc</i> باستخدام <b>Tcl_ChannelCloseProc</b> أو <b>Tcl_ChannelClose2Proc</b>، والتي تعيد مؤشرًا إلى الدالة المقابلة.</p>
+<section class="Ss">
+<h2 class="Ss" id='INPUTPROC'><a class='permalink' href='#INPUTPROC'>INPUTPROC</a></h2>
+<p class="Pp">يحتوي الحقل <i>inputProc</i> على عنوان دالة تستدعيها الطبقة العامة لقراءة البيانات من ملف أو جهاز وتخزينها في مخزن مؤقت داخلي. يجب أن يتطابق <i>InputProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverInputProc</b>(
+        ClientData <i>instanceData</i>,
+        char *<i>buf</i>,
+        int <i>bufSize</i>,
+        int *<i>errorCodePtr</i>);
+</pre>
+</div>
+<p class="Pp"><i>instanceData</i> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء القناة. يشير الوسيط <i>buf</i> إلى مصفوفة بايت سيتم تخزين بيانات الإدخال من الجهاز فيها، ويشير الوسيط <i>bufSize</i> إلى عدد البايتات المتاحة في <i>buf</i>.</p>
+<p class="Pp">يشير الوسيط <i>errorCodePtr</i> إلى متغير صحيح توفره الطبقة العامة. إذا حدث خطأ، فيجب على الدالة تعيين هذا المتغير إلى رمز خطأ POSIX يحدد الخطأ.</p>
+<p class="Pp">يجب على الدالة قراءة البيانات من الجهاز الذي تغلفه القناة وتخزينها في <i>buf</i>. في حالة النجاح، يجب على الدالة إرجاع رقم غير سالب يشير إلى عدد البايتات التي تم قراءتها من الجهاز وتخزينها في <i>buf</i>. في حالة حدوث خطأ، يجب على الدالة إرجاع -1. إذا حدث خطأ بعد قراءة بعض البيانات من الجهاز، فسيتم فقدان البيانات.</p>
+<p class="Pp">إذا كان بإمكان <i>inputProc</i> تحديد أن جهاز الإدخال يحتوي على بعض البيانات المتاحة ولكن أقل مما هو مطلوب بواسطة الوسيط <i>bufSize</i>، فستحاول الدالة فقط قراءة كمية البيانات المتاحة والعودة دون حظر. إذا لم تكن هناك بيانات متاحة في جهاز الإدخال وكانت القناة في وضع غير حاظر، فيجب على الدالة إرجاع الخطأ <b>EAGAIN</b>. إذا لم تكن هناك بيانات متاحة في جهاز الإدخال وكانت القناة في وضع حاظر، فيجب على الدالة حظر أقصر وقت ممكن حتى يمكن قراءة بايت واحد على الأقل من البيانات من الجهاز؛ ثم، ستعيد أقصى قدر من البيانات التي يمكنها قراءتها دون حظر.</p>
+<p class="Pp">يمكن الحصول على هذه القيمة باستخدام <b>Tcl_ChannelInputProc</b>، والتي تعيد مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='OUTPUTPROC'><a class='permalink' href='#OUTPUTPROC'>OUTPUTPROC</a></h2>
+<p class="Pp">يحتوي الحقل <i>outputProc</i> على عنوان دالة تستدعيها الطبقة العامة لنقل البيانات من المخزن المؤقت الداخلي إلى جهاز الإخراج. يجب أن يتطابق <i>OutputProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverOutputProc</b>(
+        ClientData <i>instanceData</i>,
+        const char *<i>buf</i>,
+        int <i>toWrite</i>,
+        int *<i>errorCodePtr</i>);
+</pre>
+</div>
+<p class="Pp"><i>instanceData</i> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء القناة. الوسيط <i>buf</i> يحتوي على مصفوفة بايت لكتابتها في الجهاز، ويشير الوسيط <i>toWrite</i> إلى عدد البايتات التي سيتم كتابتها من الوسيط <i>buf</i>.</p>
+<p class="Pp">يشير الوسيط <i>errorCodePtr</i> إلى متغير صحيح توفره الطبقة العامة. إذا حدث خطأ، فيجب على الدالة تعيين هذا المتغير إلى رمز خطأ POSIX يحدد الخطأ.</p>
+<p class="Pp">يجب على الدالة كتابة البيانات في <i>buf</i> في جهاز الإخراج الذي تغلفه القناة. في حالة النجاح، يجب على الدالة إرجاع رقم غير سالب يشير إلى عدد البايتات التي تم كتابتها في جهاز الإخراج. عادة ما تكون قيمة الإرجاع هي نفسها <i>toWrite</i>، ولكنها قد تكون أقل في مواقف معينة، مثل عندما يتم مقاطعة عملية الإخراج بواسطة إشارة. إذا حدث خطأ، يجب على الدالة إرجاع -1. في حالة حدوث خطأ، قد تكون بعض البيانات قد تمت كتابتها في الجهاز.</p>
+<p class="Pp">إذا كانت القناة في وضع غير حاظر ولم يتمكن جهاز الإخراج من استيعاب أي بيانات، فيجب على الدالة إرجاع -1 مع الخطأ <b>EAGAIN</b> دون كتابة أي بيانات.</p>
+<p class="Pp">يمكن الحصول على هذه القيمة باستخدام <b>Tcl_ChannelOutputProc</b>، والتي تعيد مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SEEKPROC_AND_WIDESEEKPROC'><a class='permalink' href='#SEEKPROC_AND_WIDESEEKPROC'>SEEKPROC   AND WIDESEEKPROC</a></h2>
+<p class="Pp">يحتوي الحقل <i>seekProc</i> على عنوان دالة تستدعيها الطبقة العامة لنقل نقطة الوصول التي سيتم تطبيق عمليات الإدخال أو الإخراج اللاحقة عليها. يجب أن يتطابق <i>SeekProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverSeekProc</b>(
+        ClientData <i>instanceData</i>,
+        long <i>offset</i>,
+        int <i>seekMode</i>,
+        int *<i>errorCodePtr</i>);
+</pre>
+</div>
+<p class="Pp"><i>instanceData</i> هو نفس القيمة التي تم إعطاؤها لـ <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة. <i>Offset</i> و <i>seekMode</i> لهما نفس المعنى كما في الإجراء <b>Tcl_Seek</b> (الموصوف في دليل <b>Tcl_OpenFileChannel</b>).</p>
+<p class="Pp">يشير <i>errorCodePtr</i> إلى متغير صحيح توفره الطبقة العامة لإرجاع قيمة <b>errno</b> للدالة. يجب على الدالة تعيين هذا المتغير إلى رمز خطأ POSIX إذا حدث خطأ. يجب على الدالة تخزين الرمز <b>EINVAL</b> إذا كان نوع القناة لا ينفذ البحث.</p>
+<p class="Pp">قيمة الإرجاع هي نقطة الوصول الجديدة أو -1 في حالة حدوث خطأ. إذا حدث خطأ، لا يجب على الدالة نقل نقطة الوصول.</p>
+<p class="Pp">إذا كان هناك حقل غير فارغ لـ <i>seekProc</i>، فقد يحتوي الحقل <i>wideSeekProc</i> على عنوان دالة بديلة تتعامل مع الإزاحات الواسعة (أي، أكبر من 32 بت)، مما يسمح بالبحث في ملفات أكبر من 2 جيجابايت. يتم استدعاء <i>wideSeekProc</i> مع تفضيل <i>seekProc</i>، ولكن يجب تعريف كليهما إذا تم تعريف <i>wideSeekProc</i>. يجب أن يتطابق <i>WideSeekProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef Tcl_WideInt <b>Tcl_DriverWideSeekProc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_WideInt <i>offset</i>,
+        int <i>seekMode</i>,
+        int *<i>errorCodePtr</i>);
+</pre>
+</div>
+<p class="Pp">الوسائط وقيم الإرجاع هي نفسها كما هو الحال مع <i>seekProc</i>، إلا إذا كان نوع الإزاحة ونوع الإرجاع مختلفين.</p>
+<p class="Pp">يمكن الحصول على الحقل <i>seekProc</i> باستخدام <b>Tcl_ChannelSeekProc</b>، والذي يعيد مؤشرًا إلى الدالة، ويمكن الحصول على الحقل <i>wideSeekProc</i> باستخدام <b>Tcl_ChannelWideSeekProc</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SETOPTIONPROC'><a class='permalink' href='#SETOPTIONPROC'>SETOPTIONPROC</a></h2>
+<p class="Pp">يحتوي الحقل <i>setOptionProc</i> على عنوان دالة تستدعيها الطبقة العامة لتعيين خيار محدد لنوع القناة في قناة. يجب أن يتطابق <i>setOptionProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverSetOptionProc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_Interp *<i>interp</i>,
+        const char *<i>optionName</i>,
+        const char *<i>newValue</i>);
+</pre>
+</div>
+<p class="Pp"><i>optionName</i> هو اسم خيار ليتم تعيينه، و <i>newValue</i> هو القيمة الجديدة لهذا الخيار، كسلسلة. <i>instanceData</i> هو نفس القيمة التي تم إعطاؤها لـ <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة. يجب على الدالة تنفيذ أي إجراءات خاصة بنوع القناة مطلوبة لتنفيذ القيمة الجديدة للخيار.</p>
+<p class="Pp">يتم التعامل مع بعض الخيارات بواسطة الكود العام ولن يتم استدعاء هذه الدالة أبدًا لتعيينها، مثل <b>-blockmode</b>. خيارات أخرى خاصة بنوع القناة وسيتم استدعاء الدالة <i>setOptionProc</i> لمحرك القناة لتنفيذها. يمكن أن يكون الحقل <i>setOptionProc</i> NULL، مما يشير إلى أن هذا النوع من القنوات لا يدعم خيارات محددة.</p>
+<p class="Pp">إذا تم تعديل قيمة الخيار بنجاح للقيمة الجديدة، تعيد الدالة <b>TCL_OK</b>. يجب عليها استدعاء <b>Tcl_BadChannelOption</b>، والتي تعيد <b>TCL_ERROR</b> إذا لم يتم التعرف على <i>optionName</i>. إذا كان <i>newValue</i> يحدد قيمة غير مدعومة أو إذا حدث خطأ في استدعاء نظام، فيجب على الدالة ترك رسالة خطأ في نتيجة <i>interp</i> إذا لم يكن <i>interp</i> NULL. يجب على الدالة أيضًا استدعاء <b>Tcl_SetErrno</b> لتخزين رمز خطأ POSIX مناسب.</p>
+<p class="Pp">يمكن الحصول على هذه القيمة باستخدام <b>Tcl_ChannelSetOptionProc</b>، والتي تعيد مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='GETOPTIONPROC'><a class='permalink' href='#GETOPTIONPROC'>GETOPTIONPROC</a></h2>
+<p class="Pp">يحتوي الحقل <i>getOptionProc</i> على عنوان دالة تستدعيها الطبقة العامة للحصول على قيمة خيار محدد لنوع القناة في قناة. يجب أن يتطابق <i>getOptionProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverGetOptionProc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_Interp *<i>interp</i>,
+        const char *<i>optionName</i>,
+        Tcl_DString *<i>optionValue</i>);
+</pre>
+</div>
+<p class="Pp"><i>optionName</i> هو اسم خيار مدعوم من قبل هذا النوع من القنوات. إذا لم يكن اسم الخيار NULL، تقوم الدالة بتخزين قيمته الحالية، كسلسلة، في سلسلة Tcl الديناميكية <i>optionValue</i>. إذا كان <i>optionName</i> NULL، تقوم الدالة بتخزين قائمة بديلة بجميع الخيارات المدعومة وقيمها الحالية في <i>optionValue</i>. في حالة النجاح، تعيد الدالة <b>TCL_OK</b>. يجب عليها استدعاء <b>Tcl_BadChannelOption</b>، والتي تعيد <b>TCL_ERROR</b> إذا لم يتم التعرف على <i>optionName</i>. إذا كان <i>newValue</i> يحدد قيمة غير مدعومة أو إذا حدث خطأ في استدعاء نظام، فيجب على الدالة ترك رسالة خطأ في نتيجة <i>interp</i> إذا لم يكن <i>interp</i> NULL. يجب على الدالة أيضًا استدعاء <b>Tcl_SetErrno</b> لتخزين رمز خطأ POSIX مناسب.</p>
+<p class="Pp">يمكن الحصول على هذه القيمة باستخدام <b>Tcl_ChannelGetOptionProc</b>، والتي تعيد مؤشرًا إلى الدالة.</p>
+</section>
+<p class="Pp"><em>interp</em> غير معروف. إذا حدث خطأ في استدعاء النظام،
+    يجب أن تترك الدالة رسالة خطأ في نتيجة <em>interp</em> إذا
+    كان <em>interp</em> ليس NULL. يجب على الدالة أيضًا استدعاء
+    <b>Tcl_SetErrno</b> لتخزين رمز خطأ POSIX مناسب.</p>
+<p class="Pp">بعض الخيارات يتم التعامل معها بواسطة الكود العام ولا يتم استدعاء هذه الدالة أبدًا لاسترداد قيمتها، على سبيل المثال، <b>-blockmode</b>. الخيارات الأخرى خاصة بكل نوع قناة وسيتم استدعاء إجراء <em>getOptionProc</em> الخاص بمشغل القناة لتنفيذها. يمكن أن يكون الحقل <em>getOptionProc</em> NULL، مما يشير إلى أن نوع القناة هذا لا يدعم خيارات محددة النوع.</p>
+<p class="Pp">يمكن استرداد هذه القيمة باستخدام <b>Tcl_ChannelGetOptionProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='WATCHPROC'><a class='permalink' href='#WATCHPROC'>WATCHPROC</a></h2>
+<p class="Pp">يحتوي الحقل <em>watchProc</em> على عنوان دالة يتم استدعاؤها بواسطة الطبقة العامة لتهيئة آلية إشعار الأحداث لملاحظة الأحداث ذات الأهمية على هذه القناة. يجب أن يتطابق <em>WatchProc</em> مع النموذج التالي:</p>
+<div class="Bd-indent">
+<pre>typedef void <b>Tcl_DriverWatchProc</b>(
+        ClientData <i>instanceData</i>,
+        int <i>mask</i>);</pre>
+</div>
+<p class="Pp"><em>instanceData</em> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة. الوسيط <em>mask</em> هو مزيج ORed من <b>TCL_READABLE</b> و <b>TCL_WRITABLE</b> و <b>TCL_EXCEPTION</b>؛ وهو يشير إلى الأحداث التي يهتم المتصل بملاحظتها على هذه القناة.</p>
+<p class="Pp">يجب على الدالة تهيئة آليات محددة لنوع الجهاز لملاحظة عندما يكون حدث ذو أهمية موجودًا على القناة. عندما يحدث حدث واحد أو أكثر من الأحداث المعينة على القناة، يكون مشغل القناة مسؤولاً عن استدعاء <b>Tcl_NotifyChannel</b> لإبلاغ وحدة القناة العامة. يجب على المشغل توخي الحذر لعدم تجويع مشغلي القنوات الآخرين أو مصادر الاستدعاءات عن طريق استدعاء Tcl_NotifyChannel بشكل متكرر جدًا. يمكن ضمان العدالة باستخدام طابور أحداث Tcl للسماح بجدولة حدث القناة بالتسلسل مع الأحداث الأخرى. انظر وصف <b>Tcl_QueueEvent</b> للحصول على تفاصيل حول كيفية وضع حدث في الطابور.</p>
+<p class="Pp">يمكن استرداد هذه القيمة باستخدام <b>Tcl_ChannelWatchProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='GETHANDLEPROC'><a class='permalink' href='#GETHANDLEPROC'>GETHANDLEPROC</a></h2>
+<p class="Pp">يحتوي الحقل <em>getHandleProc</em> على عنوان دالة يتم استدعاؤها بواسطة الطبقة العامة لاسترداد مقبض خاص بنوع الجهاز من القناة. يجب أن يتطابق <em>GetHandleProc</em> مع النموذج التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverGetHandleProc</b>(
+        ClientData <i>instanceData</i>,
+        int <i>direction</i>,
+        ClientData *<i>handlePtr</i>);</pre>
+</div>
+<p class="Pp"><em>InstanceData</em> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة. الوسيط <em>direction</em> هو إما <b>TCL_READABLE</b> لاسترداد المقبض المستخدم للإدخال، أو <b>TCL_WRITABLE</b> لاسترداد المقبض المستخدم للإخراج.</p>
+<p class="Pp">إذا كان تنفيذ القناة يحتوي على مقابض خاصة بالجهاز، فيجب على الدالة استرداد المقبض المناسب المرتبط بالقناة، وفقًا للوسيط <em>direction</em>. يجب تخزين المقبض في الموقع المشار إليه بواسطة <em>handlePtr</em>، ويجب إرجاع <b>TCL_OK</b>. إذا لم تكن القناة مفتوحة للاتجاه المحدد، أو إذا كان تنفيذ القناة لا يستخدم مقابض الجهاز، فيجب على الدالة إرجاع <b>TCL_ERROR</b>.</p>
+<p class="Pp">يمكن استرداد هذه القيمة باستخدام <b>Tcl_ChannelGetHandleProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='FLUSHPROC'><a class='permalink' href='#FLUSHPROC'>FLUSHPROC</a></h2>
+<p class="Pp">الحقل <em>flushProc</em> محجوز حاليًا للاستخدام المستقبلي. يجب تعيينه إلى NULL. يجب أن يتطابق <em>FlushProc</em> مع النموذج التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverFlushProc</b>(
+        ClientData <i>instanceData</i>);</pre>
+</div>
+<p class="Pp">يمكن استرداد هذه القيمة باستخدام <b>Tcl_ChannelFlushProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='HANDLERPROC'><a class='permalink' href='#HANDLERPROC'>HANDLERPROC</a></h2>
+<p class="Pp">يحتوي الحقل <em>handlerProc</em> على عنوان دالة يتم استدعاؤها بواسطة الطبقة العامة لإبلاغ القناة بحدوث حدث. يجب تعريفه لمشغلي القنوات المكدسة الذين يرغبون في تلقي إشعارات بالأحداث التي تحدث على القناة الأساسية (المكدسة). يجب أن يتطابق <em>HandlerProc</em> مع النموذج التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverHandlerProc</b>(
+        ClientData <i>instanceData</i>,
+        int <i>interestMask</i>);</pre>
+</div>
+<p class="Pp"><em>InstanceData</em> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة. <em>interestMask</em> هو مزيج ORed من <b>TCL_READABLE</b> أو <b>TCL_WRITABLE</b>؛ وهو يشير إلى نوع الحدث الذي حدث على هذه القناة.</p>
+<p class="Pp">يمكن استرداد هذه القيمة باستخدام <b>Tcl_ChannelHandlerProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='THREADACTIONPROC'><a class='permalink' href='#THREADACTIONPROC'>THREADACTIONPROC</a></h2>
+<p class="Pp">يحتوي الحقل <em>threadActionProc</em> على عنوان الدالة التي يتم استدعاؤها بواسطة الطبقة العامة عند إنشاء قناة، أو إغلاقها، أو نقلها إلى خيط مختلف، أي كلما قد تحتاج حالة المشغل الخاصة بالخيط إلى تهيئتها أو تحديثها. يمكن أن تكون NULL. يتم استخدام الإجراء <i>TCL_CHANNEL_THREAD_REMOVE</em> لإبلاغ المشغل بأنه يجب عليه تحديث أو إزالة أي بيانات خاصة بالخيط قد يحتفظ بها للقناة.</p>
+<p class="Pp">يتم استخدام الإجراء <i>TCL_CHANNEL_THREAD_INSERT</em> لإبلاغ المشغل بأنه يجب عليه تحديث أو تهيئة أي بيانات خاصة بالخيط قد يحتفظ بها باستخدام الخيط المتصل كخيط مرتبط. انظر <b>Tcl_CutChannel</b> و <b>Tcl_SpliceChannel</b> لمزيد من التفاصيل.</p>
+<div class="Bd-indent">
+<pre>typedef void <b>Tcl_DriverThreadActionProc</b>(
+        ClientData <i>instanceData</i>,
+        int <i>action</i>);</pre>
+</div>
+<p class="Pp"><em>InstanceData</em> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة.</p>
+<p class="Pp">يمكن استرداد هذه القيم باستخدام <b>Tcl_ChannelThreadActionProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='TRUNCATEPROC'><a class='permalink' href='#TRUNCATEPROC'>TRUNCATEPROC</a></h2>
+<p class="Pp">يحتوي الحقل <em>truncateProc</em> على عنوان الدالة التي يتم استدعاؤها بواسطة الطبقة العامة عند اقتطاع قناة إلى طول معين. يمكن أن تكون NULL.</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_DriverTruncateProc</b>(
+        ClientData <i>instanceData</i>,
+        Tcl_WideInt <i>length</i>);</pre>
+</div>
+<p class="Pp"><em>InstanceData</em> هو نفس القيمة التي تم تمريرها إلى <b>Tcl_CreateChannel</b> عند إنشاء هذه القناة، و <em>length</em> هو الطول الجديد للملف الأساسي، والذي يجب ألا يكون سالبًا. يجب أن تكون النتيجة 0 عند النجاح أو رمز errno (مناسب للاستخدام مع <b>Tcl_SetErrno</b>) عند الفشل.</p>
+<p class="Pp">يمكن استرداد هذه القيم باستخدام <b>Tcl_ChannelTruncateProc</b>، التي تُرجع مؤشرًا إلى الدالة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_BADCHANNELOPTION'><a class='permalink' href='#TCL_BADCHANNELOPTION'>TCL_BADCHANNELOPTION</a></h1>
+<p class="Pp">تنشئ هذه الإجراءات رسالة خطأ "خيار سيء" في مترجم (اختياري). يتم استخدامها بواسطة مشغلي القنوات عند طلب خيار تعيين/الحصول غير صالح. الغرض منها هو ربط قائمة الخيارات العامة بالخيارات المحددة وتجميع سلسلة رسالة خطأ الخيارات العامة.</p>
+<p class="Pp">تعود دائمًا بالقيمة <b>TCL_ERROR</b></p>
+<p class="Pp">يتم إنشاء رسالة خطأ في قيمة نتيجة <em>interp</em> للإشارة إلى أنه تم استدعاء أمر بخيار سيء. الرسالة لها الشكل</p>
+<div class="Bd-indent">
+<pre>    bad option &quot;blah&quot;: should be one of
+    &lt;...generic options...&gt;+&lt;...specific options...&gt;</pre>
+</div>
+لذلك تحصل على على سبيل المثال:
+<div class="Bd-indent">
+<pre>    bad option &quot;-blah&quot;: should be one of -blocking,
+    -buffering, -buffersize, -eofchar, -translation,
+    -peername, or -sockname</pre>
+</div>
+عند استدعائها مع <em>optionList</em> يساوي "peername sockname"
+<p class="Pp">"blah" هو الوسيط <em>optionName</em> و "&lt;specific options&gt;" هي قائمة مفصولة بمسافات من الكلمات الخاصة بالخيارات. تتخذ الدالة عناية جيدة بإدراج علامات الطرح قبل كل خيار، وفواصل بعده، و "or" قبل الخيار الأخير.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OLD_CHANNEL_TYPES'><a class='permalink' href='#OLD_CHANNEL_TYPES'>OLD   CHANNEL TYPES</a></h1>
+<p class="Pp">يحتوي هيكل <b>Tcl_ChannelType</b> الأصلي (8.3.1 وما دون) على الحقول التالية:</p>
+<div class="Bd-indent">
+<pre>typedef struct Tcl_ChannelType {
+    const char *<i>typeName</i>;
+    Tcl_DriverBlockModeProc *<i>blockModeProc</i>;
+    Tcl_DriverCloseProc *<i>closeProc</i>;
+    Tcl_DriverInputProc *<i>inputProc</i>;
+    Tcl_DriverOutputProc *<i>outputProc</i>;
+    Tcl_DriverSeekProc *<i>seekProc</i>;
+    Tcl_DriverSetOptionProc *<i>setOptionProc</i>;
+    Tcl_DriverGetOptionProc *<i>getOptionProc</i>;
+    Tcl_DriverWatchProc *<i>watchProc</i>;
+    Tcl_DriverGetHandleProc *<i>getHandleProc</i>;
+    Tcl_DriverClose2Proc *<i>close2Proc</i>;
+} <b>Tcl_ChannelType</b>;</pre>
+</div>
+<p class="Pp">لا يزال من الممكن إنشاء قنوات بالهيكل أعلاه. سيحدد الكود الداخلي للقناة الإصدار. من الضروري استخدام هيكل <b>Tcl_ChannelType</b> الجديد إذا كنت تقوم بإنشاء مشغل قناة مكدسة، بسبب مشاكل في تنفيذ القناة المكدسة السابقة (في 8.2.0 إلى 8.3.1).</p>
+<p class="Pp">قبل 8.4.0 (أي خلال الإصدارات الأخيرة من 8.3 والجزء المبكر من دورة تطوير 8.4) احتوى هيكل <b>Tcl_ChannelType</b> على الحقول التالية:</p>
+<div class="Bd-indent">
+<pre>typedef struct Tcl_ChannelType {
+    const char *<i>typeName</i>;
+    Tcl_ChannelTypeVersion <i>version</i>;
+    Tcl_DriverCloseProc *<i>closeProc</i>;
+    Tcl_DriverInputProc *<i>inputProc</i>;
+    Tcl_DriverOutputProc *<i>outputProc</i>;
+    Tcl_DriverSeekProc *<i>seekProc</i>;
+    Tcl_DriverSetOptionProc *<i>setOptionProc</i>;
+    Tcl_DriverGetOptionProc *<i>getOptionProc</i>;
+    Tcl_DriverWatchProc *<i>watchProc</i>;
+    Tcl_DriverGetHandleProc *<i>getHandleProc</i>;
+    Tcl_DriverClose2Proc *<i>close2Proc</i>;
+    Tcl_DriverBlockModeProc *<i>blockModeProc</i>;
+    Tcl_DriverFlushProc *<i>flushProc</i>;
+    Tcl_DriverHandlerProc *<i>handlerProc</i>;
+    Tcl_DriverTruncateProc *<i>truncateProc</i>;
+} <b>Tcl_ChannelType</b>;</pre>
+</div>
+<p class="Pp">عند تسجيل الهيكل أعلاه كنوع قناة، يجب أن يكون الحقل <em>version</em> دائمًا <b>TCL_CHANNEL_VERSION_2</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp">Tcl_Close(3), Tcl_OpenFileChannel(3), Tcl_SetErrno(3),
+    Tcl_QueueEvent(3), Tcl_StackChannel(3), Tcl_GetStdChannel(3)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" i
+<div>
+  <h1>d='KEYWORDS'><a class='permalink' href='#KEYWORDS'>كلمات مفتاحية</a></h1>
+  <p class="Pp">حظر، مشغل القناة، تسجيل القناة، نوع القناة،
+      غير محظور</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">8.4</td>
+    <td class="foot-os">Tcl</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>المنشأ:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>TCL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#ARGUMENTS">المعاملات</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#TCL_CHANNELTYPE">TCL_CHANNELTYPE</a></li>
+        
+            <li><a href="#TCL_BADCHANNELOPTION">TCL_BADCHANNELOPTION</a></li>
+        
+            <li><a href="#OLD_CHANNEL_TYPES">أنواع القنوات القديمة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#KEYWORDS">كلمات مفتاحية</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>صيغ أخرى:
+        
+            <a href="/man/Tcl_GetChannelMode.3.en.txt">txt</a>, 
+        
+            <a href="/man/Tcl_GetChannelMode.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

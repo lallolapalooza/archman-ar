@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POE::Filter::Map(3pm) — صفحات الدليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Filter__Map(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">POE::Filter::Map(3)</td>
+    <td class="head-vol">توثيق Perl المساهم به</td>
+    <td class="head-rtitle">POE::Filter::Map(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">POE::Filter::Map - تحويل المدخلات و/أو المخرجات ضمن مكدس مرشحات</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>#!perl
+use POE qw(
+  Wheel::FollowTail
+  Filter::Line Filter::Map Filter::Stackable
+);
+POE::Session-&gt;create(
+  inline_states =&gt; {
+    _start =&gt; sub {
+      my $parse_input_as_lines = POE::Filter::Line-&gt;new();
+      my $redact_some_lines = POE::Filter::Map-&gt;new(
+        Code =&gt; sub {
+          my $input = shift;
+          $input = &quot;[REDACTED]&quot; unless $input =~ /sudo\[\d+\]/i;
+          return $input;
+        },
+      );
+      my $filter_stack = POE::Filter::Stackable-&gt;new(
+        Filters =&gt; [
+          $parse_input_as_lines, # أول في الاستقبال، آخر في الإرسال
+          $redact_some_lines, # أول في الإرسال، آخر في الاستقبال
+        ]
+      );
+      $_[HEAP]{tailor} = POE::Wheel::FollowTail-&gt;new(
+        Filename =&gt; &quot;/var/log/system.log&quot;,
+        InputEvent =&gt; &quot;got_log_line&quot;,
+        Filter =&gt; $filter_stack,
+      );
+    },
+    got_log_line =&gt; sub {
+      print &quot;Log: $_[ARG0]\n&quot;;
+    }
+  }
+);
+POE::Kernel-&gt;run();
+exit;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يقوم POE::Filter::Map بتحويل البيانات داخل مكدس المرشحات. يمكن استخدامه لتحويل المدخلات، المخرجات، أو كليهما حسب كيفية إنشائه. تم تسمية هذا المرشح ونمذجته بعد الدالة المضمنة في Perl <b>map()</b>.</p>
+<p class="Pp">تم تصميم POE::Filter::Map للدمج مع مرشحات أخرى من خلال POE::Filter::Stackable. في مثال &quot;الملخص&quot;، تم إنشاء مكدس مرشحات لتحليل السجلات كسطور وحذف جميع الإدخالات التي لا تتعلق بعملية sudo.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_FILTER_METHODS'><a class='permalink' href='#PUBLIC_FILTER_METHODS'>طرق المرشحات العامة</a></h1>
+<p class="Pp">بالإضافة إلى طرق POE::Filter المعتادة، يدعم POE::Filter::Map أيضًا ما يلي:</p>
+<section class="Ss">
+<h2 class="Ss" id='new'><a class='permalink' href='#new'>new</a></h2>
+<p class="Pp">يقوم <b>new()</b> بإنشاء كائن POE::Filter::Map جديد. يجب استدعاؤه إما بمعامل Code واحد، أو بمعاملات Put و Get. القيم الخاصة بـ Code، Put، و Get هي مراجع كود، عند استدعائها، تُرجع إصدارات محسنة من معاملاتها الوحيدة. سيتم استخدام دالة Code لكل من المدخلات والمخرجات، بينما تسمح دوال Get و Put بتصفية المدخلات والمخرجات بطرق مختلفة.</p>
+<pre># فك تشفير rot13.
+sub decrypt_rot13 {
+  my $encrypted = shift;
+  $encrypted =~ tr[a-zA-Z][n-za-mN-ZA-M];
+  return $encrypted;
+}
+# تشفير rot13.
+sub encrypt_rot13 {
+  my $plaintext = shift;
+  $plaintext =~ tr[a-zA-Z][n-za-mN-ZA-M];
+  return $plaintext;
+}
+# فك تشفير rot13 عند المدخل، وتشفيره عند المخرج.
+my $rot13_transcrypter = POE::Filter::Map-&gt;new(
+  Get =&gt; \&amp;decrypt_rot13,
+  Put =&gt; \&amp;encrypt_rot13,
+);</pre>
+<p class="Pp">Rot13 متناظر، لذلك يمكن تبسيط المثال أعلاه لاستخدام دالة Code واحدة.</p>
+<pre>my $rot13_transcrypter = POE::Filter::Map-&gt;new(
+  Code =&gt; sub {
+    local $_ = shift;
+    tr[a-zA-Z][n-za-mN-ZA-M];
+    return $_;
+  }
+);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='modify'><a class='permalink' href='#modify'>modify</a></h2>
+<p class="Pp">يقوم <b>modify()</b> بتغيير سلوك كائن POE::Filter::Map في وقت التشغيل. يقبل نفس المعاملات مثل <b>new()</b>، ويستبدل التحويلات الحالية بتحويلات جديدة.</p>
+<pre># التبديل إلى تشفير "عكسي" للاختبار.
+$rot13_transcrypter-&gt;modify(
+  Code =&gt; sub { return scalar reverse shift }
+);</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">POE::Filter لمزيد من المعلومات حول المرشحات بشكل عام.</p>
+<p class="Pp">POE::Filter::Stackable لمزيد من التفاصيل حول تكديس المرشحات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">لا توجد أخطاء معروفة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">تم المساهمة بمرشح Map بواسطة Dieter Pearcey. تم توفير التوثيق بواسطة Rocco Caputo.</p>
+<p class="Pp">يرجى الرجوع إلى صفحة دليل POE لمزيد من المعلومات حول المؤلفين والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#PUBLIC_FILTER_METHODS">طرق المرشحات العامة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Filter::Map.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Filter::Map.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيص خاص بها محدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

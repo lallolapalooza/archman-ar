@@ -1,0 +1,763 @@
+{
+  "file_structure": {
+    "sections": [
+      {
+        "title": "How \"form\" Hyphenates",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Any line with a block field repeats on subsequent lines until all block fields on that line have consumed all their data. Non-block fields on these lines are replaced by the appropriate number of spaces."
+          },
+          {
+            "type": "paragraph",
+            "text": "Words are wrapped whole, unless they will not fit into the field at all, in which case they are broken and (by default) hyphenated. Simple hyphenation is used (i.e. break at the N-1th character and insert a '-'), unless a suitable alternative subroutine is specified instead."
+          },
+          {
+            "type": "paragraph",
+            "text": "Words will not be broken if the break would leave less than 2 characters on the current line. This minimum can be varied by setting the 'minbreak' option to a numeric value indicating the minumum total broken characters (including hyphens) required on the current line. Note that, for very narrow fields, words will still be broken (but unhyphenated). For example:"
+          },
+          {
+            "type": "code",
+            "text": "print form '~', 'split';"
+          },
+          {
+            "type": "paragraph",
+            "text": "would print:"
+          },
+          {
+            "type": "code",
+            "text": "s\np\nl\ni\nt"
+          },
+          {
+            "type": "paragraph",
+            "text": "whilst:"
+          },
+          {
+            "type": "code",
+            "text": "print form {minbreak=>1}, '~', 'split';"
+          },
+          {
+            "type": "paragraph",
+            "text": "would print:"
+          },
+          {
+            "type": "code",
+            "text": "s-\np-\nl-\ni-\nt"
+          },
+          {
+            "type": "paragraph",
+            "text": "Alternative breaking subroutines can be specified using the \"break\" option in a configuration hash. For example:"
+          },
+          {
+            "type": "code",
+            "text": "form { break => \&my_line_breaker }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "\"form\" expects any user-defined line-breaking subroutine to take three arguments (the string to be broken, the maximum permissible length of the initial section, and the total width of the field being filled). The \"hypenate\" sub must return a list of two strings: the initial (broken) section of the word, and the remainder of the string respectively)."
+          },
+          {
+            "type": "paragraph",
+            "text": "For example:"
+          },
+          {
+            "type": "code",
+            "text": "sub tilde_break = sub($$)\n{\n        (substr($_[0],0,$_[1]-1).'~', substr($_[0],$_[1]-1));\n}\nform { break => \&tilde_break }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "makes '~' the hyphenation character, whilst:"
+          },
+          {
+            "type": "code",
+            "text": "sub wrap_and_slop = sub($$)\n{\n        my ($text, $reqlen, $fldlen) = @_;\n        if ($reqlen==$fldlen) { $text =~ m/\\A(\\s*\\S*)(.*)/s }\n        else                  { (\"\", $text) }\n}\nform { break => \&wrap_and_slop }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "wraps excessively long words to the next line and \"slops\" them over the right margin if necessary."
+          },
+          {
+            "type": "paragraph",
+            "text": "The Text::Reform package provides three functions to simplify the use of variant hyphenation schemes. The exportable subroutine \"Text::Reform::break_wrap\" generates a reference to a subroutine implementing the \"wrap-and-slop\" algorithm shown in the last example, which could therefore be rewritten:"
+          },
+          {
+            "type": "code",
+            "text": "use Text::Reform qw( form break_wrap );\nform { break => break_wrap }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "The subroutine \"Text::Reform::break_with\" takes a single string argument and returns a reference to a sub which hyphenates by cutting off the text at the right margin and appending the string argument. Hence the first of the two examples could be rewritten:"
+          },
+          {
+            "type": "code",
+            "text": "use Text::Reform qw( form break_with );\nform { break => break_with('-') }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "The subroutine \"Text::Reform::break_at\" takes a single string argument and returns a reference to a sub which hyphenates by breaking immediately after that string. For example:"
+          },
+          {
+            "type": "code",
+            "text": "use Text::Reform qw( form break_at );\nform { break => break_at('-') }\n       \"[[[[[[[[[[[[[[ \",\n       \"The Newton-Raphson methodology\";\n# returns:\n#\n#       \"The Newton-\n#        Raphson \n#        methodology\""
+          },
+          {
+            "type": "paragraph",
+            "text": "Note that this differs from the behaviour of \"break_with\", which would be:"
+          },
+          {
+            "type": "code",
+            "text": "form { break => break_with('-') }\n       \"[[[[[[[[[[[[[[ \",\n       \"The Newton-Raphson methodology\";\n# returns:\n#\n#       \"The Newton-R-\n#        aphson metho-\n#        dology\""
+          },
+          {
+            "type": "paragraph",
+            "text": "Hence \"break_at\" is generally a better choice."
+          },
+          {
+            "type": "paragraph",
+            "text": "\"break_at\" also takes an 'except' option, which tells the resulting subroutine not to break in the middle of certain strings. For example:"
+          },
+          {
+            "type": "code",
+            "text": "    form { break => break_at('-', {except=>qr/Newton-Raphson/}) }\n           \"[[[[[[[[[[[[[[ \",\n           \"The Newton-Raphson methodology\";\n    # returns:\n    #\n    #       \"The\n#        Newton-Raphson \n    #        methodology\""
+          },
+          {
+            "type": "paragraph",
+            "text": "This option is particularly useful for preserving URLs."
+          },
+          {
+            "type": "paragraph",
+            "text": "The subroutine \"Text::Reform::break_TeX\" returns a reference to a sub which hyphenates using Jan Pazdziora's TeX::Hyphen module. For example:"
+          },
+          {
+            "type": "code",
+            "text": "use Text::Reform qw( form break_wrap );\nform { break => break_TeX }\n     $format_str,\n     @data;"
+          },
+          {
+            "type": "paragraph",
+            "text": "Note that in the previous examples there is no leading '\\&' before \"break_wrap\", \"break_with\", or \"break_TeX\", since each is being directly *called* (and returns a reference to some other suitable subroutine);"
+          }
+        ]
+      },
+      {
+        "title": "The \"form\" Formatting Algorithm",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "The algorithm \"form\" uses is:"
+          },
+          {
+            "type": "code",
+            "text": "1. If interleaving is specified, split the first string in the\n   argument list into individual format lines and add a\n   terminating newline (unless one is already present).\n   Otherwise, treat the entire string as a single \"line\" (like\n   /s does in regexes)\n2. For each format line...\n        2.1. determine the number of fields and shift\n             that many values off the argument list and\n             into the filling list. If insufficient\n             arguments are available, generate as many \n             empty strings as are required.\n        2.2. generate a text line by filling each field\n             in the format line with the initial contents\n             of the corresponding arg in the filling list"
+          }
+        ]
+      }
+    ]
+  }
+}
+          (وإزالة المحتويات الأولية من الوسيط).
+        2.3. استبدل أي حقول &lt;,&gt; أو ^ بما يعادلها
+             عدد من المسافات. شق الحقول المقابلة
+             من قائمة التعبئة.
+        2.4. كرر من الخطوة 2.2 حتى تصبح جميع الوسائط في
+             قائمة التعبئة فارغة.
+3. دمج أسطر النص التي تم إنشاؤها في الخطوة 2
+4. كرر من الخطوة 1 حتى تصبح قائمة الوسائط فارغة</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;form&amp;quot;_examples'><a class='permalink' href='#&amp;quot;form&amp;quot;_examples'>أمثلة "form"</a></h2>
+<p class="Pp">كمثال على استخدام
+    <span class="Li">&quot;form&quot;</span>، ما يلي:</p>
+<pre>$count = 1;
+$text = &quot;A big long piece of text to be formatted exquisitely&quot;;
+print form q
+q{       ||||  &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;   },
+$count, $text,
+q{       ----------------   },
+q{       ^^^^  ]]]]]]]]]]|  },
+$count+11, $text,
+q{                       =  
+         ]]].[[[            },
+&quot;123 123.4\n123.456789&quot;;</pre>
+<p class="Pp">ينتج عنه الإخراج التالي:</p>
+<pre> 1    A big long
+----------------
+ 12     piece of|
+      text to be|
+       formatted|
+      exquisite-|
+              ly|
+                =
+123.0
+                =
+123.4
+                =
+123.456</pre>
+<p class="Pp">لاحظ أن حقول الكتل في سلسلة تنسيق متعددة الأسطر، تؤدي إلى تكرار
+    التنسيق متعدد الأسطر بالكامل حسب الضرورة.</p>
+<p class="Pp">يتم تشابك سلاسل الصور وقيم الاستبدال في تنسيق
+    <span class="Li">&quot;format&quot;</span> التقليدي، ولكن يلزم توخي الحذر
+    لضمان توفير العدد الصحيح من قيم الاستبدال. مثال آخر:</p>
+<pre>$report = form
+        'Name           Rank    Serial Number',
+        '====           ====    =============',
+        '&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;  ^^^^    &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;',
+         $name,         $rank,  $serial_number,
+        ''
+        'Age    Sex     Description',
+        '===    ===     ===========',
+        '^^^    ^^^     [[[[[[[[[[[',
+         $age,  $sex,   $description;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_&amp;quot;form&amp;quot;_consumes_strings'><a class='permalink' href='#How_&amp;quot;form&amp;quot;_consumes_strings'>كيف تستهلك "form" السلاسل</a></h2>
+<p class="Pp">على عكس
+    <span class="Li">&quot;format&quot;</span>، ضمن
+    <span class="Li">&quot;form&quot;</span>، تستهلك الحقول غير الكتل
+    النص الذي تنسقه، لذلك ما يلي:</p>
+<pre>$text = &quot;a line of text to be formatted over three lines&quot;;
+print form &quot;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n  &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n    &lt;&lt;&lt;&lt;&lt;&lt;\n&quot;,
+            $text,        $text,        $text;</pre>
+<p class="Pp">ينتج عنه:</p>
+<pre>a line of
+  text to
+    be fo-</pre>
+<p class="Pp">وليس:</p>
+<pre>a line of
+  a line 
+    a line</pre>
+<p class="Pp">لتحقيق التأثير الأخير، قم بتحويل الوسائط المتغيرة إلى ثوابت مستقلة
+    (عن طريق الاستيفاء المزدوج المقتبس):</p>
+<pre>$text = &quot;a line of text to be formatted over three lines&quot;;
+print form &quot;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n  &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n    &lt;&lt;&lt;&lt;&lt;&lt;\n&quot;,
+           &quot;$text&quot;,      &quot;$text&quot;,      &quot;$text&quot;;</pre>
+<p class="Pp">على الرغم من أن القيم المقدمة من الوسائط المتغيرة يتم استهلاكها بشكل
+    تدريجي <i>داخل</i>
+    <span class="Li">&quot;form&quot;</span>، فإن قيم المتغيرات الأصلية
+    الممررة إلى
+    <span class="Li">&quot;form&quot;</span>
+    <i>لا</i> يتم تعديلها. وبالتالي:</p>
+<pre>$text = &quot;a line of text to be formatted over three lines&quot;;
+print form &quot;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n  &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n    &lt;&lt;&lt;&lt;&lt;&lt;\n&quot;,
+            $text,        $text,        $text;
+print $text, &quot;\n&quot;;</pre>
+<p class="Pp">سيقوم بطباعة:</p>
+<pre>a line of
+  text to
+    be fo-
+a line of text to be formatted over three lines</pre>
+<p class="Pp">لجعل
+    <span class="Li">&quot;form&quot;</span> تستهلك قيم المتغيرات الأصلية
+    الممررة إليها، قم بتمريرها كمرجع. وبالتالي:</p>
+<pre>$text = &quot;a line of text to be formatted over three lines&quot;;
+print form &quot;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n  &lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;\n    &lt;&lt;&lt;&lt;&lt;&lt;\n&quot;,
+            \$text,       \$text,       \$text;
+print $text, &quot;\n&quot;;</pre>
+<p class="Pp">سيقوم بطباعة:</p>
+<pre>a line of
+  text to
+    be fo-
+rmatted over three lines</pre>
+<p class="Pp">لاحظ أنه، من أجل السلامة، فإن سلوك "عدم الاستهلاك" له الأسبقية، لذلك
+    إذا تم تمرير متغير إلى
+    <span class="Li">&quot;form&quot;</span> بالمرجع
+    <i>و</i> بالقيمة، فسيتم تغيير قيمته النهائية دون تغيير.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Numerical_formatting'><a class='permalink' href='#Numerical_formatting'>التنسيق الرقمي</a></h2>
+<p class="Pp">يمكن استخدام محددات الحقول "&gt;&gt;&gt;.&lt;&lt;&lt;" و "]]].[[["
+    لتنسيق القيم الرقمية حول علامة عشرية ثابتة. على سبيل المثال:</p>
+<pre>print form '(]]]]].[[)', &lt;&lt;EONUMS;
+           1
+           1.0
+           1.001
+           1.009
+           123.456
+           1234567
+           one two
+EONUMS</pre>
+<p class="Pp">سيقوم بطباعة:</p>
+<pre>(    1.0 )
+(    1.0 )
+(    1.00)
+(    1.01)
+(  123.46)
+(#####.##)
+(?????.??)
+(?????.??)</pre>
+<p class="Pp">يتم تقريب الكسور إلى العدد المحدد من الأماكن بعد العشرة، ولكن يتم عرض
+    الأرقام الهامة فقط. هذا هو السبب في أن 1 و 1.0 في المثال أعلاه يتم تنسيقهما
+    كـ "1.0"، بينما يتم تنسيق 1.001 كـ "1.00".</p>
+<p class="Pp">يمكنك تحديد أن العدد الأقصى للأماكن العشرية يتم استخدامه دائمًا عن طريق
+    إعطاء خيار التكوين 'numeric' قيمة تتطابق مع /\bAllPlaces\b/i. على سبيل
+    المثال:</p>
+<pre>print form { numeric =&gt; AllPlaces },
+           '(]]]]].[[)', &lt;&lt;'EONUMS';
+           1
+           1.0
+EONUMS</pre>
+<p class="Pp">سيقوم بطباعة:</p>
+<pre>(    1.00)
+(    1.00)</pre>
+<p class="Pp">لاحظ أنه على الرغم من تقريب الأرقام العشرية لتناسب العرض المحدد، فإن
+    الجزء الصحيح من الرقم لا يتغير أبدًا. إذا لم تكن هناك أماكن كافية قبل الفاصلة
+    العشرية لتمثيل الرقم، يتم استبدال الرقم بأكمله بعلامات التجزئة.</p>
+<p class="Pp">إذا تم تمرير تسلسل غير رقمي كبيانات لحقل رقمي، فسيتم تنسيقه كسلسلة من
+    علامات الاستفهام. يمكن تغيير هذا السلوك الاستجوابي عن طريق إعطاء خيار التكوين
+    'numeric' قيمة تتطابق مع /\bSkipNaN\b/i، وفي هذه الحالة، يتم تجاهل أي
+    بيانات رقمية غير صالحة ببساطة. على سبيل المثال:</p>
+<pre>print form { numeric =&gt; 'SkipNaN' }
+           '(]]]]].[[)',
+           &lt;&lt;EONUMS;
+           1
+           two three
+           4
+EONUMS</pre>
+<p class="Pp">سيقوم بطباعة:</p>
+<pre>(    1.0 )
+(    4.0 )</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Filling_block_fields_with_lists_of_values'><a class='permalink' href='#Filling_block_fields_with_lists_of_values'>تعبئة حقول الكتل بقوائم القيم</a></h2>
+<p class="Pp">إذا كان الوسيط المقابل لحقل ما هو مرجع لمصفوفة، فإن
+    <span class="Li">&quot;form&quot;</span> يضم تلقائيًا عناصر المصفوفة في سلسلة
+    واحدة، مع فصل كل عنصر بحرف سطر جديد. نتيجة لذلك، استدعاء مثل هذا:</p>
+<pre>@values = qw( 1 10 100 1000 );
+print form &quot;(]]]].[[)&quot;, \@values;</pre>
+<p class="Pp">سيقوم بطباعة</p>
+<pre>(   1.00)
+(  10.00)
+( 100.00)
+(1000.00)</pre>
+<p class="Pp">كما هو متوقع.</p>
+<p class="Pp">لاحظ مع ذلك أنه يجب تمرير المصفوفات بالمرجع (بحيث تعرف
+    <span class="Li">&quot;form&quot;</span> أن المصفوفة بأكملها تحتوي على بيانات
+    لحقل واحد). إذا لم يقم المثال السابق بتمرير
+    <span class="Li">@values</span> بالمرجع:</p>
+<pre>@values = qw( 1 10 100 1000 );
+print form &quot;(]]]].[[)&quot;, @values;</pre>
+<p class="Pp">كان الإخراج سيكون:</p>
+<pre>(   1.00)
+10
+100
+1000</pre>
+<p class="Pp">هذا لأن <span class="Li">@values</span> سيتم استيفاؤها في قائمة وسائط
+    <span class="Li">&quot;form&quot;</span>، لذلك سيتم استخدام
+    <span class="Li">$value</span>[0] فقط كبيانات لسلسلة التنسيق الأولية. سيتم
+    معاملة العناصر المتبقية من
+    <span class="Li">@value</span> كسلاسل تنسيق منفصلة، وسيتم طباعتها
+    "حرفيًا".</p>
+<p class="Pp">لاحظ أيضًا، نظرًا لأنه يجب تمرير المصفوفات باستخدام مرجع، فإن محتوياتها
+    الأصلية تستهلكها
+    <span class="Li">&quot;form&quot;</span>، تمامًا مثل محتويات القيم
+    القياسية الممررة بالمرجع.</p>
+<p class="Pp">لتجنب استهلاك مصفوفة بواسطة
+    <span class="Li">&quot;form&quot;</span>، قم بتمريرها كمصفوفة مجهولة:</p>
+<pre>print form &quot;(]]]].[[)&quot;, [@values];</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Headers,_footers,_and_pages'><a class='permalink' href='#Headers,_footers,_and_pages'>العناوين، والتذييلات، والصفحات</a></h2>
+<p class="Pp">يمكن للروتين الفرعي
+    <span class="Li">&quot;form&quot;</span> أيضًا إدراج العناوين، والتذييلات،
+    وتغذية الصفحات أثناء تنسيقها. يتم التحكم في هذه الميزات بواسطة خيارات
+    "header"، و "footer"، و "pagefeed"، و "pagelen"، و "pagenum".</p>
+<p class="Pp">يأخذ خيار "pagenum" قيمة قياسية أو مرجعًا لمتغير قياسي ويبدأ ترقيم
+    الصفحات من تلك القيمة. إذا تم تحديد مرجع لمتغير قياسي، فسيتم تحديث قيمة هذا
+    المتغير أثناء تقدم التنسيق، بحيث يكون رقم الصفحة النهائي متاحًا فيه بعد
+    التنسيق. يمكن أن يكون هذا مفيدًا للتقارير متعددة الأجزاء.</p>
+<p class="Pp">يحدد خيار "pagelen" العدد الإجمالي للأسطر في الصفحة (بما في ذلك
+    العناوين، والتذييلات، وتغذية الصفحات).</p>
+<p class="Pp">يحدد خيار "pagewidth" العدد الإجمالي للأعمدة في الصفحة.</p>
+<p class="Pp">إذا تم تحديد خيار "header" بقيمة سلسلة، فسيتم استخدام هذه السلسلة
+    كعنوان لكل صفحة تم إنشاؤها. إذا تم تحديده كمرجع لروتين فرعي، فسيتم استدعاء
+    هذا الروتين الفرعي في بداية كل صفحة وسيتم استخدام قيمته المعادة كسلسلة عنوان.
+    عند استدعائه، يتم تمرير الرقم الحالي للصفحة إلى الروتين الفرعي.</p>
+<p class="Pp">بالمثل، إذا تم تحديد خيار "footer" بقيمة سلسلة، فسيتم استخدام هذه
+    السلسلة كتذييل لكل صفحة تم إنشاؤها. إذا تم تحديده كمرجع لروتين فرعي، فسيتم
+    استدعاء هذا الروتين الفرعي في <i>بداية</i> كل صفحة وسيتم استخدام قيمته
+    المعادة كسلسلة تذييل. عند استدعائه، يتم تمرير رقم الصفحة الحالي إلى روتين
+    التذييل الفرعي.</p>
+<p class="Pp">يمكن أيضًا تحديد كل من خيارات العنوان والتذييل كمرجعيات إلى جداول
+    هاش. في هذه الحالة، تحدد إدخالات الهاش للمفاتيح "left"، و "centre"
+    (أو "center")، و "right" ما يجب أن يظهر على اليسار والوسط واليمين من
+    العنوان/التذييل. يحدد الإدخال للمفتاح "width" عرض التذييل. إذا تم حذف
+    المفتاح "width"، فسيتم استخدام خيار التكوين "pagewidth" (الذي يفترض
+    افتراضيًا 72 حرفًا).</p>
+<p class="Pp">قد تكون قيم "left"، و "centre"، و "right" سلاسل حرفية، أو
+    روتينات فرعية (تمامًا كما قد يكون مواصفات عنوان/تذييل عادي). انظر المثال
+    الثاني، أدناه.</p>
+<p class="Pp">بديل آخر لخيارات العنوان والتذييل هو تحديدهما كروتين فرعي يعيد جدول
+    هاش. يتم استدعاء الروتين الفرعي لكل صفحة، ثم يتم التعامل مع جدول الهاش الناتج
+    مثل جداول الهاش الموصوفة في الفقرة السابقة. سي</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_&amp;quot;pagefeed&amp;quot;_option'><a class='permalink' href='#The_&amp;quot;pagefeed&amp;quot;_option'>The "pagefeed" option</a></h2>
+<p class="Pp">The "pagefeed" option acts in exactly the same way, to
+    produce a pagefeed which is appended after the footer. But note that the
+    pagefeed is not counted as part of the page length.</p>
+<p class="Pp">All three of these page components are recomputed at the start of
+    each new page, before the page contents are formatted (recomputing the
+    header and footer first makes it possible to determine how many lines of
+    data to format so as to adhere to the specified page length).</p>
+<p class="Pp">When the call to <span class="Li">&quot;form&quot;</span> is
+    complete and the data has been fully formatted, the footer subroutine is
+    called one last time, with an extra argument of 1. The string returned by
+    this final call is used as the final footer.</p>
+<p class="Pp">So for example, a 60-line per page report, starting at page 7,
+    with appropriate headers and footers might be set up like so:</p>
+<pre>$page = 7;
+form { header =&gt; sub { &quot;Page $_[0]\n\n&quot; },
+       footer =&gt; sub { my ($pagenum, $lastpage) = @_;
+                       return &quot;&quot; if $lastpage;
+                       return &quot;-&quot;x50 . &quot;\n&quot;
+                                     .form &quot;&gt;&quot;x50, &quot;...&quot;.($pagenum+1);
+                      },
+       pagefeed =&gt; &quot;\n\n&quot;,
+       pagelen  =&gt; 60
+       pagenum =&gt; \$page
+     },
+     $template,
+     @data;</pre>
+<p class="Pp">Note the recursive use of <span class="Li">&quot;form&quot;</span>
+    within the &quot;footer&quot; option!</p>
+<p class="Pp">Alternatively, to set up headers and footers such that the running
+    head is right justified in the header and the page number is centred in the
+    footer:</p>
+<pre>form { header =&gt; { right =&gt; &quot;Running head&quot; },
+       footer =&gt; { centre =&gt; sub { &quot;Page $_[0]&quot; } },
+       pagelen  =&gt; 60
+     },
+     $template,
+     @data;</pre>
+<p class="Pp">The footer in the previous example could also have been specified
+    the other way around, as a subroutine that returns a hash (rather than a
+    hash containing a subroutine):</p>
+<pre>form { header =&gt; { right =&gt; &quot;Running head&quot; },
+       footer =&gt; sub { return {centre =&gt; &quot;Page $_[0]&quot;} },
+       pagelen  =&gt; 60
+     },
+     $template,
+     @data;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_&amp;quot;cols&amp;quot;_option'><a class='permalink' href='#The_&amp;quot;cols&amp;quot;_option'>The "cols" option</a></h2>
+<p class="Pp">Sometimes data to be used in a
+    <span class="Li">&quot;form&quot;</span> call needs to be extracted from a
+    nested data structure. For example, whilst it's easy to print a table if you
+    already have the data in columns:</p>
+<pre>@name  = qw(Tom Dick Harry);
+@score = qw( 88   54    99);
+@time  = qw( 15   13    18);
+print form
+'-------------------------------',
+'Name             Score     Time',
+'-------------------------------',
+'[[[[[[[[[[[[[[   |||||     ||||',
+ \@name,          \@score,  \@time;</pre>
+<p class="Pp">if the data is aggregrated by rows:</p>
+<pre>@data = (
+    { name=&gt;'Tom',   score=&gt;88, time=&gt;15 },
+    { name=&gt;'Dick',  score=&gt;54, time=&gt;13 },
+    { name=&gt;'Harry', score=&gt;99, time=&gt;18 },
+);</pre>
+<p class="Pp">you need to do some fancy mapping before it can be fed to
+    <span class="Li">&quot;form&quot;</span>:</p>
+<pre>print form
+'-------------------------------',
+'Name             Score     Time',
+'-------------------------------',
+'[[[[[[[[[[[[[[   |||||     ||||',
+[map $$_{name},  @data],
+[map $$_{score}, @data],
+[map $$_{time} , @data];</pre>
+<p class="Pp">Or you could just use the <span class="Li">'cols'</span>
+  option:</p>
+<pre>use Text::Reform qw(form columns);
+print form
+'-------------------------------',
+'Name             Score     Time',
+'-------------------------------',
+'[[[[[[[[[[[[[[   |||||     ||||',
+{ cols =&gt; [qw(name score time)],
+  from =&gt; \@data
+};</pre>
+<p class="Pp">This option takes an array of strings that specifies the keys of
+    the hash entries to be extracted into columns. The
+    <span class="Li">'from'</span> entry (which must be present) also takes an
+    array, which is expected to contain a list of references to hashes. For each
+    key specified, this option inserts into
+    <span class="Li">&quot;form&quot;</span>'s argument list a reference to an
+    array containing the entries for that key, extracted from each of the hash
+    references supplied by <span class="Li">'from'</span>. So, for example, the
+    option:</p>
+<pre>{ cols =&gt; [qw(name score time)],
+  from =&gt; \@data
+}</pre>
+<p class="Pp">is replaced by three array references, the first containing the
+    <span class="Li">'name'</span> entries for each hash inside
+    <span class="Li">@data</span>, the second containing the
+    <span class="Li">'score'</span> entries for each hash inside
+    <span class="Li">@data</span>, and the third containing the
+    <span class="Li">'time'</span> entries for each hash inside
+    <span class="Li">@data</span>.</p>
+<p class="Pp">If, instead, you have a list of arrays containing the data:</p>
+<pre>@data = (
+        # Time  Name     Score
+        [ 15,   'Tom',   88 ],
+        [ 13,   'Dick',  54 ],
+        [ 18,   'Harry', 99 ],
+);</pre>
+<p class="Pp">the <span class="Li">'cols'</span> option can extract the
+    appropriate columns for that too. You just specify the required indices,
+    rather than keys:</p>
+<pre>print form
+'-----------------------------',
+'Name             Score   Time',
+'-----------------------------',
+'[[[[[[[[[[[[[[   |||||   ||||',
+{ cols =&gt; [1,2,0],
+  from =&gt; \@data
+}</pre>
+<p class="Pp">Note that the indices can be in any order, and the resulting
+    arrays are returned in the same order.</p>
+<p class="Pp">If you need to merge columns extracted from two hierarchical data
+    structures, just concatenate the data structures first, like so:</p>
+<pre>print form
+'---------------------------------------',
+'Name             Score   Time   Ranking
+'---------------------------------------',
+'[[[[[[[[[[[[[[   |||||   ||||   |||||||',
+{ cols =&gt; [1,2,0],
+  from =&gt; [@data, @olddata],
+}</pre>
+<p class="Pp">Of course, this only works if the columns are in the same
+    positions in both data sets (and both datasets are stored in arrays) or if
+    the columns have the same keys (and both datasets are in hashes). If not,
+    you would need to format each dataset separately, like so:</p>
+<pre>print form
+'-----------------------------',
+'Name             Score   Time'
+'-----------------------------',
+'[[[[[[[[[[[[[[   |||||   ||||',
+{ cols=&gt;[1,2,0],  from=&gt;\@data },
+'[[[[[[[[[[[[[[   |||||   ||||',
+{ cols=&gt;[3,8,1],  from=&gt;\@olddata },
+'[[[[[[[[[[[[[[   |||||   ||||',
+{ cols=&gt;[qw(name score time)],  from=&gt;\@otherdata };</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_&amp;quot;tag&amp;quot;_sub'><a class='permalink' href='#The_&amp;quot;tag&amp;quot;_sub'>The "tag" sub</a></h2>
+<p class="Pp">The <span class="Li">&quot;tag&quot;</span> subroutine may be
+    exported from the module. It takes two arguments: a tag specifier and a text
+    to be entagged. The tag specifier indicates the indenting of the tag, and of
+    the text. The sub generates an end-tag (using the usual
+    &quot;/<i>tag</i>&quot; variant), unless an explicit end-tag is provided as
+    the third argument.</p>
+<p class="Pp">The tag specifier consists of the following components (in
+  order):</p>
+<dl class="Bl-tag">
+  <dt id="An"><a class="permalink" href="#An">An optional vertical spacer (zero
+    or more whitespace-separated newlines)</a></dt>
+  <dd>One or more whitespace characters up to a final mandatory newline. This
+      vertical space is inserted before the tag and after the end-tag</dd>
+  <dt id="An~2"><a class="permalink" href="#An~2">An optional tag
+    indent</a></dt>
+  <dd>Zero or more whitespace characters. Both the tag and the end-tag are
+      indented by this whitespace.</dd>
+  <dt id="An~3"><a class="permalink" href="#An~3">An optional left (opening) tag
+    delimiter</a></dt>
+  <dd>Zero or more non-&quot;word&quot; characters (not alphanumeric or '_'). If
+      the opening delimiter is omitted, the character '&lt;' is used.</dd>
+  <dt id="A"><a class="permalink" href="#A">A tag</a></dt>
+  <dd>One or more &quot;word&quot; characters (alphanumeric or '_').</dd>
+  <dt id="Optional"><a class="permalink" href="#Optional">Optional tag
+    arguments</a></dt>
+  <dd>Any number of any characters</dd>
+  <dt id="An~4"><a class="permalink" href="#An~4">An optional right (closing)
+    tag delimiter</a></dt>
+  <dd>Zero or more non-&quot;word&quot; characters which balance some sequential
+      portion of the opening tag delimiter. For example, if the opening
+      delimiter is &quot;&lt;-(&quot; then any of the following are acceptible
+      closing delimiters: &quot;)-&gt;&quot;, &quot;-&gt;&quot;, or
+      &quot;&gt;&quot;. If the closing delimiter is omitted, the
+      &quot;inverse&quot; of the opening delimiter is used (for example,
+      &quot;)-&gt;&quot;),</dd>
+  <dt id="An~5"><a class="permalink" href="#An~5">An optional vertical spacer
+    (zero or more newlines)</a></dt>
+  <dd>One or more whitespace characters up to a mandatory newline. This vertical
+      space is inserted before and after the complete text.</dd>
+  <dt id="An~6"><a class="permalink" href="#An~6">An optional text
+    indent</a></dt>
+  <dd>Zero or more space of tab characters. Each line of text is indented by
+      this whitespace (in addition to the tag indent).</dd>
+</dl>
+<p class="Pp">For example:</p>
+<pre>$text = &quot;three lines\nof tagged\ntext&quot;;
+print tag &quot;A HREF=#nextsection&quot;, $text;</pre>
+<p class="Pp">prints:</p>
+<pre>&lt;A HREF=#nextsection&gt;three lines
+of tagged
+text&lt;/A&gt;</pre>
+<p class="Pp">whereas:</p>
+<pre>print tag &quot;[-:GRIN&gt;&gt;&gt;\n&quot;, $text;</pre>
+<p class="Pp">prints:</p>
+<pre>[-:GRIN&gt;&gt;&gt;:-]
+three lines
+of tagged
+text
+[-:/GRIN&gt;&gt;&gt;:-]</pre>
+<p class="Pp">and:</p>
+<pre>print tag &quot;\n\n   &lt;BOLD&gt;\n\n   &quot;, $text, &quot;&lt;END BOLD&gt;&quot;;</pre>
+<p class="Pp">prints:</p>
+<p class="Pp">&#x00A0;</p>
+<pre>&lt;BOLD&gt;
+   three lines
+   of tagged
+   text
+&lt;END BOLD&gt;</pre>
+<p class="Pp">&#x00A0;</p>
+<p class="Pp">(with the indicated spacing fore and aft).</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Damian Conway (damian@conway.org)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<p class="Pp">The module uses <span class="Li">&quot;POSIX::strtod&quot;</span>,
+    which may be broken under certain versions of Windows. Applying the
+    WINDOWS_PATCH patch to Reform.pm will replace the POSIX function with a
+    copycat subroutine.</p>
+<p class="Pp">There are undoubtedly serious bugs lurking somewhere in code this
+    funky :-) Bug reports and other feedback are most welcome.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENCE_AND_COPYRIGHT'><a class='permalink' href='#LICENCE_AND_COPYRIGHT'>LICENCE   AND COPYRIGHT</a></h1>
+<p class="Pp">Copyright (c) 1997-2007, Damian Conway
+    <span class="Li">&quot;&lt;DCONWAY@CPAN.org&gt;&quot;</span>. All rights
+    reserved.</p>
+<p class="Pp">This module is free software; you can redistribute it and/or
+    modify it under the same terms as Perl itself. See perlartistic.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DISCLAIMER_OF_WARRANTY'><a class='permalink' href='#DISCLAIMER_OF_WARRANTY'>DISCLAIMER   OF WARRANTY</a></h1>
+<p class="Pp">BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO
+    WARRANTY FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT
+    WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER</p>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Text::Reform(3pm) - Arch Linux</title>
+        <link rel="stylesheet" href="/css/style.css" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Text__Reform(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-text-reform/">perl-text-reform</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main>
+            <article>
+<section class="Manual">
+<div class="Bd Markup">
+<p class="Pp">
+   تُقدم البرمجيات "كما هي" بدون أي ضمان من أي نوع، سواء كان صريحاً أو ضمنياً، بما في ذلك، على سبيل المثال لا الحصر، الضمانات الضمنية لقابلية التسويق والملاءمة لغرض معين. يتحمل المستخدم بالكامل مخاطر جودة وأداء البرمجيات. في حالة تبين أن البرمجيات معيبة، يتحمل المستخدم تكلفة جميع الخدمات أو الإصلاحات أو التصحيحات الضرورية.</p>
+<p class="Pp">
+   لن يتحمل أي صاحب حقوق طبع ونشر، أو أي طرف آخر قد يقوم بتعديل و/أو إعادة توزيع البرمجيات وفقاً للترخيص المذكور أعلاه، المسؤولية تجاهك عن الأضرار، بما في ذلك أي أضرار عامة أو خاصة أو عرضية أو تبعية تنشأ عن استخدام البرمجيات أو عدم القدرة على استخدامها (بما في ذلك على سبيل المثال لا الحصر فقدان البيانات أو عرض البيانات بشكل غير دقيق أو الخسائر التي تتكبدها أنت أو أطراف ثالثة أو فشل البرمجيات في العمل مع أي برمجيات أخرى)، حتى لو تم إبلاغ هذا المالك أو الطرف الآخر بإمكانية حدوث مثل هذه الأضرار.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-text-reform/">extra/perl-text-reform</a></dd>
+        <dt>Version:</dt>
+        <dd>1.20-7</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/Text-Reform">https://search.cpan.org/dist/Text-Reform</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-text-reform/">/listing/extra/perl-text-reform/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#VERSION">VERSION</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+            <li><a href="#LICENCE_AND_COPYRIGHT">LICENCE AND COPYRIGHT</a></li>
+        
+            <li><a href="#DISCLAIMER_OF_WARRANTY">DISCLAIMER OF WARRANTY</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Text::Reform.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Text::Reform.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

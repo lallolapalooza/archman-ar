@@ -1,0 +1,512 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlfaq8.1perl</h1>
+<link rel="stylesheet" href="basic.css">
+&quot;cmd&quot;);
+while( &lt;PH&gt; ) { }
+waitpid($pid, 0);</pre>
+<p class="Pp">لالتقاط STDERR لبرنامج، مع تجاهل STDOUT الخاص به:</p>
+<pre>use IPC::Open3;
+use File::Spec;
+my $in = '';
+open(NULL, &quot;&gt;&quot;, File::Spec-&gt;devnull);
+my $pid = open3($in, &quot;&gt;&amp;NULL&quot;, \*PH, &quot;cmd&quot;);
+while( &lt;PH&gt; ) { }
+waitpid($pid, 0);</pre>
+<p class="Pp">لالتقاط STDERR لبرنامج، والسماح لـ STDOUT الخاص به بالذهاب إلى STDERR الخاص بنا:</p>
+<pre>use IPC::Open3;
+my $in = '';
+my $pid = open3($in, &quot;&gt;&amp;STDERR&quot;, \*PH, &quot;cmd&quot;);
+while( &lt;PH&gt; ) { }
+waitpid($pid, 0);</pre>
+<p class="Pp">لقراءة كل من STDOUT و STDERR للأمر بشكل منفصل، يمكنك إعادة توجيههما إلى ملفات مؤقتة، والسماح للبرنامج بالتشغيل، ثم قراءة الملفات المؤقتة:</p>
+<pre>use IPC::Open3;
+use IO::File;
+my $in = '';
+local *CATCHOUT = IO::File-&gt;new_tmpfile;
+local *CATCHERR = IO::File-&gt;new_tmpfile;
+my $pid = open3($in, &quot;&gt;&amp;CATCHOUT&quot;, &quot;&gt;&amp;CATCHERR&quot;, &quot;cmd&quot;);
+waitpid($pid, 0);
+seek $_, 0, 0 for \*CATCHOUT, \*CATCHERR;
+while( &lt;CATCHOUT&gt; ) {}
+while( &lt;CATCHERR&gt; ) {}</pre>
+<p class="Pp">ولكن لا توجد حاجة حقيقية لأن يكون كلا الملفين مؤقتين ... يجب أن يعمل ما يلي بنفس القدر، دون تجميد:</p>
+<pre>use IPC::Open3;
+my $in = '';
+use IO::File;
+local *CATCHERR = IO::File-&gt;new_tmpfile;
+my $pid = open3($in, \*CATCHOUT, &quot;&gt;&amp;CATCHERR&quot;, &quot;cmd&quot;);
+while( &lt;CATCHOUT&gt; ) {}
+waitpid($pid, 0);
+seek CATCHERR, 0, 0;
+while( &lt;CATCHERR&gt; ) {}</pre>
+<p class="Pp">وسيكون ذلك أسرع أيضًا، حيث يمكننا البدء في معالجة stdout للبرنامج على الفور، بدلاً من انتظار انتهاء البرنامج.</p>
+<p class="Pp">مع أي من هذه، يمكنك تغيير واصفات الملفات قبل الاستدعاء:</p>
+<pre>open(STDOUT, &quot;&gt;logfile&quot;);
+system(&quot;ls&quot;);</pre>
+<p class="Pp">أو يمكنك استخدام إعادة توجيه واصف الملفات في Bourne shell:</p>
+<pre>$output = `$cmd 2&gt;some_file`;
+open (PIPE, &quot;cmd 2&gt;some_file |&quot;);</pre>
+<p class="Pp">يمكنك أيضًا استخدام إعادة توجيه واصف الملفات لجعل STDERR نسخة مكررة من STDOUT:</p>
+<pre>$output = `$cmd 2&gt;&amp;1`;
+open (PIPE, &quot;cmd 2&gt;&amp;1 |&quot;);</pre>
+<p class="Pp">لاحظ أنه لا يمكنك ببساطة فتح STDERR ليكون نسخة مكررة من STDOUT في برنامج Perl الخاص بك وتجنب استدعاء shell للقيام بإعادة التوجيه. هذا لا يعمل:</p>
+<pre>open(STDERR, &quot;&gt;&amp;STDOUT&quot;);
+$alloutput = `cmd args`;  # stderr still escapes</pre>
+<p class="Pp">يفشل هذا لأن `open()` يجعل STDERR يذهب إلى حيث كان STDOUT ذاهبًا في وقت `open()`. ثم تجعل علامات الاقتباس المائلة الخلفية STDOUT يذهب إلى سلسلة نصية، ولكنها لا تغير STDERR (الذي لا يزال يذهب إلى STDOUT القديم).</p>
+<p class="Pp">لاحظ أنه يجب عليك استخدام صيغة إعادة توجيه Bourne shell (`sh(1)`) في علامات الاقتباس المائلة الخلفية، وليس `csh(1)`! تتوفر تفاصيل حول سبب استخدام `system()` و علامات الاقتباس المائلة الخلفية وفتح الأنابيب في Perl لواجهة Bourne shell في المقال *versus/csh.whynot* في مجموعة &quot;أكثر بكثير مما كنت ترغب في معرفته&quot; على <a href='http://www.cpan.org/misc/olddoc/FMTEYEWTK.tgz'>http://www.cpan.org/misc/olddoc/FMTEYEWTK.tgz</a>. لالتقاط STDERR و STDOUT لأمر معًا:</p>
+<pre>$output = `cmd 2&gt;&amp;1`;                       # either with backticks
+$pid = open(PH, &quot;cmd 2&gt;&amp;1 |&quot;);              # or with an open pipe
+while (&lt;PH&gt;) { }                            #    plus a read</pre>
+<p class="Pp">لالتقاط STDOUT لأمر ولكن تجاهل STDERR الخاص به:</p>
+<pre>$output = `cmd 2&gt;/dev/null`;                # either with backticks
+$pid = open(PH, &quot;cmd 2&gt;/dev/null |&quot;);       # or with an open pipe
+while (&lt;PH&gt;) { }                            #    plus a read</pre>
+<p class="Pp">لالتقاط STDERR لأمر ولكن تجاهل STDOUT الخاص به:</p>
+<pre>$output = `cmd 2&gt;&amp;1 1&gt;/dev/null`;           # either with backticks
+$pid = open(PH, &quot;cmd 2&gt;&amp;1 1&gt;/dev/null |&quot;);  # or with an open pipe
+while (&lt;PH&gt;) { }                            #    plus a read</pre>
+<p class="Pp">لتبادل STDOUT و STDERR لأمر لالتقاط STDERR ولكن ترك STDOUT الخاص به ليخرج من STDERR القديم الخاص بنا:</p>
+<pre>$output = `cmd 3&gt;&amp;1 1&gt;&amp;2 2&gt;&amp;3 3&gt;&amp;-`;        # either with backticks
+$pid = open(PH, &quot;cmd 3&gt;&amp;1 1&gt;&amp;2 2&gt;&amp;3 3&gt;&amp;-|&quot;);# or with an open pipe
+while (&lt;PH&gt;) { }                            #    plus a read</pre>
+<p class="Pp">لقراءة كل من STDOUT و STDERR لأمر بشكل منفصل، من الأسهل إعادة توجيههما بشكل منفصل إلى ملفات، ثم القراءة من تلك الملفات عند انتهاء البرنامج:</p>
+<pre>system(&quot;program args 1&gt;program.stdout 2&gt;program.stderr&quot;);</pre>
+<p class="Pp">الترتيب مهم في كل هذه الأمثلة. وذلك لأن shell يعالج إعادة توجيه واصفات الملفات بترتيب صارم من اليسار إلى اليمين.</p>
+<pre>system(&quot;prog args 1&gt;tmpfile 2&gt;&amp;1&quot;);
+system(&quot;prog args 2&gt;&amp;1 1&gt;tmpfile&quot;);</pre>
+<p class="Pp">الأمر الأول يرسل كل من الإخراج القياسي والخطأ القياسي إلى الملف المؤقت. الأمر الثاني يرسل فقط الإخراج القياسي القديم إلى هناك، ويظهر الخطأ القياسي القديم على الإخراج القياسي القديم.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">لماذا لا يُرجع <b>open()</b> خطأ عندما تفشل فتحة الأنبوب؟</h2>
+<p class="Pp">إذا كان الوسيط الثاني لـ `open()` ذي الأنبوب يحتوي على أحرف تعريفية خاصة بـ shell، فإن Perl تقوم بعمل `fork()`، ثم `exec()` لـ shell لفك تشفير الأحرف التعريفية وتشغيل البرنامج المطلوب في النهاية. إذا لم يكن من الممكن تشغيل البرنامج، فإن shell هو الذي يتلقى الرسالة، وليس Perl. كل ما يمكن لبرنامج Perl الخاص بك معرفته هو ما إذا كان يمكن بدء تشغيل shell بنجاح. لا يزال بإمكانك التقاط STDERR لـ shell والتحقق منه بحثًا عن رسائل الخطأ. انظر &quot;كيف يمكنني التقاط STDERR من أمر خارجي؟&quot; في مكان آخر في هذا المستند، أو استخدم الوحدة النمطية IPC::Open3.</p>
+<p class="Pp">إذا لم تكن هناك أحرف تعريفية خاصة بـ shell في وسيط `open()`، فإن Perl يقوم بتشغيل الأمر مباشرة، دون استخدام shell، ويمكنه الإبلاغ بشكل صحيح عما إذا كان الأمر قد بدأ.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">ما هو الخطأ في استخدام علامات الاقتباس المائلة الخلفية في سياق فارغ؟</h2>
+<p class="Pp">بالمعنى الدقيق للكلمة، لا شيء. من الناحية الأسلوبية، إنها ليست طريقة جيدة لكتابة التعليمات البرمجية القابلة للصيانة. لدى Perl العديد من المعاملات لتشغيل الأوامر الخارجية. علامات الاقتباس المائلة الخلفية هي واحدة؛ فهي تجمع الإخراج من الأمر للاستخدام في برنامجك. الدالة `system()` هي طريقة أخرى؛ فهي لا تفعل ذلك.</p>
+<p class="Pp">كتابة علامات اقتباس مائلة خلفية في برنامجك ترسل رسالة واضحة للقراء الكود الخاص بك بأنك أردت جمع إخراج الأمر. لماذا ترسل رسالة واضحة ليست صحيحة؟</p>
+<p class="Pp">ضع في اعتبارك هذا السطر:</p>
+<pre>`cat /etc/termcap`;</pre>
+<p class="Pp">لقد نسيت التحقق من `$؟` لمعرفة ما إذا كان البرنامج قد تم تشغيله بشكل صحيح. حتى لو كتبت</p>
+<pre>print `cat /etc/termcap`;</pre>
+<p class="Pp">يمكن كتابة هذا الكود، وربما يجب أن يُكتب كـ</p>
+<pre>system(&quot;cat /etc/termcap&quot;) == 0
+or die &quot;cat program failed!&quot;;</pre>
+<p class="Pp">والذي سيقوم بطباعة إخراج أمر cat كما يتم إنشاؤه، بدلاً من الانتظار حتى يكتمل البرنامج لطباعته. كما أنه يتحقق من قيمة الإرجاع.</p>
+<p class="Pp">توفر `system()` أيضًا تحكمًا مباشرًا في ما إذا كان معالجة أحرف البدل في shell قد تحدث، بينما لا تفعل علامات الاقتباس المائلة الخلفية ذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_can_I_call_backticks_without_shell_processing?'><a class='permalink' href='#How_can_I_call_backticks_without_shell_processing?'>كيف يمكنني استدعاء علامات الاقتباس المائلة الخلفية دون معالجة shell؟</a></h2>
+<p class="Pp">هذا أمر صعب بعض الشيء. لا يمكنك ببساطة كتابة الأمر هكذا:</p>
+<pre>@ok = `grep @opts '$search_string' @filenames`;</pre>
+<p class="Pp">اعتبارًا من Perl 5.8.0، يمكنك استخدام `open()` مع وسائط متعددة. تمامًا مثل الأشكال القائمة لـ `system()` و `exec()`، لا تحدث عمليات هروب shell.</p>
+<pre>open( GREP, &quot;-|&quot;, 'grep', @opts, $search_string, @filenames );
+chomp(@ok = &lt;GREP&gt;);
+close GREP;</pre>
+<p class="Pp">يمكنك أيضًا:</p>
+<pre>my @ok = ();
+if (open(GREP, &quot;-|&quot;)) {
+    while (&lt;GREP&gt;) {
+        chomp;
+        push(@ok, $_);
+    }
+    close GREP;
+} else {
+    exec 'grep', @opts, $search_string, @filenames;
+}</pre>
+<p class="Pp">تمامًا كما هو الحال مع `system()`، لا تحدث عمليات هروب shell عند `exec()` قائمة. يمكن العثور على أمثلة أخرى لهذا في &quot;Safe Pipe Opens&quot; في perlipc.</p>
+<p class="Pp">لاحظ أنه إذا كنت تستخدم Windows، فلن يكون هناك حل لهذه المشكلة المزعجة. على الرغم من أن Perl تحاكي `fork()`، إلا أنك ستظل عالقًا، لأن Windows لا تحتوي على واجهة API من نوع argc/argv.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">لماذا لا يمكن لسكريبتي القراءة من STDIN بعد أن أعطيته EOF (
+  ^D على Unix، ^Z على MS-DOS)؟</h2>
+<p class="Pp">يحدث هذا فقط إذا تم تجميع Perl الخاص بك لاستخدام stdio بدلاً من perlio، وهو الإعداد الافتراضي. قد تقوم بعض (وربما كل؟) stdios بتعيين علامات الخطأ و eof التي قد تحتاج إلى مسحها. تحدد الوحدة النمطية POSIX `clearerr()` التي يمكنك استخدامها. هذه هي الطريقة الصحيحة تقنيًا للقيام بذلك. إليك بعض الحلول البديلة الأقل موثوقية:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>حاول الاحتفاظ بمؤشر البحث والذهاب إلى هناك، مثل هذا:
+        <pre>my $where = tell($log_fh);
+seek($log_fh, $where, 0);
+</pre>
+  </dd>
+  <dt>2.</dt>
+  <dd>إذا لم ينجح ذلك، حاول البحث في جزء مختلف من الملف ثم العودة.</dd>
+  <dt>3.</dt>
+  <dd>إذا لم ينجح ذلك، حاول البحث في جزء مختلف من الملف، وقراءة شيء ما، ثم العودة.</dd>
+  <dt>4.</dt>
+  <dd>إذا لم ينجح ذلك، فتخلي عن حزمة stdio الخاصة بك واستخدم sysread.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_can_I_convert_my_shell_script_to_perl?'><a class='permalink' href='#How_can_I_convert_my_shell_script_to_perl?'>كيف يمكنني تحويل سكربت shell الخاص بي إلى perl؟</a></h2>
+<p class="Pp">تعلم Perl وأعد كتابته. بجدية، لا يوجد محول بسيط. الأشياء التي يصعب القيام بها في shell سهلة في Perl، وهذا الصعوبة نفسها هي ما سيجعل محول shell-&gt;perl مستحيلاً تقريبًا. من خلال إعادة كتابته، ستفكر فيما تحاول القيام به حقًا، ومن المأمول أن تتخلص من نموذج تدفق بيانات الأنابيب الخاص بـ shell، والذي بينما يكون مناسبًا لبعض الأمور، فإنه يسبب العديد من أوجه عدم الكفاءة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Can_I_use_perl_to_run_a_telnet_or_ftp_session?'><a class='permalink' href='#Can_I_use_perl_to_run_a_telnet_or_ftp_session?'>هل يمكنني استخدام perl لتشغيل جلسة telnet أو ftp؟</a></h2>
+<p class="Pp">جرب الوحدات النمطية Net::FTP و Net::Telnet (متوفرة من CPAN). سيساعد أيضًا <a href='http://www.cpan.org/scripts/netstuff/telnet.emul.shar'>http://www.cpan.org/scripts/netstuff/telnet.emul.shar</a> في محاكاة بروتوكول telnet، ولكن Net::Telnet من المحتمل أن يكون أسهل في الاستخدام.</p>
+<p class="Pp">إذا كان كل ما تريد فعله هو التظاهر بأنك telnet ولكنك لا تحتاج إلى المصافحة الأولية لـ telnet، فإن نهج العملية المزدوجة القياسي سيكون كافيًا:</p>
+<pre>use IO::Socket;             # new in 5.004
+my $handle = IO::Socket::INET-&gt;new('www.perl.com:80')
+    or die &quot;can't connect to port 80 on www.perl.com $!&quot;;
+$handle-&gt;autoflush(</pre>
+{
+  "file_structure": [
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "How do I know if an error message is from Perl?",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "The fix involves a little bit of code, but this may be all you need to figure out the problem."
+        },
+        {
+          "type": "preformatted",
+          "code": "#!/usr/bin/perl -w\nBEGIN {\n    $SIG{__WARN__} = sub{ print STDERR \"Perl: \", @_; };\n    $SIG{__DIE__}  = sub{ print STDERR \"Perl: \", @_; exit 1};\n}\n$a = 1 + undef;\n$x / 0;\n__END__"
+        },
+        {
+          "type": "paragraph",
+          "text": "The perl message comes out with \"Perl\" in front. The BEGIN block works at compile time so all of the compilation errors and warnings get the \"Perl:\" prefix too."
+        },
+        {
+          "type": "preformatted",
+          "code": "Perl: Useless use of division (/) in void context at ./test line 9.\nPerl: Name \"main::a\" used only once: possible typo at ./test line 8.\nPerl: Name \"main::x\" used only once: possible typo at ./test line 9.\nPerl: Use of uninitialized value in addition (+) at ./test line 8.\nPerl: Use of uninitialized value in division (/) at ./test line 9.\nPerl: Illegal division by zero at ./test line 9.\nPerl: Illegal division by zero at -e line 3."
+        },
+        {
+          "type": "paragraph",
+          "text": "If I don't see that \"Perl:\", it's not from perl."
+        },
+        {
+          "type": "paragraph",
+          "text": "You could also just know all the perl errors, and although there are some people who may know all of them, you probably don't. However, they all should be in the perldiag manpage. If you don't find the error in there, it probably isn't a perl error."
+        },
+        {
+          "type": "paragraph",
+          "text": "Looking up every message is not the easiest way, so let perl to do it for you. Use the diagnostics pragma with turns perl's normal messages into longer discussions on the topic."
+        },
+        {
+          "type": "preformatted",
+          "code": "use diagnostics;"
+        },
+        {
+          "type": "paragraph",
+          "text": "If you don't get a paragraph or two of expanded discussion, it might not be perl's message."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "How do I install a module from CPAN?",
+      "contributor": "brian d foy",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "The easiest way is to have a module also named CPAN do it for you by using the \"cpan\" command that comes with Perl. You can give it a list of modules to install:"
+        },
+        {
+          "type": "preformatted",
+          "code": "$ cpan IO::Interactive Getopt::Whatever"
+        },
+        {
+          "type": "paragraph",
+          "text": "If you prefer \"CPANPLUS\", it's just as easy:"
+        },
+        {
+          "type": "preformatted",
+          "code": "$ cpanp i IO::Interactive Getopt::Whatever"
+        },
+        {
+          "type": "paragraph",
+          "text": "If you want to install a distribution from the current directory, you can tell \"CPAN.pm\" to install \".\" (the full stop):"
+        },
+        {
+          "type": "preformatted",
+          "code": "$ cpan ."
+        },
+        {
+          "type": "paragraph",
+          "text": "See the documentation for either of those commands to see what else you can do."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you want to try to install a distribution by yourself, resolving all dependencies on your own, you follow one of two possible build paths."
+        },
+        {
+          "type": "paragraph",
+          "text": "For distributions that use Makefile.PL:"
+        },
+        {
+          "type": "preformatted",
+          "code": "$ perl Makefile.PL\n$ make test install"
+        },
+        {
+          "type": "paragraph",
+          "text": "For distributions that use Build.PL:"
+        },
+        {
+          "type": "preformatted",
+          "code": "$ perl Build.PL\n$ ./Build test\n$ ./Build install"
+        },
+        {
+          "type": "paragraph",
+          "text": "Some distributions may need to link to libraries or other third-party code and their build and installation sequences may be more complicated. Check any README or INSTALL files that you may find."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "What's the difference between require and use?",
+      "contributor": "brian d foy",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "Perl runs \"require\" statement at run-time. Once Perl loads, compiles, and runs the file, it doesn't do anything else. The \"use\" statement is the same as a \"require\" run at compile-time, but Perl also calls the import method for the loaded package. These two are the same:"
+        },
+        {
+          "type": "preformatted",
+          "code": "use MODULE qw(import list);\nBEGIN {\n    require MODULE;\n    MODULE->import(import list);\n}"
+        },
+        {
+          "type": "paragraph",
+          "text": "However, you can suppress the \"import\" by using an explicit, empty import list. Both of these still happen at compile-time:"
+        },
+        {
+          "type": "preformatted",
+          "code": "use MODULE ()\nBEGIN {\n    require MODULE;\n}"
+        },
+        {
+          "type": "paragraph",
+          "text": "Since \"use\" will also call the \"import\" method, the actual value for \"MODULE\" must be a bareword. That is, \"use\" cannot load files by name, although \"require\" can:"
+        },
+        {
+          "type": "preformatted",
+          "code": "require \"$ENV{HOME}/lib/Foo.pm\"; # no @INC searching!"
+        },
+        {
+          "type": "paragraph",
+          "text": "See the entry for \"use\" in perlfunc for more details."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "How do I keep my own module/library directory?",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "When you build modules, tell Perl where to install the modules."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you want to install modules for your own use, the easiest way might be local::lib, which you can download from CPAN. It sets various installation settings for you, and uses those same settings within your programs."
+        },
+        {
+          "type": "paragraph",
+          "text": "If you want more flexibility, you need to configure your CPAN client for your particular situation."
+        },
+        {
+          "type": "paragraph",
+          "text": "For \"Makefile.PL\"-based distributions, use the INSTALL_BASE option when generating Makefiles:"
+        },
+        {
+          "type": "preformatted",
+          "code": "perl Makefile.PL INSTALL_BASE=/mydir/perl"
+        },
+        {
+          "type": "paragraph",
+          "text": "You can set this in your \"CPAN.pm\" configuration so modules automatically install in your private library directory when you use the CPAN.pm shell:"
+        },
+        {
+          "type": "preformatted",
+          "code": "% cpan\ncpan&gt; o conf makepl_arg INSTALL_BASE=/mydir/perl\ncpan&gt; o conf commit"
+        },
+        {
+          "type": "paragraph",
+          "text": "For \"Build.PL\"-based distributions, use the --install_base option:"
+        },
+        {
+          "type": "preformatted",
+          "code": "perl Build.PL --install_base /mydir/perl"
+        },
+        {
+          "type": "paragraph",
+          "text": "You can configure \"CPAN.pm\" to automatically use this option too:"
+        },
+        {
+          "type": "preformatted",
+          "code": "% cpan\ncpan&gt; o conf mbuild_arg \"--install_base /mydir/perl\"\ncpan&gt; o conf commit"
+        },
+        {
+          "type": "paragraph",
+          "text": "INSTALL_BASE tells these tools to put your modules into /mydir/perl/lib/perl5. See \"How do I add a directory to my include path (@INC) at runtime?\" for details on how to run your newly installed modules."
+        },
+        {
+          "type": "paragraph",
+          "text": "There is one caveat with INSTALL_BASE, though, since it acts differently from the PREFIX and LIB settings that older versions of ExtUtils::MakeMaker advocated. INSTALL_BASE does not support installing modules for multiple versions of Perl or different architectures under the same directory. You should consider whether you really want that and, if you do, use the older PREFIX and LIB settings. See the ExtUtils::MakeMaker documentation for more details."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "How do I add the directory my program lives in to the module/library search path?",
+      "contributor": "brian d foy",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "If you know the directory already, you can add it to @INC as you would for any other directory. You might \"use lib\" if you know the directory at compile time:"
+        },
+        {
+          "type": "preformatted",
+          "code": "use lib $directory;"
+        },
+        {
+          "type": "paragraph",
+          "text": "The trick in this task is to find the directory. Before your script does anything else (such as a \"chdir\"), you can get the current working directory with the \"Cwd\" module, which comes with Perl:"
+        },
+        {
+          "type": "preformatted",
+          "code": "BEGIN {\n    use Cwd;\n    our $directory = cwd;\n}\nuse lib $directory;"
+        },
+        {
+          "type": "paragraph",
+          "text": "You can do a similar thing with the value of $0, which holds the script name. That might hold a relative path, but \"rel2abs\" can turn it into an absolute path. Once you have the"
+        },
+        {
+          "type": "preformatted",
+          "code": "BEGIN {\n    use File::Spec::Functions qw(rel2abs);\n    use File::Basename qw(dirname);\n    my $path   = rel2abs( $0 );\n    our $directory = dirname( $path );\n}\nuse lib $directory;"
+        },
+        {
+          "type": "paragraph",
+          "text": "The FindBin module, which comes with Perl, might work. It finds the directory of the currently running script and puts it in $Bin, which you can then use to construct the right library path:"
+        },
+        {
+          "type": "preformatted",
+          "code": "use FindBin qw($Bin);"
+        },
+        {
+          "type": "paragraph",
+          "text": "You can also use local::lib to do much of the same thing. Install modules using local::lib's settings then use the module in your program:"
+        },
+        {
+          "type": "preformatted",
+          "code": "use local::lib; # sets up a local lib at ~/perl5"
+        },
+        {
+          "type": "paragraph",
+          "text": "See the local::lib documentation for more details."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "How do I add a directory to my include path (@INC) at runtime?",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "Here are the suggested ways of modifying your include path, including environment variables, run-time switches, and in-code statements:"
+        },
+        {
+          "type": "list",
+          "list_type": "description",
+          "items": [
+            {
+              "term": "the \"PERLLIB\" environment variable",
+              "definition": [
+                {
+                  "type": "preformatted",
+                  "code": "$ export PERLLIB=/path/to/my/dir\n$ perl program.pl\n"
+                }
+              ]
+            },
+            {
+              "term": "the \"PERL5LIB\" environment variable",
+              "definition": [
+                {
+                  "type": "preformatted",
+                  "code": "$ export PERL5LIB=/path/to/my/dir\n$ perl program.pl\n"
+                }
+              ]
+            },
+            {
+              "term": "the \"perl -Idir\" command line flag",
+              "definition": [
+                {
+                  "type": "preformatted",
+                  "code": "$ perl -I/path/to/my/dir program.pl\n"
+                }
+              ]
+            },
+            {
+              "term": "the \"lib\" pragma:",
+              "definition": [
+                {
+                  "type": "preformatted",
+                  "code": "use lib \"$ENV{HOME}/myown_perllib\";\n"
+                }
+              ]
+            },
+            {
+              "term": "the local::lib module:",
+              "definition": [
+                {
+                  "type": "preformatted",
+                  "code": "use local::lib;\nuse local::lib \"~/myown_perllib\";\n"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "Where are modules installed?",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "Modules are installed on a case-by-case basis (as provided by the methods described in the previous section), and in the operating system. All of these paths are stored in @INC, which you can display with the one-liner"
+        },
+        {
+          "type": "preformatted",
+          "code": "perl -e 'print join(\"\\n\",@INC,\"\\n\")'"
+        },
+        {
+          "type": "paragraph",
+          "text": "The same information is displayed at the end of the output from the command"
+        },
+        {
+          "type": "preformatted",
+          "code": "perl -V"
+        },
+        {
+          "type": "paragraph",
+          "text": "To find out where a module's source code is located, use"
+        },
+        {
+          "type": "preformatted",
+          "code": "perldoc -l Encode"
+        },
+        {
+          "type": "paragraph",
+          "text": "to display the path to the module. In some cases (for example, the \"AutoLoader\" module), this command will show the path to a separate \"pod\" file; the module itself should be in the same directory, with a 'pm' file extension."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "name": "Ss",
+      "title": "What is socket.ph and where do I get it?",
+      "children": [
+        {
+          "type": "paragraph",
+          "text": "It's a Perl 4 style file defining values for system networking constants. Sometimes it"
+        }
+      ]
+    }
+  ]
+}

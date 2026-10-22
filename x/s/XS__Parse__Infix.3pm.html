@@ -1,0 +1,365 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">XS__Parse__Infix(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perl-xs-parse-keyword/">perl-xs-parse-keyword</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl, GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+ ليكون
+    اسم مشغل مؤهل بالكامل بأسلوب الواجهة الجديدة. إذا لم يكن كذلك،
+    يفترض أنه عالمي قديم.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PARSE_HOOKS'><a class='permalink' href='#PARSE_HOOKS'>خطافات التحليل</a></h1>
+<p class="Pp">يوفر الهيكل <span class="Li">&quot;XSParseInfixHooks&quot;</span>
+    الحقول التالية التي تستخدم في مراحل مختلفة من التحليل.</p>
+<pre>struct XSParseInfixHooks {
+   U16 flags;
+   U8 lhs_flags;
+   U8 rhs_flags;
+   enum XSParseInfixClassification cls;
+   const char *wrapper_func_name;
+   const char *permit_hintkey;
+   bool (*permit)(pTHX_ void *hookdata);
+   OP *(*new_op)(pTHX_ U32 flags, OP *lhs, OP *rhs, SV **parsedata, void *hookdata);
+   OP *(*ppaddr)(pTHX);
+   /* اختياري */
+   void (*parse)(pTHX_ U32 flags, SV **parsedata, void *hookdata);
+};</pre>
+<section class="Ss">
+<h2 class="Ss" id='Flags'><a class='permalink' href='#Flags'>الأعلام</a></h2>
+<p class="Pp">يعطي حقل <span class="Li">&quot;flags&quot;</span> تفاصيل حول كيفية
+    التعامل مع المشغل بشكل عام. يجب أن يكون قناع بت لهذه الثوابت التالية، أو
+    يترك كصفر:</p>
+<dl class="Bl-tag">
+  <dt id="XPI_FLAG_LISTASSOC"><a class="permalink" href="#XPI_FLAG_LISTASSOC">XPI_FLAG_LISTASSOC</a></dt>
+  <dd><i>منذ الإصدار 0.40.</i>
+    <p class="Pp">إذا تم ضبطه، يدعم المشغل صيغة الربط الترابطي متعدد الطرق؛
+        مكتوبة بالشكل</p>
+        <pre>OPERAND op OPERAND op OPERAND op ...
+</pre>
+    <p class="Pp">في هذه الحالة، سيكون المشغل المخصص LISTOP بدلاً من BINOP،
+        وسيتم تخزين كل معامل للسلسلة بأكملها كابن للمشغل. ستحتاج وظيفة
+        المشغل إلى معرفة عدد المعاملات التي تعمل عليها. هناك طريقتان يمكن
+        الإشارة إليهما، اعتمادًا على ما إذا كان معروفًا وقت الترجمة.</p>
+    <p class="Pp">إذا كان عدد المعاملات معروفًا وقت الترجمة، ولم يتم ضبط
+        علامة <span class="Li">&quot;OPf_STACKED&quot;</span>، ويشير حقل
+        <span class="Li">&quot;op_private&quot;</span> إلى عدد تعبيرات المعاملات
+        التي كانت موجودة.</p>
+    <p class="Pp">إذا لم يكن العدد معروفًا (على سبيل المثال، يتم استخدام
+        المشغل كجسم لوظيفة غلاف تم إنشاؤها)، فسيتم ضبط علامة
+        <span class="Li">&quot;OPf_STACKED&quot;</span>. سيتم تمرير عدد
+        الوسائط كـ UV لـ SV إضافي يتم دفعه أخيرًا إلى المكدس. يجب أن تقوم
+        وظيفة المشغل بإلغاء هذا أولاً لمعرفة ذلك.</p>
+    <p class="Pp">من المعتاد أن تبدأ وظيفة المشغل المرتبطة بالقائمة بكود مثل:</p>
+        <pre>int n = (PL_op-&gt;op_flags &amp; OPf_STACKED) ? POPu : PL_op-&gt;op_private;
+</pre>
+    <p class="Pp">إذا كان المشغل مرتبطًا بالقائمة، فيجب أن تكون
+        <span class="Li">&quot;lhs_flags&quot;</span> و
+        <span class="Li">&quot;rhs_flags&quot;</span> متساويتين.</p>
+  </dd>
+</dl>
+<p class="Pp">تعطي حقلا <span class="Li">&quot;lhs_flags&quot;</span> و
+    <span class="Li">&quot;rhs_flags&quot;</span> تفاصيل حول كيفية التعامل مع
+    المعاملات اليسرى واليمنى على التوالي.</p>
+<p class="Pp">يجب ضبطه على أحد الثوابت التالية، أو تركه كصفر:</p>
+<dl class="Bl-tag">
+  <dt id="XPI_OPERAND_TERM_LIST"><a class="permalink" href="#XPI_OPERAND_TERM_LIST">XPI_OPERAND_TERM_LIST</a></dt>
+  <dd>سيتم فرض المعامل في سياق القائمة، مع الحفاظ على
+      <span class="Li">&quot;OP_PUSHMARK&quot;</span> في البداية. هذا يعني أن
+      وظيفة pp لهذا المشغل البيني ستحتاج إلى
+      <span class="Li">&quot;POPMARK&quot;</span> للعثور على ذلك.</dd>
+  <dt id="XPI_OPERAND_LIST"><a class="permalink" href="#XPI_OPERAND_LIST">XPI_OPERAND_LIST</a></dt>
+  <dd>نفس الشيء كما هو أعلاه.</dd>
+</dl>
+<p class="Pp">استخدمت الإصدارات القديمة لتوفير ثوابت تسمى
+    <span class="Li">&quot;XPI_OPERAND_ARITH&quot;</span> و
+    <span class="Li">&quot;XPI_OPERAND_TERM&quot;</span> ولكنها تتعلق بإصدار
+    أقدم من الفرع الأساسي لـ perl. هذه الأسماء هي الآن أسماء مستعارة للصفر،
+    ويمكن إزالتها من التعليمات البرمجية الجديدة.</p>
+<p class="Pp">بالإضافة إلى ذلك، تم تعريف الأعلام الإضافية التالية:</p>
+<dl class="Bl-tag">
+  <dt id="XPI_OPERAND_ONLY_LOOK"><a class="permalink" href="#XPI_OPERAND_ONLY_LOOK">XPI_OPERAND_ONLY_LOOK</a></dt>
+  <dd>إذا تم ضبطه، فإن وظيفة المشغل تعد بأنها لن تقوم بتعديل أي من القيم
+      الممررة إليها، ولن تسمح بتسرب مؤشرات تابعة مباشرة لها عبر القيمة المرجعة
+      أو مواقع أخرى.
+    <p class="Pp">هذا العلم اختياري؛ حذفه عند تطبيقه لن يغير أي سلوك ملاحظ.
+        قد يمكّن ضبطه بعض التحسينات التي سيتم إجراؤها.</p>
+    <p class="Pp">حاليًا، يمكّن هذا العلم ببساطة تحسينًا في مدقق الاستدعاءات
+        لوظائف غلاف المشغل البيني التي تأخذ معاملات على شكل قوائم. يتجاهل هذا
+        التحسين عملية <span class="Li">&quot;OP_ANONLIST&quot;</span> التي
+        ستنشئ مرجع مصفوفة مجهول مؤقت لقيم المعاملات الخاصة بها، مما يسمح
+        بتوفير طفيف في استخدام الذاكرة ووقت وحدة المعالجة المركزية. هذا التحسين
+        آمن فقط للتنفيذ إذا لم يقم المشغل بتعديل أو الاحتفاظ بمؤشرات تابعة
+        لأي من الوسائط، وإلا فقد يرى المتصل تعديلات غير متوقعة أو مراجع
+        قيم للقيم الممررة.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Selection_Stage'><a class='permalink' href='#The_Selection_Stage'>مرحلة الاختيار</a></h2>
+<p class="Pp">يعطي حقل <span class="Li">&quot;cls&quot;</span>
+    &quot;تصنيفًا&quot; للمشغل، مما يشير إلى نوع العملية التي يقدمها. يستخدم هذا
+    كمرشح بواسطة وحدات الماكرو المختلفة لـ
+    <span class="Li">&quot;XS::Parse::Keyword&quot;</span> للاختيار.</p>
+<p class="Pp">يجب أن يكون التصنيف أحد ثوابت
+    <span class="Li">&quot;XPI_CLS_*&quot;</span> الموجودة والموصوفة بشكل أكبر
+    في ملف <i>XSParseInfix.h</i> الرئيسي.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_&amp;quot;permit&amp;quot;_Stage'><a class='permalink' href='#The_&amp;quot;permit&amp;quot;_Stage'>مرحلة "السماح"</a></h2>
+<p class="Pp">كاختصار للحالة الشائعة، قد يشير
+    <span class="Li">&quot;permit_hintkey&quot;</span> إلى سلسلة نصية للبحث عنها
+    في تجزئة التلميحات. إذا لم يتم العثور على اسم المفتاح المحدد في تجزئة
+    التلميحات، فلن يُسمح بالكلمة المفتاحية. إذا كان المفتاح موجودًا، فسيتم
+    استدعاء وظيفة
+    <span class="Li">&quot;permit&quot;</span> كالمعتاد.</p>
+<p class="Pp">إذا لم يتم رفضه بواسطة مفتاح تلميح لم يتم العثور عليه في تجزئة
+    التلميحات، فسيتم استدعاء جزء الوظيفة من المرحلة بعد ذلك ويجب أن يفحص ما إذا
+    كانت الكلمة المفتاحية مسموح بها في هذا الوقت، ربما عن طريق فحص أدلة معجمية
+    أخرى، وإرجاع true فقط إذا كانت الكلمة المفتاحية مسموح بها.</p>
+<p class="Pp">كل من السلسلة والوظيفة اختيارية. يمكن أن يكون أي منهما أو كلاهما
+    موجودًا. إذا لم يكن أي منهما موجودًا، فسيتم دائمًا السماح بالكلمة المفتاحية -
+    وهو ما لم تكن تريده على الأرجح.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_&amp;quot;parse&amp;quot;_Stage'><a class='permalink' href='#The_&amp;quot;parse&amp;quot;_Stage'>مرحلة "التحليل"</a></h2>
+<p class="Pp">إذا كانت وظيفة الخطاف الاختيارية
+    <span class="Li">&quot;parse&quot;</span> موجودة، فسيتم استدعاؤها فورًا بعد
+    أن يتعرف المحلل على وجود المشغل المسمى نفسه ولكن قبل محاولة استهلاك الحد
+    الأيمن. يمكن لوظيفة الخطاف هذه محاولة إجراء المزيد من التحليل، من أجل تنفيذ
+    نحو أكثر تعقيدًا مثل المشغلات الفائقة.</p>
+<p class="Pp">عند استدعائها، يتم تمرير مؤشر إلى متغير تخزين من نوع
+    <span class="Li">&quot;SV *&quot;</span>. يكون حرًا في استخدام هذا المتغير
+    كما يرغب لتخزين نتيجة، والتي ستكون متاحة لاحقًا لوظيفة
+    <span class="Li">&quot;new_op&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Op_Generation_Stage'><a class='permalink' href='#The_Op_Generation_Stage'>مرحلة توليد المشغل</a></h2>
+<p class="Pp">إذا كان المشغل البيني سيستخدم، فإن أحد حقلي
+    <span class="Li">&quot;new_op&quot;</span> أو
+    <span class="Li">&quot;ppaddr&quot;</span> يشرح كيفية إنشاء جزء شجرة تشغيل
+    جديد.</p>
+<p class="Pp">إذا تم تعريف
+    <span class="Li">&quot;new_op&quot;</span> فسيتم استخدامه، ومن المتوقع أن
+    يعيد جزء شجرة تشغيل يستهلك وسائط LHS و RHS لتنفيذ دلالات المشغل. إذا كان
+    مرحلة
+    <span class="Li">&quot;parse&quot;</span> الاختيارية موجودة سابقًا، فإن المؤشر
+    <span class="Li">&quot;SV **&quot;</span> الذي تم تمريره هنا سيشير إلى نفس
+    التخزين الذي كانت <span class="Li">&quot;parse&quot;</span> قد وصلت إليه
+    سابقًا، بحيث يمكنه استرداد النتائج.</p>
+<p class="Pp">إذا لم يكن
+    <span class="Li">&quot;new_op&quot;</span> موجودًا، فسيتم استخدام
+    <span class="Li">&quot;ppaddr&quot;</span> بدلاً من ذلك لبناء BINOP أو
+    LISTOP جديد من النوع
+    <span class="Li">&quot;OP_CUSTOM&quot;</span>. إذا كانت مرحلة
+    <span class="Li">&quot;parse&quot;</span> سابقة قد خزنت نتائج إضافية في
+    متغير <span class="Li">&quot;SV *&quot;</span>، فسيتم فقدانها هنا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Wrapper_Function'><a class='permalink' href='#The_Wrapper_Function'>وظيفة الغلاف</a></h2>
+<p class="Pp">بالإضافة إلى ذلك، إذا تم ضبط حقل
+    <span class="Li">&quot;wrapper_func_name&quot;</span> على سلسلة نصية، فإن هذا
+    يعطي الاسم (المؤهل بالكامل) لوظيفة سيتم إنشاؤها كجزء من تسجيل المشغل. ستعمل
+    هذه الوظيفة التي تم إنشاؤها حديثًا كغلاف للمشغل.</p>
+<p class="Pp">بالنسبة للمشغلات التي يكون حدها الأيمن (RHS) عدديًا، يُفترض أن
+    تأخذ وظيفة الغلاف وسيطين عدديين بسيطين. سيتم تحديد نتيجة استدعاء الوظيفة
+    على هذه الوسائط باستخدام رمز المشغل.</p>
+<pre>$result = $lhs OP $rhs;
+$result = WRAPPERFUNC( $lhs, $rhs );</pre>
+<p class="Pp">بالنسبة للمشغلات التي يكون حدها الأيمن (RHS) قائمة، تأخذ وظيفة
+    الغلاف وسيطًا واحدًا على الأقل، وربما أكثر. الوسيط الأول هو العدد على الحد
+    الأيسر (LHS)، والوسائط المتبقية، مهما كان عددها، تشكل الحد الأيمن (RHS):</p>
+<pre>$result = $lhs OP @rhs;
+$result = WRAPPERFUNC( $lhs, @rhs );</pre>
+<p class="Pp">بالنسبة للمشغلات التي لها قوائم على كل من الحد الأيسر (LHS) والحد
+    الأيمن (RHS)، تأخذ وظيفة الغلاف وسيطين يجب أن يكونا مرجعين للمصفوفة يحتويان
+    على القوائم.</p>
+<pre>$result = @lhs OP @rhs;
+$result = WRAPPERFUNC( \@lhs, \@rhs );</pre>
+<p class="Pp">هذا يخلق راحة للوصول إلى المشغل من إصدارات perl التي لا تدعم
+    <span class="Li">&quot;PL_infix_plugin&quot;</span>.</p>
+<p class="Pp">في حالة المشغلات العددية البينية، تتضمن وظيفة الغلاف أيضًا مدقق
+    استدعاء يحاول تضمين المشغل مباشرة في موقع الاستدعاء. وبالتالي، في الحالات
+    البسيطة التي يتم فيها استدعاء الوظيفة مباشرة على وسيطين عدديين بالضبط (كما
+    فيما يلي)، لن يتم تكبد أي تكلفة إضافية لـ
+    <span class="Li">&quot;ENTERSUB&quot;</span> وسيكون شجرة التشغيل التي تم
+    إنشاؤها مماثلة لتلك التي كان سيتم إنشاؤها باستخدام بناء جملة المشغل البيني
+    مباشرة:</p>
+<pre>WRAPPERFUNC( $lhs, $rhs );
+WRAPPERFUNC( $lhs, CONSTANT );
+WRAPPERFUNC( $args[0], $args[1] );
+WRAPPERFUNC( $lhs, scalar otherfunc() );</pre>
+<p class="Pp">المدقق متشائم للغاية ولن يعيد كتابة سوى مواقع الاستدعاء التي
+    يحدد أنه يمكن القيام بذلك بأمان. لن يعيد كتابة أي من الأشكال التالية:</p>
+<pre>WRAPPERFUNC( $onearg );            # عدد وسائط غير كافٍ
+WRAPPERFUNC( $x, $y, $z );         # عدد وسائط زائد
+WRAPPERFUNC( @args[0,1] );         # ليس عدديًا
+WRAPPERFUNC( $lhs, otherfunc() );  # ليس عدديًا</pre>
+<p class="Pp">وظيفة الغلاف للمشغلات البينية التي تأخذ قوائم على كلا الجانبين
+    لديها أيضًا مدقق استدعاء سيحاول تضمين المشغل</p>
+</section>
+</section>
+في
+    ظروف مماثلة. بالإضافة إلى التحسينات الموضحة أعلاه للمؤثرات العددية، سيقوم
+    هذا المدقق أيضًا بتضمين مؤثر مرجع المصفوفة وتجاهل سلوك إلغاء الإشارة الناتج.
+    وبالتالي، فإن السطرين التاليين يصدران نفس الشجرة البصرية (optree)، بدون
+    <span class="Li">&quot;OP_SREFGEN&quot;</span> أو <span class="Li">&quot;OP_RV2AV&quot;</span>:</span></p>
+<pre>@lhs OP @rhs;
+WRAPPERFUNC( \@lhs, \@rhs );</pre>
+<p class="Pp"><b>لاحظ</b> أنه من الناحية الفنية، هذا التحسين ليس شفافًا تمامًا في
+    الحالة الزاوية الغريبة حيث تكون إحدى المصفوفات المشار إليها هي أيضًا المخزن
+    الخلفي لمرجع كائن مبارك، ولديه فئة الكائن هذه حمل زائد على
+    <span class="Li">&quot;@{}&quot;</span>.</p>
+<pre>my @arr;
+package SomeClass {
+   use overload '@{}' =&gt; sub { return [&quot;values&quot;, &quot;go&quot;, &quot;here&quot;]; };
+}
+bless \@arr, &quot;SomeClass&quot;;
+# this will not actually invoke the overload operator
+WRAPPERFUNC( \@arr, [4, 5, 6] );</pre>
+<p class="Pp">نظرًا لأن هذه الحالة الزاوية تتعلق بأخذ مراجع مكررة لنفس المتغير
+    الخلفي لكائن مبارك، فيجب ألا يؤثر ذلك على أي كود حقيقي؛ الكائنات العادية التي
+    يتم تمريرها كمرجع إلى الدالة المغلّفة ستشغّل طرق الحمل الزائد الخاصة بها
+    كالمعتاد.</p>
+<p class="Pp">يمكن لمدقق الاستدعاء لمعاملات القائمة اختياريًا أيضًا تجاهل مؤثر من
+    نوع <span class="Li">&quot;OP_ANONLIST&quot;</span>، والذي يستخدمه بناء مرجع
+    المصفوفة المجهول:</p>
+<pre>($u, $v, $w) OP ($x, $y, $z);
+WRAPPERFUNC( [$u, $v, $w], [$x, $y, $z] );</pre>
+<p class="Pp">يتم إجراء هذا التحسين فقط إذا أعلن المؤثر أنه آمن للقيام بذلك، عبر
+    العلامة <span class="Li">&quot;XPI_OPERAND_ONLY_LOOK&quot;</span>.</p>
+<p class="Pp">إذا كانت هناك دالة بالاسم المحدد موجودة بالفعل وقت التسجيل، فسيتم
+    تركها دون تغيير ولن يتم إنشاء غلاف جديد. وهذا يسمح للمؤثر الداخلي نفسه بأن
+    يكون له تهجئات متعددة لاسمه؛ على سبيل المثال، للسماح بترجمة حرفية يونيكود
+    حقيقية وترجمة بديلة ASCII للمؤثر نفسه. سيؤدي التسجيل الأول إلى إنشاء الدالة
+    المغلّفة؛ وسيتخطى التسجيل اللاحق ذلك لأنه سيكون متطابقًا بخلاف ذلك.</p>
+<p class="Pp">لاحظ أنه عند إنشاء شجرة بصرية (optree) لاستدعاء دالة مغلّفة، سيتم
+    استدعاء دالة الخطاف <span class="Li">&quot;new_op&quot;</span> بمؤشر
+    <span class="Li">&quot;NULL&quot;</span> لتخزين بيانات التحليل من نوع
+    <span class="Li">&quot;SV *&quot;</span>، حيث لن تكون هناك فرصة لتشغيل خطاف
+    <span class="Li">&quot;parse&quot;</span> في هذه الحالة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DEPARSE'><a class='permalink' href='#DEPARSE'>DEPARSE</a></h1>
+<p class="Pp">تعمل هذه الوحدة مع B::Deparse لتوفير دعم depares تلقائي للمؤثرات
+    الداخلية. سيتم إضافة منطق depares لكل مؤثر داخلي يتم تنفيذه كمؤثر مخصص (وبالتالي
+    يحتوي على حقل الخطاف
+    <span class="Li">&quot;ppaddr&quot;</span> مضبوط). سيسمح هذا بـ depares إما
+    للدالة المغلّفة المسماة، أو لصيغة المؤثر الداخلي إذا كان على بيرل مفعل
+    بـ<span class="Li">&quot;PL_infix_plugin&quot;</span> وكانت التلميح المعجمي المناسب
+    مفعلًا عند نقطة الاستدعاء.</p>
+<p class="Pp">لكي يعمل هذا، من المهم ألا يتم تسجيل المؤثر المخصص الخاص بك كمؤثر
+    مخصص باستخدام الدالة
+    <span class="Li">Perl_register_custom_op()</span>. سيتم إجراء هذا التسجيل بواسطة
+    <span class="Li">&quot;XS::Parse::Infix&quot;</span> نفسه في وقت تسجيل المؤثر
+    الداخلي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TODO'><a class='permalink' href='#TODO'>TODO</a></h1>
+<ul class="Bl-bullet">
+  <li>جعل مدقق entersub لمؤثرات القائمة/القائمة يفكه من أشكال مرجع المصفوفة أو
+      المصفوفة المجهولة (<span class="Li">&quot;WRAPPERFUNC( \@lhs, \@rhs )&quot;</span>
+      أو <span class="Li">&quot;WRAPPERFUNC( [LHS], [RHS] )&quot;</span>).</li>
+  <li>مزيد من الأفكار حول كيفية عمل المؤثرات الداخلية مع خطافات
+      <span class="Li">&quot;parse&quot;</span> مع depares التلقائي، وكيفية دمجها
+      مع قطعة النحو الخاصة بـ XS::Parse::Keyword.</li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Paul Evans &lt;leonerd@leonerd.org.uk&gt;</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-02</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perl-xs-parse-keyword/">extra/perl-xs-parse-keyword</a></dd>
+        <dt>Version:</dt>
+        <dd>0.49-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://metacpan.org/dist/XS-Parse-Keyword">https://metacpan.org/dist/XS-Parse-Keyword</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Artistic-1.0-Perl, GPL-1.0-or-later</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-xs-parse-keyword/">/listing/extra/perl-xs-parse-keyword/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#CONSTANTS">CONSTANTS</a></li>
+        
+            <li><a href="#PERL_FUNCTIONS">PERL FUNCTIONS</a></li>
+        
+            <li><a href="#XS_FUNCTIONS">XS FUNCTIONS</a></li>
+        
+            <li><a href="#PARSE_HOOKS">PARSE HOOKS</a></li>
+        
+            <li><a href="#DEPARSE">DEPARSE</a></li>
+        
+            <li><a href="#TODO">TODO</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/XS::Parse::Infix.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/XS::Parse::Infix.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

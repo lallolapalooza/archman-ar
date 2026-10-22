@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>re2ocaml(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">re2ocaml(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/re2c/">re2c</a></p>
+<p class="lic">التراخيص: LicenseRef-re2c</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">RE2OCAML(1)</td>
+    <td class="head-vol"></td>
+    <td class="head-rtitle">RE2OCAML(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">re2ocaml - إنشاء محللات معجمية سريعة لـ OCaml</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الموجز</a></h1>
+<p class="Pp">re2ocaml <b>[ خيارات ]</b> <b>[ تحذيرات ]</b> <b>إدخال</b></p>
+<p class="Pp">يمكن أن يكون الإدخال إما ملفًا أو <b>-</b> للإدخال القياسي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>مقدمة</a></h1>
+<p class="Pp">يعمل re2ocaml كمعالج مسبق. يقرأ ملف الإدخال (وهو عادةً برنامج بلغة OCaml، ولكنه يمكن أن يكون أي شيء) ويبحث عن كتل من التعليمات البرمجية محاطة بعلامات بداية/نهاية خاصة. يتم نسخ النص خارج هذه الكتل حرفيًا إلى ملف الإخراج. تتم معالجة محتويات الكتل بواسطة re2ocaml. يقوم بترجمتها إلى تعليمات برمجية بلغة OCaml ويخرج التعليمات البرمجية المولدة في مكان الكتلة.</p>
+<p class="Pp">إليك مثال لبرنامج صغير يتحقق مما إذا كان سلسلة معينة تحتوي على رقم عشري:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT -i *)
+open String
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+}
+%{
+    re2c:YYFN = [&quot;lex;bool&quot;, &quot;yyrecord;state&quot;];
+    re2c:yyfill:enable = 0;
+    [1-9][0-9]* { true }
+    *           { false }
+%}
+let main () =
+    let st = {yyinput = &quot;1234&quot;; yycursor = 0}
+    in if not (lex st) then raise (Failure &quot;error&quot;)
+let _ = main ()</pre>
+</div>
+</div>
+<p class="Pp">في الإخراج، استبدل re2ocaml الكتلة في المنتصف بالتعليمات البرمجية المولدة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* تم الإنشاء بواسطة re2ocaml *)
+(* re2ocaml $INPUT -o $OUTPUT -i *)
+open String
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+}
+let rec yy0 (yyrecord : state) : bool =
+    let yych = unsafe_get yyrecord.yyinput yyrecord.yycursor in
+    yyrecord.yycursor &lt;- yyrecord.yycursor + 1;
+    match yych with
+        | '1'..'9' -&gt; (yy2 [@tailcall]) yyrecord
+        | _ -&gt; (yy1 [@tailcall]) yyrecord
+and yy1 (yyrecord : state) : bool =
+    false
+and yy2 (yyrecord : state) : bool =
+    let yych = unsafe_get yyrecord.yyinput yyrecord.yycursor in
+    match yych with
+        | '0'..'9' -&gt;
+            yyrecord.yycursor &lt;- yyrecord.yycursor + 1;
+            (yy2 [@tailcall]) yyrecord
+        | _ -&gt; (yy3 [@tailcall]) yyrecord
+and yy3 (yyrecord : state) : bool =
+    true
+and lex (yyrecord : state) : bool =
+    (yy0 [@tailcall]) yyrecord
+let main () =
+    let st = {yyinput = &quot;1234&quot;; yycursor = 0}
+    in if not (lex st) then raise (Failure &quot;error&quot;)
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BASICS'><a class='permalink' href='#BASICS'>أساسيات</a></h1>
+<p class="Pp">يتكون برنامج re2ocaml من تسلسل من <i>الكتل</i> تتخللها تعليمات برمجية باللغة المستهدفة. قد تحتوي الكتلة على <i>تعريفات</i>، <i>تكوينات</i>، <i>قواعد</i>، <i>إجراءات</i> و<i>توجيهات</i> بأي ترتيب:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="name"><a class="permalink" href="#name"><b><b>الاسم =
+    تعبير-عادي ;</b></b></a></dt>
+  <dd><i>تعريف</i> يربط <b>الاسم</b> بـ <b>التعبير-العادي</b>. يمكن للأسماء أن تحتوي على أحرف أبجدية رقمية وشرطة سفلية. يعطي قسم <i>التعبيرات العادية</i> نظرة عامة على صيغة re2ocaml للتعبيرات العادية. بمجرد تعريفه، يمكن استخدام <b>الاسم</b> في تعبيرات عادية أخرى وفي القواعد. التكرار في التعريفات المسماة غير مسموح به، ويجب تعريف كل اسم قبل استخدامه. ترث الكتلة التعريفات المسماة من النطاق العام. إعادة تعريف اسم موجود في النطاق الحالي يعد خطأ.</dd>
+  <dt id="configuration"><a class="permalink" href="#configuration"><b><b>تكوين
+    = قيمة ;</b></b></a></dt>
+  <dd><i>التكوين</i> يسمح بتغيير سلوك re2ocaml وتخصيص التعليمات البرمجية المولدة. للحصول على قائمة كاملة بالتكوينات التي يدعمها re2ocaml، راجع قسم <i>التكوينات</i>. اعتمادًا على تكوين معين، يمكن أن تكون <b>القيمة</b> كلمة مفتاحية، أو رقم صحيح غير سالب، أو سلسلة نصية من سطر واحد يجب أن تكون محاطة بعلامات اقتباس مزدوجة أو مفردة ما لم تتكون من أحرف أبجدية رقمية. ترث الكتلة التكوينات من النطاق العام ويمكنها إعادة تعريفها أو إضافة تكوينات جديدة. تؤثر التكوينات المعرفة داخل كتلة على الكتلة بأكملها، حتى لو ظهرت في نهايتها.</dd>
+  <dt id="regular"><a class="permalink" href="#regular"><b><b>تعبير-عادي
+    تعليمة برمجية</b></b></a></dt>
+  <dd><i>القاعدة</i> تربط <b>التعبير-العادي</b> بإجراءها الدلالي (كتلة من التعليمات البرمجية في أقواس معقوفة، أو كتلة من التعليمات البرمجية تبدأ بـ <b>:=</b> وتنتهي بسطر جديد متبوعًا بأي حرف غير مسافة بيضاء). إذا تطابق <b>التعبير-العادي</b>، يتم تنفيذ <b>التعليمة البرمجية</b> المرتبطة. إذا تطابقت قواعد متعددة، فإن أطول تطابق له الأسبقية. إذا تطابقت قواعد متعددة مع نفس السلسلة، فإن الأسبق له الأسبقية. هناك قاعدتان خاصتان: القاعدة الافتراضية <b>*</b> وقاعدة نهاية الإدخال <b>$</b>. يجب تعريف القاعدة الافتراضية دائمًا، ولها أقل أولوية بغض النظر عن مكانها في الكتلة، وتطابق أي وحدة رمز (ليس بالضرورة حرفًا صالحًا، راجع قسم <i>دعم الترميز</i>). يجب تعريف قاعدة نهاية الإدخال إذا تم استخدام طريقة <i>معالجة نهاية الإدخال</i> المقابلة. مع <i>حالات البدء</i>، تحتوي القواعد على صيغة أكثر تعقيدًا.</dd>
+  <dt><b><b>!تعليمة برمجية</b></b></dt>
+  <dd><i>الإجراء</i> يربط كتلة <b>تعليمات برمجية</b> معرفة من قبل المستخدم بمكان معين في آلة الحالة المحدودة المولدة (بنفس طريقة ربط الإجراءات الدلالية بالتعليمات البرمجية للحالات النهائية). انظر قسم <i>الإجراءات</i> للحصول على قائمة كاملة بالإجراءات المحددة مسبقًا.</dd>
+  <dt><b><b>!توجيه ;</b></b></dt>
+  <dd><i>التوجيه</i> هو أحد البيانات المحددة مسبقًا. لكل توجيه غرض فريد. انظر قسم <i>التوجيهات</i> للحصول على التفاصيل.</dd>
+</dl>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Blocks'><a class='permalink' href='#Blocks'>الكتل</a></h2>
+<p class="Pp">علامات بداية ونهاية الكتلة هي إما <b>/*!re2c</b> و <b>*/</b>، أو <b>%{</b> و <b>%}</b> (كلا النمطين مدعومان). بدءًا من الإصدار 2.2، يمكن أن يكون للكتل أسماء اختيارية تسمح بالإشارة إليها في كتل أخرى. هناك أنواع مختلفة من الكتل:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>/*!re2c[:&lt;name&gt;] ... */</b> أو <b>%{[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>تحتوي <i>الكتلة العامة</i> على تعريفات وتكوينات وقواعد وتوجيهات. يقوم re2ocaml بترجمة التعبيرات العادية المرتبطة بكل قاعدة إلى آلة حالة محدودة حتمية، ويقوم بتشفيرها في شكل قفزات شرطية في اللغة المستهدفة ويستبدل الكتلة بالتعليمات البرمجية المولدة. تضاف الأسماء والتكوينات المعرفة في كتلة عامة إلى النطاق العام وتصبح مرئية للكتل اللاحقة. في بداية البرنامج، تتم تهيئة النطاق العام بـ <i>خيارات</i> سطر الأوامر.</dd>
+  <dt><b><b>/*!local:re2c[:&lt;name&gt;] ... */</b> أو <b>%{local[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>الكتلة المحلية</i> تشبه الكتلة العامة، ولكن الأسماء والتكوينات فيها لها نطاق محلي (لا تؤثر على الكتل الأخرى).</dd>
+  <dt><b><b>/*!rules:re2c[:&lt;name&gt;] ... */</b> أو <b>%{rules[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>كتلة القواعد</i> تشبه الكتلة المحلية، ولكنها لا تولد أي تعليمات برمجية بنفسها، ولا تضيف أي تعريفات إلى النطاق العام - فهي مخصصة لإعادة الاستخدام في كتل أخرى. هذه طريقة لمشاركة التعليمات البرمجية (مزيد من التفاصيل في قسم <i>الكتل القابلة لإعادة الاستخدام</i>). قبل الإصدار 2.2 من re2ocaml، تطلبت كتل القواعد الخيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!use:re2c[:&lt;name&gt;] ... */</b> أو <b>%{use[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>كتلة استخدام تشير إلى كتلة قواعد معرفة مسبقًا. إذا تم تحديد الاسم، يبحث re2ocaml عن كتل قواعد بهذا الاسم. وإلا، يتم استخدام أحدث كتلة قواعد (سواء كانت مسماة أو غير مسماة). يمكن لكتلة الاستخدام إضافة تعريفاتها وتكويناتها وقواعدها الخاصة، والتي تضاف إلى تلك الخاصة بكتلة القواعد المشار إليها. قبل الإصدار 2.2 من re2ocaml، تطلبت كتل الاستخدام الخيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!max:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{max[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تولد تعريف <b>YYMAXFILL</b>. تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب قيمة <b>YYMAXFILL</b> (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، التعليمات البرمجية المولدة هي تعريف ماكرو لـ C (<b>#define
+      YYMAXFILL &lt;n&gt;</b>)، أو متغير عام لـ Go (<b>var YYMAXFILL
+      int = &lt;n&gt;</b>). يمكن تخصيصها بتكوين اختياري <b>format</b> يحدد سلسلة قالب يتم فيها استبدال <b>@@{max}</b> (أو <b>@@</b> اختصارًا) بالقيمة الرقمية لـ <b>YYMAXFILL</b>.</dd>
+  <dt><b><b>/*!maxnmatch:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{maxnmatch[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تولد تعريف <b>YYMAXNMATCH</b> (يتطلب خيار <b>-P --posix-captures</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب <b>Y</dd>
+</dl>
+</div>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+  "title": "re2c Manual",
+  "sections": [
+    {
+      "id": "Block-Types",
+      "title": "Block Types",
+      "content": [
+        {
+          "type": "description-list",
+          "items": [
+            {
+              "term": "<b>/*!YYMAXNMATCH:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> or <b>%{YYMAXNMATCH[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b>",
+              "description": "Blocks that define the maximum number of nested rule disjunctions. By default, this value is used to limit the size of generated code when it is too large. If the list is empty, all blocks are included. By default, the generated code is a macro-definition for C (<b>#define YYMAXNMATCH &lt;n&gt;</b>), or a global variable for Go (<b>var YYMAXNMATCH int = &lt;n&gt;</b>). It can be customized with an optional configuration <b>format</b> that specifies a template string where <b>@@{max}</b> (or <b>@@</b> for short) is replaced with the numeric value of <b>YYMAXNMATCH</b>."
+            },
+            {
+              "term": "<b>/*!stags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>, <b>/*!mtags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> or <b>%{stags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>, <b>%{mtags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b>",
+              "description": "Blocks that specify a template piece of code that is expanded for each s-tag/m-tag variable generated by re2ocaml. An optional list of block names specifies which blocks should be included when computing the set of tag variables (if the list is empty, all blocks are included). There are two optional configurations: <b>format</b> and <b>separator</b>. Configuration <b>format</b> specifies a template string where <b>@@{tag}</b> (or <b>@@</b> for short) is replaced with the name of each tag variable. Configuration <b>separator</b> specifies a piece of code used to join the generated <b>format</b> pieces for different tag variables."
+            },
+            {
+              "term": "<b>/*!svars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>, <b>/*!mvars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> or <b>%{svars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>, <b>%{mvars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b>",
+              "description": "Blocks that specify a template piece of code that is expanded for each s-tag/m-tag that is either explicitly mentioned by the rules (with <b>--tags</b> option) or implicitly generated by re2ocaml (with <b>--captvars</b> or <b>--posix-captvars</b> options). An optional list of block names specifies which blocks should be included when computing the set of tags (if the list is empty, all blocks are included). There are two optional configurations: <b>format</b> and <b>separator</b>. Configuration <b>format</b> specifies a template string where <b>@@{tag}</b> (or <b>@@</b> for short) is replaced with the name of each tag. Configuration <b>separator</b> specifies a piece of code used to join the generated <b>format</b> pieces for different tags."
+            },
+            {
+              "term": "<b>/*!getstate:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> or <b>%{getstate[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b>",
+              "description": "A block that generates conditional dispatch on the lexer state (it requires <b>--storable-state</b> option). An optional list of block names specifies which blocks should be included in the state dispatch. The default transition goes to the start label of the first block on the list. If the list is empty, all blocks are included, and the default transition goes to the first block in the file that has a start label. This block type is incompatible with the <b>--loop-switch</b> option, as it requires cross-block transitions that are unsupported without <b>goto</b> or function calls."
+            },
+            {
+              "term": "<b>/*!conditions:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>, <b>/*!types:re2c... */</b> or <b>%{conditions[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>, <b>%{types... %}</b></b>",
+              "description": "A block that generates condition enumeration (it requires <b>--conditions</b> option). An optional list of block names specifies which blocks should be included when computing the set of conditions (if the list is empty, all blocks are included). By default the generated code is an enumeration <b>YYCONDTYPE</b>. It can be customized with optional configurations <b>format</b> and <b>separator</b>. Configuration <b>format</b> specifies a template string where <b>@@{cond}</b> (or <b>@@</b> for short) is replaced with the name of each condition, and <b>@@{num}</b> is replaced with a numeric index of that condition. Configuration <b>separator</b> specifies a piece of code used to join the generated <b>format</b> pieces for different conditions."
+            },
+            {
+              "term": "<b>/*!include:re2c &lt;file&gt; */</b> or <b>%{include &lt;file&gt; %}</b></b>",
+              "description": "This block allows one to include <b>&lt;file&gt;</b>, which must be a double-quoted file path. The contents of the file are literally substituted in place of the block, in the same way as <b>#include</b> works in C/C++. This block can be used together with the <b>--depfile</b> option to generate build system dependencies on the included files."
+            },
+            {
+              "term": "<b>/*!header:re2c:on*/</b> or <b>%{header:on %}</b></b>",
+              "description": "This block marks the start of header file. Everything after it and up to the following <b>header:off</b> block is processed by re2ocaml and written to the header file specified with <b>-t --type-header</b> option."
+            },
+            {
+              "term": "<b>/*!header:re2c:off*/</b> or <b>%{header:off %}</b></b>",
+              "description": "This block marks the end of header file started with <b>header:on*/</b> block."
+            },
+            {
+              "term": "<b>/*!ignore:re2c ... */</b> or <b>%{ignore ... %}</b></b>",
+              "description": "A block which contents are ignored and removed from the output file."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Configurations",
+      "title": "Configurations",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "Here is a full list of configurations supported by re2ocaml:"
+        },
+        {
+          "type": "description-list",
+          "items": [
+            {
+              "term": "<b>re2c:api</b>, <b>re2c:input</b></b>",
+              "id": "re2c:api",
+              "description": "Same as the <b>--api</b> option."
+            },
+            {
+              "term": "<b>re2c:api:sigil</b></b>",
+              "id": "re2c:api:sigil",
+              "description": "Specify the marker (&quot;sigil&quot;) that is used for argument placeholders in the API primitives. The default is <b>@@</b>. A placeholder starts with sigil followed by the argument name in curly braces. For example, if sigil is set to <b>$</b>, then placeholders will have the form <b>${name}</b>. Single-argument APIs may use shorthand notation without the name in braces. This option can be overridden by options for individual API primitives, e.g. <b>re2c:YYFILL@len</b> for <b>YYFILL</b>."
+            },
+            {
+              "term": "<b>re2c:api:style</b></b>",
+              "id": "re2c:api:style",
+              "description": "Specify API style. Possible values are <b>functions</b> (the default for C) and <b>free-form</b> (the default for Go and Rust). In <b>functions</b> style API primitives are generated with an argument list in parentheses following the name of the primitive. The arguments are provided only for autogenerated parameters (such as the number of characters passed to <b>YYFILL</b>), but not for the general lexer context, so the primitives behave more like macros in C/C++ or closures in Go and Rust. In free-form style API primitives do not have a fixed form: they should be defined as strings containing free-form pieces of code with interpolated variables of the form <b>@@{var}</b> or <b>@@</b> (they correspond to arguments in function-like style). This configuration may be overridden for individual API primitives, see for example <b>re2c:YYFILL:naked</b> configuration for <b>YYFILL</b>."
+            },
+            {
+              "term": "<b>re2c:bit-vectors</b>, <b>re2c:flags:bit-vectors</b>, <b>re2c:flags:b</b></b>",
+              "id": "re2c:bit",
+              "description": "Same as the <b>--bit-vectors</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:captures</b>, <b>re2c:leftmost-captures</b></b>",
+              "id": "re2c:captures",
+              "description": "Same as the <b>--leftmost-captures</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:captvars</b>, <b>re2c:leftmost-captvars</b></b>",
+              "id": "re2c:captvars",
+              "description": "Same as the <b>--leftmost-captvars</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:case-insensitive</b>, <b>re2c:flags:case-insensitive</b></b>",
+              "id": "re2c:case",
+              "description": "Same as the <b>--case-insensitive</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:case-inverted</b>, <b>re2c:flags:case-inverted</b></b>",
+              "id": "re2c:case~2",
+              "description": "Same as the <b>--case-inverted</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:case-ranges</b>, <b>re2c:flags:case-ranges</b></b>",
+              "id": "re2c:case~3",
+              "description": "Same as the <b>--case-ranges</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:computed-gotos</b>, <b>re2c:flags:computed-gotos</b>, <b>re2c:flags:g</b></b>",
+              "id": "re2c:computed",
+              "description": "Same as the <b>--computed-gotos</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:computed-gotos:relative</b>, <b>re2c:cgoto:relative</b></b>",
+              "id": "re2c:computed~2",
+              "description": "Same as the <b>--computed-gotos-relative</b> option, but can be configured on per-block basis."
+            },
+            {
+              "term": "<b>re2c:computed-gotos:threshold</b>, <b>re2c:cgoto:threshold</b></b>",
+              "id": "re2c:computed~3",
+              "description": "If computed <b>goto</b> is used, this configuration specifies the complexity threshold that triggers the generation of jump tables instead of nested <b>if</b> statements and bitmaps. The default value is <b>9</b>."
+            },
+            {
+              "term": "<b>re2c:cond:abort</b></b>",
+              "id": "re2c:cond:abort",
+              "description": "If set to a positive integer value, the default case in the generated condition dispatch aborts program execution."
+            },
+            {
+              "term": "<b>re2c:cond:goto</b></b>",
+              "id": "re2c:cond:goto",
+              "description": "Specifies a piece of code used for the autogenerated shortcut rules <b>:=&gt;</b> in conditions. The default is <b>goto @@;</b>. The <b>@@</b> placeholder is substituted with condition name (see configurations <b>re2c:api:sigil</b> and <b>re2c:cond:goto@cond</b>)."
+            },
+            {
+              "term": "<b>re2c:cond:goto@cond</b></b>",
+              "id": "re2c:cond:goto@cond",
+              "description": "Specifies the sigil used for argument substitution in <b>re2c:cond:goto</b> definition. The default value is <b>@@</b>. Overrides the more generic <b>re2c:api:sigil</b> configuration."
+            },
+            {
+              "term": "<b>re2c:cond:divider</b></b>",
+              "id": "re2c:cond:divider",
+              "description": "Defines the divider for condition blocks. The default value is <b>/* *********************************** */</b>. Placeholders are substituted with condition name (see <b>re2c:api;sigil</b> and <b>re2c:cond:divider@cond</b>)."
+            },
+            {
+              "term": "<b>re2c:cond:divider@cond</b></b>",
+              "id": "re2c:cond:divider@cond",
+              "description": "Specifies the sigil used for argument substitution in <b>re2c:cond:divider</b> definition. The default is <b>@@</b>. Overrides the more generic <b>re2c:api:sigil</b> configuration."
+            },
+            {
+              "term": "<b>re2c:cond:prefix</b>, <b>re2c:condprefix</b></b>",
+              "id": "re2c:cond:prefix",
+              "description": "Specifies the prefix used for condition labels. The default is <b>yyc_</b>."
+            },
+            {
+              "term": "<b>re2c:cond:enumprefix</b>, ",
+              "id": "re2c:cond:enumprefix"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+      <b>YYFILL</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYFN"><a class="permalink" href="#re2c:YYFN"><b><b>re2c:YYFN</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYFN</b>.</dd>
+  <dt id="re2c:YYINPUT"><a class="permalink" href="#re2c:YYINPUT"><b><b>re2c:YYINPUT</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYINPUT</b>.</dd>
+  <dt id="re2c:YYGETCOND"><a class="permalink" href="#re2c:YYGETCOND"><b><b>re2c:YYGETCOND</b>,
+    <b>re2c:define:YYGETCONDITION</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYGETCOND</b>.</dd>
+  <dt id="re2c:YYGETCOND:naked"><a class="permalink" href="#re2c:YYGETCOND:naked"><b><b>re2c:YYGETCOND:naked</b>,
+    <b>re2c:define:YYGETCONDITION:naked</b></b></a></dt>
+  <dd>يستبدل إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETCOND</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYGETSTATE"><a class="permalink" href="#re2c:YYGETSTATE"><b><b>re2c:YYGETSTATE</b>,
+    <b>re2c:define:YYGETSTATE</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYGETSTATE</b>.</dd>
+  <dt id="re2c:YYGETSTATE:naked"><a class="permalink" href="#re2c:YYGETSTATE:naked"><b><b>re2c:YYGETSTATE:naked</b>,
+    <b>re2c:define:YYGETSTATE:naked</b></b></a></dt>
+  <dd>يستبدل إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETSTATE</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYGETACCEPT"><a class="permalink" href="#re2c:YYGETACCEPT"><b><b>re2c:YYGETACCEPT</b>,
+    <b>re2c:define:YYGETACCEPT</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYGETACCEPT</b>.</dd>
+  <dt id="re2c:YYLESSTHAN"><a class="permalink" href="#re2c:YYLESSTHAN"><b><b>re2c:YYLESSTHAN</b>,
+    <b>re2c:define:YYLESSTHAN</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYLESSTHAN</b>.</dd>
+  <dt id="re2c:YYLIMIT"><a class="permalink" href="#re2c:YYLIMIT"><b><b>re2c:YYLIMIT</b>,
+    <b>re2c:define:YYLIMIT</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYLIMIT</b>.</dd>
+  <dt id="re2c:YYMARKER"><a class="permalink" href="#re2c:YYMARKER"><b><b>re2c:YYMARKER</b>,
+    <b>re2c:define:YYMARKER</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYMARKER</b>.</dd>
+  <dt id="re2c:YYMTAGN"><a class="permalink" href="#re2c:YYMTAGN"><b><b>re2c:YYMTAGN</b>,
+    <b>re2c:define:YYMTAGN</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYMTAGN</b>.</dd>
+  <dt id="re2c:YYMTAGP"><a class="permalink" href="#re2c:YYMTAGP"><b><b>re2c:YYMTAGP</b>,
+    <b>re2c:define:YYMTAGP</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYMTAGP</b>.</dd>
+  <dt id="re2c:YYPEEK"><a class="permalink" href="#re2c:YYPEEK"><b><b>re2c:YYPEEK</b>,
+    <b>re2c:define:YYPEEK</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYPEEK</b>.</dd>
+  <dt id="re2c:YYRESTORE"><a class="permalink" href="#re2c:YYRESTORE"><b><b>re2c:YYRESTORE</b>,
+    <b>re2c:define:YYRESTORE</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYRESTORE</b>.</dd>
+  <dt id="re2c:YYRESTORECTX"><a class="permalink" href="#re2c:YYRESTORECTX"><b><b>re2c:YYRESTORECTX</b>,
+    <b>re2c:define:YYRESTORECTX</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYRESTORECTX</b>.</dd>
+  <dt id="re2c:YYRESTORETAG"><a class="permalink" href="#re2c:YYRESTORETAG"><b><b>re2c:YYRESTORETAG</b>,
+    <b>re2c:define:YYRESTORETAG</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYRESTORETAG</b>.</dd>
+  <dt id="re2c:YYSETCOND"><a class="permalink" href="#re2c:YYSETCOND"><b><b>re2c:YYSETCOND</b>,
+    <b>re2c:define:YYSETCONDITION</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYSETCOND</b>.</dd>
+  <dt id="re2c:YYSETCOND@cond"><a class="permalink" href="#re2c:YYSETCOND@cond"><b><b>re2c:YYSETCOND@cond</b>,
+    <b>re2c:define:YYSETCONDITION@cond</b></b></a></dt>
+  <dd>يحدد الرمز المميز المستخدم لاستبدال المعاملات في تعريف <b>YYSETCOND</b>.
+      القيمة الافتراضية هي <b>@@</b>. يستبدل إعداد <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETCOND:naked"><a class="permalink" href="#re2c:YYSETCOND:naked"><b><b>re2c:YYSETCOND:naked</b>,
+    <b>re2c:define:YYSETCONDITION:naked</b></b></a></dt>
+  <dd>يستبدل إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETCOND</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYSETSTATE"><a class="permalink" href="#re2c:YYSETSTATE"><b><b>re2c:YYSETSTATE</b>,
+    <b>re2c:define:YYSETSTATE</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYSETSTATE</b>.</dd>
+  <dt id="re2c:YYSETSTATE@state"><a class="permalink" href="#re2c:YYSETSTATE@state"><b><b>re2c:YYSETSTATE@state</b>,
+    <b>re2c:define:YYSETSTATE@state</b></b></a></dt>
+  <dd>يحدد الرمز المميز المستخدم لاستبدال المعاملات في تعريف <b>YYSETSTATE</b>.
+      القيمة الافتراضية هي <b>@@</b>. يستبدل إعداد <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETSTATE:naked"><a class="permalink" href="#re2c:YYSETSTATE:naked"><b><b>re2c:YYSETSTATE:naked</b>,
+    <b>re2c:define:YYSETSTATE:naked</b></b></a></dt>
+  <dd>يستبدل إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETSTATE</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYSETACCEPT"><a class="permalink" href="#re2c:YYSETACCEPT"><b><b>re2c:YYSETACCEPT</b>,
+    <b>re2c:define:YYSETACCEPT</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>YYSETACCEPT</b>.</dd>
+  <dt id="re2c:YYSKIP"><a class="permalink" href="#re2c:YYSKIP"><b><b>re2c:YYSKIP</b>,
+    <b>re2c:define:YYSKIP</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSKIP</b>.</dd>
+  <dt id="re2c:YYSHIFT"><a class="permalink" href="#re2c:YYSHIFT"><b><b>re2c:YYSHIFT</b>,
+    <b>re2c:define:YYSHIFT</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSHIFT</b>.</dd>
+  <dt id="re2c:YYCOPYMTAG"><a class="permalink" href="#re2c:YYCOPYMTAG"><b><b>re2c:YYCOPYMTAG</b>,
+    <b>re2c:define:YYCOPYMTAG</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYCOPYMTAG</b>.</dd>
+  <dt id="re2c:YYCOPYSTAG"><a class="permalink" href="#re2c:YYCOPYSTAG"><b><b>re2c:YYCOPYSTAG</b>,
+    <b>re2c:define:YYCOPYSTAG</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYCOPYSTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTMTAG"><a class="permalink" href="#re2c:YYSHIFTMTAG"><b><b>re2c:YYSHIFTMTAG</b>,
+    <b>re2c:define:YYSHIFTMTAG</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSHIFTMTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTSTAG"><a class="permalink" href="#re2c:YYSHIFTSTAG"><b><b>re2c:YYSHIFTSTAG</b>,
+    <b>re2c:define:YYSHIFTSTAG</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSHIFTSTAG</b>.</dd>
+  <dt id="re2c:YYSTAGN"><a class="permalink" href="#re2c:YYSTAGN"><b><b>re2c:YYSTAGN</b>,
+    <b>re2c:define:YYSTAGN</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSTAGN</b>.</dd>
+  <dt id="re2c:YYSTAGP"><a class="permalink" href="#re2c:YYSTAGP"><b><b>re2c:YYSTAGP</b>,
+    <b>re2c:define:YYSTAGP</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي العام لواجهة برمجة التطبيقات <b>YYSTAGP</b>.</dd>
+  <dt id="re2c:yyaccept"><a class="permalink" href="#re2c:yyaccept"><b><b>re2c:yyaccept</b>,
+    <b>re2c:variable:yyaccept</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yyaccept</b>.</dd>
+  <dt id="re2c:yybm"><a class="permalink" href="#re2c:yybm"><b><b>re2c:yybm</b>,
+    <b>re2c:variable:yybm</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yybm</b>.</dd>
+  <dt id="re2c:yybm:hex"><a class="permalink" href="#re2c:yybm:hex"><b><b>re2c:yybm:hex</b>,
+    <b>re2c:variable:yybm:hex</b></b></a></dt>
+  <dd>إذا تم تعيينها على غير صفري، يتم إنشاء جداول البتات للخي
+      ار <b>--bit-vectors</b> بتنسيق سداسي عشري. القيمة الافتراضية هي صفر (جداول
+      البتات بتنسيق عشري).</dd>
+  <dt id="re2c:yych"><a class="permalink" href="#re2c:yych"><b><b>re2c:yych</b>,
+    <b>re2c:variable:yych</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yych</b>.</dd>
+  <dt id="re2c:yych:emit"><a class="permalink" href="#re2c:yych:emit"><b><b>re2c:yych:emit</b>,
+    <b>re2c:variable:yych:emit</b></b></a></dt>
+  <dd>إذا تم تعيينها على صفر، لا يتم إنشاء تعريف <b>yych</b>. القيمة الافتراضية
+      هي غير صفرية.</dd>
+  <dt id="re2c:yych:conversion"><a class="permalink" href="#re2c:yych:conversion"><b><b>re2c:yych:conversion</b>,
+    <b>re2c:variable:yych:conversion</b></b></a></dt>
+  <dd>إذا تم تعيينها على غير صفري، يقوم re2ocaml تلقائيًا بإنشاء تحويل إلى
+      <b>YYCTYPE</b> في كل مرة تتم فيها قراءة <b>yych</b>. القيمة الافتراضية هي صفر (لا
+      تحويل).</dd>
+  <dt id="re2c:yych:literals"><a class="permalink" href="#re2c:yych:literals"><b><b>re2c:yych:literals</b>,
+    <b>re2c:variable:yych:literals</b></b></a></dt>
+  <dd>يحدد شكل الثوابت التي تتم مطابقتها مع <b>yych</b>. القيم
+      الممكنة هي: <b>char</b> (ثوابت الأحرف في علامات اقتباس مفردة، غير القابلة للطباعة
+      تستخدم تسلسلات هروب تبدأ بشرطة مائلة للخلف)، <b>hex</b> (أعداد صحيحة سداسية
+      عشرية)، و <b>char_or_hex</b> (مزيج من الاثنين، ثوابت الأحرف للأحرف القابلة
+      للطباعة وأعداد صحيحة سداسية عشرية لغيرها).</dd>
+  <dt id="re2c:yyctable"><a class="permalink" href="#re2c:yyctable"><b><b>re2c:yyctable</b>,
+    <b>re2c:variable:yyctable</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yyctable</b>.</dd>
+  <dt id="re2c:yynmatch"><a class="permalink" href="#re2c:yynmatch"><b><b>re2c:yynmatch</b>,
+    <b>re2c:variable:yynmatch</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yynmatch</b>.</dd>
+  <dt id="re2c:yypmatch"><a class="permalink" href="#re2c:yypmatch"><b><b>re2c:yypmatch</b>,
+    <b>re2c:variable:yypmatch</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yypmatch</b>.</dd>
+  <dt id="re2c:yytarget"><a class="permalink" href="#re2c:yytarget"><b><b>re2c:yytarget</b>,
+    <b>re2c:variable:yytarget</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yytarget</b>.</dd>
+  <dt id="re2c:yystable"><a class="permalink" href="#re2c:yystable"><b><b>re2c:yystable</b>,
+    <b>re2c:variable:yystable</b></b></a></dt>
+  <dd>تم إهمالها.</dd>
+  <dt id="re2c:yystate"><a class="permalink" href="#re2c:yystate"><b><b>re2c:yystate</b>,
+    <b>re2c:variable:yystate</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yystate</b>.</dd>
+  <dt id="re2c:yyfill"><a class="permalink" href="#re2c:yyfill"><b><b>re2c:yyfill</b>,
+    <b>re2c:variable:yyfill</b></b></a></dt>
+  <dd>يحدد العنصر الأساسي لواجهة برمجة التطبيقات <b>yyfill</b>.</dd>
+  <dt id="re2c:yyfill:check"><a class="permalink" href="#re2c:yyfill:check"><b><b>re2c:yyfill:check</b></b></a></dt>
+  <dd>إذا تم تعيينها على صفر، فإنها تمنع إنشاء فحص ما قبل
+      <b>YYFILL</b> لعدد أحرف الإدخال (تعريف <b>YYLESSTHAN</b> في الواجهة
+      العامة والمقارنة المستندة إلى <b>YYLIMIT</b> في واجهة C المؤشر). القيمة
+      الافتراضية هي غير صفرية (إنشاء الفحص).</dd>
+  <dt id="re2c:yyfill:enable"><a class="permalink" href="#re2c:yyfill:enable"><b><b>re2c:yyfill:enable</b></b></a></dt>
+  <dd>إذا تم تعيينها على صفر، فإنها تمنع إنشاء <b>YYFILL</b> (جنبًا إلى جنب
+      مع الفحص). يجب استخدام هذا عندما تتناسب جميع المدخلات في قطعة واحدة من
+      الذاكرة (لا حاجة للتخزين المؤقت) ولا تعتمد فحوصات نهاية الإدخال على فحوصات
+      <b>YYFILL</b> (على سبيل المثال، إذا تم استخدام حرف محدد). استخدم التحذيرات (خيار
+      <b>-W</b>) وإعداد <b>re2c:sentinel</b> للتحقق من أن المحلل اللغوي الذي تم إنشاؤه
+      لا يمكنه القراءة بما يتجاوز نهاية الإدخال. القيمة الافتراضية هي غير صفرية (<b>YYFILL</b>
+      ممكّن).</dd>
+  <dt id="re2c:yyfill:parameter"><a class="permalink" href="#re2c:yyfill:parameter"><b><b>re2c:yyfill:parameter</b></b></a></dt>
+  <dd>إذا تم تعيينها على صفر، فإنها تمنع إنشاء المعامل الذي يتم تمريره إلى
+      <b>YYFILL</b>. المعامل هو الحد الأدنى لعدد الأحرف التي يجب توفيرها.
+      القيمة الافتراضية هي غير صفرية (المعامل تم إنشاؤه). يمكن تجاوز هذا
+      الإعداد باستخدام <b>re2c:YYFILL:naked</b> أو
+      <b>re2c:api:style</b>.</dd>
+  <dt id="re2c:yyfn:sep"><a class="permalink" href="#re2c:yyfn:sep"><b><b>re2c:yyfn:sep</b></b></a></dt>
+  <dd>يحدد الفاصل المستخدم في عناصر <b>YYFN</b> (الافتراضي هو
+    فاصلة منقوطة).</dd>
+  <dt id="re2c:yyfn:throw"><a class="permalink" href="#re2c:yyfn:throw"><b><b>re2c:yyfn:throw</b></b></a></dt>
+  <dd>يحدد الاستثناءات التي تلقيها <
+{
+  "options": [
+    {
+      "id": "bmatch",
+      "name": "<b>--bmatch</b>",
+      "description": " of capacity <b>2 * YYMAXNMATCH</b>, and <b>yynmatch</b> is set to the number of groups for the matching rule."
+    },
+    {
+      "id": "captvars",
+      "name": "<b>--captvars</b>, <b>--leftmost-captvars</b>",
+      "description": "Enable submatch extraction with leftmost greedy capturing groups. The result is collected into variables <b>yytl&lt;k&gt;</b>, <b>yytr&lt;k&gt;</b> for <b>k</b>-th capturing group."
+    },
+    {
+      "id": "case",
+      "name": "<b>--case-insensitive</b>",
+      "description": "Treat single-quoted and double-quoted strings as case-insensitive."
+    },
+    {
+      "id": "case~2",
+      "name": "<b>--case-inverted</b>",
+      "description": "Invert the meaning of single-quoted and double-quoted strings: treat single-quoted strings as case-sensitive and double-quoted strings as case-insensitive."
+    },
+    {
+      "id": "case~3",
+      "name": "<b>--case-ranges</b>",
+      "description": "Collapse consecutive cases in a switch statements into a range of the form <b>low ... high</b>. This syntax is a C/C++ language extension that is supported by compilers like GCC, Clang and Tcc. The main advantage over using single cases is smaller generated code and faster generation time, although for some compilers like Tcc it also results in smaller binary size."
+    },
+    {
+      "id": "computed",
+      "name": "<b>--computed-gotos -g</b>",
+      "description": "Optimize conditional jumps using non-standard \"computed goto\" extension (which must be supported by the compiler). re2ocaml generates jump tables only in complex cases with a lot of conditional branches. Complexity threshold can be configured with <b>cgoto:threshold</b> configuration. Relative offsets can be enabled with <b>cgoto:relative</b> configuration. This option implies <b>--bit-vectors</b>."
+    },
+    {
+      "id": "computed~2",
+      "name": "<b>--computed-gotos-relative</b>",
+      "description": "Similar to --computed-gotos but generate relative offsets for jump tables instead (which must be supported by the compiler). This option implies <b>--computed-gotos</b>."
+    },
+    {
+      "id": "conditions",
+      "name": "<b>--conditions --start-conditions -c</b>",
+      "description": "Enable support of Flex-like \"conditions\": multiple interrelated lexers within one block. This is an alternative to manually specifying different re2ocaml blocks connected with <b>goto</b> or function calls."
+    },
+    {
+      "id": "depfile",
+      "name": "<b>--depfile FILE</b>",
+      "description": "Write dependency information to <b>FILE</b> in the form of a Makefile rule <b>&lt;output-file&gt; : &lt;input-file&gt; [include-file ...]</b>. This allows one to track build dependencies in the presence of <b>include</b> blocks/directives, so that updating include files triggers regeneration of the output file. This option depends on the <b>--output</b> option."
+    },
+    {
+      "id": "ebcdic",
+      "name": "<b>--ebcdic --ecb -e</b>",
+      "description": "Generate a lexer that reads input in EBCDIC encoding. re2ocaml assumes that the character range is 0 -- 0xFF and character size is 1 byte."
+    },
+    {
+      "id": "empty",
+      "name": "<b>--empty-class &lt;match-empty | match-none | error&gt;</b>",
+      "description": "Define the way re2ocaml treats empty character classes. With <b>match-empty</b> (the default) empty class matches empty input (which is illogical, but backwards-compatible). With <b>match-none</b> empty class always fails to match. With <b>error</b> empty class raises a compilation error."
+    },
+    {
+      "id": "encoding",
+      "name": "<b>--encoding-policy &lt;fail | substitute | ignore&gt;</b>",
+      "description": "Define the way re2ocaml treats Unicode surrogates. With <b>fail</b> re2ocaml aborts with an error when a surrogate is encountered. With <b>substitute</b> re2ocaml silently replaces surrogates with the error code point 0xFFFD. With <b>ignore</b> (the default) re2ocaml treats surrogates as normal code points. The Unicode standard says that standalone surrogates are invalid, but real-world libraries and programs behave in different ways."
+    },
+    {
+      "id": "flex",
+      "name": "<b>--flex-syntax -F</b>",
+      "description": "Partial support for Flex syntax: in this mode named definitions don't need the equal sign and the terminating semicolon, and when used they must be surrounded with curly braces. Names without curly braces are treated as double-quoted strings."
+    },
+    {
+      "id": "goto",
+      "name": "<b>--goto-label</b>",
+      "description": "Use \"goto/label\" code model: encode DFA in form of labeled code blocks connected with <b>goto</b> transitions across blocks. This is only supported for languages that have a <b>goto</b> statement."
+    },
+    {
+      "id": "header",
+      "name": "<b>--header --type-header -t HEADER</b>",
+      "description": "Generate a <b>HEADER</b> file. The contents of the file can be specified using special blocks <b>header:on</b> and <b>header:off</b>. If conditions are used, the generated header will have a condition enum automatically appended to it (unless there is an explicit <b>conditions</b> block)."
+    },
+    {
+      "id": "I",
+      "name": "<b>-I PATH</b>",
+      "description": "Add <b>PATH</b> to the list of locations which are used when searching for include files. This option is useful in combination with <b>include</b> block or directive. re2ocaml looks for <b>FILE</b> in the directory of the parent file and in the include locations specified with <b>-I</b> option."
+    },
+    {
+      "id": "input",
+      "name": "<b>--input &lt;default | custom&gt;</b>",
+      "description": "Deprecated alias for <b>--api</b>. Option <b>default</b> corresponds to <b>simple</b> (it is indeed the default for most backends, but not for all). Option <b>custom</b> corresponds to <b>generic</b>."
+    },
+    {
+      "id": "input~2",
+      "name": "<b>--input-encoding &lt;ascii | utf8&gt;</b>",
+      "description": "Specify the way re2ocaml parses regular expressions. With <b>ascii</b> (the default) re2ocaml handles input as ASCII-encoded: any sequence of code units is a sequence of standalone 1-byte characters. With <b>utf8</b> re2ocaml handles input as UTF8-encoded and recognizes multibyte characters."
+    },
+    {
+      "id": "invert",
+      "name": "<b>--invert-captures</b>",
+      "description": "Invert the meaning of capturing and non-capturing groups. By default <b>(...)</b> is capturing and <b>(! ...)</b> is non-capturing. With this option <b>(! ...)</b> is capturing and <b>(...)</b> is non-capturing."
+    },
+    {
+      "id": "lang",
+      "name": "<b>--lang &lt;none | c | d | go | haskell | java | js | ocaml | python | rust | swift | v | zig&gt;</b>",
+      "description": "Specify the target language. Supported languages are C, D, Go, Haskell, Java, JS, OCaml, Python, Rust, Swift, V, Zig (more languages can be added via user-defined syntax files, see the <b>--syntax</b> option). Option <b>none</b> disables default suntax configs, so that the target language is undefined."
+    },
+    {
+      "id": "location",
+      "name": "<b>--location-format &lt;gnu | msvc&gt;</b>",
+      "description": "Specify location format in messages. With <b>gnu</b> locations are printed as 'filename:line:column: ...'. With <b>msvc</b> locations are printed as 'filename(line,column) ...'. The default is <b>gnu</b>."
+    },
+    {
+      "id": "loop",
+      "name": "<b>--loop-switch</b>",
+      "description": "Use \"loop/switch\" code model: encode DFA in form of a loop over a switch statement, where individual states are switch cases. State is stored in a variable <b>yystate</b>. Transitions between states update <b>yystate</b> to the case label of the destination state and continue execution to the head of the loop."
+    },
+    {
+      "id": "nested",
+      "name": "<b>--nested-ifs -s</b>",
+      "description": "Use nested <b>if</b> statements instead of <b>switch</b> statements in conditional jumps. This usually results in more efficient code with non-optimizing compilers."
+    },
+    {
+      "id": "no",
+      "name": "<b>--no-debug-info -i</b>",
+      "description": "Do not output line directives. This may be useful when the generated code is stored in a version control system (to avoid huge autogenerated diffs on small changes)."
+    },
+    {
+      "id": "no~2",
+      "name": "<b>--no-generation-date</b>",
+      "description": "Suppress date output in the generated file."
+    },
+    {
+      "id": "no~3",
+      "name": "<b>--no-version</b>",
+      "description": "Suppress version output in the generated file."
+    },
+    {
+      "id": "no~4",
+      "name": "<b>--no-unsafe</b>",
+      "description": "Do not generate <b>unsafe</b> wrapper over <b>YYPEEK</b> (this option is specific to Rust). For performance reasons <b>YYPEEK</b> should avoid bounds-checking, as the lexer already performs end-of-input checks in a more efficient way. The user may choose to provide a safe <b>YYPEEK</b> definition, or a definition that is unsafe only in release builds, in which case the <b>--no-unsafe</b> option helps to avoid warnings about redundant <b>unsafe</b> blocks."
+    },
+    {
+      "id": "output",
+      "name": "<b>--output -o OUTPUT</b>",
+      "description": "Specify the <b>OUTPUT</b> file."
+    },
+    {
+      "id": "posix",
+      "name": "<b>--posix-captures</b>, <b>-P</b>",
+      "description": "Enable submatch extraction with POSIX-style capturing groups. The result is collected into an array <b>yybmatch</b> of capacity <b>2 * YYMAXNMATCH</b>, and <b>yynmatch</b> is set to the number of groups for the matching rule."
+    },
+    {
+      "id": "posix~2",
+      "name": "<b>--posix-captvars</b>",
+      "description": "Enable submatch extraction with POSIX-style capturing groups. The result is collected into variables <b>yytl&lt;k&gt;</b>, <b>yytr&lt;k&gt;</b> for <b>k</b>-th capturing group."
+    },
+    {
+      "id": "recursive",
+      "name": "<b>--recursive-functions</b>",
+      "description": "Use code model based on co-recursive functions, where each DFA state is a separate function that may call other state-functions or itself."
+    },
+    {
+      "id": "reusable",
+      "name": "<b>--reusable -r</b>",
+      "description": "Deprecated since version 2.2 (reusable blocks are allowed by default now)."
+    },
+    {
+      "id": "skeleton",
+      "name": "<b>--skeleton -S</b>",
+      "description": "Ignore user-defined interface code and generate a self-contained \"skeleton\" program. Additionally, generate input files with strings derived from the regular grammar and compressed match results that are used to verify \"skeleton\" behavior on all inputs. This option is useful for finding bugs in optimizations and code generation. This option is supported only for C."
+    },
+    {
+      "id": "storable",
+      "name": "<b>--storable-state -f</b>",
+      "description": "Generate a lexer which can store its inner state. This is useful in push-model lexers which are stopped by an outer program when there is not enough input, and then resumed when more input becomes available. In this mode users should additionally define <b>YYGETSTATE</b> and <b>YYSETSTATE</b> primitives, and variables <b>yyc</b>"
+    }
+  ]
+}
+<div>
+<dl>
+<dt id="Wdeprecated"><a class="permalink" href="#Wdeprecated"><b><b>-Wdeprecated-eof_rule</b></b></a></dt>
+<dd>تحذير بشأن قواعد نهاية الإدخال المستقلة <b>$</b> التي سيتم كسرها بواسطة
+التغييرات المستقبلية وتتطلب الإصلاح. في الوقت الحالي، تتفوق هذه القواعد عندما تتعارض مع قواعد أخرى، ولكن بعد إدخال رمز نهاية الإدخال المعمم <b>$</b>، سيتغير ترتيب الأسبقية وستصبح هذه القواعد مظللة بقواعد أخرى.</dd>
+<dt id="Wuseless"><a class="permalink" href="#Wuseless"><b><b>-Wuseless-escape</b></b></a></dt>
+<dd>تحذير إذا تم الهروب من رمز عندما لا ينبغي ذلك. افتراضيًا، يتجاهل re2ocaml هذه الهروب بصمت، ولكن هذا قد يشير أيضًا إلى خطأ إملائي أو خطأ في تسلسل الهروب.</dd>
+<dt id="Wnondeterministic"><a class="permalink" href="#Wnondeterministic"><b><b>-Wnondeterministic-tags</b></b></a></dt>
+<dd>تحذير إذا كان للعلامة درجة <b>n</b> من عدم التحديد، حيث <b>n</b> أكبر من 1.</dd>
+<dt id="Wsentinel"><a class="permalink" href="#Wsentinel"><b><b>-Wsentinel-in-midrule</b></b></a></dt>
+<dd>تحذير إذا كان رمز الحارس يظهر في منتصف القاعدة - قد يؤدي ذلك إلى قراءات تتجاوز نهاية المخزن المؤقت، أو تعطل، أو تلف في الذاكرة في المحلل اللغوي الذي تم إنشاؤه. هذا التحذير ينطبق فقط إذا تم استخدام طريقة الحارس للتحقق من نهاية الإدخال. يتم تعيينه كخطأ إذا تم استخدام تكوين <b>re2c:sentinel</b>.</dd>
+<dt id="Wundefined~2"><a class="permalink" href="#Wundefined~2"><b><b>-Wundefined-syntax-config</b></b></a></dt>
+<dd>تحذير إذا كان ملف الصيغة المحدد بالخيار <b>--syntax</b> يفتقر إلى تعريفات بعض التكوينات. هذا يساعد في صيانة ملفات الصيغة المعرفة من قبل المستخدم: إذا أضاف إصدار جديد تكوينات، فإن ملف الصيغة القديم سيؤدي إلى تحذير، وسيتم إخطار المستخدم. إذا كانت بعض التكوينات غير مستخدمة ولا تحتاج إلى تعريف، فيجب تعيينها صراحةً إلى <b>&lt;undefined&gt;</b>.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Syntax_files'><a class='permalink' href='#Syntax_files'>ملفات الصيغة</a></h2>
+<p class="Pp">يعتمد دعم اللغات المختلفة في re2c على فكرة <i>ملفات الصيغة</i>. ملف الصيغة هو ملف تكوين يحدد صيغة اللغة المستهدفة - وليس اللغة بأكملها، ولكن جزءًا صغيرًا منها تستخدمه الشفرة التي تم إنشاؤها. تجعل ملفات الصيغة re2c مرنة للغاية، ولكن لا ينبغي استخدامها كبديل لتكوينات <b>re2c:</b>: الغرض منها هو تحديد صيغة اللغة المستهدفة، وليس تخصيص محلل لغوي معين. جميع اللغات المدعومة لديها ملفات صيغة افتراضية جزء من التوزيع (انظر الدليل الفرعي <b>include/syntax</b>)؛ وهي مضمنة أيضًا في الثنائي re2ocaml. يمكن للمستخدمين تقديم ملف صيغة مخصص يحل محل عدد قليل من التكوينات لواحدة من اللغات المدعومة، أو يمكنهم اختيار إعادة تعريف جميع التكوينات (في هذه الحالة يجب استخدام الخيار <b>--lang none</b>). تحتوي ملفات الصيغة على تكوينات من أربعة أنواع مختلفة: قوائم الميزات، وتكوينات اللغة، وتكوينات التضمين، وقوالب الشفرة.</p>
+<p class="Pp"><b>قوائم الميزات</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد بعض تكوينات القوائم ميزات مختلفة تدعمها الواجهة الخلفية المعينة، بحيث يمكن لـ re2ocaml تقديم خطأ واضح إذا حاول المستخدم تمكين ميزة غير مدعومة:
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="supported_apis"><a class="permalink" href="#supported_apis"><b><b>supported_apis</b></b></a></dt>
+<dd>قائمة بواجهات برمجة التطبيقات المدعومة مع عناصر محتملة <b>simple</b>، <b>record</b>، <b>generic</b>.</dd>
+<dt id="supported_api_styles"><a class="permalink" href="#supported_api_styles"><b><b>supported_api_styles</b></b></a></dt>
+<dd>قائمة بأنماط واجهة برمجة التطبيقات المدعومة مع عناصر محتملة <b>functions</b>، <b>free-form</b>.</dd>
+<dt id="supported_code_models"><a class="permalink" href="#supported_code_models"><b><b>supported_code_models</b></b></a></dt>
+<dd>قائمة بنماذج الشفرة المدعومة مع عناصر محتملة <b>goto-label</b>، <b>loop-switch</b>، <b>recursive-functions</b>.</dd>
+<dt id="supported_targets"><a class="permalink" href="#supported_targets"><b><b>supported_targets</b></b></a></dt>
+<dd>قائمة بأهداف توليد الشفرة المدعومة مع عناصر محتملة <b>code</b>، <b>dot</b>، <b>skeleton</b>.</dd>
+<dt id="supported_features"><a class="permalink" href="#supported_features"><b><b>supported_features</b></b></a></dt>
+<dd>قائمة بالميزات المدعومة مع عناصر محتملة <b>nested-ifs</b>، <b>bitmaps</b>، <b>computed-gotos</b>، <b>case-ranges</b>، <b>monadic</b>، <b>unsafe</b>، <b>tags</b>، <b>captures</b>، <b>captvars</b>.</dd>
+</dl>
+</div>
+</div>
+</div>
+<p class="Pp"><b>تكوينات اللغة</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تصف بعض التكوينات المنطقية ميزات اللغة المستهدفة التي تؤثر على محلل re2ocaml ومولد الشفرة:
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="semicolons"><a class="permalink" href="#semicolons"><b><b>semicolons</b></b></a></dt>
+<dd>قيمة غير صفرية إذا كانت اللغة تستخدم الفواصل المنقوطة بعد العبارات.</dd>
+<dt id="backtick_quoted_strings"><a class="permalink" href="#backtick_quoted_strings"><b><b>backtick_quoted_strings</b></b></a></dt>
+<dd>قيمة غير صفرية إذا كانت اللغة تحتوي على سلاسل محاطة بعلامات اقتباس خلفية.</dd>
+<dt id="single_quoted_strings"><a class="permalink" href="#single_quoted_strings"><b><b>single_quoted_strings</b></b></a></dt>
+<dd>قيمة غير صفرية إذا كانت اللغة تحتوي على سلاسل محاطة بعلامات اقتباس مفردة.</dd>
+<dt id="indentation_sensitive"><a class="permalink" href="#indentation_sensitive"><b><b>indentation_sensitive</b></b></a></dt>
+<dd>قيمة غير صفرية إذا كانت اللغة حساسة للمسافة البادئة.</dd>
+<dt id="wrap_blocks_in_braces"><a class="permalink" href="#wrap_blocks_in_braces"><b><b>wrap_blocks_in_braces</b></b></a></dt>
+<dd>قيمة غير صفرية إذا كانت الكتل المركبة يجب أن تكون محاطة بأقواس متعرجة.</dd>
+</dl>
+</div>
+</div>
+</div>
+<p class="Pp"><b>تكوينات التضمين</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد ملفات الصيغة القيم الأولية لجميع تكوينات <b>re2c:</b>، حيث يمكن أن تختلف للغات مختلفة. انظر قسم التكوينات للحصول على قائمة كاملة بجميع تكوينات التضمين ومعناها.</div>
+</div>
+<p class="Pp"><b>قوالب الشفرة</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد قوالب الشفرة صيغة اللغة المستهدفة. وهي مكتوبة بلغة بسيطة خاصة بالمجال مع النحو الرسمي التالي:
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>code-template ::
+      name '=' code-exprs ';'
+    | CODE_TEMPLATE ';'
+    | '&lt;undefined&gt;' ';'
+code-exprs ::
+      &lt;EMPTY&gt;
+    | code-exprs code-expr
+code-expr ::
+      STRING
+    | VARIABLE
+    | optional
+    | list
+optional ::
+      '(' CONDITIONAL '?' code-exprs ')'
+    | '(' CONDITIONAL '?' code-exprs ':' code-exprs ')'
+list ::
+      '[' VARIABLE ':' code-exprs ']'
+    | '[' VARIABLE '{' NUMBER '}' ':' code-exprs ']'
+    | '[' VARIABLE '{' NUMBER ',' NUMBER '}' ':' code-exprs ']'</pre>
+</div>
+</div>
+<p class="Pp">قالب الشفرة هو تسلسل من الثوابت النصية، والمتغيرات، والعناصر الاختيارية والقوائم، أو إشارة إلى قالب شفرة آخر، أو قيمة خاصة <b>&lt;undefined&gt;</b>. المتغيرات هي عناصر نائبة يتم استبدالها أثناء مرحلة توليد الشفرة. متغيرات القائمة خاصة: عند توسيع قوالب القائمة، يكرر re2ocaml تعبيرات الجانب الأيمن من العمود عدة مرات، ويستبدل في كل مرة تكرارات متغير القائمة بقيمة خاصة بهذه التكرارات. تحتوي القوائم على حدود اختيارية (القيم السالبة تُحسب من النهاية، على سبيل المثال <b>-1</b> يعني العنصر الأخير). أسماء الشروط تبدأ بنقطة. قد تكون الشروط والمتغيرات محلية (خاصة بقالب الشفرة المحدد) أو عامة (مسموح بها في جميع قوالب الشفرة). عندما يقرأ re2ocaml ملف الصيغة، فإنه يتحقق من أن كل قالب شفرة يستخدم فقط المتغيرات والشروط المسموح بها فيه.</p>
+<p class="Pp">على سبيل المثال، يحدد قالب الشفرة التالي بنية "إذا كان ... إذن ... وإلا ..." للغة تشبه C:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>code:if_then_else =
+    [branch{0}: topindent &quot;if &quot; cond &quot; {&quot; nl
+        indent [stmt: stmt] dedent]
+    [branch{1:-1}: topindent &quot;} else&quot; (.cond ? &quot; if &quot; cond) &quot; {&quot; nl
+        indent [stmt: stmt] dedent]
+    topindent &quot;}&quot; nl;</pre>
+</div>
+</div>
+<p class="Pp">هنا <b>branch</b> هو متغير قائمة: <b>branch{0}</b> يتوسع إلى الفرع الأول (وهو خاص، حيث لا يوجد جزء <b>else</b>)، <b>branch{1:-1}</b> يتوسع إلى جميع الفروع المتبقية (إن وجدت). <b>stmt</b> هو أيضًا متغير قائمة: <b>[stmt: stmt]</b> هي قائمة متداخلة تتوسع إلى قائمة عبارات في جسم الفرع الحالي. <b>topindent</b>، <b>indent</b>، <b>dedent</b> و <b>nl</b> هي متغيرات عامة، و <b>.cond</b> هو شرط محلي (معناها موصوف أدناه). يمكن أن ينتج قالب الشفرة هذا الشفرة التالية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>if x {
+    // do something
+} else if y {
+    // do something else
+} else {
+    // don't do anything
+}</pre>
+</div>
+</div>
+<p class="Pp">إليك قائمة بجميع قوالب الشفرة التي يدعمها re2ocaml مع متغيراتها المحلية وشروطها. لاحظ أن التعريف المحدد قد يستخدم، ولكنه ليس ملزمًا، المتغيرات المحلية والشروط. يجب تعيين أي قوالب شفرة غير مستخدمة إلى <b>&lt;undefined&gt;</b>.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="code:var_local"><a class="permalink" href="#code:var_local"><b><b>code:var_local</b></b></a></dt>
+<dd>تعريف أو تعريف متغير محلي. المتغيرات المدعومة: <b>type</b> (نوع المتغير)، <b>name</b> (اسمه) و <b>init</b> (القيمة الأولية، إن وجدت). الشروط: <b>.init</b> (صحيح إذا كان هناك مُهيئ).</dd>
+<dt id="code:var_global"><a class="permalink" href="#code:var_global"><b><b>code:var_global</b></b></a></dt>
+<dd>نفس <b>code:var_local</b>، باستثناء أنه يُستخدم على المستوى الأعلى.</dd>
+<dt id="code:const_local"><a class="permalink" href="#code:const_local"><b><b>code:const_local</b></b></a></dt>
+<dd>تعريف ثابت محلي. المتغيرات المدعومة: <b>type</b> (نوع الثابت)، <b>name</b> (اسمه) و <b>init</b> (القيمة الأولية).</dd>
+<dt id="code:const_global"><a class="permalink" href="#code:const_global"><b><b>code:const_global</b></b></a></dt>
+<dd>نفس <b>code:const_local</b>، باستثناء أنه يُستخدم على المستوى الأعلى.</dd>
+<dt id="code:array_local"><a class="permalink" href="#code:array_local"><b><b>code:array_local</b></b></a></dt>
+<dd>تعريف مصفوفة محلية (جدول). المتغيرات المدعومة: <b>type</b> (نوع عناصر المصفوفة)، <b>name</b> (اسم المصفوفة)، <b>size</b> (حجمها)، <b>row</b> (متغير قائمة لا ينتج أي شفرة بحد ذاته، ولكنه يوسع تعبير القائمة عدة مرات بعدد الصفوف في الجدول) و <b>elem</b> (متغير قائمة يتوسع إلى جميع عناصر الجدول في الصف الحالي - وهو مخصص للتداخل في قائمة <b>row</b>). الشرط المدعوم: <b>.const</b> (صحيح إذا كانت المصفوفة غير قابلة للتغيير).</dd>
+<dt id="code:array_global"><a class="permalink" href="#code:array_global"><b><b>code:array_global</b></b></a></dt>
+<dd>نفس <b>code:array_local</b>، باستثناء أنه يُستخدم على المستوى الأعلى.</dd>
+<dt id="code:array_elem"><a class="permalink" href="#code:array_elem"><b><b>code:array_elem</b></b></a></dt>
+<dd>إشارة إلى عنصر في مصفوفة (جدول). المتغيرات المدعومة: <b>array</b> (اسم المصفوفة) و <b>index</b> (فهرس العنصر).</dd>
+<dt id="code:enum"><a class="permalink" href="#code:enum"><b
+><b>code:enum</b></b></a></dt>
+  <dd>تعريف تعداد (قد يتم تعريفه باستخدام بناء لغة خاص للتعدادات، أو ببساطة كمجموعة من الثوابت المستقلة). المتغيرات المدعومة هي <b>type</b> (نوع التعداد المعرف من قبل المستخدم أو نوع الثوابت)، <b>elem</b> (متغير قائمة يتوسع إلى اسم كل عضو) و <b>init</b> (مُهيئ لكل عضو). الشروط: <b>.init</b> (صحيح إذا كان هناك مُهيئ).</dd>
+  <dt id="code:enum_elem"><a class="permalink" href="#code:enum_elem"><b><b>code:enum_elem</b></b></a></dt>
+  <dd>عنصر التعداد (عضو في نوع تعداد معرف من قبل المستخدم أو اسم ثابت، اعتمادًا على كيفية تعريف <b>code:enum</b>). المتغيرات المدعومة هي <b>name</b> (اسم العنصر) و <b>type</b> (نوعه).</dd>
+  <dt id="code:assign"><a class="permalink" href="#code:assign"><b><b>code:assign</b></b></a></dt>
+  <dd>عبارة تعيين. المتغيرات المدعومة هي <b>lhs</b> (الجانب الأيسر) و <b>rhs</b> (الجانب الأيمن).</dd>
+  <dt id="code:type_int"><a class="permalink" href="#code:type_int"><b><b>code:type_int</b></b></a></dt>
+  <dd>نوع عدد صحيح موقع.</dd>
+  <dt id="code:type_uint"><a class="permalink" href="#code:type_uint"><b><b>code:type_uint</b></b></a></dt>
+  <dd>نوع عدد صحيح غير موقع.</dd>
+  <dt id="code:type_yybm"><a class="permalink" href="#code:type_yybm"><b><b>code:type_yybm</b></b></a></dt>
+  <dd>نوع العناصر في جدول <b>yybm</b>.</dd>
+  <dt id="code:type_yytarget"><a class="permalink" href="#code:type_yytarget"><b><b>code:type_yytarget</b></b></a></dt>
+  <dd>نوع العناصر في جدول <b>yytarget</b>.</dd>
+  <dt id="code:type_yyctable"><a class="permalink" href="#code:type_yyctable"><b><b>code:type_yyctable</b></b></a></dt>
+  <dd>نوع العناصر في جدول <b>yyctable</b>.</dd>
+  <dt id="code:cmp_eq"><a class="permalink" href="#code:cmp_eq"><b><b>code:cmp_eq</b></b></a></dt>
+  <dd>المعامل "يساوي".</dd>
+  <dt id="code:cmp_ne"><a class="permalink" href="#code:cmp_ne"><b><b>code:cmp_ne</b></b></a></dt>
+  <dd>المعامل "لا يساوي".</dd>
+  <dt id="code:cmp_lt"><a class="permalink" href="#code:cmp_lt"><b><b>code:cmp_lt</b></b></a></dt>
+  <dd>المعامل "أصغر من".</dd>
+  <dt id="code:cmp_gt"><a class="permalink" href="#code:cmp_gt"><b><b>code:cmp_gt</b></b></a></dt>
+  <dd>المعامل "أكبر من"</dd>
+  <dt id="code:cmp_le"><a class="permalink" href="#code:cmp_le"><b><b>code:cmp_le</b></b></a></dt>
+  <dd>المعامل "أصغر من أو يساوي"</dd>
+  <dt id="code:cmp_ge"><a class="permalink" href="#code:cmp_ge"><b><b>code:cmp_ge</b></b></a></dt>
+  <dd>المعامل "أكبر من أو يساوي"</dd>
+  <dt id="code:if_then_else"><a class="permalink" href="#code:if_then_else"><b><b>code:if_then_else</b></b></a></dt>
+  <dd>عبارة إذا-ثم-غير ذلك مع فرع واحد أو أكثر. المتغيرات المدعومة: <b>branch</b> (متغير قائمة لا ينتج بحد ذاته أي رمز، ولكنه يوسع تعبير القائمة بعدد الفروع)، <b>cond</b> (شرط الفرع الحالي) و <b>stmt</b> (متغير قائمة يتوسع إلى جميع العبارات في الفرع الحالي). الشروط: <b>.cond</b> (صحيح إذا كان للفرع الحالي شرط)، <b>.many</b> (صحيح إذا كان هناك أكثر من فرع واحد).</dd>
+  <dt id="code:if_then_else_oneline"><a class="permalink" href="#code:if_then_else_oneline"><b><b>code:if_then_else_oneline</b></b></a></dt>
+  <dd>تخصص لـ <b>code:if_then_else</b> للحالة التي تكون فيها جميع الفروع عبارات من سطر واحد. إذا كان هذا <b>&lt;undefined&gt;</b>، يتم استخدام <b>code:if_then_else</b> بدلاً منه.</dd>
+  <dt id="code:switch"><a class="permalink" href="#code:switch"><b><b>code:switch</b></b></a></dt>
+  <dd>عبارة مفتاح مع مجموعة حالات واحدة أو أكثر. المتغيرات المدعومة: <b>expr</b> (التعبير الذي يتم تبديله) و <b>case</b> (متغير قائمة يتوسع إلى جميع مجموعات الحالات مع كتل الرمز الخاصة بها).</dd>
+  <dt id="code:switch_cases"><a class="permalink" href="#code:switch_cases"><b><b>code:switch_cases</b></b></a></dt>
+  <dd>مجموعة حالات مفتاح تتوافق مع كتلة رمز واحدة. المتغيرات المدعومة هي <b>case</b> (متغير قائمة يتوسع إلى جميع الحالات في هذه المجموعة) و <b>stmt</b> (متغير قائمة يتوسع إلى جميع العبارات في كتلة الرمز).</dd>
+  <dt id="code:switch_cases_oneline"><a class="permalink" href="#code:switch_cases_oneline"><b><b>code:switch_cases_oneline</b></b></a></dt>
+  <dd>تخصص لـ <b>code:switch_cases</b> للحالة التي تتكون فيها كتلة الرمز من عبارة واحدة من سطر واحد. إذا كان هذا <b>&lt;undefined&gt;</b>، يتم استخدام <b>code:switch_cases</b> بدلاً منه.</dd>
+  <dt id="code:switch_case_range"><a class="permalink" href="#code:switch_case_range"><b><b>code:switch_case_range</b></b></a></dt>
+  <dd>حالة مفتاح واحدة تغطي نطاقًا من القيم (قد تتكون من قيمة واحدة). المتغير المدعوم: <b>val</b> (متغير قائمة يتوسع إلى جميع القيم في النطاق). الشروط المدعومة: <b>.many</b> (صحيح إذا كان هناك أكثر من قيمة واحدة في النطاق) و <b>.char_literals</b> (صحيح إذا كان هذا مفتاحًا على أحرف حرفية - توفر بعض اللغات صيغة خاصة لهذه الحالة).</dd>
+  <dt id="code:switch_case_default"><a class="permalink" href="#code:switch_case_default"><b><b>code:switch_case_default</b></b></a></dt>
+  <dd>حالة مفتاح افتراضية.</dd>
+  <dt id="code:loop"><a class="permalink" href="#code:loop"><b><b>code:loop</b></b></a></dt>
+  <dd>حلقة تعمل إلى الأبد (ما لم يتم مقاطعتها من جسم الحلقة). المتغيرات المدعومة: <b>label</b> (تسمية الحلقة)، <b>stmt</b> (متغير قائمة يتوسع إلى جميع العبارات في جسم الحلقة).</dd>
+  <dt id="code:continue"><a class="permalink" href="#code:continue"><b><b>code:continue</b></b></a></dt>
+  <dd>عبارة متابعة. المتغيرات المدعومة: <b>label</b> (تسمية لمتابعة التنفيذ منها).</dd>
+  <dt id="code:goto"><a class="permalink" href="#code:goto"><b><b>code:goto</b></b></a></dt>
+  <dd>عبارة انتقال. المتغيرات المدعومة: <b>label</b> (تسمية وجهة القفز).</dd>
+  <dt id="code:cgoto"><a class="permalink" href="#code:cgoto"><b><b>code:cgoto</b></b></a></dt>
+  <dd>عبارة انتقال محسوبة. المتغيرات المدعومة: <b>array</b> (الجدول الذي يحتوي على معلومات الانتقال المحسوبة)، <b>index</b> (فهرس العنصر في الجدول) و <b>base</b> (تسمية أساسية، تستخدم فقط إذا كان <b>.cgoto.relative</b> صحيحًا).</dd>
+  <dt id="code:cgoto:data"><a class="permalink" href="#code:cgoto:data"><b><b>code:cgoto:data</b></b></a></dt>
+  <dd>تعبير تهيئة لعنصر واحد في جدول الانتقال المحسوب. المتغيرات المدعومة: <b>label</b> (التسمية المستخدمة لتهيئة العنصر الحالي)، <b>type</b> (النوع الأساسي للعناصر في الجدول) و <b>base</b> (تسمية أساسية - تستخدم فقط إذا كان <b>.cgoto.relative</b> صحيحًا).</dd>
+  <dt id="code:fndecl"><a class="permalink" href="#code:fndecl"><b><b>code:fndecl</b></b></a></dt>
+  <dd>إعلان دالة. المتغيرات المدعومة: <b>name</b> (اسم الدالة)، <b>type</b> (نوع الإرجاع)، <b>throw</b> (الاستثناءات التي تلقيها هذه الدالة، تتوافق مع إعداد <b>re2c:yyfn:throw</b>)، <b>arg</b> (متغير قائمة لا ينتج بحد ذاته أي رمز، ولكنه يوسع تعبير القائمة بعدد وسائط الدالة)، <b>argname</b> (اسم الوسيط الحالي)، <b>argtype</b> (نوع الوسيط الحالي). شرط: <b>.type</b> (صحيح إذا كانت هذه دالة غير فارغة).</dd>
+  <dt id="code:fndef"><a class="permalink" href="#code:fndef"><b><b>code:fndef</b></b></a></dt>
+  <dd>مثل <b>code:fndecl</b>، ولكنها تستخدم لتعريفات الدوال، لذلك لديها متغير قائمة إضافي واحد <b>stmt</b> يتوسع إلى جميع العبارات في جسم الدالة.</dd>
+  <dt id="code:fncall"><a class="permalink" href="#code:fncall"><b><b>code:fncall</b></b></a></dt>
+  <dd>عبارة استدعاء دالة. المتغيرات المدعومة: <b>name</b> (اسم الدالة)، <b>retval</b> (قيمة l حيث يتم تخزين القيمة المرجعة، إن وجدت) و <b>arg</b> (متغير قائمة يتوسع إلى جميع وسائط الدالة). الشروط: <b>.args</b> (صحيح إذا كانت الدالة تحتوي على وسائط) و <b>.retval</b> (صحيح إذا كانت القيمة المرجعة تحتاج إلى حفظ).</dd>
+  <dt id="code:tailcall"><a class="permalink" href="#code:tailcall"><b><b>code:tailcall</b></b></a></dt>
+  <dd>عبارة استدعاء ذيلي. المتغيرات المدعومة: <b>name</b> (اسم الدالة)، و <b>arg</b> (متغير قائمة يتوسع إلى جميع وسائط الدالة). الشروط: <b>.args</b> (صحيح إذا كانت الدالة تحتوي على وسائط) و <b>.retval</b> (صحيح إذا كانت هذه دالة غير فارغة).</dd>
+  <dt id="code:recursive_functions"><a class="permalink" href="#code:recursive_functions"><b><b>code:recursive_functions</b></b></a></dt>
+  <dd>جسم البرنامج مع نموذج الرمز <b>--recursive-functions</b>. المتغيرات المدعومة: <b>fn</b> (متغير قائمة لا ينتج بحد ذاته أي رمز، ولكنه يوسع تعبير القائمة بعدد الدوال)، <b>fndecl</b> (إعلان الدالة الحالية) و <b>fndef</b> (تعريف الدالة الحالية).</dd>
+  <dt id="code:fingerprint"><a class="permalink" href="#code:fingerprint"><b><b>code:fingerprint</b></b></a></dt>
+  <dd>البصمة في أعلى ملف الإخراج المنشأ. المتغيرات المدعومة: <b>ver</b> (إصدار re2ocaml الذي تم استخدامه لإنشائه) و <b>date</b> (تاريخ الإنشاء).</dd>
+  <dt id="code:line_info"><a class="permalink" href="#code:line_info"><b><b>code:line_info</b></b></a></dt>
+  <dd>تنسيق توجيهات الأسطر (إذا تم تعيين هذا إلى <b>&lt;undefined&gt;</b>، فلن يتم إنشاء أي توجيهات). المتغيرات المدعومة: <b>line</b> (رقم السطر) و <b>file</b> (اسم الملف).</dd>
+  <dt id="code:abort"><a class="permalink" href="#code:abort"><b><b>code:abort</b></b></a></dt>
+  <dd>عبارة تلغي تنفيذ البرنامج.</dd>
+  <dt id="code:yydebug"><a class="permalink" href="#code:yydebug"><b><b>code:yydebug</b></b></a></dt>
+  <dd>عبارة <b>YYDEBUG</b>، ربما تكون متخصصة لواجهات برمجة تطبيقات مختلفة. المتغيرات المدعومة: <b>YYDEBUG</b>، <b>yyrecord</b>، <b>yych</b> (تتوافق مع إعدادات <b>re2c:</b> المقابلة)، <b>state</b> (رقم حالة DFA).</dd>
+  <dt id="code:yypeek"><a class="permalink" href="#code:yypeek"><b><b>code:yypeek</b></b></a></dt>
+  <dd>عبارة <b>YYPEEK</b>، ربما تكون متخصصة لواجهات برمجة تطبيقات مختلفة. المتغيرات المدعومة: <b>YYPEEK</b>، <b>YYCTYPE</b>، <b>YYINPUT</b>، <b>YYCURSOR</b>، <b>yyrecord</b>، <b>yych</b> (تتوافق مع إعدادات <b>re2c:</b> المقابلة). الشروط: <b>.cast</b> (صحيح إذا تم تعيين <b>re2c:yych:conversion</b> إلى قيمة غير صفرية).</dd>
+  <dt id="code:yyskip"><a class="permalink" href="#code:yyskip"><b><b>code:yyskip</b></b></a></dt>
+  <dd>عبارة <b>YYSKIP</b>، ربما تكون متخصصة لواجهات برمجة تطبيقات مختلفة. المتغيرات المدعومة: <b>YYSKIP</b>، <b>YYCURSOR</b>، <b>yyrecord</b> (تتوافق مع إعدادات <b>re2c:</b> المقابلة).</dd>
+  <dt id="code:yybackup"><a class="permalink" href="#code:yybackup"><b><b>code:yybackup</b></b></a></dt>
+  <dd>عبارة <b>YYBACKUP</b>، ربما تكون متخصصة لواجهات برمجة تطبيقات مختلفة. المتغيرات المدعومة: <b>YYBACKUP</b>، <b>YYCURSOR</b>، <b>YYMARKER</b>، <b>yyrecord</b> (تتوافق مع إعدادات <b>re2c:</b> المقابلة).</dd>
+  <dt id="code:yybackupctx"><a class="permalink" href="#code:yybackupctx"><b><b>code:yybackupctx</b></b></a></dt>
+  <dd>عبارة <b>YYBACKUPCTX</b>، ربما تكون متخصصة لواجهات برمجة تطبيقات مختلفة. المتغيرات المدعومة: <b>YYBACKUPCTX</b>، <b>YYCURSOR</b>، <b>YYCTXMARKER</b>، <b>yyrecord</b> (تتوافق مع إعدادات <b>re2c:</b> المقابلة).</dd>
+  <dt id="code:yyskip_yypeek"><a class="permalink" href="#code:yyskip_yypeek"><b><b>code:yyskip_yypeek</b></b></a></dt>
+  <dd>عبارة <b>code:yyskip</b> و <b>code:yypeek</b> مدمجة.</dd>nded at the end of input, where
+    <b>YYMAXFILL</b> value is autogenerated with a <b>max</b> block. It is not
+    necessary to use null for padding --- any characters can be used as long as
+    they do not form a valid lexeme suffix (in this example padding should not
+    contain single quotes, as they may be mistaken for a suffix of a
+    single-quoted string). There is a &quot;stop&quot; rule that matches the
+    first padding character (null) and terminates the lexer (note that it checks
+    if null is at the beginning of padding, otherwise it is a syntax error).
+    Bounds checks are generated only in some states that are determined by the
+    strongly connected components of the underlying automaton. Checks have the
+    form <b>(YYLIMIT - YYCURSOR) &lt; n</b> or <b>YYLESSTHAN(n)</b> with generic
+    API, where <b>n</b> is the minimum number of characters that are needed for
+    the lexer to proceed (it also means that the next bounds check will occur in
+    at most <b>n</b> characters). If the check condition is true, the lexer has
+    reached the end of input and will invoke <b>YYFILL(n)</b> that should either
+    supply at least <b>n</b> input characters or not return. In this example
+    <b>YYFILL</b> always fails and terminates the lexer with an error (which is
+    fine because the input fits into one buffer). See the <i>YYFILL with
+    padding</i> section for an example that refills the input buffer with
+    <b>YYFILL</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT *)
+open String
+exception Fill
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+    yylimit: int;
+}
+%{max %}
+%{
+    re2c:YYFN = [&quot;lex;int&quot;, &quot;yyrecord;state&quot;, &quot;count;int&quot;];
+    re2c:YYFILL = &quot;raise Fill;&quot;;
+    str = ['] ([^'\\] | [\\][^])* ['];
+    [\x00] {
+        (* check that it is the sentinel, not some unexpected null *)
+        if yyrecord.yycursor = length yyrecord.yyinput - yymaxfill + 1 then count else -1
+    }
+    str  { lex yyrecord (count + 1) }
+    [ ]+ { lex yyrecord count }
+    *    { -1 }
+%}
+let test(str, count) =
+    let buf = cat str (make yymaxfill '\x00') in
+    let st = {yyinput = buf; yycursor = 0; yylimit = length buf} in
+    let result = try lex st 0 with Fill -&gt; -1 in
+    if not (result = count) then raise (Failure &quot;error&quot;)
+let main () =
+    test(&quot;&quot;, 0);
+    test(&quot;'unterminated\\'&quot;, -1);
+    test(&quot;'qu\x00tes' 'are' 'fine: \\'' &quot;, 3);
+    test(&quot;'unexpected \x00 null&quot;, -1)
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Custom_checks'><a class='permalink' href='#Custom_checks'>Custom   checks</a></h2>
+<p class="Pp">This example uses a custom end-of-input handling method based on
+    generic API. The program counts space-separated single-quoted strings. It is
+    the same as the <i>sentinel</i> example, except that the input is not
+    null-terminated. To cover up for the absence of a sentinel character at the
+    end of input, <b>YYPEEK</b> is redefined to perform a bounds check before it
+    reads the next input character. This is inefficient because checks are done
+    very often. If the check condition fails, <b>YYPEEK</b> returns the real
+    character, otherwise it returns a fake sentinel character.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT *)
+type state = {
+    str: string;
+    mutable cur: int;
+    lim: int;
+}
+(* expect a string without terminating null *)
+%{
+    re2c:api = generic;
+    re2c:YYFN = [&quot;lex;int&quot;, &quot;st;state&quot;, &quot;count;int&quot;];
+    re2c:YYPEEK = &quot;if st.cur &lt; st.lim then st.str.[st.cur] else '\\x00'&quot;;
+    re2c:YYSKIP = &quot;st.cur &lt;- st.cur + 1;&quot;;
+    re2c:yyfill:enable = 0;
+    *      { -1 }
+    [\x00] { count }
+    [a-z]+ { lex st (count + 1) }
+    [ ]+   { lex st count }
+%}
+let test(str, count) =
+    let st = {str = str; cur = 0; lim = String.length str}
+    in if not (lex st 0 = count) then raise (Failure &quot;error&quot;)
+let main () =
+    test(&quot;&quot;, 0);
+    test(&quot;one two three&quot;, 3);
+    test(&quot;f0ur&quot;, -1)
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUFFER_REFILLING'><a class='permalink' href='#BUFFER_REFILLING'>BUFFER   REFILLING</a></h1>
+<p class="Pp">The need for buffering arises when the input cannot be mapped in
+    memory all at once: either it is too large, or it comes in a streaming
+    fashion (like reading from a socket). The usual technique in such cases is
+    to allocate a fixed-sized memory buffer and process input in chunks that fit
+    into the buffer. When the current chunk is processed, it is moved out and
+    new data is moved in. In practice it is somewhat more complex, because lexer
+    state consists not of a single input position, but a set of interrelated
+    positions:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li>cursor: the next input character to be read (<b>YYCURSOR</b> in C pointer
+        API or <b>YYSKIP</b>/<b>YYPEEK</b> in generic API)</li>
+    <li>limit: the position after the last available input character
+        (<b>YYLIMIT</b> in C pointer API, implicitly handled by <b>YYLESSTHAN</b>
+        in generic API)</li>
+    <li>marker: the position of the most recent match, if any (<b>YYMARKER</b> in
+        default API or <b>YYBACKUP</b>/<b>YYRESTORE</b> in generic API)</li>
+    <li>token: the start of the current lexeme (implicit in re2ocaml API, as it is
+        not needed for the normal lexer operation and can be defined and updated
+        by the user)</li>
+    <li>context marker: the position of the trailing context (<b>YYCTXMARKER</b>
+        in C pointer API or <b>YYBACKUPCTX</b>/<b>YYRESTORECTX</b> in generic
+        API)</li>
+    <li>tag variables: submatch positions (defined with <b>stags</b> and
+        <b>mtags</b> blocks and generic API primitives
+        <b>YYSTAGP</b>/<b>YYSTAGN</b>/<b>YYMTAGP</b>/<b>YYMTAGN</b>)</li>
+</ul>
+</div>
+<p class="Pp">Not all these are used in every case, but if used, they must be
+    updated by <b>YYFILL</b>. All active positions are contained in the segment
+    between token and cursor, therefore everything between buffer start and
+    token can be discarded, the segment from token and up to limit should be
+    moved to the beginning of buffer, and the free space at the end of buffer
+    should be filled with new data. In order to avoid frequent <b>YYFILL</b>
+    calls it is best to fill in as many input characters as possible (even
+    though fewer characters might suffice to resume the lexer). The details of
+    <b>YYFILL</b> implementation are slightly different depending on which EOF
+    handling method is used: the case of EOF rule is somewhat simpler than the
+    case of bounds-checking with padding. Also note that if <b>-f
+    --storable-state</b> option is used, <b>YYFILL</b> has slightly different
+    semantics (described in the section about storable state).</p>
+<section class="Ss">
+<h2 class="Ss" id='YYFILL_with_sentinel'><a class='permalink' href='#YYFILL_with_sentinel'>YYFILL   with sentinel</a></h2>
+<p class="Pp">If EOF rule is used, <b>YYFILL</b> is a function-like primitive
+    that accepts no arguments and returns a value which is checked against zero.
+    <b>YYFILL</b> invocation is triggered by condition <b>YYLIMIT &lt;=
+    YYCURSOR</b> in C pointer API and <b>YYLESSTHAN()</b> in generic API. A
+    non-zero return value means that <b>YYFILL</b> has failed. A successful
+    <b>YYFILL</b> call must supply at least one character and adjust input
+    positions accordingly. Limit must always be set to one after the last input
+    position in buffer, and the character at the limit position must be the
+    sentinel symbol specified by <b>re2c:eof</b> configuration. The pictures
+    below show the relative locations of input positions in buffer before and
+    after <b>YYFILL</b> call (sentinel symbol is marked with <b>#</b>, and the
+    second picture shows the case when there is not enough input to fill the
+    whole buffer).</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>               &lt;-- shift --&gt;
+             &gt;-A------------B---------C-------------D#-----------E-&gt;
+             buffer       token    marker         limit,
+                                                  cursor
+&gt;-A------------B---------C-------------D------------E#-&gt;
+             buffer,  marker        cursor        limit
+             token
+               &lt;-- shift --&gt;
+             &gt;-A------------B---------C-------------D#--E (EOF)
+             buffer       token    marker         limit,
+                                                  cursor
+&gt;-A------------B---------C-------------D---E#........
+             buffer,  marker       cursor limit
+             token</pre>
+</div>
+</div>
+<p class="Pp">Here is an example of a program that reads input file
+    <b>input.txt</b> in chunks of 4096 bytes and uses EOF rule.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT *)
+open Bytes
+let bufsize = 4096
+type state = {
+    file: in_channel;
+    yyinput: bytes;
+    mutable yycursor: int;
+    mutable yymarker: int;
+    mutable yylimit: int;
+    mutable token: int;
+    mutable eof: bool;
+}
+type status = Ok | Eof | LongLexeme
+let fill(st: state) : status =
+    if st.eof then Eof else
+    (* Error: lexeme too long. In real life could reallocate a larger buffer. *)
+    if st.token &lt; 1 then LongLexeme else (
+    (* Shift buffer contents (discard everything up to the current token). *)
+    blit st.yyinput st.token st.yyinput 0 (st.yylimit - st.token);
+    st.yycursor &lt;- st.yycursor - st.token;
+    st.yymarker &lt;- st.yymarker - st.token;
+    st.yylimit &lt;- st.yylimit - st.token;
+    st.token &lt;- 0;
+    (* Fill free space at the end of buffer with new data from file. *)
+    let n = input st.file st.yyinput st.yylimit (bufsize - st.yylimit - 1) in (* -1 for sentinel *)
+    st.yylimit &lt;- st.yylimit + n;
+    if n = 0 then
+        st.eof &lt;- true; (* end of file *)
+        set st.yyinput st.yylimit '\x00'; (* append sentinel *)
+    Ok)
+%{
+    re2c:YYFN = [&quot;lex;int&quot;, &quot;yyrecord;state&quot;, &quot;count;int&quot;];
+    re2c:YYFILL = &quot;fill yyrecord = Ok&quot;;
+    re2c:eof = 0;
+    str = ['] ([^'\\] | [\\][^])* ['];
+    *    { -1 }
+    $    { count }
+    str  { lex_loop yyrecord (count + 1) }
+    [ ]+ { lex_loop yyrecord count }
+%}
+and lex_loop st count =
+    st.token &lt;- st.yycursor;
+    lex st count
+let main () =
+    let fname = &quot;input&quot; in
+    (* Prepare input file. *)
+    Out_channel.with_open_bin fname
+        (fun oc -&gt; for i = 1 to bufsize do
+            output_string oc &quot;'qu\x00tes' 'are' 'fine: \\'' &quot;
+        done);
+    (* Run lexer on the prepared file. *)
+    In_channel.with_open_bin fname
+        (fun ic -&gt;
+            let yylimit = bufsize - 1 in
+            let st = {
+                file = ic;
+                yyinput = create bufsize;
+                yycursor = yylimit;
+                yymarker = yylimit;
+                yylimit = yylimit;
+                token = yylimit;
+                eof = false;
+            } in if not (lex_loop st 0 = 3 * bufsize) then
+                raise (Failure &quot;error&quot;));
+    (* Cleanup. *)
+    Sys.remove fname
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='YYFILL_with_padding'><a class='permalink' href='#YYFILL_with_padding'>YYFILL   with padding</a></h2>
+<p class="Pp">In the default case (when EOF rule is not used) <b>YYFILL</b> is a
+    function-like primitive that accepts a single argument and does not return
+    any value. <b>YYFILL</b> invocation is triggered by condition <b>(YYLIMIT -
+    YYCURSOR) &lt; n</b> in C pointer API and <b>YYLESSTHAN(n)</b> in generic
+    API. The argument passed to <b>YYFILL</b> is the minimal number of
+    characters that must be supplied. If it fails to do s{
+  "file_structure": {
+    "type": "directory",
+    "name": "root",
+    "children": [
+      {
+        "type": "file",
+        "name": "example.ml"
+      }
+    ]
+  },
+  "files_content": {
+    "example.ml": ";;\nopen String\n\ntype state = {\n    file: in_channel;\n    yyinput: bytes;\n    mutable yycursor: int;\n    mutable yymarker: int;\n    mutable yylimit: int;\n    mutable token: int;\n    mutable eof: bool;\n    (* Final tag variables available in semantic action. *)\n    mutable svars_tag1: int;\n    mutable svars_tag2: int;\n    (* Intermediate tag variables used by the lexer (must be autogenerated). *)\n    mutable stags_t1: int;\n    mutable stags_t2: int;\n    mutable stags_t3: int;\n    mutable stags_t4: int;\n    mutable stags_t5: int;\n}\ntype status = Ok | Eof | LongLexeme\ntype semver = {\n    major: int;\n    minor: int;\n    patch: int;\n}\nlet s2n (str: bytes) (i1: int) (i2: int) : int = \n    let rec f s i j n = \n        if i >= j then n else f s (i + 1) j (n * 10 + Char.code (get s i) - 48)\n    in f str i1 i2 0\n\nlet fill(st: state) : status = \n    if st.eof then Eof else\n    (* Error: lexeme too long. In real life could reallocate a larger buffer. *)\n    if st.token < 1 then LongLexeme else (\n    (* Shift buffer contents (discard everything up to the current token). *)\n    blit st.yyinput st.token st.yyinput 0 (st.yylimit - st.token);\n    st.yycursor <- st.yycursor - st.token;\n    st.yymarker <- st.yymarker - st.token;\n    st.yylimit <- st.yylimit - st.token;\n    st.stags_t1 <- if st.stags_t1 = -1 then -1 else st.stags_t1 - st.token;\n    st.stags_t2 <- if st.stags_t2 = -1 then -1 else st.stags_t2 - st.token;\n    st.stags_t3 <- if st.stags_t3 = -1 then -1 else st.stags_t3 - st.token;\n    st.stags_t4 <- if st.stags_t4 = -1 then -1 else st.stags_t4 - st.token;\n    st.stags_t5 <- if st.stags_t5 = -1 then -1 else st.stags_t5 - st.token;\n    st.token <- 0;\n    (* Fill free space at the end of buffer with new data from file. *)\n    let n = input st.file st.yyinput st.yylimit (String.length st.yyinput - st.yylimit - 1) in (* -1 for sentinel *)\n    st.yylimit <- st.yylimit + n;\n    if n = 0 then \n        st.eof <- true; (* end of file *)\n        set st.yyinput st.yylimit '\\x00'; (* append sentinel *)\n    Ok)\n\nlet rec lex_loop (st: state) (vers: semver list) = \n    st.token <- st.yycursor;\n    let res = lex st vers in\n    match res with \n    | Ok (new_vers) -> lex_loop st new_vers\n    | Eof (final_vers) -> Some (List.rev final_vers)\n    | LongLexeme -> None\n\nand lex (st: state) (vers: semver list) : (semver list, status) result = \n    let rec lex' () = \n        match st.yycursor with \n        | i when i >= st.yylimit -> \n            let status = fill st in\n            match status with \n            | Ok -> lex' ()\n            | Eof -> Eof (vers)\n            | LongLexeme -> LongLexeme\n        | _ -> \n            let c = get st.yyinput st.yycursor in\n            match c with \n            | '0'..'9' -> \n                let t1 = st.yycursor in\n                let marker = ref st.yymarker in\n                let current_cursor = ref st.yycursor in\n                let t2 = ref 0 in\n                let t3 = ref 0 in \n                let t4 = ref 0 in\n                let t5 = ref (-1) in\n                (\n                    st.stags_t1 <- st.yycursor;\n                    st.stags_t2 <- st.yycursor;\n                    st.stags_t3 <- st.yycursor;\n                    st.stags_t4 <- st.yycursor;\n                    st.stags_t5 <- -1;\n                    st.yycursor <- st.yycursor + 1;\n                    while get st.yyinput st.yycursor >= '0' && get st.yyinput st.yycursor <= '9' do\n                        st.yycursor <- st.yycursor + 1\n                    done;\n                    st.stags_t2 <- st.yycursor;\n                    if get st.yyinput st.yycursor = '.' then (\n                        st.yycursor <- st.yycursor + 1;\n                        st.stags_t3 <- st.yycursor;\n                        st.stags_t4 <- st.yycursor;\n                        while get st.yyinput st.yycursor >= '0' && get st.yyinput st.yycursor <= '9' do\n                            st.yycursor <- st.yycursor + 1\n                        done;\n                        st.stags_t4 <- st.yycursor;\n                        if get st.yyinput st.yycursor = '.' then (\n                            st.yycursor <- st.yycursor + 1;\n                            st.stags_t5 <- st.yycursor;\n                            while get st.yyinput st.yycursor >= '0' && get st.yyinput st.yycursor <= '9' do\n                                st.yycursor <- st.yycursor + 1\n                            done;\n                            st.stags_t5 <- st.yycursor;\n                            if get st.yyinput st.yycursor = '\\n' then (\n                                let ver = {\n                                    major = s2n st.yyinput st.stags_t1 st.stags_t2;\n                                    minor = s2n st.yyinput st.stags_t3 st.stags_t4;\n                                    patch = if st.stags_t5 = -1 then 0 else s2n st.yyinput st.stags_t5 (st.yycursor) \n                                }\n                                in Ok (ver :: vers)\n                            ) else lex' ()\n                        ) else lex' ()\n                    ) else lex' ()\n                )\n            | _ -> \n                if get st.yyinput st.yycursor = '\\n' then \n                    st.yycursor <- st.yycursor + 1;\n                    lex' ()\n                else \n                    if st.yycursor >= st.yylimit then \n                        let status = fill st in \n                        match status with \n                        | Ok -> lex' ()\n                        | Eof -> Eof (vers)\n                        | LongLexeme -> LongLexeme\n                    else \n                        if get st.yyinput st.yycursor = '\\x00' then Eof(vers)\n                        else lex' ()\n    in \n    lex' ()\n\n\n\nlet main () = \n    let fname = \"input\" in\n    (* Prepare input file. *)\n    Out_channel.with_open_bin fname \n        (fun oc -> for i = 1 to 1000 do\n            output_string oc \"1.22.333\\n\"\n        done);\n    (* Construct the expected result to compare against. *)\n    let expect = Some (List.init 1000 \n            (fun _ -> {major = 1; minor = 22; patch = 333;})) in\n    (* Run lexer on the prepared file. *)\n    In_channel.with_open_bin fname \n        (fun ic -> \n            let yylimit = 1024 - 1 in\n            let st = {\n                file = ic;\n                yyinput = String.make 1024 '\\000';\n                yycursor = 0;\n                yymarker = 0;\n                yylimit = yylimit;\n                token = 0;\n                eof = false;\n                svars_tag1 = -1;\n                svars_tag2 = -1;\n                stags_t1 = -1;\n                stags_t2 = -1;\n                stags_t3 = -1;\n                stags_t4 = -1;\n                stags_t5 = -1;\n            } in \n            let result = lex_loop st [] in\n            if result <> expect then\n                raise (Failure \"error\"));\n    (* Cleanup. *)\n    Sys.remove fname\n\nlet _ = main ()"
+  }
+}
+-block directive <b>!include FILE ;</b>, where <b>FILE</b> is a path to
+    the file to be included. re2ocaml looks for include files in the directory
+    of the including file and in include locations, which can be specified with
+    the <b>-I</b> option. Include blocks/directives in re2ocaml work in the same
+    way as C/C++ <b>#include</b>: <b>FILE</b> contents are copy-pasted verbatim
+    in place of the block/directive. Include files may have further includes of
+    their own. Use <b>--depfile</b> option to track build dependencies of the
+    output file on include files. re2ocaml provides some predefined include
+    files that can be found in the <b>include/</b> subdirectory of the project.
+    These files contain definitions that may be useful to other projects (such
+    as Unicode categories) and form something like a standard library for
+    re2ocaml. Below is an example of using include files.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Include_file_1_(definitions.ml)'><a class='permalink' href='#Include_file_1_(definitions.ml)'>ملف التضمين 1 (definitions.ml)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>type number = Int | Float | NaN
+%{
+    number = [1-9][0-9]*;
+%}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Include_file_2_(extra_rules.re.inc)'><a class='permalink' href='#Include_file_2_(extra_rules.re.inc)'>ملف التضمين 2 (extra_rules.re.inc)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>// floating-point numbers
+frac  = [0-9]* &quot;.&quot; [0-9]+ | [0-9]+ &quot;.&quot;;
+exp   = 'e' [+-]? [0-9]+;
+float = frac exp? | [0-9]+ exp;
+float { Float }</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">ملف الإدخال</h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT -i *)
+open String
+%{include &quot;definitions.ml&quot; %}
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+    mutable yymarker: int;
+    mutable yyaccept: int;
+}
+%{
+    re2ocaml:YYFN = [&quot;lex;number&quot;, &quot;yyrecord;state&quot;];
+    re2ocaml:yyfill:enable = 0;
+    *      { NaN }
+    number { Int }
+    !include &quot;extra_rules.re.inc&quot;;
+%}
+let test(str, num) =
+    let st = {yyinput = str; yycursor = 0; yymarker = 0; yyaccept = 0}
+    in if not (lex st = num) then raise (Failure &quot;error&quot;)
+let main () =
+    test(&quot;123&quot;, Int);
+    test(&quot;123.4567&quot;, Float)
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Header_files'><a class='permalink' href='#Header_files'>ملفات الترويسة</a></h2>
+<p class="Pp">يسمح re2ocaml بتوليد ملف ترويسة من ملف الإدخال <b>.re</b> باستخدام
+    الخيار <b>--header</b> أو تكوين <b>re2c:header</b> و أزواج الكتل من النوع
+    <b>/*!header:re2c:on*/</b> و <b>/*!header:re2c:off*/</b>، أو
+    <b>%{header:on%}</b> و <b>%{header:off%}</b>. الكتلة الأولى تحدد بداية ملف
+    الترويسة، والكتلة الثانية تحدد نهايته. يتم معالجة كل شيء بين هاتين الكتلتين
+    بواسطة re2ocaml، ويتم كتابة الكود الذي تم إنشاؤه في الملف المحدد
+    باستخدام الخيار <b>--header</b> أو تكوين <b>re2c:header</b> (أو
+    <b>stdout</b> إذا لم يتم استخدام أي خيار أو تكوين). قد تكون ملفات الترويسة
+    المولدة تلقائيًا مطلوبة في الحالات التي يتم فيها استخدام re2ocaml لتوليد
+    تعريفات يجب أن تكون مرئية من وحدات الترجمة الأخرى.</p>
+<p class="Pp">إليك مثال لتوليد ملف ترويسة يحتوي على تعريف لحالة محلل الأكواد
+    مع متغيرات العلامات (عدد المتغيرات يعتمد على قواعد اللغة المنتظمة وهو غير
+    معروف للمبرمج).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">ملف الإدخال</h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* re2ocaml $INPUT -o $OUTPUT --header lexer/state.ml -i *)
+open State
+open String
+%{header:on %}
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+    mutable tag: int;
+    %{stags format = &quot;mutable @@: int;&quot;; %}
+}
+%{header:off %}
+%{
+    re2ocaml:YYFN = [&quot;lex;int&quot;, &quot;yyrecord;State.state&quot;];
+    re2ocaml:tags = 1;
+    re2ocaml:yyfill:enable = 0;
+    re2ocaml:header = &quot;lexer/state.ml&quot;;
+    [a]* @tag [b]* { yyrecord.tag }
+%}
+let main () =
+    let st = {
+        yyinput = &quot;ab&quot;;
+        yycursor = 0;
+        tag = 0;
+        %{stags format = &quot;\n\t@@ = 0;&quot;; %}
+    }
+    in if not (lex st = 1) then raise (Failure &quot;error&quot;)
+let _ = main ()</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Header_file'><a class='permalink' href='#Header_file'>ملف الترويسة</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>(* Generated by re2c *)
+type state = {
+    yyinput: string;
+    mutable yycursor: int;
+    mutable tag: int;
+mutable yyt1: int;
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Skeleton_programs'><a class='permalink' href='#Skeleton_programs'>برامج الهيكل العظمي</a></h2>
+<p class="Pp">باستخدام الخيار <b>-S, --skeleton</b>، يتجاهل re2ocaml جميع
+    الأكواد غير re2ocaml وينشئ برنامج C مستقل يمكن تجميعه وتنفيذه لاحقًا.
+    يتكون البرنامج من كود محلل الأكواد وبيانات الإدخال. لكل DFA تم إنشاؤه
+    (كتلة أو شرط)، يقوم re2ocaml بإنشاء محلل أكواد مستقل وملفين: ملف
+    <b>.input</b> يحتوي على سلاسل مشتقة من DFA وملف <b>.keys</b> يحتوي على
+    نتائج المطابقة المتوقعة. يقوم البرنامج بتشغيل كل محلل أكواد على ملف
+    <b>.input</b> المقابل له ويقارن النتائج بالتوقعات. برامج الهيكل العظمي مفيدة
+    جدًا لعدد من الأسباب:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يمكنها التحقق من صحة تحسينات re2ocaml المختلفة (يتم إنشاء البيانات في
+      مرحلة مبكرة من العملية، قبل إجراء أي تحويلات DFA).</li>
+  <li>قد يكون توليد مجموعة من بيانات الإدخال مع تغطية جيدة مفيدًا لكل من
+      الاختبار وقياس الأداء.</li>
+  <li>يسمح توليد برامج قابلة للتنفيذ مستقلة بالحصول على حالات اختبار مصغرة
+      (قد يكون الكود الأصلي كبيرًا أو به الكثير من الاعتماديات).</li>
+</ul>
+</div>
+<p class="Pp">الصعوبة في توليد بيانات الإدخال هي أنه بالنسبة لجميع الحالات
+    باستثناء الحالات البسيطة جدًا، يكون عدد سلاسل الإدخال الممكنة كبيرًا جدًا
+    (حتى لو كان طول السلسلة محدودًا). يحل re2ocaml هذه الصعوبة عن طريق توليد
+    عدد كافٍ من السلاسل لتغطية جميع انتقالات DFA تقريبًا. يستخدم الخوارزمية
+    التالية. أولاً، يقوم ببناء هيكل عظمي لـ DFA. بالنسبة للتشفيرات بحجم وحدات
+    كود 1 بايت (مثل ASCII، UTF-8، و EBCDIC) يكون الهيكل العظمي مجرد نسخة طبق
+    الأصل من DFA الأصلي. بالنسبة للتشفيرات بوحدات كود متعددة البايت، يكون
+    الهيكل العظمي نسخة من DFA مع إزالة انتقالات معينة: على وجه التحديد، يأخذ
+    re2ocaml بحد أقصى 256 وحدة كود لكل نطاق مستمر منفصل يتوافق مع انتقال DFA.
+    القيم المختارة موزعة بالتساوي وتشمل حدود النطاق. بدلاً من محاولة تغطية
+    جميع المسارات الممكنة في الهيكل العظمي (وهو أمر غير ممكن)، يقوم re2ocaml
+    بتوليد عدد كافٍ من المسارات لتغطية جميع انتقالات الهيكل العظمي، وبالتالي
+    تشغيل القفزات الشرطية المقابلة في محلل الأكواد. التنفيذ الخوارزمي محدود
+    بحوالي 1 جيجابايت من الانتقالات ويستهلك كمية ثابتة من الذاكرة (يقوم
+    re2ocaml بكتابة البيانات إلى الملف بمجرد إنشائها).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Visualization_and_debug'><a class='permalink' href='#Visualization_and_debug'>التصور والتصحيح</a></h2>
+<p class="Pp">باستخدام الخيار <b>-D, --emit-dot</b>، لا يقوم re2ocaml بتوليد
+    كود. بدلاً من ذلك، يقوم بطرح DFA الذي تم إنشاؤه بتنسيق DOT. يمكن تحويل
+    هذا الطرح إلى صورة لـ DFA باستخدام Graphviz أو مكتبة أخرى. لاحظ أن هذا
+    الخيار يعرض DFA النهائي بعد أن مر بعدد من التحسينات والتحويلات. يمكن طرح
+    المراحل المبكرة باستخدام خيارات تصحيح مختلفة، مثل <b>--dump-nfa</b>،
+    <b>--dump-dfa-raw</b>، إلخ (انظر القائمة الكاملة للخيارات).</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يمكنك العثور على مزيد من المعلومات حول re2c على الموقع الرسمي:
+    <a href='http://re2c.org'>http://re2c.org</a>. البرامج المماثلة هي flex(1)، lex(1)،
+    quex(<a href='http://quex.sourceforge.net'>http://quex.sourceforge.net</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">تمت كتابة re2ocaml في الأصل بواسطة Peter Bumbulis
+    (<i>peter@csg.uwaterloo.ca</i>) في عام 1993. قضى Marcus Boerger و Dan Nuffer
+    عدة سنوات لتحويل الفكرة الأصلية إلى كود جاهز للإنتاج. منذ ذلك الحين، تم
+    صيانته وتطويره بواسطة متطوعين متعددين، أبرزهم، Brian Young
+    (<i>bayoung@acm.org</i>)، <i>Marcus
+    Boerger</i>، Dan Nuffer (<i>nuffer@users.sourceforge.net</i>)، <i>Ulya
+    Trofimovich</i> (<i>skvadrik@gmail.com</i>)، <i>Serghei Iakovlev</i>،
+    <i>Sergei Trofimovich</i>، <i>Petr Skocik</i>، <i>ligfx</i> <i>raekye</i>
+    و <i>PolarGoose</i>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/re2c/">extra/re2c</a></dd>
+        <dt>Version:</dt>
+        <dd>4.3-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://re2c.org">https://re2c.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>LicenseRef-re2c</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/re2c/">/listing/extra/re2c/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#BASICS">BASICS</a></li>
+        
+            <li><a href="#HANDLING_THE_END_OF_INPUT">HANDLING THE END OF INPUT</a></li>
+        
+            <li><a href="#BUFFER_REFILLING">BUFFER REFILLING</a></li>
+        
+            <li><a href="#FEATURES">FEATURES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#AUTHORS">AUTHORS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/re2ocaml.1.en.txt">txt</a>, 
+        
+            <a href="/man/re2ocaml.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

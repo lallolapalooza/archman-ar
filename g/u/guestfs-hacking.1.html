@@ -1,0 +1,251 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">guestfs-hacking(1)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+    "title": "MISCELLANEOUS TOPICS",
+    "sections": [
+        {
+            "title": "HOW OCAML PROGRAMS ARE COMPILED AND LINKED",
+            "content": [
+                "Mostly this section is \"how we make automake & ocamlopt work together\" since OCaml programs themselves are easy to compile.",
+                "Automake has no native support for OCaml programs, ocamlc nor ocamlopt. What we do instead is to treat OCaml programs as C programs which happen to contain these \"other objects\" (\"DEPENDENCIES\" in automake-speak) that happen to be the OCaml objects. This works because OCaml programs usually have C files for native bindings etc.",
+                "So a typical program is described as just its C sources:",
+                {
+                    "type": "code",
+                    "code": "virt_customize_SOURCES = ... crypt-c.c perl_edit-c.c"
+                },
+                "For programs that have no explicit C sources, we create an empty <i>dummy.c</i> file, and list that instead:",
+                {
+                    "type": "code",
+                    "code": "virt_resize_SOURCES = dummy.c"
+                },
+                "The OCaml objects which contain most of the code are listed as automake dependencies (other dependencies may also be listed):",
+                {
+                    "type": "code",
+                    "code": "virt_customize_DEPENDENCIES = ... customize_main.cmx"
+                },
+                "The only other special thing we need to do is to provide a custom link command. This is needed because automake won't assemble the ocamlopt command, the list of objects and the \"-cclib\" libraries in the correct order otherwise.",
+                {
+                    "type": "code",
+                    "code": "virt_customize_LINK = \\\n    $(top_builddir)/ocaml-link.sh -cclib '-lutils' -- ..."
+                },
+                "The actual rules, which you can examine in <i>customize/Makefile.am</i>, are a little bit more complicated than this because they have to handle:",
+                {
+                    "type": "list",
+                    "items": [
+                        "Compiling for byte code or native code.",
+                        {
+                            "text": "The pattern rules needed to compile the OCaml sources to objects.",
+                            "subcontent": [
+                                "These are now kept in <i>subdir-rules.mk</i> at the top level, which is included in every subdirectory <i>Makefile.am</i>."
+                            ]
+                        },
+                        {
+                            "text": "Adding OCaml sources files to \"EXTRA_DIST\".",
+                            "subcontent": [
+                                "Automake isn't aware of the complete list of sources for a binary, so it will not add them all automatically."
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+```
+```
+{
+    "title": "MAINTAINER TASKS",
+    "sections": [
+        {
+            "title": "MAINTAINER MAKEFILE TARGETS",
+            "content": [
+                "These \"make\" targets probably won’t work and aren't useful unless you are a libguestfs maintainer.",
+                "<i>make maintainer-commit</i>",
+                "This commits everything in the working directory with the commit message \"Version $(VERSION).\". You must update <i>configure.ac</i>, clean and rebuild first.",
+                "<i>make maintainer-tag</i>",
+                "This tags the current HEAD commit with the tag \"v$(VERSION)\" and one of the messages:",
+                {
+                    "type": "code",
+                    "code": "Version $(VERSION) stable\nVersion $(VERSION) development"
+                },
+                "(See \"LIBGUESTFS VERSION NUMBERS\" in <i>guestfs.3.en</i> for the difference between a stable and development release.)",
+                "<i>make maintainer-authors</i>",
+                "Check that all authors (found in git commit messages) are included in the <i>generator/authors.ml</i> file.",
+                "<i>make maintainer-check-extra-dist</i>",
+                "This rule must be run after \"make dist\" (so there is a tarball in the working directory). It compares the contents of the tarball with the contents of git to ensure that no files have been missed from <i>Makefile.am</i> \"EXTRA_DIST\" rules.",
+                "<i>make maintainer-upload-website</i>",
+                "This is used by the software used to automate libguestfs releases to copy the libguestfs website to another git repository before it is uploaded to the web server."
+            ]
+        },
+        {
+            "title": "MAKING A STABLE RELEASE",
+            "content": [
+                "When we make a stable release, there are several steps documented here. See \"LIBGUESTFS VERSION NUMBERS\" in <i>guestfs.3.en</i> for general information about the stable branch policy.",
+                {
+                    "type": "list",
+                    "items": [
+                        "Check \"make && make check\" works on at least:",
+                        {
+                            "type": "nested-list",
+                            "items": [
+                                {
+                                    "type": "list-item",
+                                    "text": "Fedora (x86-64)"
+                                },
+                                {
+                                    "type": "list-item",
+                                    "text": "Debian (x86-64)"
+                                },
+                                {
+                                    "type": "list-item",
+                                    "text": "Ubuntu (x86-64)"
+                                },
+                                {
+                                    "type": "list-item",
+                                    "text": "Fedora (aarch64)"
+                                },
+                                {
+                                    "type": "list-item",
+                                    "text": "Fedora (ppc64)"
+                                },
+                                {
+                                    "type": "list-item",
+                                    "text": "Fedora (ppc64le)"
+                                }
+                            ]
+                        },
+                        "Check \"./configure --without-libvirt\" works.",
+                        "Finalize <i>guestfs-release-notes.pod</i>",
+                        "Create new stable and development directories under http://libguestfs.org/download.",
+                        "Edit <i>website/index.html.in</i>.",
+                        "Set the version (in <i>configure.ac</i>) to the new <i>stable</i> version, ie. 1.XX.0, and commit it:",
+                        {
+                            "type": "code",
+                            "code": "./localconfigure\nmake distclean -k\n./localconfigure\nmake && make dist\nmake maintainer-commit\nmake maintainer-tag\n"
+                        },
+                        "Create the stable branch in git:",
+                        {
+                            "type": "code",
+                            "code": "git branch stable-1.XX\ngit push origin stable-1.XX\n"
+                        },
+                        "Do a full release of the stable branch.",
+                        "Set the version to the next development version and commit that. Optionally do a full release of the development branch."
+                    ]
+                }
+            ]
+        }
+    ]
+}
+```
+```
+{
+    "title": "INTERNAL DOCUMENTATION",
+    "content": [
+        "This section documents internal functions inside libguestfs and various utilities. It is intended for libguestfs developers only.",
+        "This section is autogenerated from \"/**\" comments in source files, which are marked up in POD format.",
+        "<b>These functions are not publicly exported, and may change or be</b> <b>removed at any time.</b>"
+    ],
+    "sections": [
+        {
+            "title": "Subdirectory <i>lib</i>",
+            "sections": [
+                {
+                    "title": "<i>File lib/actions-support.c</i>",
+                    "content": [
+                        "Helper functions for the actions code in <i>lib/actions-*.c</i>."
+                    ]
+                },
+                {
+                    "title": "<i>File lib/appliance-cpu.c</i>",
+                    "content": [
+                        "The appliance choice of CPU model."
+                    ],
+                    "subsections": [
+                        {
+                            "title": "Function \"lib/appliance-cpu.c:guestfs_int_get_cpu_model\"",
+                            "content": [
+                                "Return the right CPU model to use as the qemu \"-cpu\" parameter or its equivalent in libvirt. This returns:"
+                            ],
+                            "code": "const char *\nguestfs_int_get_cpu_model (int kvm)",
+                            "nested_sections": [
+                                {
+                                    "title": "\"host\"",
+                                    "content": "The literal string \"host\" means use \"-cpu host\"."
+                                },
+                                {
+                                    "title": "\"max\"",
+                                    "content": "The literal string \"max\" means use \"-cpu max\" (the best possible). This requires awkward translation for libvirt."
+                                },
+                                {
+                                    "title": "some string",
+                                    "content": "Some string such as \"cortex-a57\" means use \"-cpu cortex-a57\"."
+                                },
+                                {
+                                    "title": "\"NULL\"",
+                                    "content": "\"NULL\" means no \"-cpu\" option at all. Note returning \"NULL\" does not indicate an error."
+                                }
+                            ],
+                            "following_content": [
+                                "This is made unnecessarily hard and fragile because of two stupid choices in QEMU:",
+                                {
+                                    "type": "list",
+                                    "items": [
+                                        "The default for \"qemu-system-aarch64 -M virt\" is to emulate a \"cortex-a15\" (WTF?).",
+                                        "We don't know for sure if KVM will work, but \"-cpu host\" is broken with TCG, so we almost always pass a broken \"-cpu\" flag if KVM is semi-broken in any way."
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "<i>File lib/appliance-kcmdline.c</i>",
+                    "content": [
+                        "The appliance kernel command line."
+                    ],
+                    "subsections": [
+                        {
+                            "title": "Definition \"lib/appliance-kcmdline.c:VALID_TERM\"",
+                            "code": "#define VALID_TERM",
+                            "following_content": [
+                                "Check that the $TERM environment variable is reasonable before we pass it through to the appliance."
+                            ]
+                        },
+                        {
+                            "title": "Function \"lib/appliance-kcmdline.c:get_root_uuid_with_file\"",
+                            "code": "static char *\nget_root_uuid_with_file (guestfs_h *g, const char *appliance)",
+                            "following_content": [
+                                "Given a disk image containing an extX filesystem, return the UUID."
+                            ]
+                        },
+                        {
+                            "title": "Function \"lib/appliance-kcmdline.c:run_qemu_img_dd\"",
+                            "code": "static int\nrun_qemu_img_dd (guestfs_h *g, const char *in_file, char *out_file)",
+                            "following_content": [
+                                "Read the first 256k bytes of the in_file with <i>qemu-img(1)</i> command and write them into the out_file. That may be useful to get UUID of the QCOW2 disk image with \"get_root_uuid_with_file\".",
+                                "The function returns zero if successful, otherwise -1."
+                            ]
+                        },
+                        {
+                            "title": "Function \"lib/appliance-kcmdline.c:get_root_uuid\"",
+                            "code": "static char *\nget_root_uuid (guestfs_h *g, const char *appliance)",
+                            "following_content": [
+                                "Get the UUID from the appliance disk image."
+                            ]
+                        },
+                        {
+                            "title": "Function \"lib/appliance-kcmdline.c:guestfs_int_appliance_command_line\"",
+                            "code": "char *\nguestfs_int_appliance_command_line (guestfs_h *g,\n                                    const char *appliance,\n                                   int flags)",
+                            "following_content": [
+                                "Construct the Linux command line passed to the appliance. This is used by the \"direct\" and \"libvirt\" backends, and is simply located in this file because it's a convenient place for this common code.",
+                                "The \"appliance\" parameter is the filename of the appliance (could be NULL) from which we obtain the root UUID.",
+                                "The \"flags\""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

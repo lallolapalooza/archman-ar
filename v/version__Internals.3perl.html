@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>version::Internals(3perl) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">version__Internals.3perl</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">version::Internals(3perl)</td>
+    <td class="head-vol">Perl Programmers Reference Guide</td>
+    <td class="head-rtitle">version::Internals(3perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">version::Internals - ملحق Perl لكائنات الإصدار</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">كائنات إصدار محمّلة بشكل زائد لجميع إصدارات Perl الحديثة. توثق هذه
+    المادة التمثيل الداخلي للبيانات والكود الأساسي لـ version.pm. انظر <i>version.pod</i>
+    للاستخدام اليومي. هذه المادة مفيدة فقط للمستخدمين المهتمين بالتفاصيل الدقيقة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WHAT_IS_A_VERSION?'><a class='permalink' href='#WHAT_IS_A_VERSION?'>ما هو الإصدار؟</a></h1>
+<p class="Pp">لأغراض هذه الوحدة، فإن "رقم" الإصدار هو تسلسل من الأعداد الصحيحة
+    الإيجابية مفصولة بنقطة عشرية واحدة أو أكثر، واختياريًا بشرطة سفلية واحدة. هذا
+    يتوافق مع ما تستخدمه Perl نفسها للإصدار، بالإضافة إلى توسيع "الإصدار كرقم"
+    الذي نوقش في الإصدارات المختلفة من كتاب الجمل.</p>
+<p class="Pp">هناك في الواقع نوعان متميزان من كائنات الإصدار:</p>
+<dl class="Bl-tag">
+  <dt id="Decimal"><a class="permalink" href="#Decimal">الإصدارات العشرية</a></dt>
+  <dd>أي إصدار "يشبه رقمًا"، انظر "الإصدارات العشرية". يشمل هذا أيضًا الإصدارات
+      ذات نقطة عشرية واحدة وشرطة سفلية مضمنة واحدة، انظر "الإصدارات الألفا"، على
+      الرغم من أنه يجب اقتباس هذه للحفاظ على تنسيق الشرطة السفلية.</dd>
+  <dt id="Dotted"><a class="permalink" href="#Dotted">الإصدارات العشرية المنقّطة</a></dt>
+  <dd>يشار إليها أيضًا باسم "الأعداد الصحيحة المنقّطة"، تحتوي هذه على أكثر من نقطة
+      عشرية واحدة وقد تحتوي على شرطة سفلية مضمنة اختيارية، انظر الإصدارات
+      العشرية المنقّطة. هذا هو ما يستخدم عادة في معظم البرامج مفتوحة المصدر
+      كإصدار "خارجي" (الإصدار المستخدم كجزء من العلامة أو اسم ملف tar).
+      الحرف 'v' البادئ مطلوب الآن وسيصدر تحذيرًا إذا كان مفقودًا.</dd>
+</dl>
+<p class="Pp">كلا الطريقتين ستنتج كائنات إصدار متشابهة، من حيث أن التسلسل النصي
+    الافتراضي سيعطي "الشكل الطبيعي" للإصدار فقط إذا لزم الأمر:</p>
+<pre>$v  = version-&gt;new(1.002);     # 1.002، لكنه يقارن مثل 1.2.0
+$v  = version-&gt;new(1.002003);  # 1.002003
+$v2 = version-&gt;new(&quot;v1.2.3&quot;);  # v1.2.3</pre>
+<p class="Pp">على وجه التحديد، سيتم تحويل أرقام الإصدارات التي تم تهيئتها كـ
+    "إصدارات عشرية" إلى نص كما تم إنشاؤها في الأصل (أي نفس السلسلة النصية التي
+    تم تمريرها إلى <span class="Li">new()</span>. سيتم تحويل أرقام الإصدارات التي تم
+    تهيئتها كـ "إصدارات عشرية منقّطة" إلى نص كـ "شكل طبيعي".)</p>
+<section class="Ss">
+<h2 class="Ss" id='Decimal_Versions'><a class='permalink' href='#Decimal_Versions'>الإصدارات العشرية</a></h2>
+<p class="Pp">تتوافق هذه مع الإصدارات التاريخية لـ Perl نفسها قبل 5.6.0، بالإضافة
+    إلى جميع الوحدات الأخرى التي تتبع قواعد الجمل للمقياس <span class="Li">$VERSION</span>.
+    يتم تهيئة الإصدار العشري بما يبدو كرقم عائم. الأصفار البادئة **هامة**
+    والأصفار اللاحقة ضمنية للحفاظ على حد أدنى من ثلاثة أماكن بين الأجزاء الفرعية
+    للإصدار. ما يعنيه هذا هو أن أي جزء فرعي (الأرقام الموجودة على يمين الفاصلة
+    العشرية) يحتوي على أقل من ثلاثة أرقام سيتم إضافة أصفار لاحقة إليه لتعويض
+    الفرق، ولكن فقط لأغراض المقارنة مع كائنات الإصدار الأخرى. على سبيل المثال:</p>
+<pre>                                 # يطبع      يكافئ
+$v = version-&gt;new(      1.2);    # 1.2        v1.200.0
+$v = version-&gt;new(     1.02);    # 1.02       v1.20.0
+$v = version-&gt;new(    1.002);    # 1.002      v1.2.0
+$v = version-&gt;new(   1.0023);    # 1.0023     v1.2.300
+$v = version-&gt;new(  1.00203);    # 1.00203    v1.2.30
+$v = version-&gt;new( 1.002003);    # 1.002003   v1.2.3</pre>
+<p class="Pp">جميع الأمثلة السابقة صحيحة سواء كان الرقم المدخل مقتبسًا أم لا.
+    الميزة المهمة هي أن الرقم المدخل يحتوي على فاصلة عشرية واحدة فقط. انظر أيضًا
+    "الإصدارات الألفا".</p>
+<p class="Pp">ملاحظة هامة: كما هو موضح أعلاه، إذا كان الإصدار العشري الخاص بك
+    يحتوي على أكثر من 3 أرقام ذات معنى بعد الفاصلة العشرية، فسيتم تقسيمه عند كل
+    مضاعف للرقم 3، لذا فإن 1.0003 يكافئ v1.0.300، نظرًا للحاجة إلى البقاء متوافقًا
+    مع تفسير Perl الخاص 5.005_03 == 5.5.30. يتم تجاهل أي أصفار لاحقة لأغراض
+    المقارنة الرياضية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">الإصدارات العشرية المنقّطة</h2>
+<p class="Pp">هذه هي أحدث أشكال الإصدارات، وتتوافق مع أسلوب إصدار Perl الخاص بدءًا
+    من 5.6.0. بدءًا من Perl 5.10.0، وعلى الأرجح Perl 6، من المرجح أن يكون هذا هو
+    الشكل المفضل. تتطلب هذه الطريقة عادةً أن يكون المعامل المدخل مقتبسًا، على
+    الرغم من أن Perl بعد 5.8.1 يمكنها استخدام سلاسل v كنص خاص للاقتباس، ولكن هذا
+    غير مستحسن للغاية.</p>
+<p class="Pp">على عكس "الإصدارات العشرية"، تحتوي الإصدارات العشرية المنقّطة على
+    أكثر من فاصلة عشرية واحدة، على سبيل المثال:</p>
+<pre>                                 # يطبع
+$v = version-&gt;new( &quot;v1.200&quot;);    # v1.200.0
+$v = version-&gt;new(&quot;v1.20.0&quot;);    # v1.20.0
+$v = qv(&quot;v1.2.3&quot;);               # v1.2.3
+$v = qv(&quot;1.2.3&quot;);                # v1.2.3
+$v = qv(&quot;1.20&quot;);                 # v1.20.0</pre>
+<p class="Pp">بشكل عام، تسمح الإصدارات العشرية المنقّطة بأكبر قدر من الحرية لتحديد
+    إصدار، بينما تفرض الإصدارات العشرية درجة معينة من التوحيد.</p>
+<p class="Pp">مثل "الإصدارات العشرية"، يمكن استخدام الإصدارات العشرية المنقّطة
+    كـ "إصدارات ألفا".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Alpha_Versions'><a class='permalink' href='#Alpha_Versions'>الإصدارات الألفا</a></h2>
+<p class="Pp">بالنسبة لمؤلفي الوحدات الذين يستخدمون CPAN، كان التقليد هو الإشارة إلى
+    الإصدارات غير المستقرة بشرطة سفلية في سلسلة الإصدار. (انظر CPAN.) يتبع
+    version.pm هذا التقليد وستختبر الإصدارات الألفا على أنها أحدث من الإصدار
+    المستقر الأخير، وأقل من الإصدار المستقر التالي. فقط الجزء الأخير قد يتم
+    فصله بشرطة سفلية:</p>
+<pre># التصريح
+use version 0.77; our $VERSION = version-&gt;declare(&quot;v1.2_3&quot;);
+# التحليل
+$v1 = version-&gt;parse(&quot;v1.2_3&quot;);
+$v1 = version-&gt;parse(&quot;1.002_003&quot;);</pre>
+<p class="Pp">لاحظ أنه **يجب** عليك اقتباس الإصدار عند كتابة إصدار ألفا عشري.
+    الشكل المحوّل إلى نص للإصدارات العشرية سيكون دائمًا نفس السلسلة النصية التي
+    تم استخدامها لتهيئة كائن الإصدار.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Regular_Expressions_for_Version_Parsing'><a class='permalink' href='#Regular_Expressions_for_Version_Parsing'>التعبيرات النمطية لتحليل الإصدارات</a></h2>
+<p class="Pp">تم تضمين تعريف رسمي للأشكال القانونية لسلاسل الإصدار في الفئة
+    <span class="Li">&quot;version::regex&quot;</span>. تم تضمين البدائيات للعناصر
+    الشائعة، على الرغم من أنها محصورة في الملف بحيث تكون مفيدة لأغراض
+    المرجع فقط. هناك قيمتان نصيتان يمكن الوصول إليهما بشكل عام ويمكن استخدامهما
+    في كود آخر (غير مصدرتين):</p>
+<dl class="Bl-tag">
+  <dt>$version::LAX</dt>
+  <dd>يغطي تعبير Regex هذا جميع الأشكال القانونية المسموح بها بموجب محلل سلاسل
+      الإصدار الحالي. هذا لا يعني أن جميع هذه الأشكال موصى بها، وبعضها لا يمكن
+      استخدامه إلا عند اقتباسه.
+    <p class="Pp">للإصدارات العشرية المنقّطة:</p>
+        <pre>v1.2
+1.2345.6
+v1.23_4
+</pre>
+    <p class="Pp">الحرف 'v' البادئ اختياري إذا ظهرت نقطتان عشريتان أو أكثر. إذا تم
+        تضمين فاصلة عشرية واحدة فقط، فإن الحرف 'v' البادئ مطلوب لتشغيل تحليل
+        الإصدار العشري المنقّط. يُسمح بالصفر البادئ، على الرغم من عدم
+        التوصية به إلا عند اقتباسه، بسبب خطر أن تعامل Perl الرقم كرقم ثماني.
+        الشرطة السفلية اللاحقة بالإضافة إلى رقم واحد أو أكثر تشير إلى إصدار
+        ألفا أو تطوير (ويجب اقتباسها ليتم تحليلها بشكل صحيح).</p>
+    <p class="Pp">للإصدارات العشرية:</p>
+        <pre>1
+1.2345
+1.2345_01
+</pre>
+    <p class="Pp">الجزء الصحيح، فاصلة عشرية اختيارية، واختياريًا رقم واحد أو أكثر
+        على يمين الفاصلة العشرية كلها مطلوبة. الشرطة السفلية اللاحقة مسموح بها
+        والصفر البادئ مسموح به. تمامًا مثل إصدار الإصدار العشري المنقّط
+        المرن، فإن اقتباس القيم مطلوب ليتم تحليل أشكال ألفا/التطوير بشكل
+        صحيح.</p>
+  </dd>
+  <dt>$version::STRICT</dt>
+  <dd>يغطي تعبير Regex هذا مجموعة محدودة جدًا من التنسيقات ويمثل أفضل الممارسات
+      لتهيئة كائنات الإصدار. سواء اخترت استخدام الإصدارات العشرية أو العشرية
+      المنقّطة هو تفضيل شخصي ومع ذلك.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="v1.234.5"><a class="permalink" href="#v1.234.5">v1.234.5</a></dt>
+  <dd>بالنسبة للإصدارات العشرية المنقّطة، الحرف 'v' البادئ مطلوب، مع ثلاثة أجزاء
+      فرعية أو أكثر لا تزيد عن ثلاثة أرقام. يُحظر أيضًا الصفر (0) البادئ قبل
+      الجزء الفرعي الأول (في المثال أعلاه، '1').</dd>
+  <dt>2.3456</dt>
+  <dd>بالنسبة للإصدارات العشرية، الجزء الصحيح (بدون صفر بادئ)، وفاصلة عشرية،
+      ورقم واحد أو أكثر على يمين الفاصلة العشرية كلها مطلوبة.</dd>
+</dl>
+</div>
+<p class="Pp">كلا القيمتين النصيتين المقدمتين تم تجميعهما بالفعل كتعبيرات نمطية
+    ولا تحتويان على أي نقاط تثبيت أو تجميعات ضمنية، لذا يمكن تضمينهما في
+    التعبيرات النمطية الخاصة بك بحرية. على سبيل المثال،</p>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        
+    </body>
+</html>
+   خذ الكود التالي في الاعتبار:</p>
+<pre>($pkg, $ver) =~ /
+        ^[ \t]*
+        use [ \t]+($PKGNAME)
+        (?:[ \t]+($version::STRICT))?
+        [ \t]*;
+/x;</pre>
+<p class="Pp">هذا س يطابق سطرًا بالشكل:</p>
+<pre>use Foo::Bar::Baz v1.2.3;       # قانوني فقط في Perl 5.8.1+</pre>
+<p class="Pp">حيث <span class="Li">$PKGNAME</span> هو تعبير عادي آخر يحدد الأشكال القانونية لأسماء الحزم.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='IMPLEMENTATION_DETAILS'><a class='permalink' href='#IMPLEMENTATION_DETAILS'>تفاصيل التنفيذ</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Equivalence_between_Decimal_and_Dotted-Decimal_Versions'><a class='permalink' href='#Equivalence_between_Decimal_and_Dotted-Decimal_Versions'>التكافؤ بين الأرقام العشرية والأرقام العشرية المنقوطة</a></h2>
+<p class="Pp">عند إصدار Perl 5.6.0، تم اتخاذ قرار بتوفير تحويل بين الأرقام العشرية القديمة الأسلوب والأرقام العشرية المنقوطة الجديدة الأسلوب:</p>
+<pre>5.6.0    == 5.006000
+5.005_04 == 5.5.40</pre>
+<p class="Pp">يتم أخذ الرقم العائم وتقسيمه أولاً عند الفاصلة العشرية المفردة، ثم تشكل كل مجموعة من ثلاثة أرقام على يمين الفاصلة الرقم التالي، وهكذا حتى ينفد عدد الأرقام الهامة، **بالإضافة** إلى ما يكفي من الأصفار اللاحقة للوصول إلى المضاعف التالي من ثلاثة.</p>
+<p class="Pp">كانت هذه هي الطريقة التي اعتمدتها version.pm أيضًا. قد تكون بعض الأمثلة مفيدة:</p>
+<pre>                          مكافئ
+عشري    محشو بالأصفار   عشري منقوط
+-------    -----------    --------------
+1.2        1.200          v1.200.0
+1.02       1.020          v1.20.0
+1.002      1.002          v1.2.0
+1.0023     1.002300       v1.2.300
+1.00203    1.002030       v1.2.30
+1.002003   1.002003       v1.2.3</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Quoting_Rules'><a class='permalink' href='#Quoting_Rules'>قواعد الاقتباس</a></h2>
+<p class="Pp">نظرًا لطبيعة روتينيات تحليل وتجزئة Perl، **يجب** اقتباس بعض قيم التهيئة بشكل صحيح لتفسيرها كإصدار مقصود، خاصة عند استخدام الطرق
+    <span class="Li">&quot;declare&quot;</span> أو &quot;<b>qv()</b>&quot;. في حين أنه ليس عليك اقتباس الأرقام العشرية عند إنشاء كائنات الإصدار، إلا أنه من الآمن دائمًا اقتباس **جميع** قيم التهيئة عند استخدام طرق version.pm، حيث سيضمن ذلك أن ما تكتبه هو ما يتم استخدامه.</p>
+<p class="Pp">بالإضافة إلى ذلك، إذا قمت باقتباس المُهيئ الخاص بك، فإن القيمة المقتبسة التي تدخل **للداخل** هي بالضبط ما يخرج **عند** طباعة (تحويل إلى نص) <span class="Li">$VERSION</span> الخاص بك. إذا لم تقم باقتباس قيمتك، فإن معالجة Perl الرقمية العادية تدخل حيز التنفيذ وقد لا تحصل على ما تتوقعه.</p>
+<p class="Pp">إذا كنت تستخدم صيغة رياضية تنتج رقمًا عائمًا، فأنت تعتمد على روتينيات تحويل Perl لإنتاج الإصدار الذي تتوقعه. أنت آمن جدًا بالقسمة على قوة من 10، على سبيل المثال، ولكن العمليات الأخرى من غير المرجح أن تكون ما تقصده. على سبيل المثال:</p>
+<pre>$VERSION = version-&gt;new((qw$Revision: 1.4)[1]/10);
+print $VERSION;          # ينتج 0.14
+$V2 = version-&gt;new(100/9); # تجاوز سعة الأعداد الصحيحة في الأرقام العشرية
+print $V2;               # ينتج شيئًا مثل 11.111.111.100</pre>
+<p class="Pp">Perl 5.8.1 وما بعده قادر على اقتباس سلاسل v تلقائيًا، ولكن ذلك غير ممكن في إصدارات Perl الأقدم. بعبارة أخرى:</p>
+<pre>$version = version-&gt;new(&quot;v2.5.4&quot;);  # قانوني في جميع إصدارات Perl
+$newvers = version-&gt;new(v2.5.4);    # قانوني فقط في Perl &gt;= 5.8.1</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='What_about_v-strings?'><a class='permalink' href='#What_about_v-strings?'>ماذا عن سلاسل v؟</a></h2>
+<p class="Pp">هناك طريقتان لإدخال سلاسل v: رقم فارغ بنقطتين عشريتين أو أكثر، أو رقم فارغ بنقطة عشرية واحدة أو أكثر وحرف 'v' مسبق (فارغ أيضًا). على سبيل المثال:</p>
+<pre>$vs1 = 1.2.3; # مرمّز كـ \1\2\3
+$vs2 = v1.2;  # مرمّز كـ \1\2</pre>
+<p class="Pp">ومع ذلك، فإن استخدام سلاسل v الفارغة لتهيئة كائنات الإصدار **لا يُنصح به بشدة** في جميع الظروف. أيضًا، لا يتم دعم سلاسل v الفارغة بشكل كامل في أي إصدار من Perl قبل 5.8.1.</p>
+<p class="Pp">إذا كنت تصر على استخدام سلاسل v الفارغة مع Perl &gt; 5.6.0، فكن على دراية بالقيود التالية:</p>
+<p class="Pp">1) بالنسبة لإصدارات Perl من 5.6.0 إلى 5.8.0، يخمن كود سلسلة v فقط، بناءً على بعض خصائص سلاسل v. **يجب** عليك استخدام إصدار ثلاثي الأجزاء، على سبيل المثال 1.2.3 أو v1.2.3 حتى ينجح هذا الاستدلال.</p>
+<p class="Pp">2) بالنسبة لإصدارات Perl 5.8.1 وما بعده، تغيرت سلاسل v في نواة Perl لتصبح سحرية، مما يعني أن كود version.pm يمكنه تحديد ما إذا كان ترميز سلسلة v قد تم استخدامه تلقائيًا.</p>
+<p class="Pp">3) في جميع الحالات، سيكون للإصدار الذي تم إنشاؤه باستخدام سلاسل v شكل نصي يحتوي على حرف 'v' مسبق، لسبب بسيط هو أنه من المستحيل أحيانًا معرفة ما إذا كان قد تم وجود واحد في البداية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Replacement_UNIVERSAL::VERSION'><a class='permalink' href='#Replacement_UNIVERSAL::VERSION'>بديل UNIVERSAL::VERSION</a></h2>
+<p class="Pp">بالإضافة إلى كائنات الإصدار، تستبدل هذه الوحدات أيضًا وظيفة UNIVERSAL::VERSION الأساسية بوظيفة تستخدم كائنات الإصدار لمقارناتها. يكون الناتج من هذا المشغل دائمًا في شكله النصي كعدد قياسي بسيط (أي ليس كائنًا)، ولكن رسالة التحذير التي تم إنشاؤها تتضمن إما الشكل النصي أو الشكل الطبيعي، اعتمادًا على كيفية استدعائها.</p>
+<p class="Pp">على سبيل المثال:</p>
+<pre>package Foo;
+$VERSION = 1.2;
+package Bar;
+$VERSION = &quot;v1.3.5&quot;; # يعمل مع جميع إصدارات Perl (لأنه مقتبس)
+package main;
+use version;
+print $Foo::VERSION; # يطبع 1.2
+print $Bar::VERSION; # يطبع 1.003005
+eval &quot;use foo 10&quot;;
+print $@; # يطبع &quot;مطلوب إصدار foo 10...&quot;
+eval &quot;use foo 1.3.5; # يعمل في Perl 5.6.1 أو أفضل
+print $@; # يطبع &quot;مطلوب إصدار foo 1.3.5...&quot;
+eval &quot;use bar 1.3.6&quot;;
+print $@; # يطبع &quot;مطلوب إصدار bar 1.3.6...&quot;
+eval &quot;use bar 1.004&quot;; # لاحظ الإصدار العشري
+print $@; # يطبع &quot;مطلوب إصدار bar 1.004...&quot;</pre>
+<p class="Pp">ملاحظة هامة: قد يعني هذا أن الكود الذي يبحث عن سلسلة نصية محددة (لتحديد ما إذا كانت وحدة معينة متاحة) قد يحتاج إلى تغيير. من الأفضل دائمًا استخدام المقارنة المضمنة ضمنيًا في <span class="Li">&quot;use&quot;</span> أو <span class="Li">&quot;require&quot;</span>، بدلاً من الفحص اليدوي لـ <span class="Li">&quot;class-&gt;VERSION&quot;</span> ثم إجراء مقارنة بنفسك.</p>
+<p class="Pp">بديل UNIVERSAL::VERSION، عند استخدامه كوظيفة، مثل هذا:</p>
+<pre>print $module-&gt;VERSION;</pre>
+<p class="Pp">سيعيد أيضًا الشكل النصي بشكل حصري. انظر &quot;تحويل النص&quot; لمزيد من التفاصيل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USAGE_DETAILS'><a class='permalink' href='#USAGE_DETAILS'>تفاصيل الاستخدام</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Using_modules_that_use_version.pm'><a class='permalink' href='#Using_modules_that_use_version.pm'>استخدام وحدات تستخدم version.pm</a></h2>
+<p class="Pp">قدر الإمكان، تظل وحدة version.pm متوافقة مع جميع الأكواد الحالية. ومع ذلك، إذا كانت وحدتك تستخدم وحدة عرفت <span class="Li">$VERSION</span> باستخدام فئة version، فهناك بعض الأشياء التي يجب أن تكون على دراية بها. لأغراض المناقشة، سنفترض أن لدينا الوحدة التالية مثبتة:</p>
+<pre>package Example;
+use version;  $VERSION = qv('1.2.2');
+...module code here...
+1;</pre>
+<dl class="Bl-tag">
+  <dt id="Decimal~2"><a class="permalink" href="#Decimal~2">الإصدارات العشرية تعمل دائمًا</a></dt>
+  <dd>كود بالشكل:
+        <pre>use Example 1.002003;
+</pre>
+    <p class="Pp">سيعمل دائمًا بشكل صحيح. سيقوم <span class="Li">&quot;use&quot;</span> بإجراء مقارنة تلقائية لـ <span class="Li">$VERSION</span> باستخدام الرقم العائم المعطى كالمصطلح الأول بعد اسم الوحدة (مثل 1.002.003 أعلاه). في هذه الحالة، الوحدة المثبتة قديمة جدًا بالنسبة للسطر المطلوب، لذا سترى خطأ مثل:</p>
+        <pre>مطلوب إصدار Example 1.002003 (v1.2.3)--هذا فقط الإصدار 1.002002 (v1.2.2)...
+</pre>
+  </dd>
+  <dt id="Dotted~2"><a class="permalink" href="#Dotted~2">الإصدارات العشرية المنقوطة تعمل أحيانًا</a></dt>
+  <dd>مع Perl &gt;= 5.6.2، يمكنك أيضًا استخدام سطر مثل هذا:
+        <pre>use Example 1.2.3;
+</pre>
+    <p class="Pp">وسيعمل مرة أخرى (أي يعطي رسالة الخطأ كما هو موضح أعلاه)، حتى مع إصدارات Perl التي لا تدعم سلاسل v عادةً (انظر &quot;ماذا عن سلاسل v؟&quot; أعلاه). هذا يرجع إلى حقيقة أن <span class="Li">&quot;use&quot;</span> يتحقق فقط مما إذا كان المصطلح الثاني **يبدو كرقم** ويمرره إلى بديل UNIVERSAL::VERSION. هذا ليس صحيحًا في Perl 5.005_04، ومع ذلك، لذا **يشجع بشدة** دائمًا استخدام إصدار عشري في الكود الخاص بك، حتى لتلك الإصدارات من Perl التي تدعم الإصدار العشري المنقوط.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Object_Methods'><a class='permalink' href='#Object_Methods'>أساليب الكائن</a></h2>
+<dl class="Bl-tag">
+  <dt id="new()"><a class="permalink" href="#new()"><b>new()</b></a></dt>
+  <dd>مثل العديد من واجهات الكائنات، يتم استخدام الأسلوب <b>new()</b> لتهيئة كائنات الإصدار. إذا تم تمرير وسيطين إلى
+      <span class="Li">new()</span>، فسيتم استخدام الوسيط **الثاني** كما لو كان مسبوقًا بـ &quot;v&quot;. هذا لدعم الاستخدام التاريخي للمشغل
+      <span class="Li">&quot;qw&quot;</span> مع متغير CVS
+      <span class="Li">$Revision</span>، والذي يتم زيادته تلقائيًا بواسطة CVS في كل مرة يتم فيها الالتزام بالملف في المستودع.
+    <p class="Pp">لتسهيل هذه الميزة، يمكن استخدام الكود التالي:</p>
+        <pre>$VERSION = version-&gt;new(qw$Revision: 2.7 $);
+</pre>
+    <p class="Pp">وسيتم إنشاء كائن الإصدار كما لو تم استخدام الكود التالي:</p>
+        <pre>$VERSION = version-&gt;new(&quot;v2.7&quot;);
+</pre>
+    <p class="Pp">بمعنى آخر، سيتم تحليل الإصدار تلقائيًا من النص، وسيتم اقتباسه للحفاظ على المعنى الذي يحمله CVS عادةً للإصدارات. يزيد متغير CVS
+      <span class="Li">$Revision</span>$ بشكل مختلف عن الإصدارات العشرية (أي أن 1.10 يتبع 1.9)، لذلك يجب التعامل معه كما لو كان إصدارًا عشريًا منقوطًا.</p>
+    <p class="Pp">يمكن إنشاء كائن إصدار جديد كنسخة من كائن إصدار موجود، إما كأسلوب فئة:</p>
+        <pre>$v1 = version-&gt;new(12.3);
+$v2 = version-&gt;new($v1);
+</pre>
+    <p class="Pp">أو كأسلوب كائن:</p>
+        <pre>$v1 = version-&gt;new(12.3);
+$v2 = $v1-&gt;new(12.3);
+</pre>
+    <p class="Pp">وفي كلتا الحالتين، سيكون <span class="Li">$v1</span> و <span class="Li">$v2</span> متطابقين. ملاحظة: إذا قمت بإنشاء كائن جديد باستخدام كائن موجود مثل هذا:</p>
+        <pre>$v2 = $v1-&gt;new();
+</pre>
+    <p class="Pp">لن يكون الكائن الجديد استنساخًا للكائن الحالي. في حالة المثال، سيكون <span class="Li">$v2</span> كائنًا فارغًا من نفس نوع <span class="Li">$v1</span>.</p>
+  </dd>
+  <dt id="qv()"><a class="permalink" href="#qv()"><b>qv()</b></a></dt>
+  <dd>طريقة بديلة لإنشاء</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NAME"></h1>
+<p class="Nd">version::Internals - Internals and details of the Perl version(1) module</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"></h1>
+<p class="Db">This document details the internals of the Perl version(1) module. It is intended as a reference for those who wish to understand how version objects are created, compared, and manipulated.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="WHAT_IS_A_VERSION?"></h1>
+<p class="Pp">A version object is a representation of a software version string, such as "1.2.3" or "v2.5_1". It allows for unambiguous comparisons and manipulations of version strings, which are common in software development.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="IMPLEMENTATION_DETAILS"></h1>
+<dl class="Bl-tag">
+  <dt id="new"><code>new()</code></dt>
+  <dd>The <code>new()</code> method is the primary way to create a new version object. It accepts a string or a number representing the version. For example:</dd>
+</dl>
+<pre>$v1 = version-&gt;new("1.2.3");
+$v2 = version-&gt;new(1.2);     # interpreted as 1.2.0
+</pre>
+<dl class="Bl-tag">
+  <dt id="qv"><code>qv()</code></dt>
+  <dd>The <code>qv()</code> sub is another way to create a version object. It is similar to other q? operators but only supports parentheses or spaces as delimiters. It is useful for initializing short versions without triggering floating-point interpretation.</dd>
+</dl>
+<pre>$v1 = qv(1.2);         # v1.2.0
+$v2 = qv(&quot;1.2&quot;);       # also v1.2.0
+</pre>
+<p class="Pp">It is recommended to use quoted strings with <code>qv()</code> to ensure proper conversion, especially for trailing zeros.</p>
+<p class="Pp">To prevent <code>qv()</code> from being exported, use:</p>
+<pre>use version ();
+</pre>
+<p>or</p>
+<pre>require version;
+</pre>
+<p class="Pp">The following examples will use these three objects:</p>
+<pre>$ver   = version-&gt;new(&quot;1.2.3.4&quot;);
+$alpha = version-&gt;new(&quot;1.2.3_4&quot;);
+$nver  = version-&gt;new(1.002);     # interpreted as 1.002.0
+</pre>
+<dl class="Bl-tag">
+  <dt id="Normal">Normal Form</dt>
+  <dd>The stringified representation of a version object is normalized (no extraneous zeros) and starts with 'v' if it has multiple decimal places or was initialized with <code>qv()</code>.</dd>
+</dl>
+<pre>print $ver-&gt;normal;         # prints v1.2.3.4
+print $ver-&gt;stringify;      # prints v1.2.3.4
+print $ver;                 # prints v1.2.3.4
+print $nver-&gt;normal;        # prints v1.002.0
+print $nver-&gt;stringify;     # prints 1.002
+</pre>
+<p class="Pp">The normalized representation always contains at least three sub-terms to preserve meaning.</p>
+<dl class="Bl-tag">
+  <dt id="Numification">Numification</dt>
+  <dd>The <code>numify()</code> method returns a numerical representation of the version object. Sub-versions are assumed to have three decimal places.</dd>
+</dl>
+<pre>print $ver-&gt;numify;         # prints 1.002003004
+print $nver-&gt;numify;        # prints 1.002
+</pre>
+<p class="Pp">Unlike stringification, trailing zeros are not needed to preserve the correct version value.</p>
+<dl class="Bl-tag">
+  <dt id="Stringification">Stringification</dt>
+  <dd>The default stringification returns the original string used for creation, with one exception: if created with <code>qv()</code> and the initializer lacked a leading 'v' or two decimal places, a leading 'v' is prepended for round-trip processing.</dd>
+</dl>
+<pre>Initialized as          Stringifies to
+==============          ==============
+version-&gt;new(&quot;1.2&quot;)       1.2
+version-&gt;new(&quot;v1.2&quot;)     v1.2
+qv(&quot;1.2.3&quot;)               1.2.3
+qv(&quot;v1.3.5&quot;)             v1.3.5
+qv(&quot;1.2&quot;)                v1.2   ### exceptional case
+</pre>
+<p class="Pp">This also applies to UNIVERSAL::VERSION when used as a class method.</p>
+<p class="Pp"><b>IMPORTANT NOTE:</b> The exceptional case for <code>qv()</code> with a single decimal place and no leading 'v' results in a stringified output with a leading 'v' to preserve the version's intent.</p>
+<p class="Pp"><b>IMPORTANT NOTE 2:</b> Manually applying <code>numify()</code> and <code>normal()</code> can lead to unexpected results:</p>
+<pre>print version-&gt;new(version-&gt;new(&quot;v1.0&quot;)-&gt;numify)-&gt;normal; # v1.0.0
+</pre>
+<p class="Pp">This is because <code>numify()</code> converts "v1.0" to "1.000000", and normalizing this results in "v1.0.0".</p>
+<p class="Pp">To create a copy of a version object:</p>
+<pre>$v2 = $v1-&gt;new($v1);
+</pre>
+<dl class="Bl-tag">
+  <dt id="Comparison">Comparison operators</dt>
+  <dd>The <code>cmp</code> and <code>&lt;=&gt;</code> operators perform version comparisons. Other comparison operators are automatically generated. Trailing zeros do not affect comparisons (e.g., "v1.2" == "1.2.0").</dd>
+</dl>
+<pre>As Number        As String           Truth Value
+-------------    ----------------    -----------
+$ver &gt;  1.0      $ver gt &quot;1.0&quot;       true
+$ver &lt;  2.5      $ver lt             true
+$ver != 1.3      $ver ne &quot;1.3&quot;       true
+$ver == 1.2      $ver eq &quot;1.2&quot;       false
+$ver == 1.2.3.4  $ver eq &quot;1.2.3.4&quot;   see discussion below
+</pre>
+<p class="Pp">It's best to stick to either decimal or dotted-decimal notation for consistency.</p>
+<p class="Pp"><b>WARNING:</b> Comparing versions with unequal numbers of decimal points can yield unexpected results:</p>
+<pre>version-&gt;new(0.96)     &gt; version-&gt;new(0.95); # 0.960.0 &gt; 0.950.0
+version-&gt;new(&quot;0.96.1&quot;) &lt; version-&gt;new(0.95); # 0.096.1 &lt; 0.950.0
+</pre>
+<p class="Pp">Use either "Decimal Versions" or "Dotted-Decimal Versions" exclusively.</p>
+<dl class="Bl-tag">
+  <dt id="Logical">Logical Operators</dt>
+  <dd>To check if a version object has been initialized:</dd>
+</dl>
+<pre>$vobj = version-&gt;new($something);
+if ( $vobj )   # true only if $something was non-blank
+</pre>
+<p class="Pp">To check if a version object is an alpha version:</p>
+<pre>$vobj = version-&gt;new(&quot;1.2_3&quot;); # MUST QUOTE
+...later...
+if ( $vobj-&gt;is_alpha )       # True
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"></h1>
+<p class="Pp">John Peacock &lt;jpeacock@cpan.org&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"></h1>
+<p class="Pp">perl.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>

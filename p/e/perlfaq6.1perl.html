@@ -1,0 +1,428 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlfaq6.1perl</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Ss">
+<h2 class="Ss" id='rl_regular_expressions_to_match_balanced_text?'>هل   يمكنني استخدام تعبيرات Perl العادية لمطابقة نص متوازن؟</h2>
+<p class="Pp">(مساهمة من brian d foy)</p>
+<p class="Pp">يجب أن تكون محاولتك الأولى على الأرجح هي الوحدة النصية Text::Balanced، وهي موجودة في مكتبة Perl القياسية منذ Perl 5.8. تحتوي على مجموعة متنوعة من الدوال للتعامل مع النصوص المعقدة. يمكن للوحدة Regexp::Common المساعدة أيضًا من خلال توفير أنماط جاهزة يمكنك استخدامها.</p>
+<p class="Pp">اعتبارًا من Perl 5.10، يمكنك مطابقة النصوص المتوازنة باستخدام التعبيرات العادية من خلال الأنماط التكرارية. قبل Perl 5.10، كان عليك اللجوء إلى حيل مختلفة مثل استخدام كود Perl في تسلسلات <span class="Li">&quot;(??{})&quot;</span>.</p>
+<p class="Pp">إليك مثال يستخدم تعبيرًا عاديًا تكراريًا. الهدف هو التقاط كل النص الموجود داخل أقواس زاوية، بما في ذلك النص الموجود في الأقواس الزاوية المتداخلة. يحتوي هذا النص النموذجي على مجموعتين "رئيسيتين": مجموعة بمستوى واحد من التداخل ومجموعة بمستويين من التداخل. يوجد خمس مجموعات إجمالاً في أقواس زاوية:</p>
+<pre>I have some &lt;brackets in &lt;nested brackets&gt; &gt; and
+&lt;another group &lt;nested once &lt;nested twice&gt; &gt; &gt;
+and that's it.</pre>
+<p class="Pp">يستخدم التعبير العادي لمطابقة النص المتوازن ميزتين جديدتين (في Perl 5.10) للتعبيرات العادية. تمت تغطية هذه الميزات في perlre وهذا المثال هو نسخة معدلة من إحداها في تلك الوثائق.</p>
+<p class="Pp">أولاً، إضافة علامة <span class="Li">&quot;+&quot;</span> الحصرية إلى أي كمي (quantifier) يجد أطول تطابق ولا يتراجع. هذا مهم لأنك تريد معالجة أي أقواس زاوية من خلال التكرار، وليس التراجع. المجموعة <span class="Li">&quot;[^&lt;&gt;]++&quot;</span> تجد حرفًا واحدًا أو أكثر من الأحرف غير القوسية بدون تراجع.</p>
+<p class="Pp">ثانيًا، تشير <span class="Li">&quot;(?PARNO)&quot;</span> الجديدة إلى النمط الفرعي في مجموعة الالتقاط المعينة بالرقم <span class="Li">&quot;PARNO&quot;</span>. في التعبير العادي التالي، تجد مجموعة الالتقاط الأولى (وتتذكر) النص المتوازن، وتحتاج إلى نفس النمط داخل المخزن المؤقت الأول لتجاوز النص المتداخل. هذا هو الجزء التكراري. تستخدم <span class="Li">&quot;(?1)&quot;</span> النمط الموجود في مجموعة الالتقاط الخارجية كجزء مستقل من التعبير العادي.</p>
+<p class="Pp">بتجميع كل شيء معًا، لديك:</p>
+<pre>#!/usr/local/bin/perl5.10.0
+my $string =&lt;&lt;&quot;HERE&quot;;
+I have some &lt;brackets in &lt;nested brackets&gt; &gt; and
+&lt;another group &lt;nested once &lt;nested twice&gt; &gt; &gt;
+and that's it.
+HERE
+my @groups = $string =~ m/
+        (                   # start of capture group 1
+        &lt;                   # match an opening angle bracket
+            (?:
+                [^&lt;&gt;]++     # one or more non angle brackets, non backtracking
+                  |
+                (?1)        # found &lt; or &gt;, so recurse to capture group 1
+            )*
+        &gt;                   # match a closing angle bracket
+        )                   # end of capture group 1
+        /xg;
+$&quot; = &quot;\n\t&quot;;
+print &quot;Found:\n\t@groups\n&quot;;</pre>
+<p class="Pp">يُظهر الإخراج أن Perl وجدت المجموعتين الرئيسيتين:</p>
+<pre>Found:
+    &lt;brackets in &lt;nested brackets&gt; &gt;
+    &lt;another group &lt;nested once &lt;nested twice&gt; &gt; &gt;</pre>
+<p class="Pp">مع القليل من العمل الإضافي، يمكنك الحصول على جميع المجموعات الموجودة داخل أقواس زاوية حتى لو كانت موجودة داخل أقواس زاوية أخرى. في كل مرة تحصل فيها على تطابق متوازن، قم بإزالة المحدد الخارجي الخاص به (وهو الذي طابقته للتو، لذا لا تطابقه مرة أخرى) وأضفه إلى قائمة انتظار للمعالجة. استمر في القيام بذلك حتى لا تحصل على أي مطابقات:</p>
+<pre>#!/usr/local/bin/perl5.10.0
+my @queue =&lt;&lt;&quot;HERE&quot;;
+I have some &lt;brackets in &lt;nested brackets&gt; &gt; and
+&lt;another group &lt;nested once &lt;nested twice&gt; &gt; &gt;
+and that's it.
+HERE
+my $regex = qr/
+        (                   # start of bracket 1
+        &lt;                   # match an opening angle bracket
+            (?:
+                [^&lt;&gt;]++     # one or more non angle brackets, non backtracking
+                  |
+                (?1)        # recurse to bracket 1
+            )*
+        &gt;                   # match a closing angle bracket
+        )                   # end of bracket 1
+        /x;
+$&quot; = &quot;\n\t&quot;;
+while( @queue ) {
+    my $string = shift @queue;
+    my @groups = $string =~ m/$regex/g;
+    print &quot;Found:\n\t@groups\n\n&quot; if @groups;
+    unshift @queue, map { s/^&lt;//; s/&gt;$//; $_ } @groups;
+}</pre>
+<p class="Pp">يُظهر الإخراج جميع المجموعات. تظهر المطابقات الخارجية أولاً وتظهر المطابقات المتداخلة لاحقًا:</p>
+<pre>Found:
+    &lt;brackets in &lt;nested brackets&gt; &gt;
+    &lt;another group &lt;nested once &lt;nested twice&gt; &gt; &gt;
+Found:
+    &lt;nested brackets&gt;
+Found:
+    &lt;nested once &lt;nested twice&gt; &gt;
+Found:
+    &lt;nested twice&gt;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='What_does_it_mean_that_regexes_are_greedy?_How_can_I_get_around_it?'><a class='permalink' href='#What_does_it_mean_that_regexes_are_greedy?_How_can_I_get_around_it?'>ماذا   يعني أن التعبيرات العادية جشعة؟ كيف يمكنني تجاوز ذلك؟</a></h2>
+<p class="Pp">معظم الناس يقصدون أن التعبيرات العادية الجشعة تطابق أكبر قدر ممكن.
+    من الناحية الفنية، الكميات (quantifiers)
+    (<span class="Li">&quot;?&quot;</span>،
+    <span class="Li">&quot;*&quot;</span>،
+    <span class="Li">&quot;+&quot;</span>،
+    <span class="Li">&quot;{}&quot;</span>) هي الجشعة وليست النمط بأكمله؛ يفضل Perl الجشع المحلي والإشباع الفوري على الجشع العام. للحصول على إصدارات غير جشعة لنفس الكميات، استخدم
+    (<span class="Li">&quot;??&quot;</span>،
+    <span class="Li">&quot;*?&quot;</span>،
+    <span class="Li">&quot;+?&quot;</span>،
+    <span class="Li">&quot;{}?&quot;</span>).</p>
+<p class="Pp">مثال:</p>
+<pre>my $s1 = my $s2 = &quot;I am very very cold&quot;;
+$s1 =~ s/ve.*y //;      # I am cold
+$s2 =~ s/ve.*?y //;     # I am very cold</pre>
+<p class="Pp">لاحظ كيف توقف الاستبدال الثاني عن المطابقة بمجرد أن صادف "y ". الكمي <span class="Li">&quot;*?&quot;</span> يخبر محرك التعبيرات العادية بشكل فعال بالبحث عن تطابق بأسرع ما يمكن وتمرير التحكم إلى ما هو تالي في السلسلة، كما لو كنت تلعب لعبة البطاطا الساخنة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_do_I_process_each_word_on_each_line?'><a class='permalink' href='#How_do_I_process_each_word_on_each_line?'>كيف   أعالج كل كلمة في كل سطر؟</a></h2>
+<p class="Pp">استخدم الدالة split:</p>
+<pre>while (&lt;&gt;) {
+    foreach my $word ( split ) {
+        # do something with $word here
+    }
+}</pre>
+<p class="Pp">لاحظ أن هذه ليست كلمة بالمعنى الإنجليزي حقًا؛ إنها مجرد أجزاء من أحرف غير بيضاء متتالية.</p>
+<p class="Pp">للعمل فقط مع التسلسلات الأبجدية الرقمية (بما في ذلك الشرطات السفلية)، قد ترغب في التفكير في</p>
+<pre>while (&lt;&gt;) {
+    foreach $word (m/(\w+)/g) {
+        # do something with $word here
+    }
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_can_I_print_out_a_word-frequency_or_line-frequency_summary?'><a class='permalink' href='#How_can_I_print_out_a_word-frequency_or_line-frequency_summary?'>كيف   يمكنني طباعة ملخص لتكرار الكلمات أو تكرار الأسطر؟</a></h2>
+<p class="Pp">للقيام بذلك، عليك تحليل كل كلمة في تدفق الإدخال.
+    سنتظاهر بأنك تقصد بالكلمة جزءًا من الأحرف الأبجدية أو الواصلات أو علامات الاقتباس، بدلاً من فكرة الكلمة المكونة من أجزاء غير بيضاء كما ورد في السؤال السابق:</p>
+<pre>my (%seen);
+while (&lt;&gt;) {
+    while ( /(\b[^\W_\d][\w'-]+\b)/g ) {   # misses &quot;`sheep'&quot;
+        $seen{$1}++;
+    }
+}
+while ( my ($word, $count) = each %seen ) {
+    print &quot;$count $word\n&quot;;
+}</pre>
+<p class="Pp">إذا كنت تريد فعل الشيء نفسه للأسطر، فلن تحتاج إلى تعبير عادي:</p>
+<pre>my (%seen);
+while (&lt;&gt;) {
+    $seen{$_}++;
+}
+while ( my ($line, $count) = each %seen ) {
+    print &quot;$count $line&quot;;
+}</pre>
+<p class="Pp">إذا كنت تريد طباعة هذه في ترتيب مرتب، انظر perlfaq4:
+    "How do I sort a hash (optionally by value instead of key)؟".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_can_I_do_approximate_matching?'><a class='permalink' href='#How_can_I_do_approximate_matching?'>كيف   يمكنني إجراء مطابقة تقريبية؟</a></h2>
+<p class="Pp">انظر الوحدة String::Approx المتاحة من CPAN.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_do_I_efficiently_match_many_regular_expressions_at_once?'><a class='permalink' href='#How_do_I_efficiently_match_many_regular_expressions_at_once?'>كيف   أطابق العديد من التعبيرات العادية بكفاءة في وقت واحد؟</a></h2>
+<p class="Pp">(مساهمة من brian d foy)</p>
+<p class="Pp">تريد تجنب تجميع تعبير عادي في كل مرة تريد مطابقة. في هذا المثال، يجب على Perl إعادة تجميع التعبير العادي لكل تكرار لحلقة
+    <span class="Li">&quot;foreach&quot;</span> نظرًا لأن
+    <span class="Li">$pattern</span> يمكن أن يتغير:</p>
+<pre>my @patterns = qw( fo+ ba[rz] );
+LINE: while( my $line = &lt;&gt; ) {
+    foreach my $pattern ( @patterns ) {
+        if( $line =~ m/\b$pattern\b/i ) {
+            print $line;
+            next LINE;
+        }
+    }
+}</pre>
+<p class="Pp">يقوم المعامل <span class="Li">&quot;qr//&quot;</span> بتجميع تعبير عادي، ولكنه لا يطبقه. عندما تستخدم الإصدار المجمع مسبقًا من التعبير العادي، يقوم Perl بعمل أقل. في هذا المثال، أدرجت <span class="Li">&quot;map&quot;</span> لتحويل كل نمط إلى شكله المجمع مسبقًا. بقية البرنامج متطابق، ولكنه أسرع:</p>
+<pre>my @patterns = map { qr/\b$_\b/i } qw( fo+ ba[rz] );
+LINE: while( my $line = &lt;&gt; ) {
+    foreach my $pattern ( @patterns ) {
+        if( $line =~ m/$pattern/ ) {
+            print $line;
+            next LINE;
+        }
+    }
+}</pre>
+<p class="Pp">في بعض الحالات، قد تتمكن من تحويل عدة أنماط إلى تعبير عادي واحد. كن حذرًا من المواقف التي تتطلب التراجع. في هذا المثال، يتم تجميع التعبير العادي مرة واحدة فقط لأن
+    <span class="Li">$regex</span> لا يتغير بين التكرارات:</p>
+<pre>my $regex = join '|', qw( fo+ ba[rz] );
+while( my $line = &lt;&gt; ) {
+    print if $line =~ m/\b(?:$regex)\b/i;
+}</pre>
+<p class="Pp">يمكن أيضًا استخدام الدالة "list2re" في Data::Munge على CPAN لتكوين تعبير عادي واحد يطابق قائمة من السلاسل الحرفية (وليس التعبيرات العادية).</p>
+<p class="Pp">لمزيد من التفاصيل حول كفاءة التعبيرات العادية، انظر
+    <i>Mastering</i> <i>Regular Expressions</i> بواسطة Jeffrey Friedl. يشرح كيف يعمل محرك التعبيرات العادية ولماذا تكون بعض الأنماط غير فعالة بشكل مدهش. بمجرد فهمك لكيفية تطبيق Perl للتعبيرات العادية، يمكنك ضبطها لحالات فردية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Why_don&apos;t_word-boundary_searches_with_&amp;quot;\b&amp;quot;_work_for_me?'><a class='permalink' href='#Why_don&apos;t_word-boundary_searches_with_&amp;quot;\b&amp;quot;_work_for_me?'>لماذا   لا تعمل عمليات البحث عن حدود الكلمات باستخدام &quot;\b&quot; معي؟</a></h2>
+<p class="Pp">(مساهمة من brian d foy)</p>
+<p class="Pp">تأكد من أنك تعرف ما تفعله \b حقًا: إنها الحدود بين حرف كلمة، \w، وشيء ليس حرف كلمة.
+    هذا الشيء الذي ليس حرف كلمة قد يكون \W، ولكنه يمكن أن يكون أيضًا بداية أو نهاية السلسلة.</p>
+<p class="Pp">إنها ليست (ليست!) الحدود بين المسافات البيضاء وغير المسافات البيضاء، وليست الشيء بين الكلمات الذي نستخدمه لإنشاء جمل.</p>
+<p class="Pp">بلغة التعبيرات العادية، حد الكلمة (\b) هو "تأكيد ذو عرض صفر"
+# vim: ft=yaml
+---
+-
+  type: "text"
+  content: |
+    ## Word Boundaries
+
+    The expression <span class="Li">&quot;\b&quot;</span> is a zero-width
+    assertion. It's not a character that matches anything, but rather a condition
+    at a certain position. It matches if and only if the character following
+    it is a word character and the character preceding it is not a word
+    character, or vice versa. Word characters are typically [a-zA-Z0-9_].
+
+    For the regular expression, /\bPerl\b/, there has to be a word
+    boundary before the "P" and after the "l". As long as
+    something other than a word character precedes the "P" and
+    succeeds the "l", the pattern will match. These strings match
+    /\bPerl\b/.
+
+    "Perl"    # no word char before "P" or after "l"
+    "Perl "   # same as previous (space is not a word char)
+    "'Perl'"  # the "'" char is not a word char
+    "Perl's"  # no word char before "P", non-word char after "l"
+
+    These strings do not match /\bPerl\b/.
+
+    "Perl_"   # "_" is a word char!
+    "Perler"  # no word char before "P", but one after "l"
+
+    You don't have to use \b to match words though. You can look for
+    non-word characters surrounded by word characters. These strings match the
+    pattern /\b'\b/.
+
+    "don't"   # the "'" char is surrounded by "n" and "t"
+    "qep'a'"  # the "'" char is surrounded by "p" and "a"
+
+    These strings do not match /\b'\b/.
+
+    "foo'"    # there is no word char after non-word "'"
+
+    You can also use the complement of \b, \B, to specify that there
+    should not be a word boundary.
+
+    In the pattern /\Bam\B/, there must be a word character before the
+    "a" and after the "m". These patterns match
+    /\Bam\B/:
+
+    "llama"   # "am" surrounded by word chars
+    "Samuel"  # same
+
+    These strings do not match /\Bam\B/
+
+    "Sam"      # no word boundary before "a", but one after "m"
+    "I am Sam" # "am" surrounded by non-word chars
+-
+  type: "section"
+  heading:
+    level: "subsection"
+    id: "Why_does_using_$&amp;,_$`,_or_$'s_slow_my_program_down?"
+    title: "Why does using $&amp;, $`, or $' slow my program down?"
+  content: |
+    (contributed by Anno Siegel)
+
+    Once Perl sees that you need one of these variables anywhere in
+    the program, it provides them on each and every pattern match. That means
+    that on every pattern match the entire string will be copied, part of it to
+    $`, part to $&amp;, and part to $'. Thus the penalty is most severe with
+    long strings and patterns that match often. Avoid $&amp;, $', and $` if you
+    can, but if you can't, once you've used them at all, use them at will
+    because you've already paid the price. Remember that some algorithms really
+    appreciate them. As of the 5.005 release, the $&amp; variable is no longer
+    "expensive" the way the other two are.
+
+    Since Perl 5.6.1 the special variables @- and @+ can functionally
+    replace $`, $&amp; and $'. These arrays contain pointers to the beginning
+    and end of each match (see perlvar for the full story), so they give you
+    essentially the same information, but without the risk of excessive string
+    copying.
+
+    Perl 5.10 added three specials, "${^MATCH}", "${^PREMATCH}", and
+    "${^POSTMATCH}" to do the same job but without the global performance penalty.
+    Perl 5.10 only sets these variables if you compile or execute the regular
+    expression with the "/p" modifier.
+-
+  type: "section"
+  heading:
+    level: "subsection"
+    id: "What_good_is_\G_in_a_regular_expression?"
+    title: "What good is \"\G\" in a regular expression?"
+  content: |
+    You use the "\G" anchor to start
+    the next match on the same string where the last match left off. The regular
+    expression engine cannot skip over any characters to find the next match
+    with this anchor, so "\G" is similar to
+    the beginning of string anchor, "^". The
+    "\G" anchor is typically used with the
+    "g" modifier. It uses the value of
+    pos() as the position to start the next match. As
+    the match operator makes successive matches, it updates
+    pos() with the position of the next character past
+    the last match (or the first character of the next match, depending on how
+    you like to look at it). Each string has its own
+    pos() value.
+
+    Suppose you want to match all of consecutive pairs of digits in a
+    string like "1122a44" and stop matching when you encounter
+    non-digits. You want to match 11 and
+    22 but the letter
+    "a" shows up between
+    22 and 44 and you want to stop at
+    "a". Simply matching pairs of
+    digits skips over the "a" and still
+    matches 44.
+
+    $_ = "1122a44";
+    my @pairs = m/(\d\d)/g;   # qw( 11 22 44 )
+
+    If you use the "\G" anchor, you
+    force the match after 22 to start with the
+    "a". The regular expression cannot match
+    there since it does not find a digit, so the next match fails and the match
+    operator returns the pairs it already found.
+
+    $_ = "1122a44";
+    my @pairs = m/\G(\d\d)/g; # qw( 11 22 )
+
+    You can also use the "\G" anchor
+    in scalar context. You still need the "g"
+    modifier.
+
+    $_ = "1122a44";
+    while( m/\G(\d\d)/g ) {
+        print "Found $1\n";
+    }
+
+    After the match fails at the letter
+    "a", perl resets
+    pos() and the next match on the same string starts
+    at the beginning.
+
+    $_ = "1122a44";
+    while( m/\G(\d\d)/g ) {
+        print "Found $1\n";
+    }
+    print "Found $1 after while" if m/(\d\d)/g; # finds "11"
+
+    You can disable
+    pos() resets on fail with
+    the "c" modifier, documented in perlop and
+    perlreref. Subsequent matches start where the last successful match ended
+    (the value of
+    pos()) even if a match on the same
+    string has failed in the meantime. In this case, the match after the
+    while() loop starts at the
+    "a" (where the last match stopped), and
+    since it does not use any anchor it can skip over the
+    "a" to find
+    44.
+
+    $_ = "1122a44";
+    while( m/\G(\d\d)/gc ) {
+        print "Found $1\n";
+    }
+    print "Found $1 after while" if m/(\d\d)/g; # finds "44"
+
+    Typically you use the "\G"
+    anchor with the "c" modifier when you want
+    to try a different match if one fails, such as in a tokenizer. Jeffrey
+    Friedl offers this example which works in 5.004 or later.
+
+    while (<>) {
+        chomp;
+        PARSER: {
+            m/ \G( \d+\b    )/gcx   && do { print "number: $1\n";  redo; };
+            m/ \G( \w+      )/gcx   && do { print "word:   $1\n";  redo; };
+            m/ \G( \s+      )/gcx   && do { print "space:  $1\n";  redo; };
+            m/ \G( [^\w\d]+ )/gcx   && do { print "other:  $1\n";  redo; };
+        }
+    }
+
+    For each line, the "PARSER" loop
+    first tries to match a series of digits followed by a word boundary. This
+    match has to start at the place the last match left off (or the beginning of
+    the string on the first match). Since "m/ \G(
+    \d+\b"
+    ")/gcx" uses the
+    "c" modifier, if the string does not match
+    that regular expression, perl does not reset pos() and the next match
+    starts at the same position to try a different pattern.
+-
+  type: "section"
+  heading:
+    level: "subsection"
+    id: "Are_Perl_regexes_DFAs_or_NFAs?_Are_they_POSIX_compliant?"
+    title: "Are Perl regexes DFAs or NFAs? Are they POSIX compliant?"
+  content: |
+    While it's true that Perl's regular expressions resemble the DFAs
+    (deterministic finite automata) of the egrep(1) program, they are in
+    fact implemented as NFAs (non-deterministic finite automata) to allow
+    backtracking and backreferencing. And they aren't POSIX-style either,
+    because those guarantee worst-case behavior for all cases. (It seems that
+    some people prefer guarantees of consistency, even when what's guaranteed is
+    slowness.) See the book "Mastering Regular Expressions" (from
+    O'Reilly) by Jeffrey Friedl for all the details you could ever hope to know
+    on these matters (a full citation appears in perlfaq2).
+-
+  type: "section"
+  heading:
+    level: "subsection"
+    id: "What's_wrong_with_using_grep_in_a_void_context?"
+    title: "What's wrong with using grep in a void context?"
+  content: |
+    The problem is that grep builds a return list, regardless of the
+    context. This means you're making Perl go to the trouble of building a list
+    that you then just throw away. If the list is large, you waste both time and
+    space. If your intent is to iterate over the list, then use a for loop for
+    this purpose.
+
+    In perls older than 5.8.1, map suffers from this problem as well.
+    But since 5.8.1, this has been fixed, and map is context aware - in void
+    context, no lists are constructed.
+-
+  type: "section"
+  heading:
+    level: "subsection"
+    id: "How_can_I_match_strings_with_multibyte_characters?"
+    title: "How can I match strings with multibyte characters?"
+  content: |
+    Starting from Perl 5.6 Perl has had some level of multibyte
+    character support. Perl 5.8 or later is recommended. Supported multibyte
+    character repertoires include Unicode, and legacy encodings through the
+    Encode module. See perluniintro, perlunicode, and Encode.
+
+    If you are stuck with older Perls, you can do Unicode with the
+    Unicode::String module, and character conversions using the Unicode::Map8
+    and Unicode::Map modules. If you are using Japanese encodings, you might try
+    using the jperl 5.005_03.
+
+    Finally, the following set of approaches was offered by Jeffrey
+    Friedl, whose article in issue #5 of The Perl Journal talks about this very
+    matter.
+
+    Let's suppose you have some weird Martian encoding where pairs of
+    ASCII uppercase letters encode single Martian letters (i.e. the two bytes
+    "CV" make a single Martian letter, as do the two bytes
+    "SG", "VS", "XX", etc.). Other bytes represent
+    single characters, just like ASCII.
+
+    So

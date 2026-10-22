@@ -1,0 +1,1356 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">PHYSFS_EnumerateCallback(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/physfs/">physfs</a></p>
+<p class="lic">التراخيص: Zlib</p>
+<link rel="stylesheet" href="basic.css">
+matically deregister all
+    archivers, so you don't need to explicitly deregister yours if you otherwise
+    shut down cleanly.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>ext</i> Filename extension that the archiver
+  handles.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">Zero on error, non-zero on success.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_Archiver</b>
+<p class="Pp"><b>PHYSFS_registerArchiver</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_enumerate_(const_char_*_dir,_&lt;b&gt;PHYSFS_EnumerateCallback&lt;/b&gt;_c,_void_*_d)'><a class='permalink' href='#int_PHYSFS_enumerate_(const_char_*_dir,_&lt;b&gt;PHYSFS_EnumerateCallback&lt;/b&gt;_c,_void_*_d)'>int   PHYSFS_enumerate (const char * dir, <b>PHYSFS_EnumerateCallback</b> c, void *   d)</a></h2>
+<p class="Pp">Get a file listing of a search path's directory, using an
+    application-defined callback, with errors reported. Internally,
+    <b>PHYSFS_enumerateFiles()</b> just calls this function and then builds a
+    list before returning to the application, so functionality is identical
+    except for how the information is represented to the application.</p>
+<p class="Pp">Unlike <b>PHYSFS_enumerateFiles()</b>, this function does not
+    return an array. Rather, it calls a function specified by the application
+    once per element of the search path:</p>
+<pre>static PHYSFS_EnumerateCallbackResult printDir(void *data, const char *origdir, const char *fname)
+{
+    printf(&quot; * We've got [%s] in [%s].\n&quot;, fname, origdir);
+    return PHYSFS_ENUM_OK;  // give me more data, please.
+}
+// ...
+PHYSFS_enumerate(&quot;/some/path&quot;, printDir, NULL);</pre>
+<p class="Pp">Items sent to the callback are not guaranteed to be in any order
+    whatsoever. There is no sorting done at this level, and if you need that,
+    you should probably use <b>PHYSFS_enumerateFiles()</b> instead, which
+    guarantees alphabetical sorting. This form reports whatever is discovered in
+    each archive before moving on to the next. Even within one archive, we can't
+    guarantee what order it will discover data. <i>Any sorting you find in these
+    callbacks is just pure luck. Do not rely on it.</i> As this walks the entire
+    list of archives, you may receive duplicate filenames.</p>
+<p class="Pp">This API and the callbacks themselves are capable of reporting
+    errors. Prior to this API, callbacks had to accept every enumerated item,
+    even if they were only looking for a specific thing and wanted to stop after
+    that, or had a serious error and couldn't alert anyone. Furthermore, if
+    PhysicsFS itself had a problem (disk error or whatnot), it couldn't report
+    it to the calling app, it would just have to skip items or stop enumerating
+    outright, and the caller wouldn't know it had lost some data along the
+  way.</p>
+<p class="Pp">Now the caller can be sure it got a complete data set, and its
+    callback has control if it wants enumeration to stop early. See the
+    documentation for <b>PHYSFS_EnumerateCallback</b> for details on how your
+    callback should behave.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>dir</i> Directory, in platform-independent notation,
+  to enumerate.
+<br/>
+<i>c</i> Callback function to notify about search path elements.
+<br/>
+<i>d</i> Application-defined data passed to callback. Can be NULL.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">non-zero on success, zero on failure. Use
+  <b>PHYSFS_getLastErrorCode()</b> to obtain the specific error. If the callback
+  returns PHYSFS_ENUM_STOP to stop early, this will be considered success.
+  Callbacks returning PHYSFS_ENUM_ERROR will make this function return zero and
+  set the error code to PHYSFS_ERR_APP_CALLBACK.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_EnumerateCallback</b>
+<p class="Pp"><b>PHYSFS_enumerateFiles</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='char_**_PHYSFS_enumerateFiles_(const_char_*_dir)'><a class='permalink' href='#char_**_PHYSFS_enumerateFiles_(const_char_*_dir)'>char   ** PHYSFS_enumerateFiles (const char * dir)</a></h2>
+<p class="Pp">Get a file listing of a search path's directory.</p>
+<p class="Pp"><b>Warning</b></p>
+<div class="Bd-indent">In PhysicsFS versions prior to 2.1, this function would
+  return as many items as it could in the face of a failure condition (out of
+  memory, disk i/o error, etc). Since this meant apps couldn't distinguish
+  between complete success and partial failure, and since the function could
+  always return NULL to report catastrophic failures anyway, in PhysicsFS 2.1
+  this function's policy changed: it will either return a list of complete
+  results or it will return NULL for any failure of any kind, so we can
+  guarantee that the enumeration ran to completion and has no gaps in its
+  results.</div>
+<p class="Pp">Matching directories are interpolated. That is, if
+    &quot;C:\mydir&quot; is in the search path and contains a directory
+    &quot;savegames&quot; that contains &quot;x.sav&quot;, &quot;y.sav&quot;,
+    and &quot;z.sav&quot;, and there is also a &quot;C:\userdir&quot; in the
+    search path that has a &quot;savegames&quot; subdirectory with
+    &quot;w.sav&quot;, then the following code:</p>
+<pre>char **rc = PHYSFS_enumerateFiles(&quot;savegames&quot;);
+char **i;
+for (i = rc; *i != NULL; i++)
+    printf(&quot; * We've got [%s].\n&quot;, *i);
+PHYSFS_freeList(rc);</pre>
+<pre>* We've got [x.sav].
+* We've got [y.sav].
+* We've got [z.sav].
+* We've got [w.sav]..fi</pre>
+<pre>Feel free to sort the list however you like. However, the returned data will always contain no duplicates, and will be always sorted in alphabetic (rather: case-sensitive Unicode) order for you.</pre>
+<pre>Don't forget to call <b>PHYSFS_freeList()</b> with the return value from this function when you are done with it.</pre>
+<pre><b>Parameters</b></pre>
+<div class="Bd-indent">
+<pre><i>dir</i> directory in platform-independent notation to enumerate. </pre>
+</div>
+<pre><b>Returns</b></pre>
+<div class="Bd-indent">
+<pre>Null-terminated array of null-terminated strings, or NULL for failure cases.</pre>
+</div>
+<pre><b>See also</b></pre>
+<div class="Bd-indent">
+<pre><b>PHYSFS_enumerate</b> </pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_PHYSFS_enumerateFilesCallback_(const_char_*_dir,_&lt;b&gt;PHYSFS_EnumFilesCallback&lt;/b&gt;_c,_void_*_d)'><a class='permalink' href='#void_PHYSFS_enumerateFilesCallback_(const_char_*_dir,_&lt;b&gt;PHYSFS_EnumFilesCallback&lt;/b&gt;_c,_void_*_d)'>void   PHYSFS_enumerateFilesCallback (const char * dir,   <b>PHYSFS_EnumFilesCallback</b> c, void * d)</a></h2>
+<p class="Pp">Get a file listing of a search path's directory, using an
+    application-defined callback.</p>
+<p class="Pp"><b>Deprecated</b></p>
+<div class="Bd-indent">As of PhysicsFS 2.1, use <b>PHYSFS_enumerate()</b>
+  instead. This function has no way to report errors (or to have the callback
+  signal an error or request a stop), so if data will be lost, your callback has
+  no way to direct the process, and your calling app has no way to know.</div>
+<p class="Pp">As of PhysicsFS 2.1, this function just wraps
+    <b>PHYSFS_enumerate()</b> and ignores errors. Consider using
+    <b>PHYSFS_enumerate()</b> or <b>PHYSFS_enumerateFiles()</b> instead.</p>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_enumerate</b>
+<p class="Pp"><b>PHYSFS_enumerateFiles</b></p>
+<p class="Pp"><b>PHYSFS_EnumFilesCallback</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_eof_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle)'><a class='permalink' href='#int_PHYSFS_eof_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle)'>int   PHYSFS_eof (<b>PHYSFS_File</b> * handle)</a></h2>
+<p class="Pp">Check for end-of-file state on a PhysicsFS filehandle. Determine
+    if the end of file has been reached in a PhysicsFS filehandle.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>handle</i> handle returned from
+  <b>PHYSFS_openRead()</b>.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">nonzero if EOF, zero if not.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_read</b>
+<p class="Pp"><b>PHYSFS_tell</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_exists_(const_char_*_fname)'><a class='permalink' href='#int_PHYSFS_exists_(const_char_*_fname)'>int   PHYSFS_exists (const char * fname)</a></h2>
+<p class="Pp">Determine if a file exists in the search path. Reports true if
+    there is an entry anywhere in the search path by the name of (fname).</p>
+<p class="Pp">Note that entries that are symlinks are ignored if
+    PHYSFS_permitSymbolicLinks(1) hasn't been called, so you might end up
+    further down in the search path than expected.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>fname</i> filename in platform-independent
+  notation.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">non-zero if filename exists. zero otherwise.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_fileLength (<b>PHYSFS_File</b> *
+  handle)</h2>
+<p class="Pp">Get total length of a file in bytes. Note that if another
+    process/thread is writing to this file at the same time, then the
+    information this function supplies could be incorrect before you get it. Use
+    with caution, or better yet, don't use at all.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>handle</i> handle returned from PHYSFS_open*().</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">size in bytes of the file. -1 if can't be
+  determined.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_tell</b>
+<p class="Pp"><b>PHYSFS_seek</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_flush_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle)'><a class='permalink' href='#int_PHYSFS_flush_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle)'>int   PHYSFS_flush (<b>PHYSFS_File</b> * handle)</a></h2>
+<p class="Pp">Flush a buffered PhysicsFS file handle. For buffered files opened
+    for writing, this will put the current contents of the buffer to disk and
+    flag the buffer as empty if possible.</p>
+<p class="Pp">For buffered files opened for reading or unbuffered files, this is
+    a safe no-op, and will report success.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>handle</i> handle returned from PHYSFS_open*().</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">nonzero if successful, zero on error.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_setBuffer</b>
+<p class="Pp"><b>PHYSFS_close</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_PHYSFS_freeList_(void_*_listVar)'><a class='permalink' href='#void_PHYSFS_freeList_(void_*_listVar)'>void   PHYSFS_freeList (void * listVar)</a></h2>
+<p class="Pp">Deallocate resources of lists returned by PhysicsFS. Certain
+    PhysicsFS functions return lists of information that are dynamically
+    allocated. Use this function to free those resources.</p>
+<p class="Pp">It is safe to pass a NULL here, but doing so will cause a crash in
+    versions before PhysicsFS 2.1.0.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>listVar</i> List of information specified as freeable
+  by this function. Passing NULL is safe; it is a valid no-op.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_getCdRomDirs</b>
+<p class="Pp"><b>PHYSFS_enumerateFiles</b></p>
+<p class="Pp"><b>PHYSFS_getSearchPath</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">const <b>PHYSFS_Allocator</b> * PHYSFS_getAllocator (void )</h2>
+<p class="Pp">Discover the current allocator. (This is for limited, hardcore
+    use. If you don't immediately see a need for it, you can probably ignore
+    this forever.)</p>
+<p class="Pp">This function exposes the function pointers th
+at make up the
+    currently used allocator. This can be useful for apps that want to access
+    PhysicsFS's internal, default allocation routines, as well as for external
+    code that wants to share the same allocator, even if the application
+    specified their own.</p>
+<p class="Pp">This call is only valid between <b>PHYSFS_init()</b> and
+    <b>PHYSFS_deinit()</b> calls; it will return NULL if the library isn't
+    initialized. As we can't guarantee the state of the internal allocators
+    unless the library is initialized, you shouldn't use any allocator returned
+    here after a call to <b>PHYSFS_deinit()</b>.</p>
+<p class="Pp">Do not call the returned allocator's Init() or Deinit() methods
+    under any circumstances.</p>
+<p class="Pp">If you aren't immediately sure what to do with this function, you
+    can safely ignore it altogether.</p>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">Current allocator, as set by
+  <b>PHYSFS_setAllocator()</b>, or PhysicsFS's internal, default allocator if no
+  application defined allocator is currently set. Will return NULL if the
+  library is not initialized.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_Allocator</b>
+<p class="Pp"><b>PHYSFS_setAllocator</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getBaseDir_(void_)'><a class='permalink' href='#const_char_*_PHYSFS_getBaseDir_(void_)'>const   char * PHYSFS_getBaseDir (void )</a></h2>
+<p class="Pp">Get the path where the application resides. Helper function.</p>
+<p class="Pp">Get the &quot;base dir&quot;. This is the directory where the
+    application was run from, which is probably the installation directory, and
+    may or may not be the process's current working directory.</p>
+<p class="Pp">You should probably use the base dir in your search path.</p>
+<p class="Pp"><b>Warning</b></p>
+<div class="Bd-indent">On most platforms, this is a directory; on Android, this
+  gives you the path to the app's package (APK) file. As APK files are just .zip
+  files, you can mount them in PhysicsFS like regular directories. You'll
+  probably want to call PHYSFS_setRoot(basedir, &quot;/assets&quot;) after
+  mounting to make your app's actual data available directly without all the
+  Android metadata and directory offset. Note that if you passed a NULL to
+  <b>PHYSFS_init()</b>, you will not get the APK file here.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">READ ONLY string of base dir in platform-dependent
+  notation.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_getPrefDir</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='char_**_PHYSFS_getCdRomDirs_(void_)'><a class='permalink' href='#char_**_PHYSFS_getCdRomDirs_(void_)'>char   ** PHYSFS_getCdRomDirs (void )</a></h2>
+<p class="Pp">Get an array of paths to available CD-ROM drives. The dirs
+    returned are platform-dependent (&quot;D:\&quot; on Win32,
+    &quot;/cdrom&quot; or whatnot on Unix). Dirs are only returned if there is a
+    disc ready and accessible in the drive. So if you've got two drives (D: and
+    E:), and only E: has a disc in it, then that's all you get. If the user
+    inserts a disc in D: and you call this function again, you get both drives.
+    If, on a Unix box, the user unmounts a disc and remounts it elsewhere, the
+    next call to this function will reflect that change.This function refers to
+    &quot;CD-ROM&quot; media, but it really means &quot;inserted disc
+    media,&quot; such as DVD-ROM, HD-DVD, CDRW, and Blu-Ray discs. It looks for
+    filesystems, and as such won't report an audio CD, unless there's a mounted
+    filesystem track on it.The returned value is an array of strings, with a
+    NULL entry to signify the end of the list:@code char **cds =
+    PHYSFS_getCdRomDirs();char **i;for (i = cds; *i != NULL; i++)
+    printf(&quot;cdrom dir [s] is available.
+  <br/>
+  &quot;, *i);</p>
+<p class="Pp">PHYSFS_freeList(cds);</p>
+<p class="Pp">This call may block while drives spin up. Be forewarned.</p>
+<p class="Pp">When you are done with the returned information, you may dispose
+    of the resources by calling <b>PHYSFS_freeList()</b> with the returned
+    pointer.</p>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">Null-terminated array of null-terminated strings.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_getCdRomDirsCallback</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_PHYSFS_getCdRomDirsCallback_(&lt;b&gt;PHYSFS_StringCallback&lt;/b&gt;_c,_void_*_d)'><a class='permalink' href='#void_PHYSFS_getCdRomDirsCallback_(&lt;b&gt;PHYSFS_StringCallback&lt;/b&gt;_c,_void_*_d)'>void   PHYSFS_getCdRomDirsCallback (<b>PHYSFS_StringCallback</b> c, void *   d)</a></h2>
+<p class="Pp">Enumerate CD-ROM directories, using an application-defined
+    callback. Internally, <b>PHYSFS_getCdRomDirs()</b> just calls this function
+    and then builds a list before returning to the application, so functionality
+    is identical except for how the information is represented to the
+    application.</p>
+<p class="Pp">Unlike <b>PHYSFS_getCdRomDirs()</b>, this function does not return
+    an array. Rather, it calls a function specified by the application once per
+    detected disc:</p>
+<pre>static void foundDisc(void *data, const char *cddir)
+{
+    printf(&quot;cdrom dir [%s] is available.\n&quot;, cddir);
+}
+// ...
+PHYSFS_getCdRomDirsCallback(foundDisc, NULL);</pre>
+<p class="Pp">This call may block while drives spin up. Be forewarned.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>c</i> Callback function to notify about detected
+  drives.
+<br/>
+<i>d</i> Application-defined data passed to callback. Can be NULL.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_StringCallback</b>
+<p class="Pp"><b>PHYSFS_getCdRomDirs</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getDirSeparator_(void_)'><a class='permalink' href='#const_char_*_PHYSFS_getDirSeparator_(void_)'>const   char * PHYSFS_getDirSeparator (void )</a></h2>
+<p class="Pp">Get platform-dependent dir separator string. This returns
+    &quot;\\&quot; on win32, &quot;/&quot; on Unix, and &quot;:&quot; on MacOS.
+    It may be more than one character, depending on the platform, and your code
+    should take that into account. Note that this is only useful for setting up
+    the search/write paths, since access into those dirs always use '/'
+    (platform-independent notation) to separate directories. This is also handy
+    for getting platform-independent access when using stdio calls.</p>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">READ ONLY null-terminated string of platform's dir
+  separator.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getErrorByCode_(&lt;b&gt;PHYSFS_ErrorCode&lt;/b&gt;_code)'><a class='permalink' href='#const_char_*_PHYSFS_getErrorByCode_(&lt;b&gt;PHYSFS_ErrorCode&lt;/b&gt;_code)'>const   char * PHYSFS_getErrorByCode (<b>PHYSFS_ErrorCode</b> code)</a></h2>
+<p class="Pp">Get human-readable description string for a given error code. Get
+    a static string, in UTF-8 format, that represents an English description of
+    a given error code.</p>
+<p class="Pp">This string is guaranteed to never change (although we may add new
+    strings for new error codes in later versions of PhysicsFS), so you can use
+    it for keying a localization dictionary.</p>
+<p class="Pp">It is safe to call this function at anytime, even before
+    <b>PHYSFS_init()</b>.</p>
+<p class="Pp">These strings are meant to be passed on directly to the user.
+    Generally, applications should only concern themselves with whether a given
+    function failed, but not care about the specifics much.</p>
+<p class="Pp">Do not attempt to free the returned strings; they are read-only
+    and you don't own their memory pages.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>code</i> Error code to convert to a string.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">READ ONLY string of requested error message, NULL if this
+  is not a valid PhysicsFS error code. Always check for NULL if you might be
+  looking up an error code that didn't exist in an earlier version of
+  PhysicsFS.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_getLastErrorCode</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getLastError_(void_)'><a class='permalink' href='#const_char_*_PHYSFS_getLastError_(void_)'>const   char * PHYSFS_getLastError (void )</a></h2>
+<p class="Pp">Get human-readable error information.</p>
+<p class="Pp"><b>Deprecated</b></p>
+<div class="Bd-indent">Use <b>PHYSFS_getLastErrorCode()</b> and
+  <b>PHYSFS_getErrorByCode()</b> instead.</div>
+<p class="Pp"><b>Warning</b></p>
+<div class="Bd-indent">As of PhysicsFS 2.1, this function has been nerfed.
+  Before PhysicsFS 2.1, this function was the only way to get error details
+  beyond a given function's basic return value. This was meant to be a
+  human-readable string in one of several languages, and was not useful for
+  application parsing. This was a problem, because the developer and not the
+  user chose the language at compile time, and the PhysicsFS maintainers had to
+  (poorly) maintain a significant amount of localization work. The app couldn't
+  parse the strings, even if they counted on a specific language, since some
+  were dynamically generated. In 2.1 and later, this always returns a static
+  string in English; you may use it as a key string for your own localizations
+  if you like, as we'll promise not to change existing error strings. Also, if
+  your application wants to look at specific errors, we now offer a better
+  option: use <b>PHYSFS_getLastErrorCode()</b> instead.</div>
+<p class="Pp">Get the last PhysicsFS error message as a human-readable,
+    null-terminated string. This will return NULL if there's been no error since
+    the last call to this function. The pointer returned by this call points to
+    an internal buffer. Each thread has a unique error state associated with it,
+    but each time a new error message is set, it will overwrite the previous one
+    associated with that thread. It is safe to call this function at anytime,
+    even before <b>PHYSFS_init()</b>.</p>
+<p class="Pp"><b>PHYSFS_getLastError()</b> and <b>PHYSFS_getLastErrorCode()</b>
+    both reset the same thread-specific error state. Calling one will wipe out
+    the other's data. If you need both, call <b>PHYSFS_getLastErrorCode()</b>,
+    then pass that value to <b>PHYSFS_getErrorByCode()</b>.</p>
+<p class="Pp">As of PhysicsFS 2.1, this function only presents text in the
+    English language, but the strings are static, so you can use them as keys
+    into your own localization dictionary. These strings are meant to be passed
+    on directly to the user.</p>
+<p class="Pp">Generally, applications should only concern themselves with
+    whether a given function failed; however, if your code require more
+    specifics, you should use <b>PHYSFS_getLastErrorCode()</b> instead of this
+    function.</p>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">READ ONLY string of last error message.</div>
+<p class="Pp"><b>See also</b></p>
+<div class="Bd-indent"><b>PHYSFS_getLastErrorCode</b>
+<p class="Pp"><b>PHYSFS_getErrorByCode</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_ErrorCode</b> PHYSFS_getLastErrorCode (void )</h2>
+<p class="Pp">Get machine-readable error information. Get the last PhysicsFS
+    error message as an integer value. This will return PHYSFS_ERR_OK if there's
+    been no error since the last call to this function. Each thread has a unique
+    error state associated with it, but each time a new error message is set, it
+    will overwrite the previous one associated with that thread. It is safe to
+    call this function at anytime, even before <b>PHYSFS_init()</b>.</p>
+<p class="Pp"><b>PHYSFS_getLastError()</b> and <b>PHYSFS_getLastErrorCode()</b>
+ike <b>PHYSFS_getSearchPath()</b>، لا تُرجع هذه الدالة مصفوفة. بدلاً من ذلك، تستدعي دالة محددة من قبل التطبيق مرة واحدة لكل عنصر في مسار البحث:</p>
+<pre>static void printSearchPath(void *data, const char *pathItem)
+{
+    printf(&quot;[%s] is in the search path.\n&quot;, pathItem);
+}
+// ...
+PHYSFS_getSearchPathCallback(printSearchPath, NULL);</pre>
+<p class="Pp">يتم الإبلاغ عن عناصر مسار البحث بترتيب أولوية البحث، لذا فإن الأرشيف/الدليل الأول الذي سيتم فحصه عند البحث عن ملف هو العنصر الأول الذي يتم تمريره عبر الدالة الاستدعائية.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>c</i> الدالة الاستدعائية للإبلاغ عن عناصر مسار البحث.
+<br/>
+<i>d</i> البيانات المحددة من قبل التطبيق التي يتم تمريرها إلى الدالة الاستدعائية. يمكن أن تكون NULL.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_StringCallback</b>
+<p class="Pp"><b>PHYSFS_getSearchPath</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getUserDir_(void_)'><a class='permalink' href='#const_char_*_PHYSFS_getUserDir_(void_)'>const   char * PHYSFS_getUserDir (void )</a></h2>
+<p class="Pp">الحصول على المسار حيث يوجد الدليل الرئيسي للمستخدم.</p>
+<p class="Pp"><b>مهمل</b></p>
+<div class="Bd-indent">اعتبارًا من PhysicsFS 2.1، من المحتمل أن ترغب في استخدام
+  <b>PHYSFS_getPrefDir()</b>.</div>
+<p class="Pp">دالة مساعدة.</p>
+<p class="Pp">الحصول على &quot;دليل المستخدم&quot;. يُقصد بهذا أن يكون اقتراحًا للمكان الذي يمكن للمستخدم معين للنظام تخزين الملفات فيه. في أنظمة Unix، هذا هو دليله الرئيسي. على الأنظمة التي لا يوجد بها مفهوم لدلائل رئيسية متعددة (MacOS، win95)، سيكون هذا افتراضيًا لشيء مثل
+  &quot;C:\mybasedir\users\username&quot; حيث سيكون &quot;username&quot; إما اسم تسجيل الدخول، أو &quot;default&quot; إذا لم يدعم النظام الأساسي المستخدمين المتعددين أيضًا.</p>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">سلسلة نصية للقراءة فقط لدليل المستخدم بتنسيق يعتمد على النظام الأساسي.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_getBaseDir</b>
+<p class="Pp"><b>PHYSFS_getPrefDir</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='const_char_*_PHYSFS_getWriteDir_(void_)'><a class='permalink' href='#const_char_*_PHYSFS_getWriteDir_(void_)'>const   char * PHYSFS_getWriteDir (void )</a></h2>
+<p class="Pp">الحصول على المسار حيث سيسمح PhysicsFS بالكتابة. الحصول على دليل الكتابة الحالي. دليل الكتابة الافتراضي هو NULL.</p>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">سلسلة نصية للقراءة فقط لدليل الكتابة بتنسيق يعتمد على النظام الأساسي، أو NULL إذا لم يتم تعيين مسار كتابة حاليًا.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_setWriteDir</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_init_(const_char_*_argv0)'><a class='permalink' href='#int_PHYSFS_init_(const_char_*_argv0)'>int   PHYSFS_init (const char * argv0)</a></h2>
+<p class="Pp">تهيئة مكتبة PhysicsFS. يجب استدعاء هذا قبل أي دالة أخرى من PhysicsFS.</p>
+<p class="Pp">يجب استدعاء هذا قبل أي محاولات لتغيير دليل العمل الحالي لعمليتك.</p>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">على Android، يجب أن يكون argv0 مؤشرًا غير NULL إلى هيكل PHYSFS_AndroidInit. يجب أن يحتوي هذا الهيكل على JNIEnv * صالح وكائن JNI jobject لسياق (سياق التطبيق أو النشاط الحالي على حد سواء). يتم تحويل كلاهما إلى void * حتى لا نحتاج إلى تضمين jni.h في أي مكان يتم فيه تضمين
+  <b>physfs.h</b>. يستخدم PhysicsFS هذه الكائنات للاستعلام عن بعض تفاصيل النظام. لا يحتفظ PhysicsFS بمرجع لـ JNIEnv أو السياق بعد استدعاء
+  <b>PHYSFS_init()</b>. إذا قمت بتمرير NULL هنا، يمكن أن ينجح PHYSFS_init، ولكن <b>PHYSFS_getBaseDir()</b> و <b>PHYSFS_getPrefDir()</b> ستكونان غير صحيحتين.</div>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>argv0</i> السلسلة النصية argv[0] التي تم تمريرها إلى الدالة الرئيسية لبرنامجك. قد تكون NULL على معظم الأنظمة الأساسية (مثل تلك التي لا تحتوي على دالة main() قياسية)، ولكن يجب عليك دائمًا محاولة تمرير شيء ما هنا. تحتاج العديد من الأنظمة الشبيهة بـ Unix إلى تمرير argv[0] من main() هنا. انظر التحذير بشأن Android أيضًا!</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية عند النجاح، صفر عند الخطأ. يمكن الحصول على تفاصيل الخطأ من <b>PHYSFS_getLastError()</b>.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_deinit</b>
+<p class="Pp"><b>PHYSFS_isInit</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_isDirectory_(const_char_*_fname)'><a class='permalink' href='#int_PHYSFS_isDirectory_(const_char_*_fname)'>int   PHYSFS_isDirectory (const char * fname)</a></h2>
+<p class="Pp">تحديد ما إذا كان ملف في مسار البحث هو دليل فعليًا.</p>
+<p class="Pp"><b>مهمل</b></p>
+<div class="Bd-indent">اعتبارًا من PhysicsFS 2.1، استخدم <b>PHYSFS_stat()</b> بدلاً من ذلك. هذه الدالة تقوم فقط بتغليفها على أي حال.</div>
+<p class="Pp">تحديد ما إذا كان أول ظهور لـ (fname) في مسار البحث هو بالفعل إدخال دليل.</p>
+<p class="Pp">لاحظ أنه يتم تجاهل الإدخالات التي هي روابط رمزية إذا لم يتم استدعاء PHYSFS_permitSymbolicLinks(1)، ولذلك، قد ينتهي بك الأمر إلى أبعد في مسار البحث مما هو متوقع.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>fname</i> اسم الملف بتنسيق مستقل عن النظام الأساسي.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية إذا كان اسم الملف موجودًا وهو دليل. صفر بخلاف ذلك.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_stat</b>
+<p class="Pp"><b>PHYSFS_exists</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_isInit_(void_)'><a class='permalink' href='#int_PHYSFS_isInit_(void_)'>int   PHYSFS_isInit (void )</a></h2>
+<p class="Pp">تحديد ما إذا كانت مكتبة PhysicsFS مهيأة. بمجرد أن تُرجع <b>PHYSFS_init()</b> بنجاح، ستُرجع هذه الدالة قيمة غير صفرية. قبل <b>PHYSFS_init()</b> ناجحة وبعد أن تُرجع <b>PHYSFS_deinit()</b> بنجاح، ستُرجع هذه الدالة صفرًا. هذه الدالة آمنة للاستدعاء في أي وقت.</p>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية إذا كانت المكتبة مهيأة، صفر إذا لم تكن المكتبة مهيأة.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_init</b>
+<p class="Pp"><b>PHYSFS_deinit</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_isSymbolicLink_(const_char_*_fname)'><a class='permalink' href='#int_PHYSFS_isSymbolicLink_(const_char_*_fname)'>int   PHYSFS_isSymbolicLink (const char * fname)</a></h2>
+<p class="Pp">تحديد ما إذا كان ملف في مسار البحث هو رابط رمزي فعليًا.</p>
+<p class="Pp"><b>مهمل</b></p>
+<div class="Bd-indent">اعتبارًا من PhysicsFS 2.1، استخدم <b>PHYSFS_stat()</b> بدلاً من ذلك. هذه الدالة تقوم فقط بتغليفها على أي حال.</div>
+<p class="Pp">تحديد ما إذا كان أول ظهور لـ (fname) في مسار البحث هو رابط رمزي فعليًا.</p>
+<p class="Pp">لاحظ أنه يتم تجاهل الإدخالات التي هي روابط رمزية إذا لم يتم استدعاء PHYSFS_permitSymbolicLinks(1)، ونتيجة لذلك، ستُرجع هذه الدالة دائمًا 0 في هذه الحالة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>fname</i> اسم الملف بتنسيق مستقل عن النظام الأساسي.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية إذا كان اسم الملف موجودًا وهو رابط رمزي. صفر بخلاف ذلك.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_stat</b>
+<p class="Pp"><b>PHYSFS_exists</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_mkdir_(const_char_*_dirName)'><a class='permalink' href='#int_PHYSFS_mkdir_(const_char_*_dirName)'>int   PHYSFS_mkdir (const char * dirName)</a></h2>
+<p class="Pp">إنشاء دليل. يتم تحديد هذا بتنسيق مستقل عن النظام الأساسي فيما يتعلق بدليل الكتابة. يتم أيضًا إنشاء جميع الدلائل الأصلية المفقودة إذا كانت لا تزال موجودة.</p>
+<p class="Pp">لذا، إذا كان لديك دليل الكتابة معينًا على
+  &quot;C:\mygame\writedir&quot; واستدعيت
+  PHYSFS_mkdir(&quot;downloads/maps&quot;) فسيتم إنشاء الدلائل
+  &quot;C:\mygame\writedir\downloads&quot; و
+  &quot;C:\mygame\writedir\downloads\maps&quot; إن أمكن. إذا فشل إنشاء &quot;maps&quot; بعد أن نجحنا في إنشاء &quot;downloads&quot;، فإن الدالة تترك الدليل الذي تم إنشاؤه وتُبلغ عن الفشل.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>dirName</i> الدليل الجديد المراد إنشاؤه.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية عند النجاح، صفر عند الخطأ. استخدم
+  <b>PHYSFS_getLastErrorCode()</b> للحصول على الخطأ المحدد.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_delete</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_mount_(const_char_*_newDir,_const_char_*_mountPoint,_int_appendToPath)'><a class='permalink' href='#int_PHYSFS_mount_(const_char_*_newDir,_const_char_*_mountPoint,_int_appendToPath)'>int   PHYSFS_mount (const char * newDir, const char * mountPoint, int   appendToPath)</a></h2>
+<p class="Pp">إضافة أرشيف أو دليل إلى مسار البحث. إذا كان هذا تكرارًا، فلن يتم إضافة الإدخال مرة أخرى، حتى لو نجحت الدالة. لا يجوز لك إضافة نفس الأرشيف إلى نقطتي تثبيت مختلفتين: يتم إجراء التحقق من التكرار مقابل الأرشيف وليس نقطة التثبيت.</p>
+<p class="Pp">عندما تقوم بتثبيت أرشيف، يتم إضافته إلى نظام ملفات افتراضي... يتم استيعاب جميع الملفات في جميع الأرشيفات في شجرة ملفات هرمية واحدة. قد يكون للأرشيفات المثبتة في نفس المكان (أو أرشيف به ملفات متداخلة مع نقطة تثبيت أخرى) ملفات متداخلة: في هذه الحالة، يتم تحديد الملف الأقدم في مسار البحث، وتصبح الملفات الأخرى غير قابلة للوصول للتطبيق. يسمح هذا باستخدام الأرشيفات لتجاوز الإصدارات السابقة؛ يمكنك استخدام آلية التثبيت لوضع الأرشيفات في نقطة معينة في شجرة الملفات ومنع التداخل؛ هذا مفيد للتعديلات القابلة للتنزيل التي قد تدمر بيانات التطبيق أو تتداخل مع بعضها البعض، على سبيل المثال.</p>
+<p class="Pp">لا يلزم أن يكون نقطة التثبيت موجودة قبل التثبيت، وهذا يختلف عما قد يتوقعه أولئك المألوفون مع مفهوم &quot;التثبيت&quot; في Unix. بالإضافة إلى ذلك، يمكن تثبيت أكثر من أرشيف واحد في نفس نقطة التثبيت، أو يمكن أن تتداخل نقاط التثبيت ومحتويات الأرشيف... لا تزال آلية الاستيعاب تعمل كالمعتاد.</p>
+<p class="Pp">يُسمح بتحديد رابط رمزي لأرشيف أو دليل هنا، بغض النظر عن حالة <b>PHYSFS_permitSymbolicLinks()</b>. تتعامل تلك الدالة فقط مع الروابط الرمزية داخل الدليل المثبت أو الأرشيف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>newDir</i> الدليل أو الأرشيف المراد إضافته إلى المسار، بتنسيق يعتمد على النظام الأساسي.
+<br/>
+<i>mountPoint</i> الموقع في الشجرة المستوعبة حيث سيتم &quot;تثبيت&quot; هذا الأرشيف، بتنسيق مستقل عن النظام الأساسي. NULL أو &quot;&quot; يعادل &quot;/&quot;.
+<br/>
+<i>appendToPath</i> قيمة غير صفرية للإلحاق بمسار البحث، صفر للإضافة في البداية.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية إذا تمت إضافته إلى المسار، صفر عند الفشل (أرشيف غير صالح، دليل مفقود، إلخ). استخدم <b>PHYSFS_getLastErrorCode()</b> للحصول على الخطأ المحدد.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_removeFromSearchPath</b>
+<p class="Pp"><b>PHYSFS_getSearchPath</b></p>
+<p class="Pp"><b>PHYSFS_getMountPoint</b></p>
+<p class="Pp"><b>PHYSFS_mountIo</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_mountHandle_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_const_char_*_newDir,_const_char_*_mountPoint,_int_appendToPath)'><a class='permalink' href='#int_PHYSFS_mountHandle_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_const_char_*_newDir,_const_char_*_mountPoint,_int_appendToPath)'>int   PHYSFS_mountHandle (<b>PHYSFS_File</b> * file, const char * newDir, const char   * mountPoint, int ap
+Sections:
+- Title: int PHYSFS_mountPath (const char * archive, const char * mountPoint, int appendToPath)
+  SeeAlso:
+  - Title: PHYSFS_unmount
+  - Title: PHYSFS_getSearchPath
+  - Title: PHYSFS_getMountPoint
+  Content: |
+    Mount an archive at a specified location in the virtual filesystem.
+
+    This function will attempt to open the specified archive file and add it to the
+    search path.
+
+    (archive) is the path to the archive file on the physical filesystem.
+    (mountPoint) is the location in the virtual filesystem where this archive will be mounted.
+    If mountPoint is NULL or an empty string, it defaults to the root directory ("/").
+    (appendToPath) is a boolean flag: if true, the archive is appended to the end of the
+    search path; if false, it is prepended to the beginning.
+
+    If (archive) is not a valid archive format that PhysFS understands, this function
+    will fail.
+
+    Warning
+
+    Unless you have some special, low-level need, you should be using
+    PHYSFS_mount() instead of this.
+
+    Note that entries that are symlinks are ignored if PHYSFS_permitSymbolicLinks(1)
+    hasn't been called, and attempting to mount a symlink with this function will
+    fail in such a case.
+
+    Parameters
+    - archive: Path to the archive file.
+    - mountPoint: Virtual filesystem mount point.
+    - appendToPath: Boolean indicating whether to append or prepend to the search path.
+
+    Returns
+    nonzero on success, zero on failure. Use PHYSFS_getLastErrorCode() to get the
+    specific error.
+- Title: int PHYSFS_mountIo (PHYSFS_Io * io, const char * newDir, const char * mountPoint, int appendToPath)
+  SeeAlso:
+  - Title: PHYSFS_unmount
+  - Title: PHYSFS_getSearchPath
+  - Title: PHYSFS_getMountPoint
+  Content: |
+    Add an archive, built on a PHYSFS_Io, to the search path.
+
+    Warning
+
+    Unless you have some special, low-level need, you should be using
+    PHYSFS_mount() instead of this.
+
+    This function operates just like PHYSFS_mount(), but takes
+    a PHYSFS_Io instead of a pathname. Behind the scenes,
+    PHYSFS_mount() calls this function with a physical-filesystem-based
+    PHYSFS_Io.
+
+    (newDir) must be a unique string to identify this archive. It is
+    used to optimize archiver selection (if you name it XXXXX.zip, we might try
+    the ZIP archiver first, for example, or directly choose an archiver that can
+    only trust the data is valid by filename extension). It doesn't need to
+    refer to a real file at all. If the filename extension isn't helpful, the
+    system will try every archiver until one works or none of them do. This
+    filename must be unique, as the system won't allow you to have two archives
+    with the same name.
+
+    (io) must remain until the archive is unmounted. When the archive
+    is unmounted, the system will call (io)->destroy(io), which will give you
+    a chance to free your resources.
+
+    If this function fails, (io)->destroy(io) is not called.
+
+    Parameters
+    - io: i/o instance for archive to add to the path.
+    - newDir: Filename that can represent this stream.
+    - mountPoint: Location in the interpolated tree that this archive will be
+      "mounted", in platform-independent notation. NULL or "" is
+      equivalent to "/".
+    - appendToPath: nonzero to append to search path, zero to prepend.
+
+    Returns
+    nonzero if added to path, zero on failure (bogus archive,
+    stream i/o issue, etc). Use PHYSFS_getLastErrorCode() to obtain the
+    specific error.
+- Title: int PHYSFS_mountMemory (const void * buf, PHYSFS_uint64 len, void(* del )(void *), const char * newDir, const char * mountPoint, int appendToPath)
+  SeeAlso:
+  - Title: PHYSFS_unmount
+  - Title: PHYSFS_getSearchPath
+  - Title: PHYSFS_getMountPoint
+  Content: |
+    Add an archive, contained in a memory buffer, to the search
+    path.
+
+    Warning
+
+    Unless you have some special, low-level need, you should be using
+    PHYSFS_mount() instead of this.
+
+    This function operates just like PHYSFS_mount(), but takes
+    a memory buffer instead of a pathname. This buffer contains all the data of
+    the archive, and is used instead of a real file in the physical
+    filesystem.
+
+    (newDir) must be a unique string to identify this archive. It is
+    used to optimize archiver selection (if you name it XXXXX.zip, we might try
+    the ZIP archiver first, for example, or directly choose an archiver that can
+    only trust the data is valid by filename extension). It doesn't need to
+    refer to a real file at all. If the filename extension isn't helpful, the
+    system will try every archiver until one works or none of them do. This
+    filename must be unique, as the system won't allow you to have two archives
+    with the same name.
+
+    (ptr) must remain until the archive is unmounted. When the archive
+    is unmounted, the system will call (del)(ptr), which will notify you that
+    the system is done with the buffer, and give you a chance to free your
+    resources. (del) can be NULL, in which case the system will make no attempt
+    to free the buffer.
+
+    If this function fails, (del) is not called.
+
+    Parameters
+    - buf: Address of the memory buffer containing the
+      archive data.
+    - len: Size of memory buffer, in bytes.
+    - del: A callback that triggers upon unmount. Can be NULL.
+    - newDir: Filename that can represent this stream.
+    - mountPoint: Location in the interpolated tree that this archive will be
+      "mounted", in platform-independent notation. NULL or "" is
+      equivalent to "/".
+    - appendToPath: nonzero to append to search path, zero to prepend.
+
+    Returns
+    nonzero if added to path, zero on failure (bogus archive,
+    etc). Use PHYSFS_getLastErrorCode() to obtain the specific error.
+- Title: PHYSFS_File * PHYSFS_openAppend (const char * filename)
+  SeeAlso:
+  - Title: PHYSFS_openRead
+  - Title: PHYSFS_openWrite
+  - Title: PHYSFS_write
+  - Title: PHYSFS_close
+  Content: |
+    Open a file for appending. Open a file for writing, in
+    platform-independent notation and in relation to the write dir as the root
+    of the writable filesystem. The specified file is created if it doesn't
+    exist. If it does exist, the writing offset is set to the end of the file,
+    so the first write will be the byte after the end.
+
+    Note that entries that are symlinks are ignored if
+    PHYSFS_permitSymbolicLinks(1) hasn't been called, and opening a symlink with
+    this function will fail in such a case.
+
+    Parameters
+    - filename: File to open.
+
+    Returns
+    A valid PhysicsFS filehandle on success, NULL on error.
+    Use PHYSFS_getLastErrorCode() to obtain the specific error.
+- Title: PHYSFS_File * PHYSFS_openRead (const char * filename)
+  SeeAlso:
+  - Title: PHYSFS_openWrite
+  - Title: PHYSFS_openAppend
+  - Title: PHYSFS_read
+  - Title: PHYSFS_close
+  Content: |
+    Open a file for reading. Open a file for reading, in
+    platform-independent notation. The search path is checked one at a time
+    until a matching file is found, in which case an abstract filehandle is
+    associated with it, and reading may be done. The reading offset is set to
+    the first byte of the file.
+
+    Note that entries that are symlinks are ignored if
+    PHYSFS_permitSymbolicLinks(1) hasn't been called, and opening a symlink with
+    this function will fail in such a case.
+
+    Parameters
+    - filename: File to open.
+
+    Returns
+    A valid PhysicsFS filehandle on success, NULL on error.
+    Use PHYSFS_getLastErrorCode() to obtain the specific error.
+- Title: PHYSFS_File * PHYSFS_openWrite (const char * filename)
+  SeeAlso:
+  - Title: PHYSFS_openRead
+  - Title: PHYSFS_openAppend
+  - Title: PHYSFS_write
+  - Title: PHYSFS_close
+  Content: |
+    Open a file for writing. Open a file for writing, in
+    platform-independent notation and in relation to the write dir as the root
+    of the writable filesystem. The specified file is created if it doesn't
+    exist. If it does exist, it is truncated to zero bytes, and the writing
+    offset is set to the start.
+
+    Note that entries that are symlinks are ignored if
+    PHYSFS_permitSymbolicLinks(1) hasn't been called, and opening a symlink with
+    this function will fail in such a case.
+
+    Parameters
+    - filename: File to open.
+
+    Returns
+    A valid PhysicsFS filehandle on success, NULL on error.
+    Use PHYSFS_getLastErrorCode() to obtain the specific error.
+
+<div class="Ss">
+<h2 class="Ss" id='void_PHYSFS_permitSymbolicLinks_(int_allow)'><a class='permalink' href='#void_PHYSFS_permitSymbolicLinks_(int_allow)'>void   PHYSFS_permitSymbolicLinks (int allow)</a></h2>
+<p class="Pp">يُمكّن أو يعطّل تتبع الروابط الرمزية. تحتوي بعض أنظمة الملفات المادية والهياكل على ملفات هي مجرد مؤشرات لملفات أخرى. عند فتح رابط رمزي في نظام مادي، سيتم فتح الملف الذي يشير إليه بشفافية.</p>
+<p class="Pp">افتراضيًا، سيتحقق PhysicsFS مما إذا كان الملف رابطًا رمزيًا أثناء استدعاءات الفتح وسيفشل إذا كان كذلك. خلاف ذلك، قد يقودك الرابط خارج مسارات القراءة والكتابة، مما يعرّض الأمان للخطر.</p>
+<p class="Pp">إذا كنت ترغب في تحمل هذا المخاطرة، استدعِ هذه الوظيفة بقيمة غير صفرية. لاحظ أن هذا ينطبق بشكل أكبر على بيئات الحماية (sandboxing) الخاصة بلغات البرمجة النصية في برنامج ما، في حالة محاولة البرامج النصية غير الموثوق بها اختراق النظام. بشكل عام، قد يكون لدى المستخدم سبب شرعي لإنشاء رابط رمزي، لذلك لا يجب عليك تعطيلها، إلا إذا شعرت أن هناك خطرًا محددًا في السماح بها.</p>
+<p class="Pp">سيتم رؤية الروابط الرمزية فقط عند التعامل مع أسماء الملفات بتدوين مستقل عن نظام التشغيل. أي، عند إعداد مسارات البحث والكتابة الخاصة بك، وما إلى ذلك، لن يتم رؤية الروابط الرمزية أبدًا.</p>
+<p class="Pp">ملاحظة: <b>PHYSFS_stat()</b> سيتحقق دائمًا من المسار المحدد؛ إذا كان هذا المسار رابطًا رمزيًا، فلن يتم اتباعه بأي حال من الأحوال. إذا لم تكن الروابط الرمزية مسموحة عبر هذه الوظيفة، فإن <b>PHYSFS_stat()</b> سيتجاهلها وسيتم التعامل مع الاستعلام كما لو أن المسار غير موجود.</p>
+<p class="Pp">يمكن تمكين أو تعطيل السماح بالروابط الرمزية في أي وقت بعد استدعاء <b>PHYSFS_init()</b>، وهي معطلة افتراضيًا.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>allow</i> قيمة غير صفرية للسماح بالروابط الرمزية، صفر لتعطيل الروابط.</div>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_symbolicLinksPermitted</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_read (<b>PHYSFS_File</b> * handle, void * buffer, <b>PHYSFS_uint32</b> objSize, <b>PHYSFS_uint32</b> objCount)</h2>
+<p class="Pp">يقرأ بيانات من ملف PhysicsFS. يجب أن يكون الملف مفتوحًا للقراءة.</p>
+<p class="Pp"><b>الوصف</b></p>
+<div class="Bd-indent">منذ PhysicsFS 2.1، استخدم <b>PHYSFS_readBytes()</b> بدلاً من ذلك. هذه الوظيفة هي مجرد غلاف لها. لم توضح هذه الوظيفة أبدًا ما سيحدث إذا تم قراءة كائن جزئي، لذا فإن العمل على مستوى البايت يجعله أنظف للجميع، خاصة الآن عندما يمكن توفير واجهات <b>PHYSFS_Io</b> من قبل المستخدم.</div>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>handle</i> المقبض الذي تم إرجاعه بواسطة <b>PHYSFS_openRead()</b>.
+<br/>
+<i>buffer</i> المخزن المؤقت لتخزين البيانات المقروءة.
+<br/>
+<i>objSize</i> حجم الكائنات المراد قراءتها بالبايت (المقبض).
+<br/>
+<i>objCount</i> عدد الكائنات (objSize) المراد قراءتها (المقبض).</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">عدد الكائنات المقروءة. يمكن لـ <b>PHYSFS_getLastErrorCode()</b> عرض سبب كون هذا <objCount)، وكذلك <b>PHYSFS_eof()</b>. -1 في حالة الفشل الكامل.</div>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_readBytes</b>
+<p class="Pp"><b>PHYSFS_eof</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_readBytes (<b>PHYSFS_File</b> * handle, void * buffer, <b>PHYSFS_uint64</b> len)</h2>
+<p class="Pp">يقرأ بايتات من ملف PhysicsFS. يجب أن يكون الملف مفتوحًا للقراءة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>handle</i> المقبض الذي تم إرجاعه بواسطة <b>PHYSFS_openRead()</b>.
+<br/>
+<i>buffer</i> المخزن المؤقت الذي يحتوي على (len) بايت على الأقل لتخزين البيانات المقروءة.
+<br/>
+<i>len</i> عدد البايتات المراد قراءتها (المقبض).</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">عدد البايتات المقروءة. يمكن أن يكون هذا أقل من (len)؛ لا يعني هذا حدوث خطأ (قراءة قصيرة قد تعني نهاية الملف). يمكن لـ <b>PHYSFS_getLastErrorCode()</b> عرض سبب كون هذا <len)، وكذلك <b>PHYSFS_eof()</b>. -1 في حالة الفشل الكامل.</div>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_eof</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint16&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint16&lt;/b&gt;_*_val)'>int   PHYSFS_readSBE16 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint16</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق big-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق big-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint32&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint32&lt;/b&gt;_*_val)'>int   PHYSFS_readSBE32 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint32</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق big-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق big-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint64&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint64&lt;/b&gt;_*_val)'>int   PHYSFS_readSBE64 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint64</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 64 بت بتنسيق big-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 64 بت بتنسيق big-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>ملاحظة</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_sint64</b> هو 32 بت فقط على المنصات التي لا تدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSLE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint16&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSLE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint16&lt;/b&gt;_*_val)'>int   PHYSFS_readSLE16 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint16</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق little-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق little-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSLE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint32&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSLE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint32&lt;/b&gt;_*_val)'>int   PHYSFS_readSLE32 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint32</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق little-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق little-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readSLE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint64&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readSLE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_sint64&lt;/b&gt;_*_val)'>int   PHYSFS_readSLE64 (<b>PHYSFS_File</b> * file, <b>PHYSFS_sint64</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 64 بت بتنسيق little-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 64 بت بتنسيق little-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>ملاحظة</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_sint64</b> هو 32 بت فقط على المنصات التي لا تدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readUBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readUBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_val)'>int   PHYSFS_readUBE16 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint16</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق big-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 16 بت بتنسيق big-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readUBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readUBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_val)'>int   PHYSFS_readUBE32 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint32</b> *   val)</a></h2>
+<p class="Pp">يقرأ ويحول قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق big-endian. وظيفة مساعدة ملائمة. تقرأ قيمة عدد صحيح غير موقّع بحجم 32 بت بتنسيق big-endian من الملف وتحولها إلى ترتيب بايتات النظام الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للقراءة منه.
+<br/>
+<i>val</i> مؤشر لتخزين القيمة فيه.</div>
+<p class="Pp"><b>القيمة المرجعة</b></p>
+<div class="Bd-indent">صفر في حالة الفشل، غير صفر في حالة النجاح. إذا نجحت، سيتم تخزين النتيجة في (*val). في حالة الفشل، يمكنك معرفة ما حدث من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+</b> *   val)</a></h2>
+<p class="Pp">اقرأ وحوّل قيمة 32 بت غير مؤشرة بترتيب bigendian. دالة مساعدة. اقرأ قيمة 32 بت غير مؤشرة بترتيب bigendian من ملف وقم بتحويلها إلى ترتيب البايت الأصلي للمنصة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS الذي سيتم القراءة منه.
+<br/>
+<i>val</i> مؤشر إلى المكان الذي سيتم تخزين القيمة فيه.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. إذا نجحت، سيقوم (*val) بتخزين النتيجة. عند الفشل، يمكنك معرفة سبب المشكلة من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readUBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readUBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_*_val)'>int   PHYSFS_readUBE64 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint64</b> *   val)</a></h2>
+<p class="Pp">اقرأ وحوّل قيمة 64 بت غير مؤشرة بترتيب bigendian. دالة مساعدة. اقرأ قيمة 64 بت غير مؤشرة بترتيب bigendian من ملف وقم بتحويلها إلى ترتيب البايت الأصلي للمنصة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS الذي سيتم القراءة منه.
+<br/>
+<i>val</i> مؤشر إلى المكان الذي سيتم تخزين القيمة فيه.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. إذا نجحت، سيقوم (*val) بتخزين النتيجة. عند الفشل، يمكنك معرفة سبب المشكلة من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر أن <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تحتوي على أي دعم لـ 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readULE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readULE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_val)'>int   PHYSFS_readULE16 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint16</b> *   val)</a></h2>
+<p class="Pp">اقرأ وحوّل قيمة 16 بت غير مؤشرة بترتيب littleendian. دالة مساعدة. اقرأ قيمة 16 بت غير مؤشرة بترتيب littleendian من ملف وقم بتحويلها إلى ترتيب البايت الأصلي للمنصة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS الذي سيتم القراءة منه.
+<br/>
+<i>val</i> مؤشر إلى المكان الذي سيتم تخزين القيمة فيه.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. إذا نجحت، سيقوم (*val) بتخزين النتيجة. عند الفشل، يمكنك معرفة سبب المشكلة من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readULE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readULE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_val)'>int   PHYSFS_readULE32 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint32</b> *   val)</a></h2>
+<p class="Pp">اقرأ وحوّل قيمة 32 بت غير مؤشرة بترتيب littleendian. دالة مساعدة. اقرأ قيمة 32 بت غير مؤشرة بترتيب littleendian من ملف وقم بتحويلها إلى ترتيب البايت الأصلي للمنصة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS الذي سيتم القراءة منه.
+<br/>
+<i>val</i> مؤشر إلى المكان الذي سيتم تخزين القيمة فيه.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. إذا نجحت، سيقوم (*val) بتخزين النتيجة. عند الفشل، يمكنك معرفة سبب المشكلة من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_readULE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_*_val)'><a class='permalink' href='#int_PHYSFS_readULE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_*_val)'>int   PHYSFS_readULE64 (<b>PHYSFS_File</b> * file, <b>PHYSFS_uint64</b> *   val)</a></h2>
+<p class="Pp">اقرأ وحوّل قيمة 64 بت غير مؤشرة بترتيب littleendian. دالة مساعدة. اقرأ قيمة 64 بت غير مؤشرة بترتيب littleendian من ملف وقم بتحويلها إلى ترتيب البايت الأصلي للمنصة.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS الذي سيتم القراءة منه.
+<br/>
+<i>val</i> مؤشر إلى المكان الذي سيتم تخزين القيمة فيه.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. إذا نجحت، سيقوم (*val) بتخزين النتيجة. عند الفشل، يمكنك معرفة سبب المشكلة من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر أن <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تحتوي على أي دعم لـ 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_registerArchiver_(const_&lt;b&gt;PHYSFS_Archiver&lt;/b&gt;_*_archiver)'><a class='permalink' href='#int_PHYSFS_registerArchiver_(const_&lt;b&gt;PHYSFS_Archiver&lt;/b&gt;_*_archiver)'>int   PHYSFS_registerArchiver (const <b>PHYSFS_Archiver</b> * archiver)</a></h2>
+<p class="Pp">إضافة عامل أرشيف جديد إلى النظام.</p>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">هذا للمستويات المتقدمة والصعبة. لا تحتاج إليه إلا إذا كنت تعرف حقًا ما تفعله. معظم التطبيقات لن تحتاج إليه.</div>
+<p class="Pp">إذا كنت تريد توفير عامل أرشيف خاص بك (على سبيل المثال، تنسيق ملف أرشيف مخصص، أو شيء افتراضي تريد أن يبدو كنظام ملفات يمكنك الوصول إليه عبر واجهات برمجة تطبيقات PhysicsFS العادية)، فهذا هو المكان الذي تبدأ منه. بمجرد تسجيل عامل الأرشيف بنجاح، يمكنك بعد ذلك استخدام <b>PHYSFS_mount()</b> لإضافة ملفات الأرشيف التي يدعمها عامل الأرشيف الخاص بك إلى مسار البحث، أو ربما استخدامه كدليل للكتابة. داخليًا، تستخدم PhysicsFS هذه الوظيفة لتسجيل عوامل الأرشيف المضمنة الخاصة بها، مثل دعم .zip، إلخ.</p>
+<p class="Pp">لا يمكنك الحصول على عاملي أرشيف يتعاملان مع نفس الامتداد. إذا كنت ستواجه تعارضًا، يمكنك إلغاء تسجيل عامل الأرشيف الآخر (بما في ذلك عوامل الأرشيف المضمنة) باستخدام <b>PHYSFS_deregisterArchiver()</b>.</p>
+<p class="Pp">يتم نسخ البيانات الموجودة في (archiver)؛ يمكنك تحرير هذا المؤشر عند عودة هذه الوظيفة.</p>
+<p class="Pp">بمجرد عودة هذه الوظيفة بنجاح، ستتمكن PhysicsFS من دعم ملفات الأرشيف من هذا النوع حتى تقوم بإلغاء تسجيل عامل الأرشيف مرة أخرى.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>archiver</i> عامل الأرشيف الذي سيتم تسجيله.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الخطأ، وغير صفري عند النجاح.</div>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_Archiver</b>
+<p class="Pp"><b>PHYSFS_deregisterArchiver</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_removeFromSearchPath_(const_char_*_oldDir)'><a class='permalink' href='#int_PHYSFS_removeFromSearchPath_(const_char_*_oldDir)'>int   PHYSFS_removeFromSearchPath (const char * oldDir)</a></h2>
+<p class="Pp">إزالة دليل أو ملف أرشيف من مسار البحث.</p>
+<p class="Pp"><b>تم إيقافه</b></p>
+<div class="Bd-indent">اعتبارًا من PhysicsFS 2.1، استخدم <b>PHYSFS_unmount()</b> بدلاً من ذلك. هذه الوظيفة تقوم فقط بتغليفها على أي حال. لا يوجد اختلاف وظيفي باستثناء تغيير المفردات من "إضافة إلى مسار البحث" إلى "تركيب" عندما تم توسيع هذه الوظيفة، وبالتالي فإن الطريقة المفضلة لإنجاز عمل هذه الوظيفة تسمى الآن "إلغاء التركيب".</div>
+<p class="Pp">هذه الوظيفة تعادل:</p>
+<pre>PHYSFS_unmount(oldDir);</pre>
+<p class="Pp">يجب عليك استخدام هذه الوظيفة وليس PHYSFS_unmount إذا كانت التوافقية الثنائية مع PhysicsFS 1.0 مهمة (وهو ما قد لا يكون صحيحًا للكثير من الأشخاص).</p>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_addToSearchPath</b>
+<p class="Pp"><b>PHYSFS_getSearchPath</b></p>
+<p class="Pp"><b>PHYSFS_unmount</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_seek_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_pos)'><a class='permalink' href='#int_PHYSFS_seek_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_pos)'>int   PHYSFS_seek (<b>PHYSFS_File</b> * handle, <b>PHYSFS_uint64</b> pos)</a></h2>
+<p class="Pp">الانتقال إلى موضع جديد داخل مقبض ملف PhysicsFS. سيحدث القراءة أو الكتابة التالية في ذلك المكان. لا يُسمح بالانتقال إلى ما بعد بداية الملف أو نهايته، ويؤدي ذلك إلى حدوث خطأ.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>handle</i> المقبض الذي تم إرجاعه من PHYSFS_open*().
+<br/>
+<i>pos</i> عدد البايتات من بداية الملف للانتقال إليها.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">غير صفري عند النجاح، وصفر عند الخطأ. استخدم <b>PHYSFS_getLastErrorCode()</b> للحصول على الخطأ المحدد.</div>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>PHYSFS_tell</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_setAllocator_(const_&lt;b&gt;PHYSFS_Allocator&lt;/b&gt;_*_allocator)'><a class='permalink' href='#int_PHYSFS_setAllocator_(const_&lt;b&gt;PHYSFS_Allocator&lt;/b&gt;_*_allocator)'>int   PHYSFS_setAllocator (const <b>PHYSFS_Allocator</b> * allocator)</a></h2>
+<p class="Pp">ربط إجراءات التخصيص الخاصة بك بـ PhysicsFS. (هذا للاستخدام المحدود والصعب. إذا لم ترَ حاجة فورية له، فيمكنك على الأرجح تجاهله إلى الأبد.)</p>
+<p class="Pp">افتراضيًا، ستستخدم PhysicsFS ما هو معقول لمنصة لإدارة الذاكرة الديناميكية (عادةً ANSI C malloc/realloc/free، ولكن قد تستخدم بعض المنصات شيئًا آخر)، ولكن في بعض الحالات غير الشائعة، قد يرغب التطبيق في مزيد من التحكم في إدارة ذاكرة المكتبة. هذا يتيح لك إعادة توجيه PhysicsFS لاستخدام إجراءات التخصيص الخاصة بك بدلاً من ذلك. لا يمكنك استدعاء هذه الوظيفة إلا قبل <b>PHYSFS_init()</b>؛ إذا تم تهيئة المكتبة، فسترفض محاولاتك لتغيير المخصص في منتصف التشغيل. يمكنك استدعاء هذه الوظيفة بعد <b>PHYSFS_deinit()</b> إذا كنت مستعدًا لإيقاف تشغيل المكتبة وإعادة تشغيلها بمخصص جديد؛ هذه عملية آمنة ومدعومة. يظل المخصص سليمًا بين استدعاءات deinit/init. إذا كنت تريد العودة إلى المخصص الافتراضي للمنصة، فمرر NULL هنا.</p>
+<p class="Pp">إذا لم تكن متأكدًا على الفور مما يجب فعله بهذه الوظيفة، يمكنك تجاهلها تمامًا.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>allocator</i> هيكل يحتوي على نقاط دخول المخصص الخاص بك.</div>
+<p class="Pp"><b>القيم المعادة</b></p>
+<div class="Bd-indent">صفر عند الفشل، وغير صفري عند النجاح. تفشل هذه المكالمة فقط عند استخدامها بين استدعاءات <b>PHYSFS_init()</b> و <b>PHYSFS_deinit()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_setBuffer_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_bufsize)'><a class='permalink' href='#int_PHYSFS_setBuffer_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_handle,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_bufsize)'>int   PHYSFS_setBuffer (<b>PHYSFS_File</b> * handle, <b>PHYSFS_uint64</b>   bufsize)</a></h2>
+<p class="Pp">إعداد التخزين المؤقت لمقبض ملف PhysicsFS. تحديد مخزن مؤقت للإدخال/الإخراج لمقبض ملف. سيتم تخصيص كتلة ذاكرة بحجم (bufsize) بايت وربطها بـ (handle).</p>
+<p class="Pp">بالنسبة للملفات المفتوحة للقراءة، يتم قراءة ما يصل إلى (bufsize) بايت من (handle) وتخزينها في المخزن المؤقت الداخلي. ستسحب استدعاءات <b>PHYSFS_read()</b> من هذا المخزن المؤقت حتى يفرغ، ثم تعيد ملئه للقراءة المزيد. لاحظ أن الملفات المضغوطة، مثل ملفات ZIP، سيتم فك ضغطها أثناء التخزين المؤقت، لذا يمكن أن يكون هذا مفيدًا لموازنة العمليات التي تستهلك وحدة المعالجة المركزية. لا يتم ملء المخزن المؤقت حتى تقوم بالقراءة التالية. قد يتم تخزين البيانات مؤقتًا في الذاكرة للملفات المفتوحة للكتابة حتى يمتلئ المخزن المؤقت أو يتم مسح المخزن المؤقت. إغلاق المقبض</p><section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint16</b> PHYSFS_swapSBE16 (<b>PHYSFS_sint16</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 16 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 16 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint32</b> PHYSFS_swapSBE32 (<b>PHYSFS_sint32</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 32 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 32 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_swapSBE64 (<b>PHYSFS_sint64</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 64 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 64 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_sint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من الدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint16</b> PHYSFS_swapSLE16 (<b>PHYSFS_sint16</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 16 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 16 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint32</b> PHYSFS_swapSLE32 (<b>PHYSFS_sint32</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 32 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 32 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_swapSLE64 (<b>PHYSFS_sint64</b> val)</h2>
+<p class="Pp">مبادلة قيمة موجبة 64 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة موقعة 64 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_sint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من الدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint16</b> PHYSFS_swapUBE16 (<b>PHYSFS_uint16</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 16 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 16 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint32</b> PHYSFS_swapUBE32 (<b>PHYSFS_uint32</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 32 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 32 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint64</b> PHYSFS_swapUBE64 (<b>PHYSFS_uint64</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 64 بت ذات ترتيب بايت Big-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 64 بت بتنسيق Big-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من الدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint16</b> PHYSFS_swapULE16 (<b>PHYSFS_uint16</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 16 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 16 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint32</b>PHYSFS_swapULE32 (<b>PHYSFS_uint32</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 32 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 32 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_uint64</b>PHYSFS_swapULE64 (<b>PHYSFS_uint64</b> val)</h2>
+<p class="Pp">مبادلة قيمة غير موقعة 64 بت ذات ترتيب بايت Little-endian إلى ترتيب بايت المنصة الأصلي. خذ قيمة غير موقعة 64 بت بتنسيق Little-endian وقم بتحويلها إلى ترتيب بايت المنصة الأصلي.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>val</i> القيمة المراد تحويلها</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">القيمة المحولة.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من الدعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_symbolicLinksPermitted_(void_)'><a class='permalink' href='#int_PHYSFS_symbolicLinksPermitted_(void_)'>int PHYSFS_symbolicLinksPermitted (void )</a></h2>
+<p class="Pp">تحديد ما إذا كان تم السماح بالروابط الرمزية. هذا يبلغ عن الإعداد من آخر استدعاء لـ <b>PHYSFS_permitSymbolicLinks()</b>. إذا لم يتم استدعاء <b>PHYSFS_permitSymbolicLinks()</b> منذ تهيئة المكتبة آخر مرة، فسيتم تعطيل الروابط الرمزية ضمنيًا.</p>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية إذا كانت الروابط الرمزية مسموح بها، وصفر إذا لم تكن كذلك.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_permitSymbolicLinks</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>PHYSFS_sint64</b> PHYSFS_tell (<b>PHYSFS_File</b> * handle)</h2>
+<p class="Pp">تحديد الموضع الحالي داخل مقبض ملف PhysicsFS.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>handle</i> المقبض الذي تم إرجاعه من PHYSFS_open*().</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">الإزاحة بالبايت من بداية الملف. -1 إذا حدث خطأ. استخدم <b>PHYSFS_getLastErrorCode()</b> للحصول على الخطأ المحدد.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_seek</b></div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_ucs4stricmp_(const_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_str1,_const_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_str2)'><a class='permalink' href='#int_PHYSFS_ucs4stricmp_(const_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_str1,_const_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_*_str2)'>int PHYSFS_ucs4stricmp (const <b>PHYSFS_uint32</b> * str1, const <b>PHYSFS_uint32</b> * str2)</a></h2>
+<p class="Pp">مقارنة غير حساسة لحالة الأحرف لسلسلتين UCS-4. هذا بديل لـ strcasecmp/stricmp يتوقع أن تكون كلتا السلسلتين بتشفير UCS-4 (المعروف أيضًا باسم UTF-32). سيقوم بإجراء "طي للحالة" لتحديد ما إذا كانت نقاط رمز Unicode في السلاسل متطابقة.</p>
+<p class="Pp">سيبلغ عن أي سلسلة "أكبر من" الأخرى، ولكن كن على علم بأن هذا لا يعني بالضرورة شيئًا: قد تكون 'a' "أقل من" 'b'، ولكن ليس لـ Kuten اليابانية علاقة أبجدية ذات معنى بـ Lambda اليونانية، ولكن القدرة على تعيين "قيمة" موثوقة تجعل خوارزميات الفرز ممكنة، وإن لم تكن صحيحة تمامًا. يجب أن يعامل معظم الحالات القيمة المرجعة على أنها "متساوية" أو "غير متساوية".</p>
+<p class="Pp">مثل stricmp، تتوقع هذه الوظيفة أن تكون كلتا السلسلتين مختتمتين بـ NULL.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>str1</i> السلسلة الأولى للمقارنة.
+<br/>
+<i>str2</i> السلسلة الثانية للمقارنة.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">-1 إذا كانت str1 "أقل من" str2، 1 إذا كانت "أكبر من"، 0 إذا كانت متساوية.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_unmount_(const_char_*_oldDir)'><a class='permalink' href='#int_PHYSFS_unmount_(const_char_*_oldDir)'>int PHYSFS_unmount (const char * oldDir)</a></h2>
+<p class="Pp">إزالة دليل أو أرشيف من مسار البحث. هذا مكافئ وظيفيًا لـ <b>PHYSFS_removeFromSearchPath()</b>، ولكن تم إيقاف هذه الوظيفة للحفاظ على المفردات متوافقة مع <b>PHYSFS_mount()</b>.</p>
+<p class="Pp">يجب أن يكون هذا تطابقًا (حساسًا لحالة الأحرف) لدليل أو أرشيف موجود بالفعل في مسار البحث، محددًا بتدوين يعتمد على النظام الأساسي.</p>
+<p class="Pp">ستفشل هذه المكالمة (وتفشل في الإزالة من المسار) إذا كانت هناك ملفات لا تزال مفتوحة فيه.</p>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تطلب هذه الوظيفة المسار إلى الأرشيف أو الدليل الذي تم تركيبه (نفس السلسلة المستخدمة كـ "newDir" في PHYSFS_addToSearchPath أو أي من وظائف التركيب)، وليس المسار الذي تم تركيبه فيه في الشجرة (المعامل "mountPoint" لأي من وظائف التركيب).</div>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>oldDir</i> الدليل / الأرشيف المراد إزالته.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<div class="Bd-indent">قيمة غير صفرية عند النجاح، وصفر عند الفشل. استخدم <b>PHYSFS_getLastErrorCode()</b> للحصول على الخطأ المحدد.</div>
+<p class="Pp"><b>انظر أيضاً</b></p>
+<div class="Bd-indent"><b>PHYSFS_getSearchPath</b>
+<p class="Pp"><b>PHYSFS_mount</b></p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_utf16stricmp_(const_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_str1,_const_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_str2)'><a class='permalink' href='#int_PHYSFS_utf16stricmp_(const_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_str1,_const_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_*_str2)'>intPHYSFS_utf16stricmp (const <b>PHYSFS_uint16</b> * str1, const <b>PHYSFS_uint16</b> * str2)</a></h2>
+<p class="Pp">مقارنة غير حساسة لحالة الأحرف لسلسلتين UTF-16. هذا بديل لـ strcasecmp/stricmp يتوقع أن تكون كلتا السلسلتين بتشفير UTF-16. سيقوم بإجراء "طي للحالة" لتحديد ما إذا كانت نقاط رمز Unicode في السلاسل متطابقة.</p>
+<p class="Pp">سيبلغ عن أي سلسلة "أكبر من" الأخرى، ولكن كن على علم بأن هذا لا يعني بالضرورة شيئًا: قد تكون 'a' "أقل من" 'b'، ولكن ليس لـ Kuten اليابانية علاقة أبجدية ذات معنى بـ Lambda اليونانية، ولكن القدرة على تعيين "قيمة" موثوقة تجعل خوارزميات الفرز ممكنة، وإن لم تكن صحيحة تمامًا. يجب أن يعامل معظم الحالات القيمة المرجعة على أنها "متساوية" أو "غير متساوية".</p>
+<p class="Pp">مثل stricmp، تتوقع هذه الوظيفة أن تكون كلتا السلسلتين مختتمتين بـ NULL.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>str1</i> السلسلة الأولى للمقارنة.
+<br/>
+<i>str2</i> السلسلة الثانية للمقارنة.</div>
+<p class="Pp"><b>الإرجاع</b></p>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_comparefnames_(const_char_*_fname1,_const_char_*_fname2)'><a class='permalink' href='#int_PHYSFS_comparefnames_(const_char_*_fname1,_const_char_*_fname2)'>int   PHYSFS_comparefnames (const char * fname1, const char * fname2)</a></h2>
+<p class="Pp">Compare two filenames. This function is used to compare filenames
+    in a way that is case-insensitive on systems that require it, but case-sensitive
+    on systems that don't.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>fname1</i> First filename to compare.
+<br/>
+<i>fname2</i> Second filename to compare.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="Bd-indent">-1 if fname1 is less than fname2, 1 if fname1 is
+  greater than fname2, 0 if they are equal.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_utf8cmp_(const_char_*_str1,_const_char_*_str2)'><a class='permalink' href='#int_PHYSFS_utf8cmp_(const_char_*_str1,_const_char_*_str2)'>int   PHYSFS_utf8cmp (const char * str1, const char * str2)</a></h2>
+<p class="Pp">Case-sensitive compare of two UTF-8 strings. This is a strcmp
+    replacement that expects both strings to be in UTF-8 encoding.</p>
+<p class="Pp">It will report which string is &quot;greater than&quot; the other,
+    but be aware that this doesn't necessarily mean anything: 'a' may be
+    &quot;less than&quot; 'b', but a Japanese kuten has no meaningful
+    alphabetically relationship to a Greek lambda, but being able to assign a
+    reliable &quot;value&quot; makes sorting algorithms possible, if not
+    entirely sane. Most cases should treat the return value as &quot;equal&quot;
+    or &quot;not equal&quot;.</p>
+<p class="Pp">Like strcmp, this expects both strings to be NULL-terminated.</p>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>str1</i> First string to compare.
+<br/>
+<i>str2</i> Second string to compare.</div>
+<p class="Pp"><b>Returns</b></p>
+<div class="B
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">الاسم</a></h1>
+<p class="Pp">PHYSFS_writeUBE16، PHYSFS_writeUBE32، PHYSFS_writeUBE64، PHYSFS_writeULE16، PHYSFS_writeULE32، PHYSFS_writeULE64 - كتابة قيم عدد صحيح بترتيب البايت المحدد.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">الملخص</a></h1>
+<pre>
+int PHYSFS_writeUBE16 (PHYSFS_File * file, PHYSFS_uint16 val)
+
+
+int PHYSFS_writeUBE32 (PHYSFS_File * file, PHYSFS_uint32 val)
+
+
+int PHYSFS_writeUBE64 (PHYSFS_File * file, PHYSFS_uint64 val)
+
+
+int PHYSFS_writeULE16 (PHYSFS_File * file, PHYSFS_uint16 val)
+
+
+int PHYSFS_writeULE32 (PHYSFS_File * file, PHYSFS_uint32 val)
+
+
+int PHYSFS_writeULE64 (PHYSFS_File * file, PHYSFS_uint64 val)
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="Detailed_Description"><a class="permalink" href="#Detailed_Description">الوصف التفصيلي</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeUBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeUBE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_val)'>int PHYSFS_writeUBE16(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint16</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 16 بت بترتيب البايت الكبير (big-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 16 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الكبير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeUBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeUBE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_val)'>int PHYSFS_writeUBE32(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint32</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 32 بت بترتيب البايت الكبير (big-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 32 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الكبير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeUBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeUBE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_val)'>int PHYSFS_writeUBE64(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint64</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 64 بت بترتيب البايت الكبير (big-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 64 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الكبير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من دعم 64 بت.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeULE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeULE16_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint16&lt;/b&gt;_val)'>int PHYSFS_writeULE16(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint16</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 16 بت بترتيب البايت الصغير (little-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 16 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الصغير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeULE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeULE32_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint32&lt;/b&gt;_val)'>int PHYSFS_writeULE32(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint32</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 32 بت بترتيب البايت الصغير (little-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 32 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الصغير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_PHYSFS_writeULE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_val)'><a class='permalink' href='#int_PHYSFS_writeULE64_(&lt;b&gt;PHYSFS_File&lt;/b&gt;_*_file,_&lt;b&gt;PHYSFS_uint64&lt;/b&gt;_val)'>int PHYSFS_writeULE64(<b>PHYSFS_File</b> *file, <b>PHYSFS_uint64</b> val)</a></h2>
+<p class="Pp">تحويل وكتابة قيمة عدد صحيح غير موقع 64 بت بترتيب البايت الصغير (little-endian). دالة مساعدة. تحويل قيمة عدد صحيح غير موقع 64 بت من ترتيب البايت الأصلي للمنصة إلى ترتيب البايت الصغير وكتابتها في ملف.</p>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>file</i> مقبض ملف PhysicsFS للكتابة إليه.<br/>
+<i>val</i> القيمة المراد تحويلها وكتابتها.</div>
+<p class="Pp"><b>يعود</b></p>
+<div class="Bd-indent">صفر عند الفشل، غير صفري عند النجاح. عند الفشل، يمكنك معرفة ما حدث خطأ من <b>PHYSFS_getLastErrorCode()</b>.</div>
+<p class="Pp"><b>تحذير</b></p>
+<div class="Bd-indent">تذكر، <b>PHYSFS_uint64</b> هو 32 بت فقط على المنصات التي لا تدعم أي نوع من دعم 64 بت.</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Author'><a class='permalink' href='#Author'>المؤلف</a></h1>
+<p class="Pp">تم إنشاؤها تلقائيًا بواسطة Doxygen لـ physfs من الكود المصدري.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">الإصدار 3.2.0</td>
+    <td class="foot-os">physfs</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/physfs/">extra/physfs</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>3.2.0-5</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://icculus.org/physfs">https://icculus.org/physfs</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Zlib</dd>
+        <dt>الأدلة اليدوية:</dt>
+        <dd><a href="/listing/extra/physfs/">/listing/extra/physfs/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#Detailed_Description">الوصف التفصيلي</a></li>
+        
+            <li><a href="#Author">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/PHYSFS_EnumerateCallback.3.en.txt">txt</a>, 
+        
+            <a href="/man/PHYSFS_EnumerateCallback.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

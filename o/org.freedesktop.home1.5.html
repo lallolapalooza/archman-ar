@@ -1,0 +1,519 @@
+{
+  "content": [
+    {
+      "type": "paragraph",
+      "text": "with the local system. Note that if the home directory is placed where systemd-homed.service looks for home directories anyway this call will only undo fixation (see below), but the record will remain known to systemd-homed.service and be listed among known records. Since the user record is embedded into the home directory this operation generally does not discard data belonging to the user or their record. This method is equivalent to <b>Unregister()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>CreateHome()</b> registers and creates a new home directory. This takes a fully specified JSON user record as argument (including the \"secret\" section). This registers the user record locally and creates a home directory matching it, depending on the settings specified in the record in combination with local configuration."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>CreateHomeEx()</b> is like <b>CreateHome()</b>, but it allows the home directory to be created with a pre-populated blob directory (see <b>User Record Blob Directories</b>[2] for more info). This can be done via the dictionary passed as the <i>blobs</i> argument to this method: the values are open file descriptors to regular files, and the keys are the filenames that should contain their respective file's data in the blob directory. Note that for security reasons, the file descriptors passed into this method must have enough privileges to read their target file and thus cannot be \"O_PATH\"; this is done to ensure the caller is actually permitted to read the file they are asking to publish in the blob directories. If the user record passed as the first argument contains a \"blobManifest\" field it will be enforced; otherwise, a \"blobManifest\" field will be generated and inserted into the record. The <i>flags</i> argument may be used for future expansion, but for now pass 0."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>RealizeHome()</b> creates a home directory whose user record is already registered locally. This takes a user name plus a user record consisting only of the \"secret\" section. Invoking <b>RegisterHome()</b> followed by <b>RealizeHome()</b> is mostly equivalent to calling <b>CreateHome()</b>, except that the latter combines the two in atomic fashion. This method is equivalent to <b>Realize()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>RemoveHome()</b> unregisters a user record locally, and removes the home directory belonging to it, if it is accessible. It takes a user name as argument. This method is equivalent to <b>Remove()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>FixateHome()</b> \"fixates\" an automatically discovered home directory. systemd-homed.service automatically discovers home directories dropped in our plugged in and adds them to the runtime list of user records it manages. A user record discovered that way may be \"fixated\", in which case it is copied out of the home directory, onto persistent storage, to fixate the UID/GID assignment of the record, and extract additional (typically previously encrypted) user record data from the home directory. A home directory mus be fixated before it can be logged into. This method call takes a user name and a JSON user record consisting only of the \"secret\" section as argument. This method is equivalent to <b>Fixate()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>AuthenticateHome()</b> checks passwords or other authentication credentials associated with the home directory. It takes a user name and a JSON user record consisting only of the \"secret\" section as argument. Note that many of the other method calls authenticate the user first, in order to execute some other operation. This method call only authenticates and executes no further operation. Like <b>ActivateHome()</b> it is usually first invoked with an empty JSON user record, which is then populated for subsequent tries with additional authentication data supplied. This method is equivalent to <b>Authenticate()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>UpdateHome()</b> updates a locally registered user record. Takes a fully specified JSON user record as argument (possibly including the \"secret\" section). A user with a matching name and realm must be registered locally already, and the last change timestamp of the newly supplied record must be newer than the previously existing user record. Note this operation updates the user record only, it does not propagate passwords/authentication tokens from the user record to the storage back-end, or resizes the storage back-end. Typically a home directory is first updated, and then the password of the underlying storage updated using <b>ChangePasswordHome()</b> as well as the storage resized using <b>ResizeHome()</b>. This method is equivalent to <b>Update()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>UpdateHomeEx()</b> is like <b>UpdateHome()</b>, but it allows for changes to the blob directory (see <b>User Record Blob Directories</b>[2] for more info). The <i>blobs</i> argument works in the same way as <b>CreateHomeEx()</b>, so check there for details. The new blob directory contents passed into this method will completely replace the user's existing blob directory. The <i>flags</i> argument can be used to further customize the behavior of this method via flags defined as follows:"
+    },
+    {
+      "type": "code",
+      "text": "#define SD_HOMED_UPDATE_OFFLINE (UINT64_C(1) << 0)"
+    },
+    {
+      "type": "paragraph",
+      "text": "When <b>SD_HOMED_UPDATE_OFFLINE</b> (0x01) is set, no attempt is made to update the copies of the user record and blob directory that are embedded into the home directory. Changes will be stored, however, and may be propagated into the home directory the next time it is reconciled (most likely when the user next logs in). Note that any changes made with this flag set may be lost if the home area has a newer record, which can happen if the home area is updated on another machine after this method call. This method is equivalent to <b>UpdateEx()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>ResizeHome()</b> resizes the storage associated with a user record. Takes a user name, a disk size in bytes, and optionally a user record consisting only of the \"secret\" section as arguments. If the size is specified as <b>UINT64_MAX</b> the storage is resized to the size already specified in the user record. Typically, if the user record is updated using <b>UpdateHome()</b> above this is used to propagate the size configured there-in down to the underlying storage back-end. This method is equivalent to <b>Resize()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>ChangePasswordHome()</b> changes the passwords/authentication tokens of a home directory. Takes a user name, and two JSON user record objects, each consisting only of the \"secret\" section, for the old and for the new passwords/authentication tokens. If the user record with the new passwords/authentication token data is specified as empty the existing user record's settings are propagated down to the home directory storage. This is typically used after a user record is updated using <b>UpdateHome()</b> in order to propagate the secrets/authentication tokens down to the storage. Background: depending on the backend the user's authentication credentials are stored at multiple places: the user record kept on the host, the user record kept in the home directory and the encrypted LUKS volume slot. If the home directory is used on a different machined temporarily, and the password is changed there, and then is moved back to the original host, the passwords of the three might get out of sync. By issuing <b>ChangePasswordHome()</b> the three locations are updated to match the newest information. This method is equivalent to <b>ChangePassword()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>LockHome()</b> temporarily suspends access to a home directory, flushing out any cryptographic keys from memory. This is only supported on some back-ends, and is usually done during system suspend, in order to effectively secure home directories while the system is sleeping. Takes a user name as single argument. If an application attempts to access a home directory while it is locked it will typically freeze until the home directory is unlocked again. This method is equivalent to <b>Lock()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>UnlockHome()</b> undoes the effect of <b>LockHome()</b>. Takes a user name and a user record consisting only of the \"secret\" section as arguments. This method is equivalent to <b>Unlock()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>AcquireHome()</b> activates or unlocks a home directory in a reference counted mode of operation. Takes a user name and user record consisting only of \"secret\" section as argument. If the home directory is not active yet, it is activated. If it is currently locked it is unlocked. After completion a reference to the activation/unlocking of the home directory is returned via a file descriptor. When the last client which acquired such a file descriptor closes it the home directory is automatically deactivated again. This method is typically invoked when a user logs in, and the file descriptor is held until the user logs out again, thus ensuring the user's home directory can be unmounted automatically again in a robust fashion, when the user logs out. The third argument is a boolean which indicates whether the client invoking the call is able to automatically re-authenticate when the system comes back from suspending. It should be set by all clients that implement a secure lock screen running outside of the user's context, that is brought up when the system comes back from suspend and can be used to re-acquire the credentials to unlock the user's home directory. If a home directory has at least one client with an open reference to the home directory that does not support this it is not suspended automatically at system suspend, otherwise it is. This method is equivalent to <b>Acquire()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>RefHome()</b> is similar to <b>AcquireHome()</b> but takes no user record with \"secret\" section, i.e. will take an additional reference to an already activated/unlocked home directory without attempting to activate/unlock it itself. It will fail if the home directory is not already activated. This method is equivalent to <b>Ref()</b> on the org.freedesktop.home1.Home interface."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>RefHomeUnrestricted()</b> is identical to <b>RefHome()</b> but succeeds even if the home area is not active currently. This is useful on conjunction with <b>ActivateHomeIfReferenced()</b>."
+    },
+    {
+      "type": "paragraph",
+      "text": "<b>ReleaseHome()</b> releases a home directory again, if all file descriptors referencing it are already closed, that where acquired through <b>AcquireHome()</b> or <b>RefHome()</b>. Note that this call does not actually cause the deactivation of the home directory (which happens automatically when the last referencing file descriptor is closed), but is simply a synchronization mechanism that allows delaying of the user session's termination until any triggered deactivation is completed. This method is equivalent t"
+    }
+  ]
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>org.freedesktop.home1.5(5) — Arch manual pages</title>
+        <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">org.freedesktop.home1(5)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/systemd/">systemd</a></p>
+<p class="lic">التراخيص: LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</p>
+
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Nm">org.freedesktop.home1.5 — systemd home directory management</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>INTRODUCTION</a></h1>
+<p class="Pp">This service manages user home directories, and may be used to
+    activate, deactivate, and manage access to them. It is intended to be used
+    by <a href='/man/homectl.1.en'>homectl(1)</a> and display managers.
+    See <b>systemd-homed.service</b>(8) for more information.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_MANAGER_OBJECT'><a class='permalink' href='#THE_MANAGER_OBJECT'>THE   MANAGER OBJECT</a></h1>
+<div class="Bd-indent">
+<pre>node /org/freedesktop/home1 {
+  interface org.freedesktop.home1.Manager {
+    methods:
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      ActivateHome(in  s user,
+                   in  s secret,
+                   in  b acquire_uid,
+                   out o home_object);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      ActivateHomeIfReferenced(in  s user,
+                               in  s secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      DeactivateHome(in  s user);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      LockHome(in  s user);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      UnlockHome(in  s user,
+                 in  s secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      ReleaseHome(in  s user);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Rebalance();
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      AdoptHome(in  s user,
+                in  s user_record,
+                in  t uid,
+                in  a{sh} blobs,
+                out o home_object);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      CreateHomeEx(in  s user,
+                   in  s user_record,
+                   in  t uid,
+                   in  a{sh} blobs,
+                   in  t flags);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      UpdateHomeEx(in  s user,
+                   in  s user_record,
+                   in  a{sh} blobs,
+                   in  t flags);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      RenameHome(in  s old_user,
+                 in  s new_user);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      RemoveHome(in  s user,
+                 in  s secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      ChangeHomePassword(in  s user,
+                         in  s new_secret,
+                         in  s old_secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      AcquireHome(in  s user,
+                  in  s secret,
+                  in  b please_suspend,
+                  out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      RefHome(in  s user,
+              in  b please_suspend,
+              out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      RefHomeUnrestricted(in  s user,
+                          in  b please_suspend,
+                          out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      ReleaseHome(in  s user);
+      LockAllHomes();
+      DeactivateAllHomes();
+      Rebalance();
+      ListSigningKeys();
+      GetSigningKey(in  s name);
+      AddSigningKey(in  s name,
+                    in  s pem_data,
+                    in  t flags);
+      RemoveSigningKey(in  s name,
+                       in  t flags);
+    properties:
+      @org.freedesktop.DBus.Property.EmitsChangedSignal(&quot;const&quot;)
+      readonly a{oa{sv}} AutoLogin = [ ... ];
+  };
+  interface org.freedesktop.DBus.Peer { ... };
+  interface org.freedesktop.DBus.Introspectable { ... };
+  interface org.freedesktop.DBus.Properties { ... };
+  interface org.freedesktop.DBus.ObjectManager { ... };
+};</pre>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Methods'><a class='permalink' href='#Methods'>Methods</a></h2>
+<p class="Pp"><b>ActivateHome()</b> activates the home directory of <i>user</i>,
+    potentially creating it if it does not exist. This is typically used by
+    display managers to activate the home directory before the user logs in.
+    The <i>secret</i> parameter should contain the user's login password or
+    other authentication token. The <i>acquire_uid</i> parameter controls if
+    the UID should be acquired for the home directory.</p>
+<p class="Pp"><b>ActivateHomeIfReferenced()</b> is similar to
+    <b>ActivateHome()</b>, but only activates the home directory if it is already
+    referenced by at least one other client. This is useful for activating home
+    directories that might have been left inactive after a suspend, but are
+    still referenced.</p>
+<p class="Pp"><b>DeactivateHome()</b> deactivates the home directory of
+    <i>user</i>. This is used when the user logs out.</p>
+<p class="Pp"><b>LockHome()</b> locks the home directory of <i>user</i>. This
+    prevents access until <b>UnlockHome()</b> is called.</p>
+<p class="Pp"><b>UnlockHome()</b> unlocks the home directory of <i>user</i>,
+    requiring the <i>secret</i> to be provided.</p>
+<p class="Pp"><b>ReleaseHome()</b> releases any references held by the home
+    directory manager to the home directory of <i>user</i>. This is typically
+    called when the home directory is no longer needed, for example, after a
+    successful logout.</p>
+<p class="Pp"><b>Rebalance()</b> synchronously rebalances free disk space
+    between home directories. This operation is only performed if at least one
+    home directory uses the LUKS2 backend and has rebalancing enabled. Otherwise,
+    it is a no-op.</p>
+<p class="Pp"><b>AdoptHome()</b> adopts an existing directory as a home
+    directory. The <i>user_record</i> contains the user's configuration in
+    JSON format. <i>blobs</i> may contain arbitrary data associated with the
+    user, keyed by name. This is typically used to import home directories from
+    other systems.</p>
+<p class="Pp"><b>CreateHomeEx()</b> creates a new home directory for <i>user</i>
+    with the given <i>user_record</i>, <i>uid</i>, and optional <i>blobs</i>. The
+    <i>flags</i> parameter is currently unused and must be zero.</p>
+<p class="Pp"><b>UpdateHomeEx()</b> updates the home directory for <i>user</i>
+    with new <i>user_record</i> and <i>blobs</i>. The <i>flags</i> parameter is
+    currently unused and must be zero.</p>
+<p class="Pp"><b>RenameHome()</b> renames the home directory of <i>old_user</i>
+    to <i>new_user</i>.</p>
+<p class="Pp"><b>RemoveHome()</b> removes the home directory of <i>user</i>. The
+    <i>secret</i> parameter must be provided for authentication.</p>
+<p class="Pp"><b>ChangeHomePassword()</b> changes the password for the home
+    directory of <i>user</i>, requiring the old password for verification.</p>
+<p class="Pp"><b>AcquireHome()</b> acquires a file descriptor that represents
+    the home directory. This is typically used by clients that need direct access
+    to the home directory, such as file managers. The <i>please_suspend</i>
+    parameter indicates whether the system should suspend the home directory
+    after the file descriptor is acquired.</p>
+<p class="Pp"><b>RefHome()</b> increments the reference count for the home
+    directory of <i>user</i>. This is used to keep the home directory active
+    even if no user is logged in. The <i>please_suspend</i> parameter indicates
+    whether the home directory should be suspended after the reference is
+    acquired.</p>
+<p class="Pp"><b>RefHomeUnrestricted()</b> is similar to <b>RefHome()</b>, but
+    it does not impose any restrictions on acquiring the reference, allowing it
+    to be acquired even if the home directory is locked or inactive.</p>
+<p class="Pp"><b>ReleaseHome()</b> decrements the reference count for the home
+    directory of <i>user</i>. This is called when the client no longer needs
+    access to the home directory.</p>
+<p class="Pp"><b>LockAllHomes()</b> locks all active home directories that only
+    have references that opted into automatic suspending during system suspend.
+    This is usually invoked automatically shortly before system suspend.</p>
+<p class="Pp"><b>DeactivateAllHomes()</b> deactivates all home areas that are
+    currently active. This is usually invoked automatically shortly before
+    system shutdown.</p>
+<p class="Pp"><b>Rebalance()</b> synchronously rebalances free disk space
+    between home areas. This only executes an operation if at least one home
+    area using the LUKS2 backend is active and has rebalancing enabled, and is
+    otherwise a NOP.</p>
+<p class="Pp"><b>ListSigningKeys()</b> acquires a list of installed home area
+    signing keys. Returns an array of key names with their PEM encoded public
+    key data. Each entry also comes with a flags value which is currently unused
+    and should be ignored by clients.</p>
+<p class="Pp"><b>GetSigningKey()</b> acquires the PEM encoded public part of the
+    specified home area signing key of the specified name. Also returns a
+    currently unused flags value that should be ignored. The <i>flags</i>
+    parameter must be set to zero, currently.</p>
+<p class="Pp"><b>AddSigningKey()</b> adds a new key to the list of home area
+    signing keys. Takes a name string (free-form, suitable as filename, with
+    suffix &quot;.public&quot;), the PEM encoded public key data and a currently
+    unused flags value that must be zero. The <i>flags</i> parameter must be set
+    to zero, currently.</p>
+<p class="Pp"><b>RemoveSigningKey()</b> removes a key from the list of home area
+    signing keys. Takes the name of the key to remove and a currently unused
+    flags value that must be zero. The <i>flags</i> parameter must be set to
+    zero, currently.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Properties'><a class='permalink' href='#Properties'>Properties</a></h2>
+<p class="Pp"><i>AutoLogin</i> exposes an array of structures consisting of user
+    name, seat name and object path of an home directory object. All locally
+    managed users that have the &quot;autoLogin&quot; field set are listed here,
+    with the seat name they are associated with. A display manager may watch
+    this property and pre-fill the login screen with the users exposed this
+  way.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_HOME_OBJECT'><a class='permalink' href='#THE_HOME_OBJECT'>THE   HOME OBJECT</a></h1>
+<div class="Bd-indent">
+<pre>node /org/freedesktop/home1/home {
+  interface org.freedesktop.home1.Home {
+    methods:
+      Activate(in  s secret);
+      ActivateIfReferenced(in  s secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Deactivate();
+      Unregister();
+      Realize(in  s secret);
+      Remove();
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Fixate(in  s secret);
+      Authenticate(in  s secret);
+      Update(in  s user_record);
+      UpdateEx(in  s user_record,
+               in  a{sh} blobs,
+               in  t flags);
+      Resize(in  t size,
+             in  s secret);
+      ChangePassword(in  s new_secret,
+                     in  s old_secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Lock();
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Unlock(in  s secret);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Acquire(in  s secret,
+              in  b please_suspend,
+              out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Ref(in  b please_suspend,
+          out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      RefUnrestricted(in  b please_suspend,
+                      out h send_fd);
+      @org.freedesktop.systemd1.Privileged(&quot;true&quot;)
+      Release();
+    properties:
+      @org.freedesktop.DBus.Property.EmitsChangedSignal(&quot;const&quot;)
+      readonly s UserName = '...';
+      readonly u UID = ...;
+      readonly (suusss) UnixRecord = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal(&quot;false&quot;)
+      readonly s State = '...';
+      @org.freedesktop.DBus.Property.EmitsChangedSignal(&quot;invalidates&quot;)
+      readonly (sb) UserRecord = ...;
+  };
+  interface org.freedesktop.DBus.Peer { ... };
+  interface org.freedesktop.DBus.Introspectable { ... };
+  interface org.freedesktop.DBus.Properties { ... };
+  interface org.freedesktop.DBus.ObjectManager { ... };
+};</pre>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Methods_2'><a class='permalink' href='#Methods_2'>Methods</a></h2>
+<p class="Pp"><b>Activate()</b>, <b>ActivateIfReferenced()</b>,
+    <b>Deactivate()</b>, <b>Unregister()</b>, <b>Realize()</b>, <b>Remove()</b>,
+    <b>Fixate()</b>, <b>Authenticate()</b>, <b>Update()</b>, <b>UpdateEx()</b>,
+    <b>Resize()</b>, <b>ChangePassword()</b>, <b>Lock()</b>, <b>Unlock()</b>,
+    <b>Acquire()</b>, <b>Ref()</b>, <b>RefUnrestricted()</b>, <b>Release()</b>,
+    operate like their matching counterparts on the
+    org.freedesktop.home1.Manager interface (see above). The main difference is
+    that they are methods of the home directory objects, and hence carry no
+    additional user name parameter. Which of the two flavors of methods to call
+    depends on the handles to the user known on the client side: if only the
+    user name is known, it is preferable to use the methods on the manager
+    object since they operate with user names only. Clients can also easily
+    operate on their own home area by using the methods on the manager object
+    with an empty string as the user name. If the client has the home's object
+    path already acquired in some way, however, it is preferable to operate on
+    the org.freedesktop.home1.Home objects instead.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Properties_2'><a class='permalink' href='#Properties_2'>Properties</a></h2>
+<p class="Pp"><i>UserName</i> contains the user name of the user account/home
+    directory.</p>
+<p class="Pp"><i>UID</i> contains the numeric UNIX UID of the user account.</p>
+<p class="Pp"><i>UnixRecord</i> contains a structure encapsulating the six
+    fields a struct passwd typically contains (the password field is
+    suppressed).</p>
+<p class="Pp"><i>State</i> exposes the current state home the home
+  directory.</p>
+<p class="Pp"><i>UserRecord</i> contains the full JSON user record string of the
+    user account.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSIONING'><a class='permalink' href='#VERSIONING'>VERSIONING</a></h1>
+<p class="Pp">These D-Bus interfaces follow <b>the usual interface versioning
+    guidelines</b>[3].</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>HISTORY</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='The_Manager_Object_2'><a class='permalink' href='#The_Manager_Object_2'>The   Manager Object</a></h2>
+<p class="Pp"><b>ActivateHomeIfReferenced()</b>, <b>RefHomeUnrestricted()</b>,
+    <b>CreateHomeEx()</b>, and <b>UpdateHomeEx()</b> were added in version
+  256.</p>
+<p class="Pp"><b>AdoptHome()</b>, <b>ListSigningKeys()</b>,
+    <b>GetSigningKey()</b>, <b>AddSigningKey()</b>, and
+    <b>RemoveSigningKey()</b> were added in version 258.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Home_Objects_2'><a class='permalink' href='#Home_Objects_2'>Home   Objects</a></h2>
+<p class="Pp"><b>ActivateIfReferenced()</b>, <b>RefUnrestricted()</b>, and
+    <b>UpdateEx()</b> were added in version 256.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/systemd.1.en'>systemd(1)</a>, <a href='/man/systemd-homed.service.8.en'>systemd-homed.service(8)</a>,
+    <a href='/man/homectl.1.en'>homectl(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>NOTES</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>JSON User Records</dd>
+</dl>
+<div class="Bd-indent"><a href='https://systemd.io/USER_RECORD'>https://systemd.io/USER_RECORD</a></div>
+<dl class="Bl-tag">
+  <dt> 2.</dt>
+  <dd>User Record Blob Directories</dd>
+</dl>
+<div class="Bd-indent"><a href='https://systemd.io/USER_RECORD_BLOB_DIRS'>https://systemd.io/USER_RECORD_BLOB_DIRS</a></div>
+<dl class="Bl-tag">
+  <dt> 3.</dt>
+  <dd>the usual interface versioning guidelines</dd>
+</dl>
+<div class="Bd-indent"><a href='https://0pointer.de/blog/projects/versioning-dbus.html'>https://0pointer.de/blog/projects/versioning-dbus.html</a></div>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os">systemd 258.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/systemd/">core/systemd</a></dd>
+        <dt>Version:</dt>
+        <dd>258.2-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.github.com/systemd/systemd">https://www.github.com/systemd/systemd</a></dd>
+        <dt>Licenses:</dt>
+        <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/systemd/">/listing/core/systemd/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#THE_MANAGER_OBJECT">THE MANAGER OBJECT</a></li>
+        
+            <li><a href="#THE_HOME_OBJECT">THE HOME OBJECT</a></li>
+        
+            <li><a href="#VERSIONING">VERSIONING</a></li>
+        
+            <li><a href="#HISTORY">HISTORY</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#NOTES">NOTES</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/org.freedesktop.home1.5.en.txt">txt</a>, 
+        
+            <a href="/man/org.freedesktop.home1.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

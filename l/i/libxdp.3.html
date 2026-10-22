@@ -1,0 +1,187 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">libxdp(3)</h1>
+<link rel="stylesheet" href="basic.css">
+  البرنامج التالي يعتمد على استدعاء السلسلة
+    للإجراءات من البرنامج السابق (انظر قسم <b>بيانات وصفية للبرنامج</b>
+    أعلاه).</p>
+<p class="Pp">بينما لا تحتاج التطبيقات التي تستخدم <i>libxdp</i> إلى معرفة
+    تفاصيل برنامج الموزع لتحميل برنامج XDP على واجهة، فإن <i>libxdp</i>
+    يكشف عن الموزع وبرامجه المكونة المرفقة، والتي يمكن استخدامها لسرد البرامج
+    المرفقة حاليًا بواجهة.</p>
+<p class="Pp">الهيكل المستخدم لهذا هو <i>struct xdp_multiprog</i>، والذي
+    يمكن إنشاؤه فقط من البرامج المحملة على واجهة بناءً على ifindex. واجهة برمجة
+    التطبيقات للحصول على مرجع multiprog والتكرار عبر البرامج المرفقة تبدو كالتالي:</p>
+<div class="Bd-indent">
+<pre>struct xdp_multiprog *xdp_multiprog__get_from_ifindex(int ifindex);
+struct xdp_program *xdp_multiprog__next_prog(const struct xdp_program *prog,
+                                             const struct xdp_multiprog *mp);
+void xdp_multiprog__close(struct xdp_multiprog *mp);
+int xdp_multiprog__detach(struct xdp_multiprog *mp, int ifindex);
+enum xdp_attach_mode xdp_multiprog__attach_mode(const struct xdp_multiprog *mp);
+struct xdp_program *xdp_multiprog__main_prog(const struct xdp_multiprog *mp);
+struct xdp_program *xdp_multiprog__hw_prog(const struct xdp_multiprog *mp);
+bool xdp_multiprog__is_legacy(const struct xdp_multiprog *mp);
+<i></i></pre>
+</div>
+<p class="Pp">إذا تم إرفاق برنامج غير مُحمّل بالكامل بالواجهة والتي لا يتعرف
+    عليها <i>libxdp</i> كبرنامج موزع، فسيتم إرجاع هيكل <i>xdp_multiprog</i>،
+    وسيعيد <i>xdp_multiprog__is_legacy()</i> القيمة true لهذا البرنامج (لاحظ أن
+    هذا ينطبق أيضًا إذا تم تحميل برنامج مُحمّل بالكامل فقط). يمكن الحصول على
+    مرجع لهذا البرنامج (العادي) XDP بواسطة <i>xdp_multiprog__main_prog()</i>.
+    إذا كان البرنامج المرفق بالواجهة <b>هو</b> برنامج موزع، فسيعيد
+    <i>xdp_multiprog__main_prog()</i> مرجعًا لبرنامج الموزع نفسه، والذي يكون مفيدًا
+    بشكل أساسي للحصول على بيانات أخرى حول هذا البرنامج (مثل معرف البرنامج). يمكن
+    الحصول على مرجع لبرنامج مُحمّل بالكامل باستخدام <i>xdp_multiprog_hw_prog()</i>.
+    تعيد الدالة <i>xdp_multiprog__attach_mode()</i> وضع الإرفاق للبرنامج غير
+    المُحمّل بالكامل، ويجب التحقق مما إذا كان برنامج مُحمّل بالكامل مرفقًا عبر
+    <i>xdp_multiprog_hw_prog()</i>.</p>
+<section class="Ss">
+<h2 class="Ss" id='Pinning_in_bpffs'><a class='permalink' href='#Pinning_in_bpffs'>تثبيت في bpffs</a></h2>
+<p class="Pp">سيقوم النواة تلقائيًا بفصل البرامج المكونة عن الموزع بمجرد اختفاء
+    آخر مرجع لها. لمنع حدوث ذلك، سيقوم <i>libxdp</i> بتثبيت مراجع البرامج
+    المكونة في <i>bpffs</i> قبل إرفاق الموزع بواجهة الشبكة. أسماء المسارات
+    المولدة للتثبيت هي كما يلي:</p>
+<dl class="Bl-tag">
+  <dt>&#x2014;</dt>
+  <dd>/sys/fs/bpf/xdp/dispatch-IFINDEX-DID - برنامج الموزع لـ IFINDEX مع معرف
+      برنامج BPF DID</dd>
+  <dt>&#x2014;</dt>
+  <dd>/sys/fs/bpf/xdp/dispatch-IFINDEX-DID/prog0-prog - البرنامج المكون 0، مرجع
+      البرنامج</dd>
+  <dt>&#x2014;</dt>
+  <dd>/sys/fs/bpf/xdp/dispatch-IFINDEX-DID/prog0-link - البرنامج المكون 0، مرجع
+      bpf_link</dd>
+  <dt>&#x2014;</dt>
+  <dd>/sys/fs/bpf/xdp/dispatch-IFINDEX-DID/prog1-prog - البرنامج المكون 1، مرجع
+      البرنامج</dd>
+  <dt>&#x2014;</dt>
+  <dd>/sys/fs/bpf/xdp/dispatch-IFINDEX-DID/prog1-link - البرنامج المكون 1، مرجع
+      bpf_link</dd>
+  <dt>&#x2014;</dt>
+  <dd>إلخ، حتى عشرة برامج مكونة
+      </dd>
+</dl>
+<p class="Pp">إذا تم تعيين متغير البيئة <i>LIBXDP_BPFFS</i>، فسيتم تجاوز
+    موقع <i>bpffs</i>، ولكن يتم استخدام الدليل الفرعي <i>xdp</i> دائمًا. إذا لم
+    يتم تحميل bpffs، فسوف يستشير libxdp متغير البيئة <i>LIBXDP_BPFFS_AUTOMOUNT</i>.
+    إذا تم تعيينه على <i>1</i>، فسحاول libxdp تحميل bpffs تلقائيًا. إذا لم يكن
+    كذلك، فسيعود libxdp إلى تحميل برنامج واحد بدون موزع، كما لو أن النواة لم تدعم
+    الميزات المطلوبة لإرفاق multiprog.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Using_AF_XDP_sockets'><a class='permalink' href='#Using_AF_XDP_sockets'>استخدام مقابس AF_XDP</a></h1>
+<p class="Pp">تنفذ Libxdp دوال مساعدة لتكوين مقابس AF_XDP بالإضافة إلى قراءة
+    وكتابة الحزم من هذه المقابس. يمكن استخدام مقابس AF_XDP لإعادة توجيه الحزم إلى
+    مساحة المستخدم بمعدلات عالية من برنامج XDP. لاحظ أن هذه الوظيفة كانت موجودة
+    في libbpf، ولكن تم نقلها الآن إلى libxdp لأنها مناسبة بشكل أفضل لهذه المكتبة.
+    اعتبارًا من الإصدار 1.0 من libbpf، سيتم إزالة دعم مقابس AF_XDP وسيتم إجراء
+    جميع التطويرات المستقبلية في libxdp بدلاً من ذلك.</p>
+<p class="Pp">للحصول على نظرة عامة على مقابس AF_XDP، يرجى الرجوع إلى ورقة Linux
+    Plumbers هذه
+    (<a href='http://vger.kernel.org/lpc_net2018_talks/lpc18_pres_af_xdp_perf-v3.pdf'>http://vger.kernel.org/lpc_net2018_talks/lpc18_pres_af_xdp_perf-v3.pdf</a>)
+    والوثائق الموجودة في نواة Linux
+    (Documentation/networking/af_xdp.rst أو
+    <a href='https://www.kernel.org/doc/html/latest/networking/af_xdp.html'>https://www.kernel.org/doc/html/latest/networking/af_xdp.html</a>).</p>
+<p class="Pp">كمثال على كيفية استخدام الواجهة، انظر البرنامجين AF_XDP-example و
+    AF_XDP-forwarding في مستودع bpf-examples:
+    <a href='https://github.com/xdp-project/bpf-examples'>https://github.com/xdp-project/bpf-examples</a>.</p>
+<section class="Ss">
+<h2 class="Ss" id='Control_path'><a class='permalink' href='#Control_path'>مسار التحكم</a></h2>
+<p class="Pp">توفر Libxdp دوال مساعدة لإنشاء وتدمير umems والمقابس كما هو موضح
+    أدناه. أول شيء يرغب المستخدم عمومًا في القيام به هو إنشاء منطقة umem. هذه هي
+    المنطقة التي ستحتوي على جميع الحزم المستلمة وتلك التي سيتم إرسالها. بعد
+    ذلك، يمكن إنشاء مقابس AF_XDP مرتبطة بهذا umem. يمكن أن تكون هذه مقابس تمتلك
+    ملكية حصرية لهذا umem عبر xsk_socket__create() أو مشتركة مع مقابس أخرى
+    باستخدام xsk_socket__create_shared. هناك خيار واحد يسمى
+    XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD يمكن تعيينه في حقل libxdp_flags (يسمى
+    أيضًا libbpf_flags لأسباب التوافق). سيؤدي هذا إلى جعل libxdp لا يقوم بتحميل
+    أي برنامج XDP أو تعيين خرائط BPF، وهو أمر ضروري إذا أراد المستخدمون إضافة
+    برنامج XDP الخاص بهم.</p>
+<p class="Pp">إذا كان هناك بالفعل مقبس تم إنشاؤه باستخدام socket(AF_XDP, SOCK_RAW,
+    0) غير مرتبط وغير مرتبط بأي umem، يمكن استخدام واصف الملف الخاص بهذا المقبس
+    في معلمات opts الخاصة بـ xsk_umem__create_opts()، وهي طريقة موصى بها
+    لإنشاء umem.</p>
+<div class="Bd-indent">
+<pre>struct xsk_umem *xsk_umem__create_opts(void *umem_area,
+                                       struct xsk_ring_prod *fill,
+                                       struct xsk_ring_cons *comp,
+                                       struct xsk_umem_opts *opts);
+int xsk_umem__create(struct xsk_umem **umem,
+                     void *umem_area, __u64 size,
+                     struct xsk_ring_prod *fill,
+                     struct xsk_ring_cons *comp,
+                     const struct xsk_umem_config *config);
+int xsk_umem__create_with_fd(struct xsk_umem **umem,
+                             int fd, void *umem_area, __u64 size,
+                             struct xsk_ring_prod *fill,
+                             struct xsk_ring_cons *comp,
+                             const struct xsk_umem_config *config);
+int xsk_socket__create(struct xsk_socket **xsk,
+                       const char *ifname, __u32 queue_id,
+                       struct xsk_umem *umem,
+                       struct xsk_ring_cons *rx,
+                       struct xsk_ring_prod *tx,
+                       const struct xsk_socket_config *config);
+int xsk_socket__create_shared(struct xsk_socket **xsk_ptr,
+                              const char *ifname,
+                              __u32 queue_id, struct xsk_umem *umem,
+                              struct xsk_ring_cons *rx,
+                              struct xsk_ring_prod *tx,
+                              struct xsk_ring_prod *fill,
+                              struct xsk_ring_cons *comp,
+                              const struct xsk_socket_config *config);
+int xsk_umem__delete(struct xsk_umem *umem);
+void xsk_socket__delete(struct xsk_socket *xsk);
+<i></i></pre>
+</div>
+<p class="Pp">هناك أيضًا دالتان مساعدتان للحصول على واصف ملف لـ umem أو مقبس.
+    هذه مطلوبة عند استخدام استدعاءات النظام القياسية في Linux مثل poll()،
+    recvmsg()، sendto()، إلخ.</p>
+<div class="Bd-indent">
+<pre>int xsk_umem__fd(const struct xsk_umem *umem);
+int xsk_socket__fd(const struct xsk_socket *xsk);
+<i></i></pre>
+</div>
+<p class="Pp">يوفر مسار التحكم أيضًا واجهتي برمجة تطبيقات لإعداد مقابس AF_XDP
+    عندما تكون العملية التي ستستخدم مقبس AF_XDP غير مميزة. تؤدي هاتان الدالتان
+    العمليات التي تتطلب امتيازات ويمكن تنفيذها من شكل من أشكال عملية تحكم تمتلك
+    الامتيازات اللازمة. سيقوم xsk_socket__create المنفذ على العملية غير
+    المميزة بتخطي هاتين الخطوتين. للحصول على مثال حول كيفية استخدامها، يرجى
+    إلقاء نظرة على برنامج AF_XDP-example في مستودع bpf-examples:
+    <a href='https://github.com/xdp-project/bpf-examples/tree/main/AF_XDP-example'>https://github.com/xdp-project/bpf-examples/tree/main/AF_XDP-example</a>.</p>
+<div class="Bd-indent">
+<pre>int xsk_setup_xdp_prog(int ifindex, int *xsks_map_fd);
+int xsk_socket__update_xskmap(struct xsk_socket *xsk, int xsks_map_fd);
+<i></i></pre>
+</div>
+<p class="Pp">لتقليل مستوى الامتيازات المطلوب بشكل أكبر، يمكن إنشاء مقبس AF_XDP
+    مسبقًا باستخدام socket(AF_XDP, SOCK_RAW, 0) وتمريره إلى عملية غير مميزة.
+    يمكن استخدام هذا المقبس في xsk_umem__create_opts() ولاحقًا في
+    xsk_socket__create() مع umem المنشأ. لا يزال xsk_socket__create_shared()
+    يتطلب امتيازات لإنشاء مقابس AF_XDP.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_path'><a class='permalink' href='#Data_path'>مسار البيانات</a></h2>
+<p class="Pp">لأسباب تتعلق بالأداء، فإن جميع دوال مسار البيانات هي دوال ثابتة مضمنة
+    موجودة في ملف الرأس xsk.h حتى يمكن تحسينها في ملف التنفيذ الثنائي للتطبيق
+    المستهدف لتحقيق أفضل أداء ممكن. هناك أربعة صفوف FIFO من نوعين رئيسيين: صفوف
+    المنتج (fill و Tx) وصفوف المستهلك (Rx والإكمال). تستخدم صفوف المنتج دوال
+    xsk_ring_prod وتستخدم صفوف المستهلك دوال xsk_ring_cons. بالنسبة لصفوف المنتج،
+    تبدأ بـ <i>حجز</i> فتحة واحدة أو أكثر في صف المنتج ثم عندما يتم ملؤها،
+    <i>تقديمها</i> بحيث يتصرف النواة بناءً عليها. بالنسبة لصف المستهلك،
+    <i>المعاينة</i> إذا كانت هناك أي حزم جديدة في الصف وإذا كان الأمر كذلك، يمكنك
+    قراءتها من الصف. بمجرد الانتهاء من قراءتها، <i>تحريرها</i> مرة أخرى إلى
+    النواة حتى تتمكن من استخدامها للحزم الجديدة. هناك أيضًا عملية <i>إلغاء</i>
+    لصفوف المستهلك إذا كان التطبيق لا يرغب في استهلاك جميع الحزم المستلمة بعملية
+    المعاينة.</p>
+<div class="Bd-indent">
+<pre>__u32 xsk_ring_prod__reserve(struct xsk_ring_prod *prod, __u32 nb, __u32 *idx);
+void xsk_ring_prod__submit(struct xsk_ring_prod *prod, __u32 nb);
+__u32 xsk_ring_cons__peek(struct xsk_ring_cons *cons, __u32 nb, __u32 *idx);
+void xsk_ring_cons__cancel(struct xsk_ring_cons *cons, __u32 nb);
+void xsk_ring_cons__release(struct xsk_ring_cons *cons, __u32 nb);
+<i></i></pre>
+</div>
+<p class="Pp">تستخدم الدوال أدناه لقراءة وكتابة واصفات الصفوف. xsk_ring_prod__fill_addr()
+    و xsk_ring_prod__tx_desc() <b>تكتب</b> إدخالات في صفوف fill و Tx</p>

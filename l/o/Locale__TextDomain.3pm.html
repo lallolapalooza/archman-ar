@@ -1,0 +1,395 @@
+<section class="Sh">
+<h1 class="Sh" id='EXPORTED_FUNCTIONS'><a class='permalink' href='#EXPORTED_FUNCTIONS'>FUNCIONES EXPORTADAS</a></h1>
+<p class="Pp">Todas las funciones tienen nombres bastante extraños con el propósito de que sean cortos, operadores y que no den conflictos con funciones existentes en <i>tu</i> espacio de nombres. Entenderás esto cuando internacionalices tu primer programa o módulo de Perl. Preparar un programa es más como marcar cadenas como traducibles que insertar llamadas a funciones. Aquí vamos:</p>
+<dl class="Bl-tag">
+  <dt><b>__ MSGID</b></dt>
+  <dd><b>NOTA:</b> ¡Este es un doble guion bajo!
+    <p class="Pp">La función básica y más utilizada. Es un atajo para una llamada a <b>gettext()</b> respectivamente <b>dgettext()</b>, y simplemente devuelve la traducción para <b>MSGID</b>. Si tu código antiguo se lee así:</p>
+        <pre>print "permission denied";
+</pre>
+    <p class="Pp">A partir de ahora escribes:</p>
+        <pre>print __"permission denied";
+</pre>
+    <p class="Pp">Eso es todo, la cadena se mostrará en el idioma preferido del usuario, siempre que hayas instalado una traducción para ella.</p>
+    <p class="Pp">Obviamente puedes usar paréntesis:</p>
+        <pre>print __("permission denied");
+</pre>
+    <p class="Pp">O incluso:</p>
+        <pre>print (__("permission denied"));
+</pre>
+    <p class="Pp">En mi opinión, la primera versión sin paréntesis es la mejor.</p>
+  </dd>
+  <dt><b>__x MSGID, ID1 =&gt; VAL1, ID2 =&gt; VAL2, ...</b></dt>
+  <dd>Una de las mejores características de Perl es su capacidad de interpolar variables en cadenas:
+        <pre>print "This is the $color $thing.\n";
+</pre>
+    <p class="Pp">Esta característica puede hacerte pensar que ahora puedas escribir:</p>
+        <pre>print __"This is the $color $thing.\n";
+</pre>
+    <p class="Pp">Sin embargo, eso sería bonito pero no es posible. Recuerda que la función __() sirve tanto como un operador para traducir cadenas <i>y</i> como un marco para cadenas traducibles. Si la cadena anterior se extrae de tu código de Perl, la forma no interpolada se incluirá en el catálogo de mensajes porque al analizar tu código es impredecible qué valores tendrán las variables <span class="Li">$thing</span> y <span class="Li">$color</span> en tiempo de ejecución (esto es probablemente una de las razones por las que has escrito tu programa). </p>
+    <p class="Pp">Sin embargo, en tiempo de ejecución, Perl intercalará los valores ya antes de que __() (respectivamente la función subsecuente <b>gettext()</b>) vea la cadena original. Por lo tanto, algo como "This is the red car.\n" se buscará en el catálogo de mensajes, no se encontrará (porque solo "This is the <span class="Li">$color</span> <span class="Li">$thing</span>.\n" está incluido en la base de datos), y se devolverá la cadena no traducida. Honestamente, porque esto es casi siempre un error, el programa <a href='/man/xgettext.1.en'>xgettext(1)</a> se detendrá con un error fatal cuando encuentre esa cadena en tu código.</p>
+    <p class="Pp">Hay dos soluciones para ese problema:</p>
+        <pre>printf __"This is the %s %s.\n", $color, $thing;
+</pre>
+    <p class="Pp">pero eso tiene varias desventajas: tu traductor solo verá la cadena aislada y sin el contexto completo es casi imposible interpretarla correctamente. De hecho, los software GNU emacs y otros con capacidad de edición de archivos de traducción PO permitirán que veas el contexto en el código fuente, pero es más probable que tu traductor busque un proyecto de traducción más sencillo cuando se encuentre con tales mensajes frecuentemente.</p>
+    <p class="Pp">Y incluso si ella entiende el programa subyacente, ¿qué pasa si tiene que reordenar el color y el thing como en francés:</p>
+        <pre>msgid "This is the red car.\n";
+msgstr "Cela est la voiture rouge.\n"
+</pre>
+    <p class="Pp">¡Zut alors! Aunque es posible reordenar los argumentos de <b>printf()</b> y amigos, requiere una sintaxis que no quieres aprender.</p>
+    <p class="Pp">¿Y qué? El backend de Perl para <b>gettext</b> del GNU ha definido un formato alternativo para cadenas interpolables:</p>
+        <pre>"This is the {color} {thing}.\n";
+</pre>
+    <p class="Pp">En lugar de variables Perl, usas marcadores de posición entre corchetes, y luego llamas a:</p>
+        <pre>print __x ("This is the {color} {thing}.\n",
+           thing =&gt; $thang,
+           color =&gt; $color);
+</pre>
+    <p class="Pp">La función _<b>_x()</b> tomará el hash adicional y reemplazará todas las ocurrencias de las claves del hash entre corchetes con los valores correspondientes. ¿Simple, legible, entendible para traductores, qué más te gustaría? Y si el traductor olvida, escribe o daña alguna "variable", la función <a href='/man/msgfmt.1.en'>msgfmt(1)</a>, que se usa para compilar el archivo de traducción textual en su representación binaria, incluso se enfadará con estos errores y rechazará la compilación de la traducción.</p>
+  </dd>
+  <dt><b>__n MSGID, MSGID_PLURAL, COUNT</b></dt>
+  <dd>¡Uf! Aquello parece complicado... mejor lo explico con un ejemplo. Vamos a revisar de nuevo tu código antiguo:
+        <pre>if ($files_deleted &gt; 1) {
+    print "All files have been deleted.\n";
+} else {
+    print "One file has been deleted.\n";
+}
+</pre>
+    <p class="Pp">Tu intención es clara, quieres evitar el complicado "1 files deleted". Esto es correcto en inglés, pero en otros idiomas hay más de un plural. Por ejemplo, en ruso, se diferencia entre 1 archivo, 3 archivos o 6 archivos. Usarás tres formas diferentes del sustantivo "file" en cada caso. [Nota: Si lo sabes, también entenderás el resto, aunque esta simplificación sea un poco complicada...].</p>
+    <p class="Pp">Esa es la razón por la que existe la función <b>ngettext()</b>, que _<b>_n()</b> es un atajo para:</p>
+        <pre>print __n"One file has been deleted.\n"
+         "All files have been deleted.\n"
+         $files_deleted;
+</pre>
+    <p class="Pp">Alternativamente:</p>
+        <pre>print __n ("One file has been deleted.\n",
+           "All files have been deleted.\n",
+           $files_deleted);
+</pre>
+    <p class="Pp">El efecto es siempre el mismo: libintl-perl buscará la forma correcta para tu idioma de usuario y el texto se mostrará siempre bien.</p>
+  </dd>
+  <dt><b>__nx MSGID, MSGID_PLURAL, COUNT, VAR1 =&gt; VAL1, VAR2 =&gt; VAL2, ...</b></dt>
+  <dd>Uniendo todo lo anterior:
+        <pre>print __nx ("One file has been deleted.\n",
+            "{count} files have been deleted.\n",
+            $num_files,
+            count =&gt; $num_files);
+</pre>
+    <p class="Pp">La función _<b>_nx()</b> elige la forma correcta de plural (también para inglés) <i>y</i> puede interpolar variables en cadenas.</p>
+    <p class="Pp">Aunque quieras mirar el orden de los argumentos: el primero es la cadena en singular, el segundo es la cadena en plural. El tercer argumento es un entero que indica el número de elementos. Este tercer argumento se usa <i>únicamente</i> para elegir la forma correcta. Los argumentos opcionales siguientes forman el hash usado para interpolación. Inicialmente suele ser confuso que la variable que almacena el número de elementos suele aparecer repetida en el hash de interpolación.</p>
+  </dd>
+  <dt><b>__xn MSGID, MSGID_PLURAL, COUNT, VAR1 =&gt; VAL1, VAR2 =&gt; VAL2, ...</b></dt>
+  <dd>Hace exactamente lo mismo que _<b>_nx()</b>. En realidad es un error tipográfico común promovido a una característica.</dd>
+  <dt><b>__p MSGCTXT, MSGID</b></dt>
+  <dd>Esta es mucho más como __. La "p" significa "particular" y MSGCTXT se usa para proporcionar contexto a los traductores. Esto puede ser necesario cuando tu cadena es corta y podría representar varios significados. Por ejemplo:</p>
+        <pre>print __p"Verb, to view", "View";
+print __p"Noun, a view", "View";
+</pre>
+    <p class="Pp">El ejemplo anterior puede ser "View" en un menú donde View-&gt;Source y File-&gt;View son formas diferentes de "View", que probablemente necesitan ser traducidas de manera diferente.</p>
+    <p class="Pp">Un uso típico son programas de interfaz gráfica. Imagina un programa con un menú principal y la entrada notoria "Open" en el menú File. Imagina ahora otra entrada de menú Preferences-&gt;Advanced-&gt;Policy donde tienes una elección entre las alternativas "Open" y "Closed". En inglés, "Open" es el texto adecuado en ambos lugares. En otros idiomas, es muy probable que necesites dos traducciones distintas. Por lo tanto, ahora escribirías:</p>
+        <pre>__p"File|", "Open";
+__p"Preferences|Advanced|Policy", "Open";
+</pre>
+    <p class="Pp">En inglés, o si no existe traducción, se devuelve el segundo argumento (MSGID).</p>
+    <p class="Pp">Esta función fue introducida en libintl-perl 1.17.</p>
+  </dd>
+  <dt><b>__px MSGCTXT, MSGID, VAR1 =&gt; VAL1, VAR2 =&gt; VAL2, ...</b></dt>
+  <dd>Como _<b>_p()</b>, pero soporta reemplazo de variables en la cadena, como _<b>_x()</b>.
+        <pre>print __px("Verb, to view", "View {file}", file =&gt; $filename);
+</pre>
+    <p class="Pp">Ver _<b>_p()</b> y _<b>_x()</b> para más detalles.</p>
+    <p class="Pp">Esta función fue introducida</p>
+  </dd>
+</dl>
+</section>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locale::TextDomain(3pm) — perl — archlinux-man</title>
+<meta name="description" content="Locale::TextDomain - Perl implementation of the gettext functions">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="basic.css">
+</head>
+<body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Locale__TextDomain(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perl-libintl-perl/">perl-libintl-perl</a></p>
+<p class="lic">التراخيص: LGPL</p>
+
+
+<main>
+<article>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">Locale::TextDomain - Perl implementation of the gettext functions</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre> use Locale::TextDomain;
+
+ # Load message catalogs
+ my $domain = Locale::TextDomain->import( 'MyTextDomain', 'AnotherDomain' );
+
+ # Translate strings
+ print $domain->gettext( 'Hello, world!' );
+ print $domain->ngettext( 'There is %d item.', 'There are %d items.', $count, $count );
+
+ # Translate strings with plural forms, but don't generate them
+ print $domain->pgettext( 'Greeting', 'Hello, world!' );
+ print $domain->npgettext( 'ItemCount', 'There is %d item.', 'There are %d items.', $count, $count );
+
+ # Translate strings with context, but don't generate them
+ print $domain->xgettext( 'Hello, world!', 'Greeting' );
+ print $domain->nxgettext( 'There is %d item.', 'There are %d items.', $count, $count, 'ItemCount' );
+
+ # Fallback to English if no translation is found
+ print $domain->gettext( 'This string is not translated.' );
+
+ # Get text domain object without loading catalogs
+ my $domain = Locale::TextDomain->new( 'MyTextDomain' );
+ $domain->load_catalog();
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">This module provides Perl implementations of the gettext
+    functions, which are used for internationalizing and localizing Perl
+    programs. It supports the standard gettext functions like <code class="Li">gettext</code>,
+    <code class="Li">ngettext</code>, <code class="Li">pgettext</code>, and <code class="Li">xgettext</code>.</p>
+<p class="Pp">The module can automatically load message catalogs from standard
+    locations. It also supports different plural forms based on the locale.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USAGE'><a class='permalink' href='#USAGE'>USAGE</a></h1>
+<p class="Pp">To use this module, you typically import it and specify the text
+    domain(s) you want to use.</p>
+<pre> use Locale::TextDomain;
+ my $domain = Locale::TextDomain->import( 'MyTextDomain' );
+</pre>
+<p class="Pp">This will load the message catalog for the text domain
+    'MyTextDomain' from the default locations (e.g.,
+    <code class="Li">/usr/share/locale/&lt;locale&gt;/LC_MESSAGES/MyTextDomain.mo</code> or
+    <code class="Li">share/locale/&lt;locale&gt;/LC_MESSAGES/MyTextDomain.mo</code> relative to
+    your installation).</p>
+<p class="Pp">You can then use the imported functions:</p>
+<pre> my $greeting = $domain->gettext('Hello');
+ my $count = 5;
+ my $items_msg = $domain->ngettext('There is %d item.', 'There are %d items.', $count, $count);
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXPORTED_FUNCTIONS'><a class='permalink' href='#EXPORTED_FUNCTIONS'>EXPORTED FUNCTIONS</a></h1>
+<p class="Pp">By default, <code class="Li">Locale::TextDomain</code> exports
+    the following functions:</p>
+<ul class="Bl-bullet">
+      <li><code class="Li">gettext</code></li>
+      <li><code class="Li">ngettext</code></li>
+      <li><code class="Li">pgettext</code></li>
+      <li><code class="Li">npgettext</code></li>
+      <li><code class="Li">xgettext</code></li>
+      <li><code class="Li">nxgettext</code></li>
+</ul>
+<p class="Pp">You can control which functions are exported using standard
+    Perl import tags:</p>
+<pre> use Locale::TextDomain qw(gettext ngettext);
+ use Locale::TextDomain qw(:all); # Export all functions
+</pre>
+<p class="Pp">When functions are imported directly, they act on the default
+    text domain. If you need to work with multiple text domains, it is
+    recommended to import the module without any arguments and then use the
+    method calls on the domain object:</p>
+<pre> use Locale::TextDomain;
+ my $app_domain = Locale::TextDomain->import('MyApp');
+ my $lib_domain = Locale::TextDomain->import('MyLibrary');
+
+ print $app_domain->gettext('Application message');
+ print $lib_domain->gettext('Library message');
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXPORTED_VARIABLES'><a class='permalink' href='#EXPORTED_VARIABLES'>EXPORTED VARIABLES</a></h1>
+<p class="Pp">None.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CLASS_METHODS'><a class='permalink' href='#CLASS_METHODS'>CLASS METHODS</a></h1>
+<ul class="Bl-bullet">
+      <li><code class="Li">new( [ domain_name ] )</code>: Creates a new
+          <code class="Li">Locale::TextDomain</code> object. If <code class="Li">domain_name</code> is
+          provided, it is used as the text domain. Otherwise, a default domain
+          might be used or it will be set later.</li>
+      <li><code class="Li">import( [ domain_name, ... ] )</code>: Imports the
+          specified text domains. This is a convenient way to load catalogs and
+          optionally export the translation functions. Returns the first
+          imported <code class="Li">Locale::TextDomain</code> object.</li>
+      <li><code class="Li">find_domain( domain_name )</code>: Returns the
+          <code class="Li">Locale::TextDomain</code> object for the given
+          <code class="Li">domain_name</code> if it has been loaded, or <code class="Li">undef</code>
+          otherwise.</li>
+      <li><code class="Li">get_default_domain( )</code>: Returns the currently
+          active default text domain object.</li>
+      <li><code class="Li">set_default_domain( domain_object )</code>: Sets the
+          default text domain object.</li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INSTANCE_METHODS'><a class='permalink' href='#INSTANCE_METHODS'>INSTANCE METHODS</a></h1>
+<ul class="Bl-bullet">
+      <li><code class="Li">load_catalog( [ domain_name ] )</code>: Loads the message
+          catalog for the specified <code class="Li">domain_name</code> (or the
+          object's domain if not specified).</li>
+      <li><code class="Li">gettext( msgid )</code>: Translates the given
+          <code class="Li">msgid</code> string.</li>
+      <li><code class="Li">ngettext( msgid_singular, msgid_plural, n, ... )</code>:
+          Translates a message string that depends on a number <code class="Li">n</code>.
+          It chooses between <code class="Li">msgid_singular</code> and
+          <code class="Li">msgid_plural</code> based on the plural form rules of
+          the current locale and the value of <code class="Li">n</code>.</li>
+      <li><code class="Li">pgettext( context, msgid )</code>: Translates the given
+          <code class="Li">msgid</code> string, considering the given <code class="Li">context</code>.
+          This is useful when the same message string can appear in different
+          contexts and needs different translations.</li>
+      <li><code class="Li">npgettext( context, msgid_singular, msgid_plural, n, ... )</code>:
+          Similar to <code class="Li">ngettext</code>, but also takes a <code class="Li">context</code>
+          argument.</li>
+      <li><code class="Li">xgettext( msgid, msgctxt )</code>: Alias for <code class="Li">pgettext</code>.
+          This is an older name for the function.</li>
+      <li><code class="Li">nxgettext( msgid_singular, msgid_plural, n, msgctxt, ... )</code>:
+          Alias for <code class="Li">npgettext</code>. This is an older name for
+          the function.</li>
+      <li><code class="Li">set_language( lang_code )</code>: Sets the language for
+          this text domain.</li>
+      <li><code class="Li">get_language( )</code>: Returns the currently set
+          language for this text domain.</li>
+      <li><code class="Li">set_encoding( encoding )</code>: Sets the expected
+          encoding of the message catalog files.</li>
+      <li><code class="Li">get_encoding( )</code>: Returns the current encoding.</li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PERFORMANCE'><a class='permalink' href='#PERFORMANCE'>PERFORMANCE</a></h1>
+<p class="Pp">This module uses pure Perl implementations for flexibility and
+    compatibility. For performance-critical applications, consider using the
+    native C <code class="Li">gettext</code> library via bindings if available, or
+    optimize your translation loading strategy.</p>
+<p class="Pp">Loading large message catalogs can incur overhead. If you are
+    using many text domains, it might be beneficial to load them explicitly
+    only when needed, or to consolidate them if possible.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Klaus Iglberger &lt;klaus iglberger at gmx de&gt;</p>
+<p class="Pp">This module is based on the original <code class="Li">gettext</code>
+    functions and aims to provide a compatible Perl interface.</p>
+<p class="Pp">Copyright (c) 2001 Klaus Iglberger. All rights reserved. This
+    program is free software; you can redistribute it and/or modify it under
+    the same terms as Perl itself.</p>
+<p class="Pp">The development of this module was inspired by the need for a
+    pure Perl solution for internationalization that does not require external
+    C libraries.</p>
+<p class="Pp">See the <code class="Li">Locale::TextDomain</code> source code
+    for more details and potential improvements.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp"><a href='/man/Locale::Messages.3pm.en'>Locale::Messages(3pm)</a>, <a href='/man/Locale::gettext_pp.3pm.en'>Locale::gettext_pp(3pm)</a>,
+    <a href='/man/perl.1.en'>perl(1)</a>, <a href='/man/gettext.1.en'>gettext(1)</a>, <a href='/man/gettext.3.en'>gettext(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perl-libintl-perl/">extra/perl-libintl-perl</a></dd>
+        <dt>Version:</dt>
+        <dd>1.35-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/libintl-perl">https://search.cpan.org/dist/libintl-perl</a></dd>
+        <dt>Licenses:</dt>
+        <dd>LGPL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-libintl-perl/">/listing/extra/perl-libintl-perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#USAGE">USAGE</a></li>
+        
+            <li><a href="#EXPORTED_FUNCTIONS">EXPORTED FUNCTIONS</a></li>
+        
+            <li><a href="#EXPORTED_VARIABLES">EXPORTED VARIABLES</a></li>
+        
+            <li><a href="#CLASS_METHODS">CLASS METHODS</a></li>
+        
+            <li><a href="#INSTANCE_METHODS">INSTANCE METHODS</a></li>
+        
+            <li><a href="#PERFORMANCE">PERFORMANCE</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Locale::TextDomain.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Locale::TextDomain.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

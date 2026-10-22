@@ -1,0 +1,303 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Type__Utils(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-type-tiny/">perl-type-tiny</a></p>
+<p class="lic">التراخيص: PerlArtistic, GPL</p>
+<link rel="stylesheet" href="basic.css">
+'Type library management':
+  'extends @libraries':
+    'Indicates that this type library extends other type libraries, importing
+      their type constraints.
+
+      Should usually be executed in a "BEGIN" block.
+
+      This is not exported by default because it''s not fun to export it to
+      Moo, Moose or Mouse classes! "use Type::Utils -all" can be used to
+      import it into your type library.': |
+        'extends @libraries'
+'Other':
+  'match_on_type $value => ($type => \&action, ..., \&default?)':
+    'Something like a "switch"/"case" or "given"/"when" construct. Dispatches along
+      different code paths depending on the type of the incoming value. Example
+      blatantly stolen from the Moose documentation:
+
+      sub to_json
+      {
+         my $value = shift;
+
+         return match_on_type $value => (
+            HashRef() => sub {
+               my $hash = shift;
+               "{ "
+                  . (
+                  join ", " =>
+                  map { \'" . $_ . "\' : " . to_json( $hash->{$_} ) }
+                  sort keys %$hash
+               ) . " }";
+            },
+            ArrayRef() => sub {
+               my $array = shift;
+               "[ ".( join ", " => map { to_json($_) } @$array )." ]";
+            },
+            Num()   => q {$_},
+            Str()   => q { \'\' . $_ . \'\' },
+            Undef() => q {'null'},
+            => sub { die "$_ is not acceptable json type" },
+         );
+      }
+
+      Note that unlike Moose, code can be specified as a string instead of a
+      coderef. (e.g. for "Num", "Str" and "Undef" above.)
+
+      For improved performance, try "compile_match_on_type".
+
+      This function is not exported by default.': |
+        'match_on_type $value => ($type => \&action, ..., \&default?)'
+  'my $coderef = compile_match_on_type($type => \&action, ..., \&default?)':
+    'Compile a "match_on_type" block into a coderef. The following JSON converter
+      is about two orders of magnitude faster than the previous example:
+
+      sub to_json;
+      *to_json = compile_match_on_type(
+         HashRef() => sub {
+            my $hash = shift;
+            "{ "
+               . (
+               join ", " =>
+               map { \'" . $_ . "\' : " . to_json( $hash->{$_} ) }
+               sort keys %$hash
+            ) . " }";
+         },
+         ArrayRef() => sub {
+            my $array = shift;
+            "[ ".( join ", " => map { to_json($_) } @$array )." ]";
+         },
+         Num()   => q {$_},
+         Str()   => q { \'\' . $_ . \'\' },
+         Undef() => q {'null'},
+         => sub { die "$_ is not acceptable json type" },
+      );
+
+      Remember to store the coderef somewhere fairly permanent so that you
+      don\'t compile it over and over. "state" variables (in Perl >= 5.10)
+      are good for this. (Same sort of idea as Type::Params.)
+
+      This function is not exported by default.': |
+        'my $coderef = compile_match_on_type($type => \&action, ..., \&default?)'
+  'my $coderef = classifier(@types)':
+    'Returns a coderef that can be used to classify values according to their
+      type constraint. The coderef, when passed a value, returns a type
+      constraint which the value satisfies.
+
+      use feature qw( say );
+      use Type::Utils qw( classifier );
+      use Types::Standard qw( Int Num Str Any );
+
+      my $classifier = classifier(Str, Int, Num, Any);
+
+      say $classifier->( "42"  )->name;   # Int
+      say $classifier->( "4.2" )->name;   # Num
+      say $classifier->( []    )->name;   # Any
+
+      Note that, for example, "42" satisfies Int, but it would satisfy the type
+      constraints Num, Str, and Any as well. In this case, the classifier has
+      picked the most specific type constraint that "42" satisfies.
+
+      If no type constraint is satisfied by the value, then the classifier will
+      return undef.': |
+        'my $coderef = classifier(@types)'
+  'dwim_type($string, %options)':
+    'Given a string like "ArrayRef[Int|CodeRef]", turns it into a type
+      constraint object, hopefully doing what you mean.
+
+      It uses the syntax of Type::Parser. Firstly the Type::Registry for the
+      caller package is consulted; if that doesn\'t have a match, Types::Standard
+      is consulted for standard type constraint names.
+
+      If none of the above yields a type constraint, and the caller class is a
+      Moose-based class, then "dwim_type" attempts to look the type constraint
+      up in the Moose type registry. If it''s a Mouse-based class, then the Mouse
+      type registry is used instead.
+
+      If no type constraint can be found via these normal methods, several
+      fallbacks are available:
+
+      fallback => [ "lookup_via_mouse" , "make_role_type" ],
+
+      For historical reasons, by default the fallbacks attempted are:
+
+      lookup_via_moose, lookup_via_mouse, make_class_type
+
+      You may set "fallback" to an arrayref to avoid using any of these fallbacks.
+
+      You can specify an alternative for the caller using the "for" option.
+
+      my $type = dwim_type("ArrayRef", for => "Moose::Object");
+
+      While it''s probably better overall to use the proper Type::Registry
+      interface for resolving type constraint strings, this function often does
+      what you want.
+
+      It should never die if it fails to find a type constraint (but may die if
+      the type constraint string is syntactically malformed), preferring to
+      return undef.
+
+      This function is not exported by default.':
+      'lookup_via_moose': 'Lookup in Moose registry even if caller is non-Moose class.'
+      'lookup_via_mouse': 'Lookup in Mouse registry even if caller is non-Mouse class.'
+      'make_class_type': 'Create a new Type::Tiny::Class constraint.'
+      'make_role_type': 'Create a new Type::Tiny::Role constraint.'
+  'is($type, $value)':
+    'Shortcut for "$type->check($value)" but also if $type is a string, will look
+      it up via "dwim_type".
+
+      This function is not exported by default. This function is not even exported
+      by "use Type::Utils -all". You must request it explicitly.
+
+      use Type::Utils "is";
+
+      Beware using this in test scripts because it has the same name as a
+      function exported by Test::More. Note that you can rename this function
+      if "is" will cause conflicts:
+
+      use Type::Utils "is" => { -as => "isntnt" };': |
+        'is($type, $value)'
+  'assert($type, $value)':
+    'Like "is" but instead of returning a boolean, returns $value and dies if the
+      value fails the type check.
+
+      This function is not exported by default, but it is exported by "use
+      Type::Utils -all".': |
+        'assert($type, $value)'
+  'english_list(\$conjunction, @items)':
+    'Joins the items with commas, placing a conjunction before the final item.
+      The conjunction is optional, defaulting to "and".
+
+      english_list(qw/foo bar baz/);       # "foo, bar, and baz"
+      english_list(\"or", qw/quux quuux/); # "quux or quuux"
+
+      This function is not exported by default.': |
+        'english_list(\$conjunction, @items)'
+'EXPORT':
+  'By default, all of the functions documented above are exported, except
+    "subtype" and "type" (prefer "declare" instead), "extends", "dwim_type",
+    "match_on_type"/"compile_match_on_type", "classifier", and "english_list".
+
+    This module uses Exporter::Tiny; see the documentation of that module for
+    tips and tricks importing from Type::Utils.': ''
+'BUGS':
+  'Please report any bugs to https://github.com/tobyink/p5-type-tiny/issues.': ''
+'SEE ALSO':
+  'Type::Tiny::Manual.
+
+    Type::Tiny, Type::Library, Types::Standard, Type::Coercion.
+
+    Type::Tiny::Class, Type::Tiny::Role, Type::Tiny::Duck, Type::Tiny::Enum,
+    Type::Tiny::Union.
+
+    Moose::Util::TypeConstraints, Mouse::Util::TypeConstraints.': ''
+'AUTHOR':
+  'Toby Inkster <tobyink@cpan.org>.': ''
+'COPYRIGHT AND LICENCE':
+  'This software is copyright (c) 2013-2014, 2017-2025 by Toby Inkster.
+
+    This is free software; you can redistribute it and/or modify it under the
+    same terms as the Perl 5 programming language system itself.': ''
+'DISCLAIMER OF WARRANTIES':
+  '': ''
+"Pp">يتم توفير هذه الحزمة "كما هي" وبدون أي ضمانات صريحة أو ضمنية، بما في ذلك، على سبيل المثال لا الحصر، الضمانات الضمنية الخاصة بقابلية التسويق والملاءمة لغرض معين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-02</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-type-tiny/">extra/perl-type-tiny</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>2.008004-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://metacpan.org/release/Type-Tiny">https://metacpan.org/release/Type-Tiny</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>PerlArtistic, GPL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-type-tiny/">/listing/extra/perl-type-tiny/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#STATUS">الحالة</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#EXPORT">التصدير</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENCE">حقوق النشر والترخيص</a></li>
+        
+            <li><a href="#DISCLAIMER_OF_WARRANTIES">إخلاء المسؤولية عن الضمانات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Type::Utils.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Type::Utils.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

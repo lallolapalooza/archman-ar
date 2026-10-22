@@ -1,0 +1,654 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">sssd-ad(5)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/sssd/">sssd</a></p>
+<p class="lic">التراخيص: GPL-3.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+[
+  {
+    "path": "/ad_writer/ldap_conns/ldap_conns.d/ldap_conn.conf",
+    "content": "tches with the\n    same specification, the first one is used.</p>\n<p class=\"Pp\">Examples:</p>\n<div class=\"Bd-indent\">\n<pre># apply filter on domain called dom1 only:\n        dom1:(memberOf=cn=admins,ou=groups,dc=dom1,dc=com)\n# apply filter on domain called dom2 only:\n        DOM:dom2:(memberOf=cn=admins,ou=groups,dc=dom2,dc=com)\n# apply filter on forest called EXAMPLE.COM only:\n        FOREST:EXAMPLE.COM:(memberOf=cn=admins,ou=groups,dc=example,dc=com)\n# apply filter for a member of a nested group in dom1:\n        DOM:dom1:(memberOf:1.2.840.113556.1.4.1941:=cn=nestedgroup,ou=groups,dc=example,dc=com)\n</pre>\n</div>\n<p class=\"Pp\">Default: Not set</p>\n</div>\n<p class=\"Pp\">ad_site (string)</p>\n<div class=\"Bd-indent\">Specify AD site to which client should try to connect. If\n  this option is not provided, the AD site will be auto-discovered.\n<p class=\"Pp\">Default: Not set</p>\n</div>\n<p class=\"Pp\">ad_enable_gc (boolean)</p>\n<div class=\"Bd-indent\">By default, the SSSD connects to the Global Catalog first\n  to retrieve users from trusted domains and uses the LDAP port to retrieve\n  group memberships or as a fallback. Disabling this option makes the SSSD only\n  connect to the LDAP port of the current AD server.\n<p class=\"Pp\">Please note that disabling Global Catalog support does not disable\n    retrieving users from trusted domains. The SSSD would connect to the LDAP\n    port of trusted domains instead. However, Global Catalog must be used in\n    order to resolve cross-domain group memberships.</p>\n<p class=\"Pp\">Default: true</p>\n</div>\n<p class=\"Pp\">ad_gpo_access_control (string)</p>\n<div class=\"Bd-indent\">This option specifies the operation mode for GPO-based\n  access control functionality: whether it operates in disabled mode, enforcing\n  mode, or permissive mode. Please note that the &#x201C;access_provider&#x201D;\n  option must be explicitly set to &#x201C;ad&#x201D; in order for this option\n  to have an effect.\n<p class=\"Pp\">GPO-based access control functionality uses GPO policy settings to\n    determine whether or not a particular user is allowed to logon to the host.\n    For more information on the supported policy settings please refer to the\n    &#x201C;ad_gpo_map&#x201D; options.</p>\n<p class=\"Pp\">Please note that current version of SSSD does not support Active\n    Directory's built-in groups. Built-in groups (such as Administrators with\n    SID S-1-5-32-544) in GPO access control rules will be ignored by SSSD. See\n    upstream issue tracker <a href='https://github.com/SSSD/sssd/issues/5063'>https://github.com/SSSD/sssd/issues/5063</a> .\n</p>\n<p class=\"Pp\">Before performing access control SSSD applies group policy\n    security filtering on the GPOs. For every single user login, the\n    applicability of the GPOs that are linked to the host is checked. In order\n    for a GPO to apply to a user, the user or at least one of the groups to\n    which it belongs must have following permissions on the GPO:</p>\n<div class=\"Bd-indent\">&#x2022;Read: The user or one of its groups must have\n  read access to the properties of the GPO (RIGHT_DS_READ_PROPERTY)</div>\n<div class=\"Bd-indent\">&#x2022;Apply Group Policy: The user or at least one of\n  its groups must be allowed to apply the GPO (RIGHT_DS_CONTROL_ACCESS).</div>\n<p class=\"Pp\">By default, the Authenticated Users group is present on a GPO and\n    this group has both Read and Apply Group Policy access rights. Since\n    authentication of a user must have been completed successfully before GPO\n    security filtering and access control are started, the Authenticated Users\n    group permissions on the GPO always apply also to the user.</p>\n<p class=\"Pp\">NOTE: If the operation mode is set to enforcing, it is possible\n    that users that were previously allowed logon access will now be denied\n    logon access (as dictated by the GPO policy settings). In order to\n    facilitate a smooth transition for administrators, a permissive mode is\n    available that will not enforce the access control rules, but will evaluate\n    them and will output a syslog message if access would have been denied. By\n    examining the logs, administrators can then make the necessary changes\n    before setting the mode to enforcing. For logging GPO-based access control\n    debug level 'trace functions' is required (see <a href='/man/sssctl.8.en'>sssctl(8)</a> manual\n    page).</p>\n<p class=\"Pp\">There are three supported values for this option:</p>\n<div class=\"Bd-indent\">&#x2022;disabled: GPO-based access control rules are\n  neither evaluated nor enforced.</div>\n<div class=\"Bd-indent\">&#x2022;enforcing: GPO-based access control rules are\n  evaluated and enforced.</div>\n<div class=\"Bd-indent\">&#x2022;permissive: GPO-based access control rules are\n  evaluated, but not enforced. Instead, a syslog message will be emitted\n  indicating that the user would have been denied access if this option's value\n  were set to enforcing.</div>\n<p class=\"Pp\">Default: enforcing</p>\n</div>\n<p class=\"Pp\">ad_gpo_implicit_deny (boolean)</p>\n<div class=\"Bd-indent\">Normally when no applicable GPOs are found the users are\n  allowed access. When this option is set to True users will be allowed access\n  only when explicitly allowed by a GPO rule. Otherwise users will be denied\n  access. This can be used to harden security but be careful when using this\n  option because it can deny access even to users in the built-in Administrators\n  group if no GPO rules apply to them.\n<p class=\"Pp\">Default: False</p>\n<p class=\"Pp\">The following 2 tables should illustrate when a user is allowed or\n    rejected based on the allow and deny login rights defined on the server-side\n    and the setting of ad_gpo_implicit_deny.</p>\n<table class=\"tbl\" border=\"1\" style=\"border-style: solid;\">\n  <tr>\n    <td colspan=\"3\" style=\"text-align: center;\"><b>ad_gpo_implicit_deny = False\n      (default)</b></td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\"><b>allow-rules</b></td>\n    <td style=\"text-align: center;\"><b>deny-rules</b></td>\n    <td style=\"text-align: center;\"><b>results</b></td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">all users are allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">only users not in deny-rules are\n      allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">only users in allow-rules are allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">only users in allow-rules and not in\n      deny-rules are allowed</td>\n  </tr>\n</table>\n<table class=\"tbl\" border=\"1\" style=\"border-style: solid;\">\n  <tr>\n    <td colspan=\"3\" style=\"text-align: center;\"><b>ad_gpo_implicit_deny = \n      True</b></td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\"><b>allow-rules</b></td>\n    <td style=\"text-align: center;\"><b>deny-rules</b></td>\n    <td style=\"text-align: center;\"><b>results</b></td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">no users are allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">no users are allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">missing</td>\n    <td style=\"text-align: center;\">only users in allow-rules are allowed</td>\n  </tr>\n  <tr>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">present</td>\n    <td style=\"text-align: center;\">only users in allow-rules and not in\n      deny-rules are allowed</td>\n  </tr>\n</table>\n</div>\n<p class=\"Pp\">ad_gpo_ignore_unreadable (boolean)</p>\n<div class=\"Bd-indent\">Normally when some group policy containers (AD object) of\n  applicable group policy objects are not readable by SSSD then users are denied\n  access. This option allows to ignore group policy containers and with them\n  associated policies if their attributes in group policy containers are not\n  readable for SSSD.\n<p class=\"Pp\">Default: False</p>\n</div>\n<p class=\"Pp\">ad_gpo_cache_timeout (integer)</p>\n<div class=\"Bd-indent\">The amount of time between lookups of GPO policy files\n  against the AD server. This will reduce the latency and load on the AD server\n  if there are many access-control requests made in a short period.\n<p class=\"Pp\">Default: 5 (seconds)</p>\n</div>\n<p class=\"Pp\">ad_gpo_map_interactive (string)</p>\n<div class=\"Bd-indent\">A comma-separated list of PAM service names for which\n  GPO-based access control is evaluated based on the InteractiveLogonRight and\n  DenyInteractiveLogonRight policy settings. Only those GPOs are evaluated for\n  which the user has Read and Apply Group Policy permission (see option\n  &#x201C;ad_gpo_access_control&#x201D;). If an evaluated GPO contains the deny\n  interactive logon setting for the user or one of its groups, the user is\n  denied local access. If none of the evaluated GPOs has an interactive logon\n  right defined, the user is granted local access. If at least one evaluated GPO\n  contains interactive logon right settings, the user is granted local access\n  only, if it or at least one of its groups is part of the policy settings.\n<p class=\"Pp\">Note: Using the Group Policy Management Editor this value is\n    called &quot;Allow log on locally&quot; and &quot;Deny log on\n  locally&quot;.</p>\n<p class=\"Pp\">It is possible to add another PAM service name to the default set\n  by using &#x201C;+service_name&#x201D; or to explicitly remove a PAM service\n  name from the default set by using &#x201C;-service_name&#x201D;. For\n  example, in order to replace a default PAM service name for this logon right\n  (e.g. &#x201C;login&#x201D;) with a custom pam service name (e.g.\n  &#x201C;my_pam_service&#x201D;), you would use the following\n  configuration:</p>\n<div class=\"Bd-indent\">\n<pre>ad_gpo_map_interactive = +my_pam_service, -login\n</pre>\n</div>\n<p class=\"Pp\">Default: the default set of PAM service names includes:</p>\n<div class=\"Bd-indent\">&#x2022;login</div>\n<div class=\"Bd-indent\">&#x2022;su</div>\n<div class=\"Bd-indent\">&#x2022;su-l</div>\n<div class=\"Bd-indent\">&#x2022;gdm-fingerprint</div>\n<div class=\"Bd-indent\">&#x2022;gdm-password</div>\n<div class=\"Bd-indent\">&#x2022;gdm-smartcard</div>\n<div class=\"Bd-indent\">&#x2022;kdm</div>\n<div class=\"Bd-indent\">&#x2022;lightdm</div>\n<div class=\"Bd-indent\">&#x2022;lxdm</div>\n<div class=\"Bd-indent\">&#x2022;sddm</div>\n<div class=\"Bd-indent\">&#x2022;unity</div>\n<div class=\"Bd-indent\">&#x2022;xdm</div>\n</div>\n<p class=\"Pp\">ad_gpo_map_remote_interactive (string)</p>\n<div class=\"Bd-indent\">A comma-separated list of PAM service names for which\n  GPO-based access control is evaluated based on the RemoteInteractiveLogonRight\n  and DenyRemoteInteractiveLogonRight policy settings. Only those GPOs are\n  evaluated for which the user has Read and Apply Group Policy permission (see\n  option &#x201C;ad_gpo_access_control&#x201D;). If an evaluated GPO contains\n  the deny remote logon setting for the user or one of its groups, the user is\n  denied remote interactive access. If none of the evaluated GPOs has a remote\n  interactive logon right defined, the user is granted remote access. If at\n  least one evaluated GPO contains remote interactive logon right settings, the\n  user is granted remote access only, if it or at least one of its groups is\n  part of the policy settings.\n<p class=\"Pp\">Note: Using the Group Policy Management Editor this value is\n    called &quot;Allow log on through Remote Desktop Services&quot; and\n    &quot;Deny log on through Remote Desktop Services&quot;.</p>\n<p class=\"Pp\">It is possible to add another PAM service name to the default set\n  by using &#x"
+  }
+]
+s_update is false this has no effect. This will override the TTL
+  serverside if set by an administrator.
+<p class="Pp">Default: 3600 (seconds)</p>
+</div>
+<p class="Pp">dyndns_iface (string)</p>
+<div class="Bd-indent">Optional. Applicable only when dyndns_update is true.
+  Choose the interface or a list of interfaces whose IP addresses should be used
+  for dynamic DNS updates. The name of interface can be a wildcard pattern. See
+  <i>man 7 glob</i> for details about patterns.
+<p class="Pp">Default: Use the IP addresses of the interface which is used for
+    AD LDAP connection</p>
+<p class="Pp">Example: dyndns_iface = em1, vnet?, vpn*</p>
+</div>
+<p class="Pp">dyndns_refresh_interval (integer)</p>
+<div class="Bd-indent">How often should the back end perform periodic DNS update
+  in addition to the automatic update performed when the back end goes online.
+  This option is optional and applicable only when dyndns_update is true. Note
+  that the lowest possible value is 60 seconds in-case if value is provided less
+  than 60, parameter will assume lowest value only.
+<p class="Pp">Default: 86400 (24 hours)</p>
+</div>
+<p class="Pp">dyndns_update_ptr (bool)</p>
+<div class="Bd-indent">Whether the PTR record should also be explicitly updated
+  when updating the client's DNS records. Applicable only when dyndns_update is
+  true.
+<p class="Pp">Note that <i>dyndns_update_per_family</i> parameter does not apply
+    for PTR record updates. Those updates are always sent separately.</p>
+<p class="Pp">Default: True</p>
+</div>
+<p class="Pp">dyndns_force_tcp (bool)</p>
+<div class="Bd-indent">Whether the nsupdate utility should default to using TCP
+  for communicating with the DNS server.
+<p class="Pp">Default: False (let nsupdate choose the protocol)</p>
+</div>
+<p class="Pp">dyndns_auth (string)</p>
+<div class="Bd-indent">Whether the nsupdate utility should use GSS-TSIG
+  authentication for secure updates with the DNS server, insecure updates can be
+  sent by setting this option to 'none'.
+<p class="Pp">Default: GSS-TSIG</p>
+</div>
+<p class="Pp">dyndns_auth_ptr (string)</p>
+<div class="Bd-indent">Whether the nsupdate utility should use GSS-TSIG
+  authentication for secure PTR updates with the DNS server, insecure updates
+  can be sent by setting this option to 'none'.
+<p class="Pp">Default: Same as dyndns_auth</p>
+</div>
+<p class="Pp">dyndns_server (string)</p>
+<div class="Bd-indent">The DNS server to use when performing a DNS update. In
+  most setups, it's recommended to leave this option unset.
+<p class="Pp">Setting this option makes sense for environments where the DNS
+    server is different from the identity server or when we use encrypted
+  DNS.</p>
+<p class="Pp">The parameter can be a simple string containing DNS name or IP
+    address. It can also be an URI. The URI can look like
+    <i>dns://servername/</i> or <i>dns+tls://1.2.3.4:853#servername/</i>.</p>
+<p class="Pp">The second example enables DNS-over-TLS protocol for DNS updates.
+    The nsupdate utility must support DoT - check the <i>man nsupdate</i> before
+    enabling it in SSSD.</p>
+<p class="Pp">Please note that this option will be only used in fallback attempt
+    when previous attempt using autodetected settings failed or when
+    DNS-over-TLS is enabled.</p>
+<p class="Pp">Default: None (let nsupdate choose the server)</p>
+</div>
+<p class="Pp">dyndns_update_per_family (boolean)</p>
+<div class="Bd-indent">DNS update is by default performed in two steps - IPv4
+  update and then IPv6 update. In some cases it might be desirable to perform
+  IPv4 and IPv6 update in single step.
+<p class="Pp">Default: true</p>
+</div>
+<p class="Pp">dyndns_dot_cacert (string)</p>
+<div class="Bd-indent">This option specifies the file of the certificate
+  authorities certificates (in PEM format) in order to verify the remote server
+  TLS certificate when using DoT.
+<p class="Pp">Default: None (use global certificate store)</p>
+</div>
+<p class="Pp">dyndns_dot_cert (string)</p>
+<div class="Bd-indent">This option sets the certificate(s) file for
+  authentication for the DoT transport to the remote server. The certificate
+  chain file is expected to be in PEM format.
+<p class="Pp">The <i>dyndns_dot_cert</i> and <i>dyndns_dot_key</i> options must
+    be both set to achieve mutual TLS authentication.</p>
+<p class="Pp">Default: None (Do not use TLS authentication)</p>
+</div>
+<p class="Pp">dyndns_dot_key (string)</p>
+<div class="Bd-indent">This option sets the key file for authenticated
+  encryption for the DoT transport to the remote server. The private key file is
+  expected to be in PEM format.
+<p class="Pp">Default: None (Do not use TLS authentication)</p>
+</div>
+<p class="Pp">override_homedir (string)</p>
+<div class="Bd-indent">Override the user's home directory. You can either
+  provide an absolute value or a template. In the template, the following
+  sequences are substituted:
+<p class="Pp">%u</p>
+<div class="Bd-indent">login name</div>
+<p class="Pp">%U</p>
+<div class="Bd-indent">UID number</div>
+<p class="Pp">%d</p>
+<div class="Bd-indent">domain name</div>
+<p class="Pp">%f</p>
+<div class="Bd-indent">fully qualified user name (user@domain)</div>
+<p class="Pp">%l</p>
+<div class="Bd-indent">The first letter of the login name.</div>
+<p class="Pp">%P</p>
+<div class="Bd-indent">UPN - User Principal Name (name@REALM)</div>
+<p class="Pp">%o</p>
+<div class="Bd-indent">The homedir value that is defined in the directory of the
+  identity provider.
+<p class="Pp">This substitution is designed to be used in an IPA-AD trust
+    scenario. If this substitution is used for the <i>subdomain_homedir</i>
+    option, it propagates the home directory value from the AD domain to the IPA
+    clients. In this scenario, the option must be set in the SSSD configuration
+    on the IPA server where SSSD is running in server mode.</p>
+</div>
+<p class="Pp">%h</p>
+<div class="Bd-indent">The path defined for the homedir directory attribute of
+  the identity provider, but in lower case. For details of use, see
+  <i>%o</i>.</div>
+<p class="Pp">%H</p>
+<div class="Bd-indent">The value of configure option
+  <i>homedir_substring</i>.</div>
+<p class="Pp">%%</p>
+<div class="Bd-indent">a literal '%'</div>
+<p class="Pp">This option can also be set per-domain.</p>
+<p class="Pp">example:</p>
+<div class="Bd-indent">
+<pre>override_homedir = /home/%u
+</pre>
+</div>
+<p class="Pp">Default: Not set (SSSD will use the value retrieved from LDAP)</p>
+<p class="Pp">Please note, the home directory from a specific override for the
+    user, either locally (see <a href='/man/sss_override.8.en'>sss_override(8)</a>) or centrally managed IPA
+    id-overrides, has a higher precedence and will be used instead of the value
+    given by override_homedir.</p>
+</div>
+<p class="Pp">homedir_substring (string)</p>
+<div class="Bd-indent">The value of this option will be used in the expansion of
+  the <i>override_homedir</i> option if the template contains the format string
+  <i>%H</i>. An LDAP directory entry can directly contain this template so that
+  this option can be used to expand the home directory path for each client
+  machine (or operating system). It can be set per-domain or globally in the
+  [nss] section. A value specified in a domain section will override one set in
+  the [nss] section.
+<p class="Pp">Default: /home</p>
+</div>
+<p class="Pp">krb5_confd_path (string)</p>
+<div class="Bd-indent">Absolute path of a directory where SSSD should place
+  Kerberos configuration snippets.
+<p class="Pp">To disable the creation of the configuration snippets set the
+    parameter to 'none'.</p>
+<p class="Pp">Default: not set (krb5.include.d subdirectory of SSSD's pubconf
+    directory)</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MODIFIED_DEFAULT_OPTIONS'><a class='permalink' href='#MODIFIED_DEFAULT_OPTIONS'>MODIFIED   DEFAULT OPTIONS</a></h1>
+<p class="Pp">Certain option defaults do not match their respective backend
+    provider defaults, these option names and AD provider-specific defaults are
+    listed below:</p>
+<section class="Ss">
+<h2 class="Ss" id='KRB5_Provider'><a class='permalink' href='#KRB5_Provider'>KRB5   Provider</a></h2>
+<div class="Bd-indent">&#x2022;krb5_validate = true</div>
+<div class="Bd-indent">&#x2022;krb5_use_enterprise_principal = true</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LDAP_Provider'><a class='permalink' href='#LDAP_Provider'>LDAP   Provider</a></h2>
+<div class="Bd-indent">&#x2022;ldap_schema = ad</div>
+<div class="Bd-indent">&#x2022;ldap_force_upper_case_realm = true</div>
+<div class="Bd-indent">&#x2022;ldap_id_mapping = true</div>
+<div class="Bd-indent">&#x2022;ldap_sasl_mech = GSS-SPNEGO</div>
+<div class="Bd-indent">&#x2022;ldap_referrals = false</div>
+<div class="Bd-indent">&#x2022;ldap_account_expire_policy = ad</div>
+<div class="Bd-indent">&#x2022;ldap_use_tokengroups = true</div>
+<div class="Bd-indent">&#x2022;ldap_sasl_authid = sAMAccountName@REALM
+  (typically SHORTNAME$@REALM)
+<p class="Pp">The AD provider looks for a different principal than the LDAP
+    provider by default, because in an Active Directory environment the
+    principals are divided into two groups - User Principals and Service
+    Principals. Only User Principal can be used to obtain a TGT and by default,
+    computer object's principal is constructed from its sAMAccountName and the
+    AD realm. The well-known host/hostname@REALM principal is a Service
+    Principal and thus cannot be used to get a TGT with.</p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='NSS_configuration'><a class='permalink' href='#NSS_configuration'>NSS   configuration</a></h2>
+<div class="Bd-indent">&#x2022;fallback_homedir = /home/%d/%u
+<p class="Pp">The AD provider automatically sets &quot;fallback_homedir =
+    /home/%d/%u&quot; to provide personal home directories for users without the
+    homeDirectory attribute. If your AD Domain is properly populated with Posix
+    attributes, and you want to avoid this fallback behavior, you can explicitly
+    set &quot;fallback_homedir = %o&quot;.</p>
+<p class="Pp">Note that the system typically expects a home directory in
+    /home/%u folder. If you decide to use a different directory structure, some
+    other parts of your system may need adjustments.</p>
+<p class="Pp">For example automated creation of home directories in combination
+    with selinux requires selinux adjustment, otherwise the home directory will
+    be created with wrong selinux context.</p>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FAILOVER'><a class='permalink' href='#FAILOVER'>FAILOVER</a></h1>
+<p class="Pp">The failover feature allows back ends to automatically switch to a
+    different server if the current server fails.</p>
+<section class="Ss">
+<h2 class="Ss" id='Failover_Syntax'><a class='permalink' href='#Failover_Syntax'>Failover   Syntax</a></h2>
+<p class="Pp">The list of servers is given as a comma-separated list; any number
+    of spaces is allowed around the comma. The servers are listed in order of
+    preference. The list can contain any number of servers.</p>
+<p class="Pp">For each failover-enabled config option, two variants exist:
+    <i>primary</i> and <i>backup</i>. The idea is that servers in the primary
+    list are preferred and backup servers are only searched if no primary
+    servers can be reached. If a backup server is selected, a timeout of 31
+    seconds is set. After this timeout SSSD will periodically try to reconnect
+    to one of the primary servers. If it succeeds, it will replace the current
+    active (backup) server.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Failover_Mechanism'><a class='permalink' href='#The_Failover_Mechanism'>The   Failover Mechanism</a></h2>
+<p class="Pp">The failover mechanism distinguishes between a machine and a
+    service. The back end first tries to resolve the hostname of a given
+    machine; if this resolution attempt fails, the machine is considered
+    offline. No further attempts are made to connect to this machine for any
+    oth
+```
+```arabic
+s_update is false this has no effect. This will override the TTL
+  serverside if set by an administrator.
+<p class="Pp">Default: 3600 (seconds)</p>
+</div>
+<p class="Pp">dyndns_iface (string)</p>
+<div class="Bd-indent">Optional. Applicable only when dyndns_update is true.
+  Choose the interface or a list of interfaces whose IP addresses should be used
+  for dynamic DNS updates. The name of interface can be a wildcard pattern. See
+  <i>man 7 glob</i> for details about patterns.
+<p class="Pp">Default: Use the IP addresses of the interface which is used for
+    AD LDAP connection</p>
+<p class="Pp">Example: dyndns_iface = em1, vnet?, vpn*</p>
+</div>
+<p class="Pp">dyndns_refresh_interval (integer)</p>
+<div class="Bd-indent">How often should the back end perform periodic DNS update
+  in addition to the automatic update performed when the back end goes online.
+  This option is optional and applicable only when dyndns_update is true. Note
+  that the lowest possible value is 60 seconds in-case if value is provided less
+  than 60, parameter will assume lowest value only.
+<p class="Pp">Default: 86400 (24 hours)</p>
+</div>
+<p class="Pp">dyndns_update_ptr (bool)</p>
+<div class="Bd-indent">Whether the PTR record should also be explicitly updated
+  when updating the client's DNS records. Applicable only when dyndns_update is
+  true.
+<p class="Pp">Note that <i>dyndns_update_per_family</i> parameter does not apply
+    for PTR record updates. Those updates are always sent separately.</p>
+<p class="Pp">Default: True</p>
+</div>
+<p class="Pp">dyndns_force_tcp (bool)</p>
+<div class="Bd-indent">Whether the nsupdate utility should default to using TCP
+  for communicating with the DNS server.
+<p class="Pp">Default: False (let nsupdate choose the protocol)</p>
+</div>
+<p class="Pp">dyndns_auth (string)</p>
+<div class="Bd-indent">Whether the nsupdate utility should use GSS-TSIG
+  authentication for secure updates with the DNS server, insecure updates can be
+  sent by setting this option to 'none'.
+<p class="Pp">Default: GSS-TSIG</p>
+</div>
+<p class="Pp">dyndns_auth_ptr (string)</p>
+<div class="Bd-indent">Whether the nsupdate utility should use GSS-TSIG
+  authentication for secure PTR updates with the DNS server, insecure updates
+  can be sent by setting this option to 'none'.
+<p class="Pp">Default: Same as dyndns_auth</p>
+</div>
+<p class="Pp">dyndns_server (string)</p>
+<div class="Bd-indent">The DNS server to use when performing a DNS update. In
+  most setups, it's recommended to leave this option unset.
+<p class="Pp">Setting this option makes sense for environments where the DNS
+    server is different from the identity server or when we use encrypted
+  DNS.</p>
+<p class="Pp">The parameter can be a simple string containing DNS name or IP
+    address. It can also be an URI. The URI can look like
+    <i>dns://servername/</i> or <i>dns+tls://1.2.3.4:853#servername/</i>.</p>
+<p class="Pp">The second example enables DNS-over-TLS protocol for DNS updates.
+    The nsupdate utility must support DoT - check the <i>man nsupdate</i> before
+    enabling it in SSSD.</p>
+<p class="Pp">Please note that this option will be only used in fallback attempt
+    when previous attempt using autodetected settings failed or when
+    DNS-over-TLS is enabled.</p>
+<p class="Pp">Default: None (let nsupdate choose the server)</p>
+</div>
+<p class="Pp">dyndns_update_per_family (boolean)</p>
+<div class="Bd-indent">DNS update is by default performed in two steps - IPv4
+  update and then IPv6 update. In some cases it might be desirable to perform
+  IPv4 and IPv6 update in single step.
+<p class="Pp">Default: true</p>
+</div>
+<p class="Pp">dyndns_dot_cacert (string)</p>
+<div class="Bd-indent">This option specifies the file of the certificate
+  authorities certificates (in PEM format) in order to verify the remote server
+  TLS certificate when using DoT.
+<p class="Pp">Default: None (use global certificate store)</p>
+</div>
+<p class="Pp">dyndns_dot_cert (string)</p>
+<div class="Bd-indent">This option sets the certificate(s) file for
+  authentication for the DoT transport to the remote server. The certificate
+  chain file is expected to be in PEM format.
+<p class="Pp">The <i>dyndns_dot_cert</i> and <i>dyndns_dot_key</i> options must
+    be both set to achieve mutual TLS authentication.</p>
+<p class="Pp">Default: None (Do not use TLS authentication)</p>
+</div>
+<p class="Pp">dyndns_dot_key (string)</p>
+<div class="Bd-indent">This option sets the key file for authenticated
+  encryption for the DoT transport to the remote server. The private key file is
+  expected to be in PEM format.
+<p class="Pp">Default: None (Do not use TLS authentication)</p>
+</div>
+<p class="Pp">override_homedir (string)</p>
+<div class="Bd-indent">Override the user's home directory. You can either
+  provide an absolute value or a template. In the template, the following
+  sequences are substituted:
+<p class="Pp">%u</p>
+<div class="Bd-indent">login name</div>
+<p class="Pp">%U</p>
+<div class="Bd-indent">UID number</div>
+<p class="Pp">%d</p>
+<div class="Bd-indent">domain name</div>
+<p class="Pp">%f</p>
+<div class="Bd-indent">fully qualified user name (user@domain)</div>
+<p class="Pp">%l</p>
+<div class="Bd-indent">The first letter of the login name.</div>
+<p class="Pp">%P</p>
+<div class="Bd-indent">UPN - User Principal Name (name@REALM)</div>
+<p class="Pp">%o</p>
+<div class="Bd-indent">The homedir value that is defined in the directory of the
+  identity provider.
+<p class="Pp">This substitution is designed to be used in an IPA-AD trust
+    scenario. If this substitution is used for the <i>subdomain_homedir</i>
+    option, it propagates the home directory value from the AD domain to the IPA
+    clients. In this scenario, the option must be set in the SSSD configuration
+    on the IPA server where SSSD is running in server mode.</p>
+</div>
+<p class="Pp">%h</p>
+<div class="Bd-indent">The path defined for the homedir directory attribute of
+  the identity provider, but in lower case. For details of use, see
+  <i>%o</i>.</div>
+<p class="Pp">%H</p>
+<div class="Bd-indent">The value of configure option
+  <i>homedir_substring</i>.</div>
+<p class="Pp">%%</p>
+<div class="Bd-indent">a literal '%'</div>
+<p class="Pp">This option can also be set per-domain.</p>
+<p class="Pp">example:</p>
+<div class="Bd-indent">
+<pre>override_homedir = /home/%u
+</pre>
+</div>
+<p class="Pp">Default: Not set (SSSD will use the value retrieved from LDAP)</p>
+<p class="Pp">Please note, the home directory from a specific override for the
+    user, either locally (see <a href='/man/sss_override.8.en'>sss_override(8)</a>) or centrally managed IPA
+    id-overrides, has a higher precedence and will be used instead of the value
+    given by override_homedir.</p>
+</div>
+<p class="Pp">homedir_substring (string)</p>
+<div class="Bd-indent">The value of this option will be used in the expansion of
+  the <i>override_homedir</i> option if the template contains the format string
+  <i>%H</i>. An LDAP directory entry can directly contain this template so that
+  this option can be used to expand the home directory path for each client
+  machine (or operating system). It can be set per-domain or globally in the
+  [nss] section. A value specified in a domain section will override one set in
+  the [nss] section.
+<p class="Pp">Default: /home</p>
+</div>
+<p class="Pp">krb5_confd_path (string)</p>
+<div class="Bd-indent">Absolute path of a directory where SSSD should place
+  Kerberos configuration snippets.
+<p class="Pp">To disable the creation of the configuration snippets set the
+    parameter to 'none'.</p>
+<p class="Pp">Default: not set (krb5.include.d subdirectory of SSSD's pubconf
+    directory)</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MODIFIED_DEFAULT_OPTIONS'><a class='permalink' href='#MODIFIED_DEFAULT_OPTIONS'>MODIFIED   DEFAULT OPTIONS</a></h1>
+<p class="Pp">Certain option defaults do not match their respective backend
+    provider defaults, these option names and AD provider-specific defaults are
+    listed below:</p>
+<section class="Ss">
+<h2 class="Ss" id='KRB5_Provider'><a class='permalink' href='#KRB5_Provider'>KRB5   Provider</a></h2>
+<div class="Bd-indent">&#x2022;krb5_validate = true</div>
+<div class="Bd-indent">&#x2022;krb5_use_enterprise_principal = true</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LDAP_Provider'><a class='permalink' href='#LDAP_Provider'>LDAP   Provider</a></h2>
+<div class="Bd-indent">&#x2022;ldap_schema = ad</div>
+<div class="Bd-indent">&#x2022;ldap_force_upper_case_realm = true</div>
+<div class="Bd-indent">&#x2022;ldap_id_mapping = true</div>
+<div class="Bd-indent">&#x2022;ldap_sasl_mech = GSS-SPNEGO</div>
+<div class="Bd-indent">&#x2022;ldap_referrals = false</div>
+<div class="Bd-indent">&#x2022;ldap_account_expire_policy = ad</div>
+<div class="Bd-indent">&#x2022;ldap_use_tokengroups = true</div>
+<div class="Bd-indent">&#x2022;ldap_sasl_authid = sAMAccountName@REALM
+  (typically SHORTNAME$@REALM)
+<p class="Pp">The AD provider looks for a different principal than the LDAP
+    provider by default, because in an Active Directory environment the
+    principals are divided into two groups - User Principals and Service
+    Principals. Only User Principal can be used to obtain a TGT and by default,
+    computer object's principal is constructed from its sAMAccountName and the
+    AD realm. The well-known host/hostname@REALM principal is a Service
+    Principal and thus cannot be used to get a TGT with.</p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='NSS_configuration'><a class='permalink' href='#NSS_configuration'>NSS   configuration</a></h2>
+<div class="Bd-indent">&#x2022;fallback_homedir = /home/%d/%u
+<p class="Pp">The AD provider automatically sets &quot;fallback_homedir =
+    /home/%d/%u&quot; to provide personal home directories for users without the
+    homeDirectory attribute. If your AD Domain is properly populated with Posix
+    attributes, and you want to avoid this fallback behavior, you can explicitly
+    set &quot;fallback_homedir = %o&quot;.</p>
+<p class="Pp">Note that the system typically expects a home directory in
+    /home/%u folder. If you decide to use a different directory structure, some
+    other parts of your system may need adjustments.</p>
+<p class="Pp">For example automated creation of home directories in combination
+    with selinux requires selinux adjustment, otherwise the home directory will
+    be created with wrong selinux context.</p>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FAILOVER'><a class='permalink' href='#FAILOVER'>FAILOVER</a></h1>
+<p class="Pp">The failover feature allows back ends to automatically switch to a
+    different server if the current server fails.</p>
+<section class="Ss">
+<h2 class="Ss" id='Failover_Syntax'><a class='permalink' href='#Failover_Syntax'>Failover   Syntax</a></h2>
+<p class="Pp">The list of servers is given as a comma-separated list; any number
+    of spaces is allowed around the comma. The servers are listed in order of
+    preference. The list can contain any number of servers.</p>
+<p class="Pp">For each failover-enabled config option, two variants exist:
+    <i>primary</i> and <i>backup</i>. The idea is that servers in the primary
+    list are preferred and backup servers are only searched if no primary
+    servers can be reached. If a backup server is selected, a timeout of 31
+    seconds is set. After this timeout SSSD will periodically try to reconnect
+    to one of the primary servers. If it succeeds, it will replace the current
+    active (backup) server.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Failover_Mechanism'><a class='permalink' href='#The_Failover_Mechanism'>The   Failover Mechanism</a></h2>
+<p class="Pp">The failover mechanism distinguishes between a machine and a
+    service. The back end first tries to resolve the hostname of a given
+    machine; if this resolution attempt fails, the machine is considered
+    offline. No further attempts are made to connect to this machine for any
+    oth
+ss="Bd-indent">يغير سلوك خوارزمية تعيين الهوية (ID-mapping) لتكون أقرب إلى سلوك خوارزمية winbind المسماة "idmap_autorid".
+<p class="Pp">عند تهيئة هذا الخيار، سيتم تخصيص النطاقات (domains) بدءًا من الشريحة صفر (slice zero) وزيادتها بشكل رتيب مع كل نطاق إضافي.</p>
+<p class="Pp">ملاحظة: هذه الخوارزمية غير حتمية (تعتمد على ترتيب طلبات المستخدمين والمجموعات). إذا كان هذا الوضع مطلوبًا للتوافق مع الأجهزة التي تشغل winbind، فمن المستحسن أيضًا استخدام خيار "ldap_idmap_default_domain_sid" لضمان تخصيص نطاق واحد على الأقل بشكل ثابت للشريحة صفر.</p>
+<p class="Pp">الافتراضي: False</p>
+</div>
+<p class="Pp">ldap_idmap_helper_table_size (integer)</p>
+<div class="Bd-indent">الحد الأقصى لعدد الشرائح الثانوية التي يتم تجربتها عند إجراء تعيين من معرف UNIX إلى SID.
+<p class="Pp">ملاحظة: قد يتم إنشاء شرائح ثانوية إضافية عند تعيين SID إلى معرف UNIX وكان جزء RID من SID خارج النطاق للشرائح الثانوية التي تم إنشاؤها حتى الآن. إذا كانت قيمة ldap_idmap_helper_table_size تساوي 0، فلن يتم إنشاء أي شرائح ثانوية إضافية.</p>
+<p class="Pp">الافتراضي: 10</p>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Well-Known_SIDs'><a class='permalink' href='#Well-Known_SIDs'>معرفات الأمان المعروفة (Well-Known SIDs)</a></h2>
+<p class="Pp">يدعم SSSD البحث عن أسماء معرفات الأمان المعروفة (Well-Known SIDs)، أي معرفات الأمان ذات المعنى الخاص والمبرمج مسبقًا. نظرًا لأن المستخدمين والمجموعات العامة المرتبطة بمعرفات الأمان المعروفة هذه ليس لها مقابل في بيئة Linux/UNIX، فلا تتوفر معرفات POSIX لهذه الكائنات.</p>
+<p class="Pp">تنظم مساحة أسماء SID في سلطات (authorities) يمكن اعتبارها نطاقات مختلفة. السلطات لمعرفات الأمان المعروفة هي:</p>
+<div class="Bd-indent">&#x2022; سلطة فارغة (Null Authority)</div>
+<div class="Bd-indent">&#x2022; سلطة العالم (World Authority)</div>
+<div class="Bd-indent">&#x2022; السلطة المحلية (Local Authority)</div>
+<div class="Bd-indent">&#x2022; سلطة المنشئ (Creator Authority)</div>
+<div class="Bd-indent">&#x2022; سلطة التسمية الإلزامية (Mandatory Label Authority)</div>
+<div class="Bd-indent">&#x2022; سلطة المصادقة (Authentication Authority)</div>
+<div class="Bd-indent">&#x2022; سلطة NT (NT Authority)</div>
+<div class="Bd-indent">&#x2022; مدمج (Built-in)</div>
+<p class="Pp">تُستخدم النسخة المكتوبة بأحرف كبيرة من هذه الأسماء كأسماء نطاقات عند إرجاع الاسم المؤهل بالكامل لمعرف أمان معروف. نتيجة لذلك، لا يجب استخدام أسماء النطاقات "NULL AUTHORITY"، "WORLD AUTHORITY"، "LOCAL AUTHORITY"، "CREATOR AUTHORITY"، "MANDATORY LABEL AUTHORITY"، "AUTHENTICATION AUTHORITY"، "NT AUTHORITY"، و"BUILTIN" كأسماء نطاقات في ملف sssd.conf.</p>
+<p class="Pp">نظرًا لأن بعض الأدوات تسمح بتعديل معلومات التحكم في الوصول المستندة إلى SID بمساعدة اسم بدلاً من استخدام SID مباشرة، يدعم SSSD البحث عن SID بالاسم أيضًا. لتجنب التعارضات، يمكن فقط استخدام الأسماء المؤهلة بالكامل للبحث عن معرفات الأمان المعروفة. ونتيجة لذلك، يجب ألا تُستخدم أسماء النطاقات "NULL AUTHORITY"، "WORLD AUTHORITY"، "LOCAL AUTHORITY"، "CREATOR AUTHORITY"، "MANDATORY LABEL AUTHORITY"، "AUTHENTICATION AUTHORITY"، "NT AUTHORITY"، و"BUILTIN" كأسماء نطاقات في sssd.conf.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<p class="Pp">يفترض المثال التالي أن SSSD تم تكوينه بشكل صحيح وأن example.com هو أحد النطاقات في قسم <i>[sssd]</i>. يوضح هذا المثال الخيارات الخاصة بموفر AD فقط.</p>
+<div class="Bd-indent">
+<pre>[domain/EXAMPLE]
+id_provider = ad
+auth_provider = ad
+access_provider = ad
+chpass_provider = ad
+ad_server = dc1.example.com
+ad_hostname = client.example.com
+ad_domain = example.com</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">يقوم موفر التحكم في الوصول AD بالتحقق مما إذا كان الحساب منتهي الصلاحية. وله نفس تأثير التكوين التالي لموفر LDAP:</p>
+<div class="Bd-indent">
+<pre>access_provider = ldap
+ldap_access_order = expire
+ldap_account_expire_policy = ad</pre>
+</div>
+<p class="Pp">ومع ذلك، ما لم يتم تكوين موفر الوصول "ad" بشكل صريح، فإن موفر الوصول الافتراضي هو "permit". يرجى ملاحظة أنه إذا قمت بتكوين موفر وصول بخلاف "ad"، فأنت بحاجة إلى تعيين جميع معلمات الاتصال (مثل عناوين LDAP وتفاصيل التشفير) يدويًا.</p>
+<p class="Pp">عندما يتم تعيين موفر autofs إلى "ad"، يتم استخدام تعيين سمات مخطط RFC2307 (nisMap، nisObject، ...) لأن هذه السمات مدرجة في مخطط Active Directory الافتراضي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/sssd.8.en'>sssd(8)</a>, <a href='/man/sssd.conf.5.en'>sssd.conf(5)</a>, <a href='/man/sssd-ldap.5.en'>sssd-ldap(5)</a>,
+    <a href='/man/sssd-ldap-attributes.5.en'>sssd-ldap-attributes(5)</a>, <a href='/man/sssd-krb5.5.en'>sssd-krb5(5)</a>, <a href='/man/sssd-simple.5.en'>sssd-simple(5)</a>,
+    <a href='/man/sssd-ipa.5.en'>sssd-ipa(5)</a>, <a href='/man/sssd-ad.5.en'>sssd-ad(5)</a>, <a href='/man/sssd-idp.5.en'>sssd-idp(5)</a>,
+    <a href='/man/sssd-sudo.5.en'>sssd-sudo(5)</a>, <a href='/man/sssd-session-recording.5.en'>sssd-session-recording(5)</a>, <a href='/man/sss_cache.8.en'>sss_cache(8)</a>,
+    <a href='/man/sss_debuglevel.8.en'>sss_debuglevel(8)</a>, <a href='/man/sss_obfuscate.8.en'>sss_obfuscate(8)</a>, <a href='/man/sss_seed.8.en'>sss_seed(8)</a>,
+    <a href='/man/sssd_krb5_locator_plugin.8.en'>sssd_krb5_locator_plugin(8)</a>, <a href='/man/sss_ssh_authorizedkeys.1.en'>sss_ssh_authorizedkeys(1)</a>,
+    <a href='/man/sss_ssh_knownhosts.1.en'>sss_ssh_knownhosts(1)</a>, <a href='/man/sssd-ifp.5.en'>sssd-ifp(5)</a>, <a href='/man/pam_sss.8.en'>pam_sss(8)</a>.
+    <a href='/man/sss_rpcidmapd.5.en'>sss_rpcidmapd(5)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp"><b>فريق SSSD الأصلي - <a href='https://github.com/SSSD/sssd/'>https://github.com/SSSD/sssd/</a></b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES_2'><a class='permalink' href='#NOTES_2'>ملاحظات</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>مجموعات الأمان في Active Directory</dd>
+</dl>
+<div class="Bd-indent"><a href='https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-groups'>https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-groups</a></div>
+<dl class="Bl-tag">
+  <dt> 2.</dt>
+  <dd>[MS-ADTS] قسم امتدادات LDAP</dd>
+</dl>
+<div class="Bd-indent"><a href='https://msdn.microsoft.com/en-us/library/cc223367.aspx'>https://msdn.microsoft.com/en-us/library/cc223367.aspx</a></div>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">08/26/2025</td>
+    <td class="foot-os">SSSD</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/sssd/">extra/sssd</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>2.11.1-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://github.com/SSSD/sssd">https://github.com/SSSD/sssd</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-3.0-or-later</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/extra/sssd/">/listing/extra/sssd/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CONFIGURATION_OPTIONS">خيارات التكوين</a></li>
+        
+            <li><a href="#MODIFIED_DEFAULT_OPTIONS">خيارات افتراضية معدلة</a></li>
+        
+            <li><a href="#FAILOVER">الفشل الاحتياطي</a></li>
+        
+            <li><a href="#SERVICE_DISCOVERY">اكتشاف الخدمة</a></li>
+        
+            <li><a href="#ID_MAPPING">تعيين الهوية</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#NOTES_2">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>بلغات أخرى:</p>
+    <ul>
+    
+        <li><a href="/man/sssd-ad.5.ru">ru</a></li>
+    
+        <li><a href="/man/sssd-ad.5.sv">sv</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/sssd-ad.5.en.txt">txt</a>, 
+        
+            <a href="/man/sssd-ad.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

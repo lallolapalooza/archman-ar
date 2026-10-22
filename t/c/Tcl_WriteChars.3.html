@@ -1,0 +1,358 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tcl_WriteChars(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tcl/">tcl</a></p>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "Tcl C API Channel Procedures",
+  "sections": [
+    {
+      "heading": "TCL_READCHARS, TCL_READOBJEKT, AND TCL_READ",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "The `Tcl_ReadChars` procedure reads up to `bytesToRead` bytes from the channel named by `channel` and stores them in the buffer pointed to by `readObjPtr`. The number of bytes read is returned. If `bytesToRead` is negative, the command will read all currently available characters (non-blocking) or everything until eof (blocking mode)."
+        },
+        {
+          "type": "paragraph",
+          "text": "The return value may be smaller than the value to read, indicating that less data than requested was available. This is called a *short read*. In blocking mode, this can only happen on an end-of-file. In nonblocking mode, a short read can also occur if there is not enough input currently available: `Tcl_ReadChars` returns a short count rather than waiting for more data."
+        },
+        {
+          "type": "paragraph",
+          "text": "If the channel is in blocking mode, a return value of zero indicates an end-of-file condition. If the channel is in nonblocking mode, a return value of zero indicates either that no input is currently available or an end-of-file condition. Use `Tcl_Eof` and `Tcl_InputBlocked` to tell which of these conditions actually occurred."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_ReadChars` translates the various end-of-line representations into the canonical `\\n` internal representation according to the current end-of-line recognition mode. End-of-line recognition and the various platform-specific modes are described in the manual entry for the Tcl `fconfigure` command."
+        },
+        {
+          "type": "paragraph",
+          "text": "As a performance optimization, when reading from a channel with the encoding `binary`, the bytes are not converted to UTF-8 as they are read. Instead, they are stored in `readObjPtr`'s internal representation as a byte-array value. The string representation of this value will only be constructed if it is needed (e.g., because of a call to `Tcl_GetStringFromObj`). In this way, byte-oriented data can be read from a channel, manipulated by calling `Tcl_GetByteArrayFromObj` and related functions, and then written to a channel without the expense of ever converting to or from UTF-8."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Read` is similar to `Tcl_ReadChars`, except that it does not do encoding conversions, regardless of the channel's encoding. It is deprecated and exists for backwards compatibility with non-internationalized Tcl extensions. It consumes bytes from `channel` and stores them in `readBuf`, performing end-of-line translations on the way. The return value of `Tcl_Read` is the number of bytes, up to `bytesToRead`, written in `readBuf`. The buffer produced by `Tcl_Read` is not null-terminated. Its contents are valid from the zeroth position up to and excluding the position indicated by the return value."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_ReadRaw` is the same as `Tcl_Read` but does not compensate for stacking. While `Tcl_Read` (and the other functions in the API) always get their data from the topmost channel in the stack the supplied channel is part of, `Tcl_ReadRaw` does not. Thus this function is *only* usable for transformational channel drivers, i.e. drivers used in the middle of a stack of channels, to move data from the channel below into the transformation."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_GETSOBJ AND TCL_GETS",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_GetsObj` consumes bytes from `channel`, converting the bytes to UTF-8 based on the channel's encoding, until a full line of input has been seen. If the channel's encoding is `binary`, each byte read from the channel is treated as an individual Unicode character. All of the characters of the line except for the terminating end-of-line character(s) are appended to `lineObjPtr`'s string representation. The end-of-line character(s) are read and discarded."
+        },
+        {
+          "type": "paragraph",
+          "text": "If a line was successfully read, the return value is greater than or equal to zero and indicates the number of bytes stored in `lineObjPtr`. If an error occurs, `Tcl_GetsObj` returns -1 and records a POSIX error code that can be retrieved with `Tcl_GetErrno`. `Tcl_GetsObj` also returns -1 if the end of the file is reached; the `Tcl_Eof` procedure can be used to distinguish an error from an end-of-file condition."
+        },
+        {
+          "type": "paragraph",
+          "text": "If the channel is in nonblocking mode, the return value can also be -1 if no data was available or the data that was available did not contain an end-of-line character. When -1 is returned, the `Tcl_InputBlocked` procedure may be invoked to determine if the channel is blocked because of input unavailability."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Gets` is the same as `Tcl_GetsObj` except the resulting characters are appended to the dynamic string given by `lineRead` rather than a Tcl value."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_UNGETS",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Ungets` is used to add data to the input queue of a channel, at either the head or tail of the queue. The pointer `input` points to the data that is to be added. The length of the input to add is given by `inputLen`. A non-zero value of `addAtEnd` indicates that the data is to be added at the end of queue; otherwise it will be added at the head of the queue. If `channel` has a “sticky” EOF set, no data will be added to the input queue. `Tcl_Ungets` returns `inputLen` or -1 if an error occurs."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_WRITECHARS, TCL_WRITEOBJ, AND TCL_WRITE",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_WriteChars` accepts `bytesToWrite` bytes of character data at `charBuf`. The UTF-8 characters in the buffer are converted to the channel's encoding and queued for output to `channel`. If `bytesToWrite` is negative, `Tcl_WriteChars` expects `charBuf` to be null-terminated and it outputs everything up to the null."
+        },
+        {
+          "type": "paragraph",
+          "text": "Data queued for output may not appear on the output device immediately, due to internal buffering. If the data should appear immediately, call `Tcl_Flush` after the call to `Tcl_WriteChars`, or set the `-buffering` option on the channel to `none`. If you wish the data to appear as soon as a complete line is accepted for output, set the `-buffering` option on the channel to `line` mode."
+        },
+        {
+          "type": "paragraph",
+          "text": "The return value of `Tcl_WriteChars` is a count of how many bytes were accepted for output to the channel. This is either greater than zero to indicate success or -1 to indicate that an error occurred. If an error occurs, `Tcl_WriteChars` records a POSIX error code that may be retrieved with `Tcl_GetErrno`."
+        },
+        {
+          "type": "paragraph",
+          "text": "Newline characters in the output data are translated to platform-specific end-of-line sequences according to the `-translation` option for the channel. This is done even if the channel has no encoding."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_WriteObj` is similar to `Tcl_WriteChars` except it accepts a Tcl value whose contents will be output to the channel. The UTF-8 characters in `writeObjPtr`'s string representation are converted to the channel's encoding and queued for output to `channel`. As a performance optimization, when writing to a channel with the encoding `binary`, UTF-8 characters are not converted as they are written. Instead, the bytes in `writeObjPtr`'s internal representation as a byte-array value are written to the channel. The byte-array representation of the value will be constructed if it is needed. In this way, byte-oriented data can be read from a channel, manipulated by calling `Tcl_GetByteArrayFromObj` and related functions, and then written to a channel without the expense of ever converting to or from UTF-8."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Write` is similar to `Tcl_WriteChars` except that it does not do encoding conversions, regardless of the channel's encoding. It is deprecated and exists for backwards compatibility with non-internationalized Tcl extensions. It accepts `bytesToWrite` bytes of data at `byteBuf` and queues them for output to `channel`. If `bytesToWrite` is negative, `Tcl_Write` expects `byteBuf` to be null-terminated and it outputs everything up to the null."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_WriteRaw` is the same as `Tcl_Write` but does not compensate for stacking. While `Tcl_Write` (and the other functions in the API) always feed their input to the topmost channel in the stack the supplied channel is part of, `Tcl_WriteRaw` does not. Thus this function is *only* usable for transformational channel drivers, i.e. drivers used in the middle of a stack of channels, to move data from the transformation into the channel below it."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_FLUSH",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Flush` causes all of the buffered output data for `channel` to be written to its underlying file or device as soon as possible. If the channel is in blocking mode, the call does not return until all the buffered data has been sent to the channel or some error occurred. The call returns immediately if the channel is nonblocking; it starts a background flush that will write the buffered data to the channel eventually, as fast as the channel is able to absorb it."
+        },
+        {
+          "type": "paragraph",
+          "text": "The return value is normally `TCL_OK`. If an error occurs, `Tcl_Flush` returns `TCL_ERROR` and records a POSIX error code that can be retrieved with `Tcl_GetErrno`."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_SEEK",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Seek` moves the access point in `channel` where subsequent data will be read or written. Buffered output is flushed to the channel and buffered input is discarded, prior to the seek operation."
+        },
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Seek` normally returns the new access point. If an error occurs, `Tcl_Seek` returns -1 and records a POSIX error code that can be retrieved with `Tcl_GetErrno`. After an error, the access point may or may not have been moved."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_TELL",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_Tell` returns the current access point for a channel. The returned value is -1 if the channel does not support seeking."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_TRUNCATECHANNEL",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_TruncateChannel` truncates the file underlying `channel` to a given `length` of bytes. It returns `TCL_OK` if the operation succeeded, and `TCL_ERROR` otherwise."
+        }
+      ]
+    },
+    {
+      "heading": "TCL_GETCHANNELOPTION",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "`Tcl_GetChannelOption` retrieves, in `optionValue`, the value of one of the options currently in effect for a channel, or a list of all options and their values. The `channel` argument identifies the channel for which to query an option or retrieve all options and their values. If `optionName` is not NULL, it is the name of the option to query; the option's value is copied to the Tcl dynamic string denoted by `optionValue`. If `optionName` is NULL, the function stores an alternating list of option names and their values in `optionValue`,"
+        }
+      ]
+    }
+  ]
+}
+<section class="Sh">
+<h1 class="Sh" id='TCL_GETCHANNELOPTION'><a class='permalink' href='#TCL_GETCHANNELOPTION'>TCL_GETCHANNELOPTION</a></h1>
+<p class="Pp"><b>Tcl_GetChannelOption</b> يبحث عن قيمة خيار <i>optionName</i>
+    بالنسبة للقناة <i>channel</i>. يتم تخزين القيمة كسلسلة حرفية في <i>value</i>.
+    إذا كانت القناة غير موجودة، أو لم يكن الخيار <i>optionName</i> صالحًا،
+    فإن الإجراء يرجع <b>TCL_ERROR</b> ويقوم بترك رسالة خطأ في نتيجة المفسر.
+    تتم معالجة الخيارات القياسية الموضحة في صفحة الدليل الخاصة بأمر Tcl
+    <b>fconfigure</b>. يمكن إضافة خيارات أخرى بواسطة كل نوع قناة، وتتم
+    معالجتها بشكل منفصل. على سبيل المثال، تتم معالجة الخيارات الخاصة بقنوات TCP
+    في <b>Tcl_OpenCommandChannel</b>. يقوم الإجراء عادةً بإرجاع <b>TCL_OK</b>.
+    إذا حدث خطأ، فإنه يرجع <b>TCL_ERROR</b> ويستدعي
+    <b>Tcl_SetErrno</b> لتخزين رمز خطأ POSIX مناسب.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_SETCHANNELOPTION'><a class='permalink' href='#TCL_SETCHANNELOPTION'>TCL_SETCHANNELOPTION</a></h1>
+<p class="Pp"><b>Tcl_SetChannelOption</b> تقوم بتعيين قيمة جديدة <i>newValue</i>
+    للخيار <i>optionName</i> على <i>channel</i>. يقوم الإجراء عادةً بإرجاع
+    <b>TCL_OK</b>. إذا حدث خطأ، فإنه يرجع <b>TCL_ERROR</b>؛ بالإضافة إلى ذلك،
+    إذا كان <i>interp</i> غير NULL، فإن
+    <b>Tcl_SetChannelOption</b> تترك رسالة خطأ في نتيجة المفسر.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_EOF'><a class='permalink' href='#TCL_EOF'>TCL_EOF</a></h1>
+<p class="Pp"><b>Tcl_Eof</b> ترجع قيمة غير صفرية إذا واجهت القناة
+    <i>channel</i> نهاية الملف أثناء عملية الإدخال الأخيرة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_INPUTBLOCKED'><a class='permalink' href='#TCL_INPUTBLOCKED'>TCL_INPUTBLOCKED</a></h1>
+<p class="Pp"><b>Tcl_InputBlocked</b> ترجع قيمة غير صفرية إذا كانت القناة
+    <i>channel</i> في وضع غير حاجب، وعملية الإدخال الأخيرة أعادت بيانات أقل
+    مما هو مطلوب بسبب عدم توفر بيانات كافية. ترجع الاستدعاء دائمًا صفر إذا كانت
+    القناة في وضع حاجب.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_INPUTBUFFERED'><a class='permalink' href='#TCL_INPUTBUFFERED'>TCL_INPUTBUFFERED</a></h1>
+<p class="Pp"><b>Tcl_InputBuffered</b> ترجع عدد البايتات من الإدخال المخزنة
+    حالياً في المخازن المؤقتة الداخلية للقناة. إذا لم تكن القناة مفتوحة للقراءة،
+    فإن هذه الدالة ترجع دائمًا صفر.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TCL_OUTPUTBUFFERED'><a class='permalink' href='#TCL_OUTPUTBUFFERED'>TCL_OUTPUTBUFFERED</a></h1>
+<p class="Pp"><b>Tcl_OutputBuffered</b> ترجع عدد البايتات من الإخراج المخزنة
+    حالياً في المخازن المؤقتة الداخلية للقناة. إذا لم تكن القناة مفتوحة للكتابة،
+    فإن هذه الدالة ترجع دائمًا صفر.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PLATFORM_ISSUES'><a class='permalink' href='#PLATFORM_ISSUES'>قضايا المنصة</a></h1>
+<p class="Pp">المقابض التي تم إرجاعها من <b>Tcl_GetChannelHandle</b> تعتمد
+    على المنصة ونوع القناة. على منصات Unix، يكون المقبض دائمًا واصف ملف Unix
+    كما تم إرجاعه من استدعاء النظام <b>open</b>. على منصات Windows، يكون المقبض
+    عبارة عن <b>HANDLE</b> ملف عندما تم إنشاء القناة باستخدام
+    <b>Tcl_OpenFileChannel</b>، أو <b>Tcl_OpenCommandChannel</b>، أو
+    <b>Tcl_MakeFileChannel</b>. قد ترجع أنواع القنوات الأخرى نوعًا مختلفًا
+    من المقابض على منصات Windows.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">DString(3), fconfigure(n), filename(n), fopen(3),
+    Tcl_CreateChannel(3)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='KEYWORDS'><a class='permalink' href='#KEYWORDS'>كلمات مفتاحية</a></h1>
+<p class="Pp">نقطة وصول، حاجب، إدخال/إخراج مخزن مؤقت، قناة، مشغل قناة، نهاية
+    الملف، مسح، إدخال، غير حاجب، إخراج، قراءة، بحث، كتابة</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">8.3</td>
+    <td class="foot-os">Tcl</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>TCL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#ARGUMENTS">الوسائط</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#TCL_OPENFILECHANNEL">TCL_OPENFILECHANNEL</a></li>
+        
+            <li><a href="#TCL_OPENCOMMANDCHANNEL">TCL_OPENCOMMANDCHANNEL</a></li>
+        
+            <li><a href="#TCL_MAKEFILECHANNEL">TCL_MAKEFILECHANNEL</a></li>
+        
+            <li><a href="#TCL_GETCHANNEL">TCL_GETCHANNEL</a></li>
+        
+            <li><a href="#TCL_REGISTERCHANNEL">TCL_REGISTERCHANNEL</a></li>
+        
+            <li><a href="#TCL_UNREGISTERCHANNEL">TCL_UNREGISTERCHANNEL</a></li>
+        
+            <li><a href="#TCL_DETACHCHANNEL">TCL_DETACHCHANNEL</a></li>
+        
+            <li><a href="#TCL_ISSTANDARDCHANNEL">TCL_ISSTANDARDCHANNEL</a></li>
+        
+            <li><a href="#TCL_CLOSE">TCL_CLOSE</a></li>
+        
+            <li><a href="#TCL_READCHARS_AND_TCL_READ">TCL_READCHARS و TCL_READ</a></li>
+        
+            <li><a href="#TCL_GETSOBJ_AND_TCL_GETS">TCL_GETSOBJ و TCL_GETS</a></li>
+        
+            <li><a href="#TCL_UNGETS">TCL_UNGETS</a></li>
+        
+            <li><a href="#TCL_WRITECHARS,_TCL_WRITEOBJ,_AND_TCL_WRITE">TCL_WRITECHARS، TCL_WRITEOBJ، و TCL_WRITE</a></li>
+        
+            <li><a href="#TCL_FLUSH">TCL_FLUSH</a></li>
+        
+            <li><a href="#TCL_SEEK">TCL_SEEK</a></li>
+        
+            <li><a href="#TCL_TELL">TCL_TELL</a></li>
+        
+            <li><a href="#TCL_TRUNCATECHANNEL">TCL_TRUNCATECHANNEL</a></li>
+        
+            <li><a href="#TCL_GETCHANNELOPTION">TCL_GETCHANNELOPTION</a></li>
+        
+            <li><a href="#TCL_SETCHANNELOPTION">TCL_SETCHANNELOPTION</a></li>
+        
+            <li><a href="#TCL_EOF">TCL_EOF</a></li>
+        
+            <li><a href="#TCL_INPUTBLOCKED">TCL_INPUTBLOCKED</a></li>
+        
+            <li><a href="#TCL_INPUTBUFFERED">TCL_INPUTBUFFERED</a></li>
+        
+            <li><a href="#TCL_OUTPUTBUFFERED">TCL_OUTPUTBUFFERED</a></li>
+        
+            <li><a href="#PLATFORM_ISSUES">قضايا المنصة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#KEYWORDS">كلمات مفتاحية</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Tcl_WriteChars.3.en.txt">txt</a>, 
+        
+            <a href="/man/Tcl_WriteChars.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

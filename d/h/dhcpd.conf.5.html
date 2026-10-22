@@ -1,0 +1,466 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">dhcpd.conf(5)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "ALLOW AND DENY KEYWORDS",
+  "sections": [
+    {
+      "heading": "THE DUPLICATES KEYWORD",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "allow duplicates;",
+            "deny duplicates;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Host declarations can match client messages based on the DHCP Client Identifier option or based on the client's network hardware type and MAC address. If the MAC address is used, the host declaration will match any client with that MAC address - even clients with different client identifiers. This doesn't normally happen, but is possible when one computer has more than one operating system installed on it - for example, Microsoft Windows and NetBSD or Linux."
+        },
+        {
+          "type": "paragraph",
+          "text": "The <b>duplicates</b> flag tells the DHCP server that if a request is received from a client that matches the MAC address of a host declaration, any other leases matching that MAC address should be discarded by the server, even if the UID is not the same. This is a violation of the DHCP protocol, but can prevent clients whose client identifiers change regularly from holding many leases at the same time. By default, duplicates are <b>allow</b>ed."
+        }
+      ]
+    },
+    {
+      "heading": "THE declines KEYWORD",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "allow declines;",
+            "deny declines;",
+            "ignore declines;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "The DHCPDECLINE message is used by DHCP clients to indicate that the lease the server has offered is not valid. When the server receives a DHCPDECLINE for a particular address, it normally abandons that address, assuming that some unauthorized system is using it. Unfortunately, a malicious or buggy client can, using DHCPDECLINE messages, completely exhaust the DHCP server's allocation pool. The server will eventually reclaim these leases, but not while the client is running through the pool. This may cause serious thrashing in the DNS, and it will also cause the DHCP server to forget old DHCP client address allocations."
+        },
+        {
+          "type": "paragraph",
+          "text": "The <b>declines</b> flag tells the DHCP server whether or not to honor DHCPDECLINE messages. If it is set to <b>deny</b> or <b>ignore</b> in a particular scope, the DHCP server will not respond to DHCPDECLINE messages."
+        },
+        {
+          "type": "paragraph",
+          "text": "The <b>declines</b> flag is only supported by DHCPv4 servers. Given the large IPv6 address space and the internal limits imposed by the server's address generation mechanism we don't think it is necessary for DHCPv6 servers at this time."
+        },
+        {
+          "type": "paragraph",
+          "text": "Currently, abandoned IPv6 addresses are reclaimed in one of two ways:"
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "text": "Client renews a specific address:",
+              "sub_list": {
+                "type": "list",
+                "items": [
+                  {
+                    "type": "list_item",
+                    "text": "If a client using a given DUID submits a DHCP REQUEST containing the last address abandoned by that DUID, the address will be reassigned to that client."
+                  }
+                ]
+              }
+            },
+            {
+              "type": "list_item",
+              "text": "Upon the second restart following an address abandonment. When an address is abandoned it is both recorded as such in the lease file and retained as abandoned in server memory until the server is restarted. Upon restart, the server will process the lease file and all addresses whose last known state is abandoned will be retained as such in memory but not rewritten to the lease file. This means that a subsequent restart of the server will not see the abandoned addresses in the lease file and therefore have no record of them as abandoned in memory and as such perceive them as free for assignment."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "The total number addresses in a pool, available for a given DUID value, is internally limited by the server's address generation mechanism. If through mistaken configuration, multiple clients are using the same DUID they will competing for the same addresses causing the server to reach this internal limit rather quickly. The internal limit isolates this type of activity such that address range is not exhausted for other DUID values. The appearance of the following error log, can be an indication of this condition:"
+        },
+        {
+          "type": "code",
+          "lines": [
+            "\"Best match for DUID <XX> is an abandoned address, This may be a result of multiple clients attempting to use this DUID\""
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "where <XX> is an actual DUID value depicted as colon separated string of bytes in hexadecimal values."
+        }
+      ]
+    },
+    {
+      "heading": "THE client-updates KEYWORD",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "allow client-updates;",
+            "deny client-updates;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "The <b>client-updates</b> flag tells the DHCP server whether or not to honor the client's intention to do its own update of its A record. See the documentation under the heading THE DNS UPDATE SCHEME for details."
+        }
+      ]
+    },
+    {
+      "heading": "THE leasequery KEYWORD",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "allow leasequery;",
+            "deny leasequery;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "The <b>leasequery</b> flag tells the DHCP server whether or not to answer DHCPLEASEQUERY packets. The answer to a DHCPLEASEQUERY packet includes information about a specific lease, such as when it was issued and when it will expire. By default, the server will not respond to these packets."
+        }
+      ]
+    }
+  ]
+},
+"ALLOW AND DENY WITHIN POOL DECLARATIONS": {
+  "title": "ALLOW AND DENY WITHIN POOL DECLARATIONS",
+  "content": [
+    {
+      "type": "paragraph",
+      "text": "The uses of the allow and deny keywords shown in the previous section work pretty much the same way whether the client is sending a DHCPDISCOVER or a DHCPREQUEST message - an address will be allocated to the client (either the old address it's requesting, or a new address) and then that address will be tested to see if it's okay to let the client have it. If the client requested it, and it's not okay, the server will send a DHCPNAK message. Otherwise, the server will simply not respond to the client. If it is okay to give the address to the client, the server will send a DHCPACK message."
+    },
+    {
+      "type": "paragraph",
+      "text": "The primary motivation behind pool declarations is to have address allocation pools whose allocation policies are different. A client may be denied access to one pool, but allowed access to another pool on the same network segment. In order for this to work, access control has to be done during address allocation, not after address allocation is done."
+    },
+    {
+      "type": "paragraph",
+      "text": "When a DHCPREQUEST message is processed, address allocation simply consists of looking up the address the client is requesting and seeing if it's still available for the client. If it is, then the DHCP server checks both the address pool permit lists and the relevant in-scope allow and deny statements to see if it's okay to give the lease to the client. In the case of a DHCPDISCOVER message, the allocation process is done as described previously in the ADDRESS ALLOCATION section."
+    },
+    {
+      "type": "paragraph",
+      "text": "When declaring permit lists for address allocation pools, the following syntaxes are recognized following the allow or deny keywords:"
+    },
+    {
+      "type": "code",
+      "lines": [
+        "known-clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any client that has a host declaration (i.e., is known). A client is known if it has a host declaration in <i>any</i> scope, not just the current scope."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "unknown-clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any client that has no host declaration (i.e., is not known)."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "members of \"class\";"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any client that is a member of the named class."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "dynamic bootp clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any bootp client."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "authenticated clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any client that has been authenticated using the DHCP authentication protocol. This is not yet supported."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "unauthenticated clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to any client that has not been authenticated using the DHCP authentication protocol. This is not yet supported."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "all clients;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool to all clients. This can be used when you want to write a pool declaration for some reason, but hold it in reserve, or when you want to renumber your network quickly, and thus want the server to force all clients that have been allocated addresses from this pool to obtain new addresses immediately when they next renew."
+    },
+    {
+      "type": "code",
+      "lines": [
+        "after time;"
+      ]
+    },
+    {
+      "type": "paragraph",
+      "text": "If specified, this statement either allows or prevents allocation from this pool after a given date. This can be used when you want to move clients from one pool to another. The server adjusts the regular lease time so that the latest expiry time is at the given time+min-lease-time. A short min-lease-time enforces a step change, whereas a longer min-lease-time allows for a gradual change. <i>time</i> is either second since epoch, or a UTC time string e.g. 4 2007/08/24 09:14:32 or a string with time zone offset in seconds e.g. 4 2007/08/24 11:14:32 -7200"
+    }
+  ]
+},
+"REFERENCE: PARAMETERS": {
+  "title": "REFERENCE: PARAMETERS",
+  "sections": [
+    {
+      "heading": "The abandon-lease-time statement",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "abandon-lease-time time;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "<i>Time</i> should be the maximum amount of time (in seconds) that an abandoned IPv4 lease remains unavailable for assignment to a client. Abandoned leases will only be offered to clients if there are no free leases. If not defined, the default abandon lease time is 86400 seconds (24 hours). Note the abandoned lease time for a given lease is preserved across server restarts. The parameter may only be set at the global scope and is evaluated only once during server startup."
+        },
+        {
+          "type": "paragraph",
+          "text": "Values less than sixty seconds are not recommended as this is below the ping check threshold and can cause leases once abandoned but since returned to the free state to not be pinged before being offered. If the requested time is larger than 0x7FFFFFFF - 1 or the sum of the current time plus the abandoned time isgreater than 0x7FFFFFFF it is treated as infinite."
+        }
+      ]
+    },
+    {
+      "heading": "The adaptive-lease-time-threshold statement",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "adaptive-lease-time-threshold percentage;"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "When the number of allocated leases within a pool rises above the <i>percentage</i> given in this statement, the DHCP server decreases the lease length for new clients within this pool to <i>min-lease-time</i> seconds. Clients renewing an already valid (long) leases get at least the remaining time from the current lease. Since the leases expire faster, the server may either recover more quickly or avoid pool exhaustion entirely. Once the number of allocated leases drop below the threshold, the server reverts back to normal lease times. Valid percentages are between 1 and 99."
+        }
+      ]
+    },
+    {
+      "heading": "The always-broadcast statement",
+      "content": [
+        {
+          "type": "code",
+          "lines": [
+            "always-broadcast;"
+          ]
+        }
+      ]
+    }
+  ]
+}
+<i>Count</i> يجب أن تكون قيمة عدد صحيح من صفر إلى 2^16-1 وتكون قيمتها الافتراضية 0، مما يعني أن الميزة معطلة. بخلاف ذلك، قد يكون 28 نقطة بداية معقولة للعديد من التكوينات (حجم SO_SNDBUF / 576 بايت). يمثل العدد الحد الأقصى لردود DHCPv4 التي سيتم وضعها في قائمة انتظار بانتظار الإرسال حتى بعد حدث تأكيد قاعدة البيانات. إذا تم الوصول إلى هذا الرقم، فسيتم إجراء حدث تأكيد قاعدة البيانات (والذي ينتج عادةً عن fsync() ويمثل عقوبة أداء)، وسيتم إرسال حزم الرد في دفعة لاحقًا. هذا يحافظ على توجيه RFC2131 بأن يتم تحديث "التخزين المستقر" قبل الرد على العملاء. إذا أصبحت مقابس DHCPv4 "جافة" (select() تعود فورًا بدون مقابس قراءة)، فسيتم إجراء التأكيد وإرسال أي حزم معلقة.
+
+وبالمثل، يشير <i>microseconds</i> إلى عدد الميكروثواني المسموح بها بالمرور بين وضع حزمة في قائمة انتظار بانتظار fsync، وتنفيذ fsync. تتراوح القيم الصالحة من 0 إلى 2^32-1، وقيمتها الافتراضية هي 250,000 (1/4 من الثانية).
+
+تم تجميع ميزة التأخير في الاستجابة (delayed-ack) افتراضيًا، ولكن يمكن تعطيلها وقت الترجمة باستخدام "./configure --disable-delayed-ack". يرجى ملاحظة أن ميزة التأخير في الاستجابة غير متوافقة حاليًا مع دعم DHCPv4-over-DHCPv6، لذا عندما تقوم وسيطة سطر الأوامر 4to6 بتفعيل هذه الميزة في الخادم، يتم إعادة تعيين قيمة التأخير في الاستجابة إلى 0.
+</p>
+<p class="Pp">
+البيان <i>dhcp-cache-threshold</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>dhcp-cache-threshold <i>percentage</i>;</b>
+</p>
+<p class="Pp">
+يأخذ البيان <i>dhcp-cache-threshold</i> معاملًا عدديًا صحيحًا واحدًا بقيم مسموح بها بين 0 و 100. القيمة الافتراضية هي 25 (25٪ من مدة التأجير). يعبر هذا المعامل عن نسبة الوقت الإجمالي للتأجير، المقاس من البداية، والذي يؤدي فيه محاولة العميل لتجديد تأجيره إلى الحصول على التأجير المعين بالفعل، بدلاً من تأجير ممتد. هذه الميزة مدعومة لكل من IPv4 و IPv6 وإلى مستوى المجمع، وبالنسبة لـ IPv6 جميع أنواع المجمعات الثلاثة: NA و TA و PD.
+</p>
+<p class="Pp">
+يمكن أن تؤدي محاولات التجديد المتكررة من العملاء إلى تحديث الخادم وكتابة قاعدة البيانات بشكل متكرر، مما يؤثر على أداء الخادم. يقوم البيان <i>dhcp-cache-threshold</i> بتعليم خادم DHCP بتجنب تحديث التأجيرات بشكل متكرر، وبالتالي تجنب هذا السلوك. بدلاً من ذلك، يرد الخادم بنفس التأجير (أي يعيد استخدامه) دون تعديلات باستثناء CLTT (وقت الإرسال الأخير للعميل) وبالنسبة لـ IPv4:
+</p>
+<p class="Pp">
+<br/>
+مدة التأجير المرسلة إلى العميل يتم تقصيرها بمقدار عمر
+<br/>
+التأجير
+</p>
+<p class="Pp">
+وبالنسبة لـ IPv6:
+</p>
+<p class="Pp">
+<br/>
+يتم تقصير الفترات المفضلة والصالحة المرسلة إلى العميل
+<br/>
+بمقدار عمر التأجير.
+</p>
+<p class="Pp">
+لا تتطلب أي من هذه التغييرات كتابة التأجير على القرص.
+</p>
+<p class="Pp">
+عندما يتم مطابقة بيانات التأجير مع عميل متجدد، فسيتم إعادة استخدامه إذا كانت جميع الشروط التالية صحيحة:
+</p>
+<pre>    1. dhcp-cache-threshold أكبر من صفر
+    2. التأجير الحالي نشط
+    3. النسبة المئوية لوقت التأجير المنقضي أقل من
+    dhcp-cache-threshold
+    4. معلومات العميل المقدمة في التجديد لا تغير أيًا مما يلي:
+       أ. معلومات DNS وتحديثات DNS ممكّنة
+       ب. فئة الفوترة التي يرتبط بها التأجير (IPv4 فقط)
+       ج. إعلان المضيف المرتبط بالتأجير (IPv4 فقط)
+       د. معرف العميل - قد يحدث هذا إذا قام عميل بالتمهيد بدون
+          معرف عميل ثم بدأ في استخدامه في الطلبات اللاحقة. (IPv4 فقط)
+</pre>
+<p class="Pp">
+على الرغم من عدم كتابة بيانات التأجير على القرص عند إعادة استخدام التأجير، سيظل الخادم ينفذ أي عبارات عند التأكيد.
+</p>
+<p class="Pp">
+لاحظ أنه يمكن إعادة استخدام التأجير إذا تغيرت الخيارات التي يرسلها العميل أو وكيل الترحيل. لن يتم تسجيل هذه التغييرات في قواعد البيانات في الذاكرة أو على القرص حتى يقوم العميل بالتجديد بعد الوصول إلى وقت العتبة.
+</p>
+</div>
+<p class="Pp">
+البيان <i>do-forward-updates</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>do-forward-updates <i>flag</i>;</b>
+</p>
+<p class="Pp">
+يقوم البيان <i>do-forward-updates</i> بتعليم خادم DHCP ما إذا كان يجب عليه محاولة تحديث سجل A الخاص بعميل DHCP عند اكتساب العميل لتأجير أو تجديده. ليس لهذا البيان أي تأثير ما لم يتم تمكين تحديثات DNS. يتم تمكين التحديثات الأمامية افتراضيًا. إذا تم استخدام هذا البيان لتعطيل التحديثات الأمامية، فلن يحاول خادم DHCP أبدًا تحديث سجل A الخاص بالعميل، وسيحاول فقط تحديث سجل PTR الخاص بالعميل إذا قدم العميل اسم نطاق مؤهل بالكامل (FQDN) يجب وضعه في سجل PTR باستخدام خيار <b>fqdn</b>. إذا تم تمكين التحديثات الأمامية، فسيظل خادم DHCP يحترم إعداد علامة <b>client-updates</b>.
+</p>
+</div>
+<p class="Pp">
+البيان <i>dont-use-fsync</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>dont-use-fsync <i>flag</i>;</b>
+</p>
+<p class="Pp">
+يخبر البيان <i>dont-use-fsync</i> خادم DHCP ما إذا كان يجب عليه استدعاء fsync() عند كتابة التأجيرات إلى ملف التأجير. افتراضيًا، وإذا كانت العلامة مضبوطة على false، سيقوم الخادم باستدعاء fsync(). قد يؤدي قمع استدعاء fsync() إلى زيادة أداء الخادم ولكنه يضيف أيضًا خطر عدم كتابة التأجير بشكل صحيح على القرص بعد إصداره لعميل وقبل توقف الخادم. يمكن أن يؤدي هذا إلى إصدار تأجيرات مكررة لعملاء مختلفين. استخدام هذا الخيار **غير** **موصى به**.
+</p>
+</div>
+<p class="Pp">
+البيان <i>dynamic-bootp-lease-cutoff</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>dynamic-bootp-lease-cutoff <i>date</i>;</b>
+</p>
+<p class="Pp">
+يحدد البيان <i>dynamic-bootp-lease-cutoff</i> وقت انتهاء صلاحية جميع التأجيرات المعينة ديناميكيًا لعملاء BOOTP. نظرًا لأن عملاء BOOTP ليس لديهم أي طريقة لتجديد التأجيرات، ولا يعرفون أن تأجيراتهم قد تنتهي صلاحيتها، يقوم dhcpd افتراضيًا بتعيين تأجيرات لا نهائية لجميع عملاء BOOTP. ومع ذلك، قد يكون من المنطقي في بعض المواقف تحديد تاريخ قطع لجميع تأجيرات BOOTP - على سبيل المثال، نهاية فترة دراسية، أو وقت الليل عندما تكون المنشأة مغلقة ويجب إيقاف تشغيل جميع الأجهزة.
+</p>
+<p class="Pp">
+يجب أن يكون <i>Date</i> هو التاريخ الذي ستنتهي فيه جميع تأجيرات BOOTP المعينة. يتم تحديد التاريخ بالشكل:
+</p>
+<p class="Pp">
+<br/>
+W YYYY/MM/DD HH:MM:SS
+<br/>
+</p>
+<p class="Pp">
+W هو يوم الأسبوع معبرًا عنه برقم من صفر (الأحد) إلى ستة (السبت). YYYY هو العام، بما في ذلك القرن. MM هو الشهر معبرًا عنه برقم من 1 إلى 12. DD هو يوم الشهر، بدءًا من 1. HH هي الساعة، من صفر إلى 23. MM هي الدقيقة و SS هي الثانية. الوقت دائمًا بالتوقيت العالمي المنسق (UTC)، وليس بالتوقيت المحلي.
+</p>
+</div>
+<p class="Pp">
+البيان <i>dynamic-bootp-lease-length</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>dynamic-bootp-lease-length <i>length</i>;</b>
+</p>
+<p class="Pp">
+يُستخدم البيان <i>dynamic-bootp-lease-length</i> لتعيين مدة التأجيرات المعينة ديناميكيًا لعملاء BOOTP. في بعض المواقع، قد يكون من الممكن افتراض أن التأجير لم يعد قيد الاستخدام إذا لم يستخدم حامله BOOTP أو DHCP للحصول على عنوانه خلال فترة زمنية معينة. يتم تحديد الفترة في <i>length</i> كعدد من الثواني. إذا قام عميل بإعادة التشغيل باستخدام BOOTP خلال فترة المهلة، يتم إعادة تعيين مدة التأجير إلى <i>length</i>، لذلك لن يفقد عميل BOOTP الذي يقوم بالتمهيد بشكل متكرر بما فيه الكفاية تأجيره أبدًا. وغني عن القول، يجب تعديل هذا المعامل بحذر شديد.
+</p>
+</div>
+<p class="Pp">
+البيان <i>echo-client-id</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>echo-client-id <i>flag</i>;</b>
+</p>
+<p class="Pp">
+يُستخدم البيان <i>echo-client-id</i> لتمكين أو تعطيل السلوك المتوافق مع RFC 6842. إذا كان البيان echo-client-id موجودًا وله قيمة true أو on، وتم استلام DHCP DISCOVER أو REQUEST الذي يحتوي على خيار معرف العميل (رمز الخيار 61)، فسيقوم الخادم بنسخ الخيار إلى استجابته (DHCP ACK أو NAK) وفقًا لـ RFC 6842. بمعنى آخر، إذا أرسل العميل الخيار، فسيستلمه مرة أخرى. افتراضيًا، هذه العلامة مغلقة ولن يتم تكرار معرفات العملاء إلى العميل.
+</p>
+</div>
+<p class="Pp">
+البيان <i>filename</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>filename "<i>filename</i>";</b>
+</p>
+<p class="Pp">
+يمكن استخدام البيان <i>filename</i> لتحديد اسم ملف التمهيد الأولي الذي سيتم تحميله بواسطة العميل. يجب أن يكون <i>filename</i> اسم ملف يمكن التعرف عليه بواسطة أي بروتوكول نقل ملفات يمكن توقع استخدام العميل له لتحميل الملف.
+</p>
+</div>
+<p class="Pp">
+الإعلان <i>fixed-address</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>fixed-address address [, <i>address</i> ... ];</b>
+</p>
+<p class="Pp">
+يُستخدم الإعلان <i>fixed-address</i> لتعيين عنوان IP ثابت واحد أو أكثر لعميل. يجب أن يظهر فقط في إعلان <i>host</i>. إذا تم توفير أكثر من عنوان، فعند تمهيد العميل، سيتم تعيين العنوان الذي يتوافق مع الشبكة التي يتم التمهيد عليها. إذا لم تكن أي من العناوين في عبارة <i>fixed-address</i> صالحة للشبكة التي يتصل بها العميل، فلن يتطابق هذا العميل مع إعلان <i>host</i> الذي يحتوي على عبارة <i>fixed-address</i>. يجب أن يكون كل <i>address</i> في عبارة <i>fixed-address</i> إما عنوان IP أو اسم نطاق يحل إلى عنوان IP واحد أو أكثر.
+</p>
+</div>
+<p class="Pp">
+الإعلان <i>fixed-address6</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>fixed-address6 ip6-address ;</b>
+</p>
+<p class="Pp">
+يُستخدم الإعلان <i>fixed-address6</i> لتعيين عناوين IPv6 ثابتة لعميل. يجب أن يظهر فقط في إعلان <i>host</i>.
+</p>
+</div>
+<p class="Pp">
+الإعلان <i>fixed-prefix6</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>fixed-prefix6 <i>low-address</i> / <i>bits</i>;</b>
+</p>
+<p class="Pp">
+يُستخدم الإعلان <i>fixed-prefix6</i> لتعيين بادئة IPv6 ثابتة لعميل. يجب أن يظهر فقط في إعلان <i>host</i>، ولكن يمكن أن يظهر العديد من عبارات <i>fixed-prefix6</i> في إعلان <i>host</i> واحد.
+</p>
+<p class="Pp">
+يحدد <i>low-address</i> بداية البادئة ويحدد <i>bits</i> حجم البادئة بالبتات.
+</p>
+<p class="Pp">
+إذا كانت هناك بادئات متعددة لإدخال مضيف معين، فسيختار الخادم واحدة تتطابق مع حجم البادئة المطلوبة أو، إذا لم تتطابق أي منها، الأولى.
+</p>
+<p class="Pp">
+إذا كانت هناك إعلانات <i>host</i> متعددة، فسيحاول الخادم اختيار إعلان يتطابق فيه <i>fixed-address6</i> مع شبكة العميل الفرعية. إذا لم يتطابق أي منها، فسيختار إعلانًا لا يحتوي على عبارة <i>fixed-address6</i>.
+</p>
+<p class="Pp">
+ملاحظة هامة: على عكس العنوان الثابت، لا تحتاج البادئة الثابتة إلى مطابقة شبكة فرعية لكي يتم خدمتها. هذا يسمح لك بتوفير بادئة لعميل خارج الشبكة الفرعية التي يقوم عليها العميل بالطلب إلى الخادم.
+</p>
+</div>
+<p class="Pp">
+البيان <i>get-lease-hostnames</i>
+</p>
+<div class="Bd-indent">
+<p class="Pp">
+<b>get-lease-hostnames <i>flag</i>;</b>
+</p>
+<p class="Pp">
+يُستخدم البيان <i>get-lease-hostnames</i> لإخبار dhcpd بما إذا كان يجب عليه البحث عن اسم النطاق المقابل لعنوان IP لكل عنوان في مجمع التأجير أم لا.
+</p>

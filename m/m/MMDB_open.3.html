@@ -1,0 +1,828 @@
+lated you should look at the
+    <span class="Li">type</span> member. The <span class="Li">pointer</span>
+    member of the union should never be populated in any data returned by the
+    API. Pointers should always be resolved internally.</p>
+<p class="Pp">The <span class="Li">data_size</span> member is only relevant for
+    <span class="Li">utf8_string</span> and <span class="Li">bytes</span> data.
+    <span class="Li">utf8_string</span> is not null terminated and
+    <span class="Li">data_size</span> <i>must</i> be used to determine its
+    length.</p>
+<p class="Pp">The <span class="Li">type</span> member can be compared to one of
+    the <span class="Li">MMDB_DATA_TYPE_*</span> macros.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='128-bit_Integers'><a class='permalink' href='#128-bit_Integers'>الأعداد الصحيحة 128 بت</a></h2>
+<p class="Pp">يعتمد التعامل مع بيانات <span class="Li">uint128</span> على كيفية دعم منصتك للأعداد الصحيحة 128 بت، إذا كانت تدعمها على الإطلاق. مع GCC 4.4 و 4.5 يمكننا كتابة <span class="Li">unsigned</span>
+    <span class="Li">int __attribute__ ((__mode__ (TI)))</span>. مع الإصدارات الأحدث من GCC (4.6+) و clang (3.2+) يمكننا ببساطة كتابة &quot;unsigned
+    __int128&quot;.</p>
+<p class="Pp">لتجاوز هذه الاختلافات، تحدد هذه المكتبة نوع
+    <span class="Li">mmdb_uint128_t</span>. يتم تعريف هذا النوع في رأس
+    <span class="Li">maxminddb.h</span> حتى تتمكن من استخدامه في التعليمات البرمجية الخاصة بك.</p>
+<p class="Pp">مع المترجمات القديمة، لا يمكننا استخدام عدد صحيح وبدلاً من ذلك نستخدم مصفوفة من 16 بايت من قيم
+    <span class="Li">uint8_t</span>. هذه هي البيانات الأولية من قاعدة البيانات.</p>
+<p class="Pp">توفر هذه المكتبة ماكرو عام
+    <span class="Li">MMDB_UINT128_IS_BYTE_ARRAY</span>. إذا كان هذا صحيحًا (1)، فسيتم إرجاع قيم
+    <span class="Li">uint128</span> كمصفوفة بايت، وإذا كان خاطئًا فسيتم إرجاعها كعدد صحيح
+    <span class="Li">mmdb_uint128_t</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_Type_Macros'><a class='permalink' href='#Data_Type_Macros'>ماكروات أنواع البيانات</a></h2>
+<p class="Pp">توفر هذه المكتبة ماكرو لكل نوع بيانات تحدده مواصفات MaxMind DB.</p>
+<ul class="Bl-bullet">
+  <li><span class="Li">MMDB_DATA_TYPE_UTF8_STRING</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_DOUBLE</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_BYTES</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_UINT16</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_UINT32</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_MAP</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_INT32</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_UINT64</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_UINT128</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_ARRAY</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_BOOLEAN</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_FLOAT</span></li>
+</ul>
+<p class="Pp">هناك أيضًا عدد قليل من الأنواع المخصصة للاستخدام الداخلي فقط:</p>
+<ul class="Bl-bullet">
+  <li><span class="Li">MMDB_DATA_TYPE_EXTENDED</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_POINTER</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_CONTAINER</span>
+      </li>
+  <li><span class="Li">MMDB_DATA_TYPE_END_MARKER</span></li>
+</ul>
+<p class="Pp">إذا رأيت أحد هذه الأنواع في البيانات التي تم إرجاعها، فهذا يعني أن هناك خطأ فادحًا. قاعدة البيانات تالفة أو تم إنشاؤها بشكل غير صحيح أو يوجد خطأ في كود libmaxminddb.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Pointer_Values_and_&lt;span_class=&quot;Li&quot;&gt;MMDB_close()&lt;/span&gt;'><a class='permalink' href='#Pointer_Values_and_&lt;span_class=&quot;Li&quot;&gt;MMDB_close()&lt;/span&gt;'>قيم المؤشرات و <span class="Li">MMDB_close()</span></a></h2>
+<p class="Pp"><span class="Li">utf8_string</span> و <span class="Li">bytes</span> و (ربما)
+    <span class="Li">uint128</span> في هذا الهيكل هي مؤشرات مباشرة إلى قسم بيانات قاعدة البيانات. يمكن أن يكون هذا كتلة ذاكرة مخصصة بواسطة
+    <span class="Li">calloc</span> أو <span class="Li">mmap</span>. في كلتا الحالتين، ستصبح هذه المؤشرات غير صالحة بعد استدعاء
+    <span class="Li">MMDB_close()</span>.</p>
+<p class="Pp">إذا كنت بحاجة إلى الإشارة إلى هذه البيانات بعد ذلك الوقت، فيجب عليك نسخ البيانات باستخدام دالة مناسبة (مثل
+    <span class="Li">strdup</span> أو <span class="Li">memcpy</span>، إلخ).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_entry_data_list_s</span></h2>
+<p class="Pp">يلخص هذا الهيكل قائمة مرتبطة من هياكل
+    <span class="Li">MMDB_entry_data_s</span>.</p>
+<pre>typedef struct MMDB_entry_data_list_s {
+    MMDB_entry_data_s entry_data;
+    struct MMDB_entry_data_list_s *next;
+} MMDB_entry_data_list_s;</pre>
+<p class="Pp">يتيح لك هذا الهيكل فحص بيانات خريطة أو مصفوفة كاملة عن طريق التكرار على القائمة المرتبطة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_search_node_s</span></h2>
+<p class="Pp">يلخص هذا الهيكل السجلين في عقدة بحث. هذا مفيد فقط إذا كنت ترغب في كتابة تعليمات برمجية تتكرر على شجرة البحث بأكملها بدلاً من البحث عن عنوان IP معين.</p>
+<pre>typedef struct MMDB_search_node_s {
+    uint64_t left_record;
+    uint64_t right_record;
+    uint8_t left_record_type;
+    uint8_t right_record_type;
+    MMDB_entry_s left_record_entry;
+    MMDB_entry_s right_record_entry;
+} MMDB_search_node_s;</pre>
+<p class="Pp">ستأخذ أنواع السجلات هذين أحد القيم التالية:</p>
+<ul class="Bl-bullet">
+  <li><span class="Li">MMDB_RECORD_TYPE_SEARCH_NODE</span> - يشير السجل إلى عقدة البحث التالية.
+      </li>
+  <li><span class="Li">MMDB_RECORD_TYPE_EMPTY</span> - السجل هو عنصر نائب يشير إلى عدم وجود بيانات لعنوان IP. يجب أن ينتهي البحث هنا.
+      </li>
+  <li><span class="Li">MMDB_RECORD_TYPE_DATA</span> - السجل مخصص للبيانات في قسم بيانات قاعدة البيانات. استخدم الإدخال للسجل عند البحث عن بيانات السجل.
+      </li>
+  <li><span class="Li">MMDB_RECORD_TYPE_INVALID</span> - السجل غير صالح. إما تم البحث عن عقدة غير صالحة أو قاعدة البيانات تالفة.</li>
+</ul>
+<p class="Pp">يكون <span class="Li">MMDB_entry_s</span> للسجل صالحًا فقط إذا كان النوع
+    <span class="Li">MMDB_RECORD_TYPE_DATA</span>. سيؤدي محاولة استخدام إدخال لأنواع سجلات أخرى إلى خطأ أو بيانات غير صالحة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STATUS_CODES'><a class='permalink' href='#STATUS_CODES'>رموز الحالة</a></h1>
+<p class="Pp">تقوم هذه المكتبة بإرجاع (أو ملء) رموز الحالة للعديد من الوظائف. رموز الحالة هذه هي:</p>
+<ul class="Bl-bullet">
+  <li><span class="Li">MMDB_SUCCESS</span> - كل شيء نجح
+      </li>
+  <li><span class="Li">MMDB_FILE_OPEN_ERROR</span> - كان هناك خطأ أثناء محاولة فتح ملف MaxMind DB.
+      </li>
+  <li><span class="Li">MMDB_IO_ERROR</span> - فشلت عملية إدخال/إخراج. تحقق من
+      <span class="Li">errno</span> لمزيد من التفاصيل.
+      </li>
+  <li><span class="Li">MMDB_CORRUPT_SEARCH_TREE_ERROR</span> - البحث عن عنوان IP
+      في شجرة البحث أعطانا نتيجة مستحيلة. قاعدة البيانات تالفة أو تم إنشاؤها بشكل غير صحيح أو يوجد خطأ في كود libmaxminddb.
+      </li>
+  <li><span class="Li">MMDB_INVALID_METADATA_ERROR</span> - هناك خطأ في بيانات التعريف الخاصة بقاعدة البيانات. ويشمل ذلك مفاتيح البيانات الوصفية المفقودة وكذلك القيم المستحيلة (مثل
+      <span class="Li">ip_version</span> بقيمة 7).
+      </li>
+  <li><span class="Li">MMDB_UNKNOWN_DATABASE_FORMAT_ERROR</span> - تشير بيانات التعريف الخاصة بقاعدة البيانات إلى أن إصدارها الرئيسي ليس 2. هذه المكتبة يمكنها فقط التعامل مع الإصدار الرئيسي 2.
+      </li>
+  <li><span class="Li">MMDB_OUT_OF_MEMORY_ERROR</span> - فشل استدعاء تخصيص الذاكرة (
+      <span class="Li">malloc</span>، إلخ).
+      </li>
+  <li><span class="Li">MMDB_INVALID_DATA_ERROR</span> - يحتوي إدخال في قسم البيانات على بيانات غير صالحة. على سبيل المثال، يدعي حقل
+      <span class="Li">uint16</span> أنه أطول من بايتين. قاعدة البيانات على الأرجح تالفة أو تم إنشاؤها بشكل غير صحيح.
+      </li>
+  <li><span class="Li">MMDB_INVALID_LOOKUP_PATH_ERROR</span> - يحتوي المسار الذي تم تمريره إلى
+      <span class="Li">MMDB_get_value</span> أو
+      <span class="Li">MMDB_vget_value</span> أو
+      <span class="Li">MMDB_aget_value</span> على فهرس مصفوفة أكبر من LONG<i>MAX أو أصغر من LONG</i>MIN.
+      </li>
+  <li><span class="Li">MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR</span> - المسار الذي تم تمريره إلى
+      <span class="Li">MMDB_get_value</span> أو <span class="Li">MMDB_vget_value</span> أو
+      <span class="Li">MMDB_aget_value</span> لا يتطابق مع بنية بيانات الإدخال. هناك عدد من الأسباب التي يمكن أن يحدث بها هذا. يمكن أن يتضمن مسار البحث مفتاحًا غير موجود في خريطة. يمكن أن يتضمن مسار البحث فهرس مصفوفة أكبر من مصفوفة أو أصغر من الحد الأدنى للإزاحة من نهاية مصفوفة. يمكن أن يحدث أيضًا عندما يتوقع المسار العثور على خريطة أو مصفوفة حيث لا توجد.</li>
+</ul>
+<p class="Pp">يجب معاملة جميع رموز الحالة كقيم
+    <span class="Li">int</span>.</p>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_strerror()</span></h2>
+<pre>const char *MMDB_strerror(int error_code)</pre>
+<p class="Pp">تأخذ هذه الدالة رمز حالة وترجع سلسلة نصية باللغة الإنجليزية تشرح الحالة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الدوال</a></h1>
+<p class="Pp">توفر هذه المكتبة الدوال المصدرة التالية:</p>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_open()</span></h2>
+<pre>int MMDB_open(
+    const char *const filename,
+    uint32_t flags,
+    MMDB_s *const mmdb);</pre>
+<p class="Pp">تفتح هذه الدالة مقبضًا لملف MaxMind DB. القيمة التي ترجعها هي رمز حالة كما هو محدد أعلاه. تحقق دائمًا من قيمة الإرجاع لهذا الاستدعاء.</p>
+<pre>MMDB_s mmdb;
+int status =
+    MMDB_open(&quot;/path/to/file.mmdb&quot;, MMDB_MODE_MMAP, &amp;mmdb);
+if (MMDB_SUCCESS != status) { ... }
+...
+MMDB_close(&amp;mmdb);</pre>
+<p class="Pp">يجب ترميز <span class="Li">filename</span> كـ UTF-8 على نظام Windows.</p>
+<p class="Pp">يمكن أن يكون هيكل <span class="Li">MMDB_s</span> الذي تمرره على المكدس أو مخصصًا من الكومة. ومع ذلك، إذا كان الفتح ناجحًا، فسوف يحتوي على بيانات مخصصة من الكومة، لذلك تحتاج إلى إغلاقه باستخدام
+    <span class="Li">MMDB_close()</span>. إذا لم يكن الرمز الذي تم إرجاعه
+    <span class="Li">MMDB_SUCCESS</span>، فإن هذه المكتبة تتأكد من تحرير جميع الذاكرة المخصصة قبل العودة.</p>
+<p class="Pp">العلامات المتوفرة حاليًا هي:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd><span class="Li">MMDB_MODE_MMAP</span> - فتح قاعدة البيانات باستخدام
+      <span class="Li">mmap()</span>.</dd>
+</dl>
+<p class="Pp">قد يؤدي تمرير قيم أخرى لـ <span class="Li">flags</span> إلى نتائج غير متوقعة. في المستقبل، قد نضيف علامات إضافية يمكنك جمعها باستخدام bitwise-or مع الوضع، بالإضافة إلى أوضاع إضافية.</p>
+<p class="Pp">يمكنك أيضًا تمرير <span class="Li">0</span> كقيمة
+    <span class="Li">flags</span>، وفي هذه الحالة سيتم فتح قاعدة البيانات باستخدام العلامات الافتراضية. ومع ذلك، قد تتغير هذه الافتراضيات في الإصدارات المستقبلية. الوضع الافتراضي الحالي هو
+    <span class="Li">MMDB_MODE_MMAP</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_close()</span></h2>
+<pre>void MMDB_close(MMDB_s *const mmdb);</pre>
+<p class="Pp">هذا يحرر أي ذاكرة مخصصة أو ممسوحة ضوئيًا يتم الاحتفاظ بها من هيكل
+    <span class="Li">MMDB_s</span>. *لا يحرر الذاكرة المخصصة</p>
+</section>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_open()</span></h2>
+<pre>MMDB_s *MMDB_open(
+    const char *filename,
+    uint32_t flags,
+    int *const mmdb_error);</pre>
+<p class="Pp">This function opens a MaxMind DB file and returns a pointer to an
+    <span class="Li">MMDB_s</span> structure. The structure should be passed to
+    all other functions in this library. You are responsible for freeing this
+    structure when you are done with it by calling
+    <span class="Li">MMDB_close()</span>.</p>
+<p class="Pp">The <span class="Li">flags</span> parameter can be used to control
+    how the database is opened. It can be one or more of the following values:</p>
+<dl class="Bl-tag">
+  <dt><span class="Li">MMDB_MODE_MMAP</span></dt>
+  <dd>Memory-map the database file. This is the fastest method, but it requires
+      the database file to be accessible via the filesystem.</dd>
+  <dt><span class="Li">MMDB_MODE_FILE</span></dt>
+  <dd>Read the database file from disk. This is slower than memory-mapping but
+      might be useful on systems where memory-mapping is not available or
+      desirable.</dd>
+  <dt><span class="Li">MMDB_MODE_STDIO</span></dt>
+  <dd>Read the database file using standard I/O functions. This is the slowest
+      method.</dd>
+</dl>
+<p class="Pp">If you do not specify a flag, <span class="Li">MMDB_MODE_MMAP</span>
+    will be used if available, otherwise <span class="Li">MMDB_MODE_FILE</span>.
+    Note that <span class="Li">MMDB_MODE_STDIO</span> is not a fallback; it must be
+    explicitly requested.</p>
+<p class="Pp">The <span class="Li">mmdb_error</span> parameter is a pointer to an
+    integer that will receive an error code if the function fails. If the function
+    succeeds, the value pointed to by <span class="Li">mmdb_error</span> will be
+    <span class="Li">MMDB_SUCCESS</span>.</p>
+<p class="Pp">The following error codes can be returned:</p>
+<dl class="Bl-tag">
+  <dt><span class="Li">MMDB_SUCCESS</span></dt>
+  <dd>No error occurred.</dd>
+  <dt><span class="Li">MMDB_FILE_NOT_FOUND_ERROR</span></dt>
+  <dd>The specified database file could not be found.</dd>
+  <dt><span class="Li">MMDB_INVALID_FILE_ERROR</span></dt>
+  <dd>The database file is not a valid MaxMind DB file or is corrupted.</dd>
+  <dt><span class="Li">MMDB_IO_ERROR</span></dt>
+  <dd>An error occurred while reading the database file.</dd>
+  <dt><span class="Li">MMDB_OUT_OF_MEMORY_ERROR</span></dt>
+  <dd>Not enough memory was available to open the database.</dd>
+</dl>
+<pre>int error;
+MMDB_s *mmdb = MMDB_open("db.mmdb", MMDB_MODE_MMAP, &amp;error);
+if (MMDB_SUCCESS != error) {
+    // handle error
+    exit(1);
+}
+// Use mmdb ...
+MMDB_close(mmdb);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_close()</span></h2>
+<pre>void MMDB_close(MMDB_s *mmdb);</pre>
+<p class="Pp">This function closes a MaxMind DB file and frees the associated
+    <span class="Li">MMDB_s</span> structure. If the structure was allocated from the
+    heap by <span class="Li">MMDB_open()</span>, it will be freed here.</p>
+<pre>MMDB_close(mmdb);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_string()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_string(
+    MMDB_s *const mmdb,
+    const char *const ipstr,
+    int *const gai_error,
+    int *const mmdb_error);</pre>
+<p class="Pp">This function looks up an IP address that is passed in as a
+    null-terminated string. Internally it calls
+    <span class="Li">getaddrinfo()</span> to resolve the address into a binary
+    form. It then calls <span class="Li">MMDB_lookup_sockaddr()</span> to look
+    the address up in the database. If you have already resolved an address you
+    can call <span class="Li">MMDB_lookup_sockaddr()</span> directly, rather
+    than resolving the address twice.</p>
+<pre>int gai_error, mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_string(&amp;mmdb, &quot;1.2.3.4&quot;, &amp;gai_error, &amp;mmdb_error);
+if (0 != gai_error) { ... }
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+<p class="Pp">This function always returns an
+    <span class="Li">MMDB_lookup_result_s</span> structure, but you should also
+    check the <span class="Li">gai_error</span> and
+    <span class="Li">mmdb_error</span> parameters. If either of these indicates
+    an error then the returned structure is meaningless.</p>
+<p class="Pp">If no error occurred you still need to make sure that the
+    <span class="Li">found_entry</span> member in the returned result is true.
+    If it's not, this means that the IP address does not have an entry in the
+    database.</p>
+<p class="Pp">This function will work with IPv4 addresses even when the database
+    contains data for both IPv4 and IPv6 addresses. The IPv4 address will be
+    looked up as '::xxx.xxx.xxx.xxx' rather than being remapped to the
+    <span class="Li">::ffff:xxx.xxx.xxx.xxx</span> block allocated for
+    IPv4-mapped IPv6 addresses.</p>
+<p class="Pp">If you pass an IPv6 address to a database with only IPv4 data then
+    the <span class="Li">found_entry</span> member will be false, but the
+    <span class="Li">mmdb_error</span> status will still be
+    <span class="Li">MMDB_SUCCESS</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_sockaddr()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_sockaddr(
+    MMDB_s *const mmdb,
+    const struct sockaddr *const sockaddr,
+    int *const mmdb_error);</pre>
+<p class="Pp">This function looks up an IP address that has already been
+    resolved by <span class="Li">getaddrinfo()</span>.</p>
+<p class="Pp">Other than not calling <span class="Li">getaddrinfo()</span>
+    itself, this function is identical to the
+    <span class="Li">MMDB_lookup_string()</span> function.</p>
+<pre>int mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_Lookup_Functions'><a class='permalink' href='#Data_Lookup_Functions'>Data   Lookup Functions</a></h2>
+<p class="Pp">There are three functions for looking up data associated with an
+    IP address.</p>
+<pre>int MMDB_get_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    ...);
+int MMDB_vget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    va_list va_path);
+int MMDB_aget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    const char *const *const path);</pre>
+<p class="Pp">The three functions allow three slightly different calling styles,
+    but they all do the same thing.</p>
+<p class="Pp">The first parameter is an <span class="Li">MMDB_entry_s</span>
+    value. In most cases this will come from the
+    <span class="Li">MMDB_lookup_result_s</span> value returned by
+    <span class="Li">MMDB_lookup_string()</span> or
+    <span class="Li">MMDB_lookup_sockaddr()</span>.</p>
+<p class="Pp">The second parameter is a reference to an
+    <span class="Li">MMDB_entry_data_s</span> structure. This will be populated
+    with the data that is being looked up, if any is found. If nothing is found,
+    then the <span class="Li">has_data</span> member of this structure will be
+    false. If <span class="Li">has_data</span> is true then you can look at the
+    <span class="Li">data_type</span> member.</p>
+<p class="Pp">The final parameter is a lookup path. The path consists of a set
+    of strings representing either map keys (e.g, &quot;city&quot;) or array
+    indexes (e.g., &quot;0&quot;, &quot;1&quot;, &quot;-1&quot;) to use in the
+    lookup.</p>
+<p class="Pp">Negative array indexes will be treated as an offset from the end
+    of the array. For instance, &quot;-1&quot; refers to the last element of the
+    array.</p>
+<p class="Pp">The lookup path allows you to navigate a complex data structure.
+    For example, given this data:</p>
+<pre>{
+    &quot;names&quot;: {
+        &quot;en&quot;: &quot;Germany&quot;,
+        &quot;de&quot;: &quot;Deutschland&quot;
+    },
+    &quot;cities&quot;: [ &quot;Berlin&quot;, &quot;Frankfurt&quot; ]
+}</pre>
+<p class="Pp">We could look up the English name with this code:</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_s entry_data;
+int status =
+    MMDB_get_value(&amp;result.entry, &amp;entry_data,
+                   &quot;names&quot;, &quot;en&quot;, NULL);
+if (MMDB_SUCCESS != status) { ... }
+if (entry_data.has_data) { ... }</pre>
+<p class="Pp">If we wanted to find the first city the lookup path would be
+    <span class="Li">&quot;cities&quot;,</span>
+    <span class="Li">&quot;0&quot;</span>. If you don't provide a lookup path at
+    all, you'll get the entry which corresponds to the top level map. The lookup
+    path must always end with <span class="Li">NULL</span>, regardless of which
+    function you call.</p>
+<p class="Pp">The <span class="Li">MMDB_get_value</span> function takes a
+    variable number of arguments. All of the arguments after the
+    <span class="Li">MMDB_entry_data_s *</span> structure pointer are the lookup
+    path. The last argument must be <span class="Li">NULL</span>.</p>
+<p class="Pp">The <span class="Li">MMDB_vget_value</span> function accepts a
+    <span class="Li">va_list</span> as the lookup path. The last element
+    retrieved by <span class="Li">va_arg()</span> must be
+    <span class="Li">NULL</span>.</p>
+<p class="Pp">Finally, the <span class="Li">MMDB_aget_value</span> accepts an
+    array of strings as the lookup path. The last member of this array must be
+    <span class="Li">NULL</span>.</p>
+<p class="Pp">If you want to get all of the entry data at once you can call
+    <span class="Li">MMDB_get_entry_data_list()</span> instead.</p>
+<p class="Pp">For each of the three functions, the return value is a status code
+    as defined above.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_entry_data_list()</span></h2>
+<pre>int MMDB_get_entry_data_list(
+    MMDB_entry_s *start,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">This function allows you to get all of the data for a complex data
+    structure at once, rather than looking up each piece using repeated calls to
+    <span class="Li">MMDB_get_value()</span>.</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_list_s *entry_data_list, *first;
+int status =
+    MMDB_get_entry_data_list(&amp;result.entry, &amp;entry_data_list);
+if (MMDB_SUCCESS != status) { ... }
+// save this so we can free this data later
+first = entry_data_list;
+while (1) {
+    MMDB_entry_data_list_s *next = entry_data_list = entry_data_list-&gt;next;
+    if (NULL == next) {
+        break;
+    }
+    switch (next-&gt;entry_data.type) {
+        case MMDB_DATA_TYPE_MAP: { ... }
+        case MMDB_DATA_TYPE_UTF8_STRING: { ... }
+        ...
+    }
+}
+MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">It's up to you to interpret the
+    <span class="Li">entry_data_list</span> data structure. The list is linked
+    in a depth-first traversal. Let's use this structure as an example:</p>
+<pre>{
+    &quot;names&quot;: {
+        &quot;en&quot;: &quot;Germany&quot;,
+        &quot;de&quot;: &quot;Deutschland&quot;
+    },
+    &quot;cities&quot;: [ &quot;Berlin&quot;, &quot;Frankfurt&quot; ]
+}</pre>
+<p class="Pp">The list will consist of the following items:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>MAP - top level map
+      </dd>
+  <dt>2.</dt>
+  <dd>UTF8_STRING - &quot;names&quot; key
+      </dd>
+  <dt>3.</dt>
+  <dd>MAP - map for &quot;names&quot; key
+      </dd>
+  <dt>4.</dt>
+  <dd>UTF8_STRING - &quot;en&quot; key
+      </dd>
+  <dt>5.</dt>
+  <dd>UTF8_STRING - value for &quot;en&quot; key
+      </dd>
+  <dt>6.</dt>
+  <dd>UTF8_STRING - &quot;de&quot; key
+      </dd>
+  <dt>7.</dt>
+  <dd>UTF8_STRING - value for &quot;de&quot; key
+      </dd>
+  <dt>8.</dt>
+  <dd>UTF8_STRING - &quot;cities&quot; key
+      </dd>
+  <dt>9.</dt>
+  <dd>ARRAY - value for &quot;cities&quot; key
+      </dd>
+  <dt>10.</dt>
+  <dd>UTF8_STRING - array[0]
+      </dd>
+  <dt>11.</dt>
+  <dd>UTF8_STRING - array[1]</dd>
+</dl>
+<p class="Pp">The return value of the function is a status code as defined
+    above.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_free_entry_data_list()</span></h2>
+<pre>void MMDB_free_entry_data_list(
+    MMDB_entry_data_list_s *const entry_data_list);</pre>
+<p class="Pp">The <span class="Li">MMDB_get_entry_data_list()</span> and
+    <span class="Li">MMDB_get_metadata_as_entry_data_list()</span> functions
+    will allocate the linked list structure from the heap. Call this function to
+    free the <span class="Li">MMDB_entry_data_list_s</span> structure.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_metadata_as_entry_data_list()</span></h2>
+<pre>int MMDB_get_metadata_as_entry_data_list(
+    MMDB_s *const mmdb,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">This function allows you to retrieve the database metadata as a
+    linked list of <span class="Li">MMDB_entry_data_list_s</span> structures.
+    This can be a more convenient way to deal with the metadata than using the
+    metadata structure directly.</p>
+<pre>    MMDB_entry_data_list_s *entry_data_list, *first;
+    int status =
+        MMDB_get_metadata_as_entry_data_list(&amp;mmdb, &amp;entry_data_list);
+    if (MMDB_SUCCESS != status) { ... }
+    first = entry_data_list;
+    ... // do something with the data
+    MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">The return value of the function is a status code as defined
+    above.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_dump_entry_data_list()</span></h2>
+<pre>int MMDB_dump_entry_data_list(
+    FILE *const stream,
+    MMDB_entry_data_list_s *const entry_data_list,
+    int indent);</pre>
+<p class="Pp">This function takes a linked list of
+    <span class="Li">MMDB_entry_data_list_s</span> structures and stringifies it
+    to the given <span class="Li">stream</span>. The
+    <span class="Li">indent</span> parameter is the starting indent level for
+    the generated output. It is incremented for nested data structures (maps,
+    array, etc.).</p>
+<p class="Pp">The <span class="Li">stream</span> must be a file handle
+    (<span class="Li">stdout</span>, etc). If your platform provides something
+    like the GNU <span class="Li">open_memstream()</span> you can use that to
+    capture the output as a string.</p>
+<p class="Pp">The output is formatted in a JSON-ish fashion, but values are
+    marked with their data type (except for maps and arrays which are shown with
+    &quot;{}&quot; and &quot;[]&quot; respectively).</p>
+<p class="Pp">The specific output format may change in future relea</p>
+</section>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <title>MMDB_open(3)</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="/css/manual.css">
+        <link rel="stylesheet" href="/css/themes/dark.css" media="(prefers-color-scheme: dark)">
+        <link rel="stylesheet" href="/css/themes/light.css" media="(prefers-color-scheme: light)">
+        <link rel="stylesheet" href="/css/themes/sepia.css" media="(prefers-color-scheme: sepia)">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">MMDB_open(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libmaxminddb/">libmaxminddb</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Nd">MMDB_open, MMDB_close, MMDB_strerror, MMDB_lib_version, MMDB_read_node - فتح وإغلاق قاعدة بيانات MaxMind DB وقراءة العقد</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>int MMDB_open(const char *filename, MMDB_mode_e mode, MMDB_s *mmdb);
+void MMDB_close(MMDB_s *mmdb);
+const char *MMDB_strerror(int status);
+int MMDB_read_node(MMDB_s *const mmdb, uint32_t node_number, MMDB_search_node_s *const node);
+const char *MMDB_lib_version(void);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تستخدم هذه الدوال لفتح وإغلاق قاعدة بيانات MaxMind DB (بصيغة MMDB) وقراءة العقد منها، والحصول على رقم إصدار المكتبة.</p>
+<p class="Pp"><code>MMDB_open()</code>: تفتح ملف قاعدة بيانات MaxMind DB المحدد بواسطة <span class="Li">filename</span>. يعتمد سلوك فتح الملف على قيمة <span class="Li">mode</span>. يمكن أن تكون <span class="Li">MMDB_MODE_MMAP</span> (للاستخدام الأمثل للذاكرة) أو <span class="Li">MMDB_MODE_FILE</span> (لقراءة الملف بالكامل في الذاكرة). يتم إرجاع مقبض لقاعدة البيانات المفتوحة في <span class="Li">mmdb</span>. إذا نجحت العملية، يتم إرجاع <span class="Li">MMDB_SUCCESS</span>، وإلا يتم إرجاع رمز خطأ.</p>
+<p class="Pp"><code>MMDB_close()</code>: تغلق قاعدة بيانات MaxMind DB التي تم فتحها مسبقًا بواسطة <span class="Li">MMDB_open()</span> وتحرر الموارد المرتبطة بها.</p>
+<p class="Pp"><code>MMDB_strerror()</code>: ترجع وصفًا نصيًا لرمز حالة تم إرجاعه بواسطة دوال المكتبة الأخرى. هذا مفيد لتصحيح الأخطاء.</p>
+<p class="Pp"><code>MMDB_read_node()</code>: تقرأ عقدة محددة في شجرة البحث. يتم تمرير رقم العقدة المطلوب قراءتها كرقم صحيح غير موقع <span class="Li">uint32_t</span>. يتم تخزين بيانات العقدة المقروءة في بنية <span class="Li">MMDB_search_node_s</span> التي يتم تمريرها كمرجع. إذا كان رقم العقدة أكبر من عدد العقد الموجودة في قاعدة البيانات، فسترجع الدالة <span class="Li">MMDB_INVALID_NODE_NUMBER_ERROR</span>. العقدة الأولى في شجرة البحث هي دائمًا العقدة رقم 0.</p>
+<p class="Pp"><code>MMDB_lib_version()</code>: ترجع رقم إصدار المكتبة كسلسلة نصية، على سبيل المثال &quot;2.0.0&quot;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DATA_STRUCTURES'><a class='permalink' href='#DATA_STRUCTURES'>هياكل البيانات</a></h1>
+<dl class="Nd">
+  <dt><span class="Li">MMDB_s</span></dt>
+  <dd>يمثل قاعدة بيانات MaxMind DB مفتوحة. يتم تمرير مؤشر إلى هذا الهيكل بين دوال المكتبة.</dd>
+  <dt><span class="Li">MMDB_search_node_s</span></dt>
+  <dd>يستخدم لتخزين بيانات عقدة البحث. سيتم تعيينه بواسطة <span class="Li">MMDB_read_node()</span>. يحتوي على معلومات حول المفاتيح والقيم الموجودة في العقدة.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STATUS_CODES'><a class='permalink' href='#STATUS_CODES'>رموز الحالة</a></h1>
+<p class="Pp">ترجع دوال المكتبة رموز حالة تشير إلى نجاح العملية أو فشلها. بعض رموز الحالة الشائعة هي:</p>
+<dl class="Nd">
+  <dt><span class="Li">MMDB_SUCCESS</span></dt>
+  <dd>تمت العملية بنجاح.</dd>
+  <dt><span class="Li">MMDB_FILE_NOT_FOUND_ERROR</span></dt>
+  <dd>لم يتم العثور على ملف قاعدة البيانات.</dd>
+  <dt><span class="Li">MMDB_INVALID_FILE_ERROR</span></dt>
+  <dd>الملف المحدد ليس بصيغة MaxMind DB صالحة.</dd>
+  <dt><span class="Li">MMDB_IO_ERROR</span></dt>
+  <dd>حدث خطأ أثناء قراءة الملف.</dd>
+  <dt><span class="Li">MMDB_INVALID_NODE_NUMBER_ERROR</span></dt>
+  <dd>رقم العقدة غير صالح.</dd>
+  <dt><span class="Li">MMDB_OUT_OF_MEMORY_ERROR</span></dt>
+  <dd>نفاد الذاكرة.</dd>
+</dl>
+<p class="Pp">هذه القائمة ليست شاملة. راجع توثيق المكتبة للحصول على قائمة كاملة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الدوال</a></h1>
+<p class="Pp"><code>MMDB_open()</code>:</p>
+<pre>int MMDB_open(
+    const char *filename,
+    MMDB_mode_e mode,
+    MMDB_s *mmdb);</pre>
+<p class="Pp">تفتح ملف قاعدة بيانات MaxMind DB.</p>
+<dl class="Nd">
+  <dt><code>filename</code></dt>
+  <dd>اسم الملف الخاص بقاعدة بيانات MMDB.</dd>
+  <dt><code>mode</code></dt>
+  <dd>وضع الفتح: <span class="Li">MMDB_MODE_MMAP</span> أو <span class="Li">MMDB_MODE_FILE</span>.</dd>
+  <dt><code>mmdb</code></dt>
+  <dd>مؤشر إلى بنية <span class="Li">MMDB_s</span> سيتم تعبئتها.</dd>
+</dl>
+<p class="Pp">القيمة المرجعة هي رمز حالة.</p>
+<p class="Pp"><code>MMDB_close()</code>:</p>
+<pre>void MMDB_close(MMDB_s *mmdb);</pre>
+<p class="Pp">تغلق قاعدة بيانات MMDB.</p>
+<p class="Pp"><code>MMDB_strerror()</code>:</p>
+<pre>const char *MMDB_strerror(int status);</pre>
+<p class="Pp">ترجع وصفًا نصيًا لرمز حالة.</p>
+<p class="Pp"><code>MMDB_read_node()</code>:</p>
+<pre>int MMDB_read_node(
+    MMDB_s *const mmdb,
+    uint32_t node_number,
+    MMDB_search_node_s *const node);</pre>
+<p class="Pp">تقرأ عقدة بحث محددة. الوسيط الثالث هو مرجع إلى بنية
+    <span class="Li">MMDB_search_node_s</span> التي سيتم تعبئتها بواسطة هذه الدالة.</p>
+<p class="Pp">القيمة المرجعة هي رمز حالة. إذا قمت بتمرير
+    <span class="Li">node_number</span> أكبر من عدد العقد في قاعدة البيانات، فسترجع هذه الدالة
+    <span class="Li">MMDB_INVALID_NODE_NUMBER_ERROR</span>، وإلا فسترجع
+    <span class="Li">MMDB_SUCCESS</span>.</p>
+<p class="Pp">العقدة الأولى في شجرة البحث هي دائمًا العقدة 0. إذا كنت ترغب في
+    التكرار فوق شجرة البحث بأكملها، فستبدأ بقراءة العقدة 0 ثم تتبع
+    السجلات التي تشكل هذه العقدة، بناءً على نوع كل سجل. إذا كان النوع هو
+    <span class="Li">MMDB_RECORD_TYPE_SEARCH_NODE</span>، فإن السجل يحتوي على عدد صحيح
+    للعقدة التالية التي يجب البحث عنها.</p>
+<p class="Pp"><code>MMDB_lib_version()</code>:</p>
+<pre>const char *MMDB_lib_version(void)</pre>
+<p class="Pp">ترجع هذه الدالة إصدار المكتبة كسلسلة نصية، شيء مثل &quot;2.0.0&quot;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<pre>#include &lt;errno.h&gt;
+#include &lt;maxminddb.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+int main(int argc, char **argv)
+{
+    char *filename = argv[1];
+    char *ip_address = argv[2];
+    MMDB_s mmdb;
+    int status = MMDB_open(filename, MMDB_MODE_MMAP, &amp;mmdb);
+    if (MMDB_SUCCESS != status) {
+        fprintf(stderr, &quot;\n  Can't open %s - %s\n&quot;,
+                filename, MMDB_strerror(status));
+        if (MMDB_IO_ERROR == status) {
+            fprintf(stderr, &quot;    IO error: %s\n&quot;, strerror(errno));
+        }
+        exit(1);
+    }
+    int gai_error, mmdb_error;
+    MMDB_lookup_result_s result =
+        MMDB_lookup_string(&amp;mmdb, ip_address, &amp;gai_error, &amp;mmdb_error);
+    if (0 != gai_error) {
+        fprintf(stderr,
+                &quot;\n  Error from getaddrinfo for %s - %s\n\n&quot;,
+                ip_address, gai_strerror(gai_error));
+        exit(2);
+    }
+    if (MMDB_SUCCESS != mmdb_error) {
+        fprintf(stderr,
+                &quot;\n  Got an error from libmaxminddb: %s\n\n&quot;,
+                MMDB_strerror(mmdb_error));
+        exit(3);
+    }
+    MMDB_entry_data_list_s *entry_data_list = NULL;
+    int exit_code = 0;
+    if (result.found_entry) {
+        int status = MMDB_get_entry_data_list(&amp;result.entry,
+                                              &amp;entry_data_list);
+        if (MMDB_SUCCESS != status) {
+            fprintf(
+                stderr,
+                &quot;Got an error looking up the entry data - %s\n&quot;,
+                MMDB_strerror(status));
+            exit_code = 4;
+            goto end;
+        }
+        if (NULL != entry_data_list) {
+            MMDB_dump_entry_data_list(stdout, entry_data_list, 2);
+        }
+    } else {
+        fprintf(
+            stderr,
+            &quot;\n  No entry for this IP address (%s) was found\n\n&quot;,
+            ip_address);
+        exit_code = 5;
+    }
+    end:
+        MMDB_free_entry_data_list(entry_data_list);
+        MMDB_close(&amp;mmdb);
+        exit(exit_code);
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REQUIREMENTS'><a class='permalink' href='#REQUIREMENTS'>المتطلبات</a></h1>
+<p class="Pp">تتطلب مكتبة libmaxminddb دعمًا بحد أدنى من POSIX.1-2001. إذا لم يتم تحديده وقت الترجمة، فإنه يطلب افتراضيًا دعم POSIX.1-2008.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THREAD_SAFETY'><a class='permalink' href='#THREAD_SAFETY'>السلامة المترابطة</a></h1>
+<p class="Pp">هذه المكتبة آمنة للاستخدام في بيئات متعددة الخيوط عند ترجمتها وربطها مع تنفيذ <span class="Li">malloc</span> و <span class="Li">free</span> آمن للخيوط.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INSTALLATION_AND_SOURCE'><a class='permalink' href='#INSTALLATION_AND_SOURCE'>التثبيت والمصدر</a></h1>
+<p class="Pp">يمكنك تنزيل أحدث إصدار من libmaxminddb <b>من GitHub</b>
+  <a href='https://github.com/maxmind/libmaxminddb/releases'>https://github.com/maxmind/libmaxminddb/releases</a>.</p>
+<p class="Pp"><b>مستودع GitHub الخاص بنا</b>
+    <a href='https://github.com/maxmind/libmaxminddb'>https://github.com/maxmind/libmaxminddb</a> متاح للجمهور. يرجى عمل نسخة منه!</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUG_REPORTS_AND_PULL_REQUESTS'><a class='permalink' href='#BUG_REPORTS_AND_PULL_REQUESTS'>تقارير الأخطاء وطلبات السحب</a></h1>
+<p class="Pp">يرجى الإبلاغ عن جميع المشكلات إلى <b>متتبع المشكلات الخاص بنا على GitHub</b>
+    <a href='https://github.com/maxmind/libmaxminddb/issues'>https://github.com/maxmind/libmaxminddb/issues</a>. نرحب بتقارير الأخطاء وطلبات السحب. يرجى ملاحظة أن طلبات السحب مفضلة بشكل كبير على التصحيحات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">كتبت هذه المكتبة بواسطة بوريس زينتنر
+    (<i>bzentner@maxmind.com</i>) وديف رولسكي
+  (<i>drolsky@maxmind.com</i>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENSE'><a class='permalink' href='#COPYRIGHT_AND_LICENSE'>حقوق النشر والترخيص</a></h1>
+<p class="Pp">حقوق النشر 2013-2025 MaxMind, Inc.</p>
+<p class="Pp">مرخص بموجب ترخيص Apache، الإصدار 2.0 (&quot;الترخيص&quot;)؛ لا يجوز لك استخدام هذا الملف إلا بالامتثال للترخيص. يمكنك الحصول على نسخة من الترخيص في</p>
+<a href='https://www.apache.org/licenses/LICENSE-2.0'>https://www.apache.org/licenses/LICENSE-2.0</a>
+<p class="Pp">ما لم يقتضِ القانون المعمول به أو يتم الاتفاق عليه كتابيًا، يتم توزيع البرنامج بموجب الترخيص على أساس &quot;كما هو&quot;، دون أي ضمانات أو شروط من أي نوع، صريحة أو ضمنية. راجع الترخيص للغة المحددة التي تحكم الأذونات والقيود بموجب الترخيص.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضا</a></h1>
+<p class="Pp">mmdblookup(1)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libmaxminddb/">extra/libmaxminddb</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.12.2-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://maxmind.github.io/libmaxminddb/">https://maxmind.github.io/libmaxminddb/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/libmaxminddb/">/listing/extra/libmaxminddb/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#DATA_STRUCTURES">هياكل البيانات</a></li>
+        
+            <li><a href="#STATUS_CODES">رموز الحالة</a></li>
+        
+            <li><a href="#FUNCTIONS">الدوال</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#REQUIREMENTS">المتطلبات</a></li>
+        
+            <li><a href="#THREAD_SAFETY">السلامة المترابطة</a></li>
+        
+            <li><a href="#INSTALLATION_AND_SOURCE">التثبيت والمصدر</a></li>
+        
+            <li><a href="#BUG_REPORTS_AND_PULL_REQUESTS">تقارير الأخطاء وطلبات السحب</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENSE">حقوق النشر والترخيص</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/MMDB_open.3.en.txt">txt</a>, 
+        
+            <a href="/man/MMDB_open.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

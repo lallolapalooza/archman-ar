@@ -1,0 +1,415 @@
+<p class="Pp">تُستخدم الفئة <b>SoTexture2</b> لتعيين نسيج ثنائي الأبعاد (2D) إلى الهندسة اللاحقة في شجرة المشهد.</p>
+<p class="Pp">ستُطبق الأنسجة على عقد الأشكال ضمن نطاق عقد <b>SoTexture2</b> (أي، أسفل <b>SoSeparator</b> نفسه وعلى يمين <b>SoTexture2</b>) وفقًا للميزات الفردية لكل نوع شكل. راجع وثائق أنواع الأشكال المختلفة (<b>SoFaceSet</b>، <b>SoCube</b>، <b>SoSphere</b>، إلخ) للحصول على معلومات حول كيفية تطبيق النسيج.</p>
+<p class="Pp">يمكن العثور على مثال بسيط للاستخدام في وثائق فئة <b>SoSFImage</b>.</p>
+<p class="Pp">خطأ شائع في العديد من البرامج التي تدعم تصدير ملفات VRML أو Inventor هو تصدير نفس ملف النسيج عدة مرات، حتى لو تم تعيين عقد مختلفة له. يمكن أن يؤدي هذا إلى استخدام مفرط لذاكرة النسيج وأداء بطيء. فيما يلي مثال على رمز يقوم بتصحيح هذه المشكلة عن طريق استبدال جميع مثيلات النسيج نفسه بمؤشر إلى العقدة الأولى:</p>
+<pre>#include &lt;Inventor/actions/SoSearchAction.h&gt;
+#include &lt;Inventor/actions/SoWriteAction.h&gt;;
+#include &lt;Inventor/nodes/SoSeparator.h&gt;;
+#include &lt;Inventor/nodes/SoTexture2.h&gt;;
+#include &lt;Inventor/SoDB.h&gt;;
+#include &lt;Inventor/SoInput.h&gt;;
+#include &lt;Inventor/SoOutput.h&gt;;
+int main(int argc, char ** argv)
+{
+  if (argc &lt; 2) return -1;
+  SoDB::init();
+  SoInput in;
+  if (!in.openFile(argv[1])) return -1;
+  SoSeparator * root = SoDB::readAll(&amp;in);
+  if (!root) return -1;
+  root-&gt;ref();
+  SoSearchAction sa;
+  sa.setType(SoTexture2::getClassTypeId());
+  sa.setInterest(SoSearchAction::ALL);
+  sa.setSearchingAll(TRUE);
+  sa.apply(root);
+  SoPathList &amp; pl = sa.getPaths();
+  SbDict namedict;
+  for (int i = 0; i &lt; pl.getLength(); i++) {
+    SoFullPath * p = (SoFullPath*) pl[i];
+    if (p-&gt;getTail()-&gt;isOfType(SoTexture2::getClassTypeId())) {
+      SoTexture2 * tex = (SoTexture2*) p-&gt;getTail();
+      if (tex-&gt;filename.getValue().getLength()) {
+        SbName name = tex-&gt;filename.getValue().getString();
+        unsigned long key = (unsigned long) ((void*) name.getString());
+        void * tmp;
+        if (!namedict.find(key, tmp)) {
+          // نسيج جديد. قم بإدراجه في القائمة فقط
+          (void) namedict.enter(key, tex);
+        }
+        else if (tmp != (void*) tex) { // استبدال بالعقدة الموجودة في القائمة
+          SoGroup * parent = (SoGroup*) p-&gt;getNodeFromTail(1);
+          int idx = p-&gt;getIndexFromTail(0);
+          parent-&gt;replaceChild(idx, (SoNode*) tmp);
+        }
+      }
+    }
+  }
+  sa.reset();
+  // إخراج المشهد مع ضبط الأنسجة إلى stdout
+  SoOutput out;
+  SoWriteAction wa(&amp;out);
+  wa.apply(root);
+  root-&gt;unref();
+}</pre>
+<p class="Pp">عند العمل مع ملفات Inventor، غالبًا ما يرغب المرء في تضمين ملفات النسيج الخارجية في ملفات Inventor نفسها. فيما يلي مثال بسيط ومستقل يوضح كيف يمكن تحقيق ذلك عن طريق استدعاء <b>SoField::touch()</b> على حقول <b>SoTexture2::image</b> قبل تصدير شجرة المشهد:</p>
+<pre>#include &lt;Inventor/SoDB.h&gt;;
+#include &lt;Inventor/nodes/SoSeparator.h&gt;;
+#include &lt;Inventor/nodes/SoTexture2.h&gt;;
+#include &lt;Inventor/actions/SoSearchAction.h&gt;;
+#include &lt;Inventor/actions/SoWriteAction.h&gt;;
+int
+main(void)
+{
+  if (argc == 1) {
+    fprintf(stderr,&quot;الاستخدام: %s &lt;infile&gt; &gt; outfile.iv\n&quot;, argv[0]);
+    return -1;
+  }
+  SoDB::init();
+  // افتح الملف (لا تستخدم stdin) حتى يتمكن Coin من البحث عن الأنسجة المتعلقة بالملف المدخل.
+  SoInput in;
+  if (!in.openFile(argv[1])) {
+    return -1;
+  }
+  SoSeparator * root = SoDB::readAll(&amp;in);
+  if (!root) { exit(1); }
+  root-&gt;ref();
+  SoSearchAction searchaction;
+  searchaction.setType(SoTexture2::getClassTypeId());
+  searchaction.setSearchingAll(TRUE);
+  searchaction.setInterest(SoSearchAction::ALL);
+  searchaction.apply(root);
+  const SoPathList &amp; pl = searchaction.getPaths();
+  for (int i=0; i &lt; pl.getLength(); i++) {
+    SoFullPath * fp = (SoFullPath *)pl[i];
+    SoTexture2 * tex = (SoTexture2 *)fp-&gt;getTail();
+    assert(tex-&gt;getTypeId() == SoTexture2::getClassTypeId());
+    tex-&gt;image.touch();
+  }
+  SoWriteAction wa;
+  wa.apply(root);
+  root-&gt;unref();
+  return 0;
+}</pre>
+<p class="Pp">قم بتشغيل المثال عن طريق إدخال ملف iv الذي تريد استخدامه لتضمين النسيج من stdin، على سبيل المثال، على هذا النحو:</p>
+<pre>$ ./test &lt; input.iv</pre>
+<p class="Pp"><b>بنية الملف/الافتراضيات:</p>
+<pre>Texture2 {
+    filename ""
+    image 0 0 0
+    wrapS REPEAT
+    wrapT REPEAT
+    model MODULATE
+    blendColor 0 0 0
+    enableCompressedTexture FALSE
+}</pre>
+<dl>
+  <dt id="DECAL"><a class="permalink" href="#DECAL"><b><i>DECAL</i></b></a></dt>
+  <dd>صورة النسيج تستبدل تظليل المضلعات. لا يتم تغطية وحدات البكسل ذات النسيج بتظليل Phong. لها سلوك غير محدد للنسيج الرمادي والرمادي-ألفا.</dd>
+  <dt id="BLEND"><a class="permalink" href="#BLEND"><b><i>BLEND</i></b></a></dt>
+  <dd>يُستخدم هذا النموذج عادةً مع الأنسجة أحادية اللون (أي، الأنسجة ذات مكون واحد أو اثنين). يُستخدم المكون الأول، الكثافة، للمزج بين لون تظليل المضلع و<b>SoTexture2::blendColor</b>.</dd>
+  <dt id="REPLACE"><a class="permalink" href="#REPLACE"><b><i>REPLACE</i></b></a></dt>
+  <dd>صورة النسيج تستبدل تظليل المضلعات. لا يتم تغطية وحدات البكسل ذات النسيج بتظليل Phong. يدعم النسيج الرمادي والرمادي-ألفا. تتطلب هذه الميزة OpenGL 1.1. سيتم استخدام MODULATE إذا تم اكتشاف إصدار OpenGL أقل من 1.1.</dd>
+</dl>
+<p class="Pp">ملاحظة: سيؤدي استخدام نموذج النسيج هذا إلى جعل ملفات Inventor الخاصة بك غير متوافقة مع الإصدارات القديمة من Coin وInventor. تحتاج إلى Coin &gt;= 2.2 أو TGS Inventor 4.0 لتحميل ملفات Inventor التي تستخدم نموذج النسيج REPLACE.</p>
+<p class="Pp"><b>من</b></p>
+<div class="Bd-indent">Coin 2.2
+<p class="Pp">TGS Inventor 4.0</p>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">enum <b>SoTexture2::Wrap</b></h2>
+<p class="Pp">تعداد استراتيجيات الالتفاف التي يمكن استخدامها عندما لا يغطي خريطة النسيج الامتداد الكامل للهندسة.</p>
+<p class="Pp"><b>المُعدِّد</b>
+  <br/>
+</p>
+<dl class="Bl-tag">
+  <dt id="REPEAT"><a class="permalink" href="#REPEAT"><b><i>REPEAT</i></b></a></dt>
+  <dd>كرر النسيج عندما لا يكون الإحداثي بين 0 و 1.</dd>
+  <dt id="CLAMP"><a class="permalink" href="#CLAMP"><b><i>CLAMP</i></b></a></dt>
+  <dd>ثبّت الإحداثي بين 0 و 1.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Constructor_&amp;amp;_Destructor_Documentation'><a class='permalink' href='#Constructor_&amp;amp;_Destructor_Documentation'>توثيق الباني   و المدمر</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='SoTexture2::SoTexture2_(void_)'><a class='permalink' href='#SoTexture2::SoTexture2_(void_)'>SoTexture2::SoTexture2   (void )</a></h2>
+<p class="Pp">الباني.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SoTexture2::~SoTexture2_()_[protected],_[virtual]'><a class='permalink' href='#SoTexture2::~SoTexture2_()_%5Bprotected%5D,_%5Bvirtual%5D'>SoTexture2::~SoTexture2   () [protected], [virtual]</a></h2>
+<p class="Pp">المدمر. يحرر الموارد الداخلية المستخدمة لتخزين بيانات صورة النسيج.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Member_Function_Documentation'><a class='permalink' href='#Member_Function_Documentation'>توثيق وظائف الأعضاء</a></h1>
+<section class="Ss">
+<h2 class="Ss"><b>SoType</b> SoTexture2::getClassTypeId (void ) [static]</h2>
+<p class="Pp">ترجع هذه الوظيفة الثابتة كائن <b>SoType</b> المرتبط بكائنات هذا الفصل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>SoType</b> SoTexture2::getTypeId (void ) const [virtual]</h2>
+<p class="Pp">ترجع معرف النوع للكائن المشتق من فصل يرث <b>SoBase</b>. يُستخدم للتحكم في النوع وقت التشغيل وللتحويل "لأسفل" (downward).</p>
+<p class="Pp">معاد تعريفه من <b>SoTexture</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">const <b>SoFieldData</b> ** SoTexture2::getFieldDataPtr (void )
+  [static], [protected]</h2>
+<p class="Pp"><i>هذه الواجهة برمجة التطبيقات داخلية للمكتبة، حيث من غير المرجح أن تكون ذات أهمية لمطور التطبيق.</i></p>
+<p class="Pp">
+  <br/>
+   ترجع <b>SoFieldData</b> الذي يحتوي على معلومات حول حقول هذا العقدة.
+</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">const <b>SoFieldData</b> * SoTexture2::getFieldData (void ) const
+  [protected], [virtual]</h2>
+<p class="Pp">ترجع مؤشرًا إلى بيانات التخزين الخاصة بالحقول على مستوى الفصل لهذا المثيل. إذا لم تكن هناك حقول، ترجع NULL.</p>
+<p class="Pp">معاد تعريفه من <b>SoTexture</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::doAction_(&lt;b&gt;SoAction&lt;/b&gt;_*_action)_[virtual]'><a class='permalink' href='#void_SoTexture2::doAction_(&lt;b&gt;SoAction&lt;/b&gt;_*_action)_%5Bvirtual%5D'>void   SoTexture2::doAction (<b>SoAction</b> * action) [virtual]</a></h2>
+<p class="Pp">تقوم هذه الوظيفة بإجراء العملية النموذجية للعقدة لأي إجراء.</p>
+<p class="Pp">معاد تعريفه من <b>SoTexture</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::GLRender_(&lt;b&gt;SoGLRenderAction&lt;/b&gt;_*_action)_[virtual]'><a class='permalink' href='#void_SoTexture2::GLRender_(&lt;b&gt;SoGLRenderAction&lt;/b&gt;_*_action)_%5Bvirtual%5D'>void   SoTexture2::GLRender (<b>SoGLRenderAction</b> * action) [virtual]</a></h2>
+<p class="Pp">وظيفة الإجراء لـ <b>SoGLRenderAction</b>.</p>
+<p class="Pp">يتم استدعاء هذا أثناء جولات العرض. يمكن للعقد التي تؤثر على حالة العرض أو ترغب في إطلاق أشكال هندسية أولية لـ OpenGL إعادة تعريف هذه الوظيفة.</p>
+<p class="Pp">معاد تعريفه من <b>SoTexture</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::callback_(&lt;b&gt;SoCallbackAction&lt;/b&gt;_*_action)_[virtual]'><a class='permalink' href='#void_SoTexture2::callback_(&lt;b&gt;SoCallbackAction&lt;/b&gt;_*_action)_%5Bvirtual%5D'>void   SoTexture2::callback (<b>SoCallbackAction</b> * action) [virtual]</a></h2>
+<p class="Pp">وظيفة الإجراء لـ <b>SoCallbackAction</b>.</p>
+<p class="Pp">يقوم بتحديث الحالة وفقًا لكيفية تصرف العقدة مع إجراء العرض، مما يسمح لمطور التطبيق باستخدام <b>SoCallbackAction</b> لاستخراج المعلومات حول الرسم البياني للمشهد.</p>
+<p class="Pp">معاد تعريفه من <b>SoTexture</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::rayPick_(&lt;b&gt;SoRayPickAction&lt;/b&gt;_*_action)_[virtual]'><a class='permalink' href='#void_SoTexture2::rayPick_(&lt;b&gt;SoRayPickAction&lt;/b&gt;_*_action)_%5Bvirtual%5D'>void   SoTexture2::rayPick (<b>SoRayPickAction</b> * action) [virtual]</a></h2>
+<p class="Pp">وظيفة الإجراء لـ <b>SoRayPickAction</b>.</p>
+<p class="Pp">يفحص مواصفات شعاع الإجراء ويختبر التقاطع مع بيانات العقدة.</p>
+<p class="Pp">تعيد العقد التي تؤثر على المتغيرات ذات الصلة بكيفية إجراء الالتقاط تعريف هذه الوظيفة أيضًا.</p>
+<p class="Pp">معاد تعريفه من <b>SoNode</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SbBool_SoTexture2::readImage_(const_&lt;b&gt;SbString&lt;/b&gt;_&amp;amp;_fname,_int_&amp;amp;_w,_int_&amp;amp;_h,_int_&amp;amp;_nc,_unsigned_char_*&amp;amp;_bytes)_[static]'><a class='permalink' href='#SbBool_SoTexture2::readImage_(const_&lt;b&gt;SbString&lt;/b&gt;_&amp;amp;_fname,_int_&amp;amp;_w,_int_&amp;amp;_h,_int_&amp;amp;_nc,_unsigned_char_*&amp;amp;_bytes)_%5Bstatic%5D'>SbBool   SoTexture2::readImage (const <b>SbString</b> &amp; fname, int &amp; w, int   &amp; h, int &amp; nc, unsigned char *&amp; bytes) [static]</a></h2>
+<p class="Pp">غير منفذ في Coin؛ يجب اعتباره غير عام في واجهة برمجة التطبيقات الأصلية لـ SGI Open Inventor. سنفكر في تنفيذه إذا طُلب منا ذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SbBool_SoTexture2::readInstance_(&lt;b&gt;SoInput&lt;/b&gt;_*_in,_unsigned_short_flags)_[protected],_[virtual]'><a class='permalink' href='#SbBool_SoTexture2::readInstance_(&lt;b&gt;SoInput&lt;/b&gt;_*_in,_unsigned_short_flags)_%5Bprotected%5D,_%5Bvirtual%5D'>SbBool   SoTexture2::readInstance (<b>SoInput</b> * in, unsigned short flags)   [protected], [virtual]</a></h2>
+<p class="Pp">تُستخدم هذه الوظيفة بشكل أساسي أثناء عمليات استيراد الملفات.</p>
+<p class="Pp">تقرأ تعريف مثيل من ملف الإدخال <i>in</i>. يشير مؤشر ملف الإدخال إلى بداية تمثيل متسلسل / دائم لمثيل لهذا النوع من الفصول.</p>
+<p class="Pp">ترجع TRUE أو FALSE اعتمادًا على ما إذا كان إنشاء وتكوين الكائن الجديد من هذا النوع من الفصول ناجحًا أم لا. يجب أن تكون عملية الاستيراد قوية وأن تتعامل مع الإدخالات التالفة عن طريق إرجاع FALSE.</p>
+<p class="Pp">تُستخدم القيمة <i>flags</i> داخليًا أثناء الاستيراد الثنائي عند قراءة عقد امتداد المستخدم أو عقد المجموعة أو المحركات.</p>
+<p class="Pp">معاد تعريفه من <b>SoNode</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::notify_(&lt;b&gt;SoNotList&lt;/b&gt;_*_l)_[protected],_[virtual]'><a class='permalink' href='#void_SoTexture2::notify_(&lt;b&gt;SoNotList&lt;/b&gt;_*_l)_%5Bprotected%5D,_%5Bvirtual%5D'>void   SoTexture2::notify (<b>SoNotList</b> * l) [protected], [virtual]</a></h2>
+<p class="Pp">يُبلغ جميع المستمعين لهذا المثيل عند حدوث تغييرات.</p>
+<p class="Pp">معاد تعريفه من <b>SoNode</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='int_SoTexture2::getReadStatus_(void_)_[protected]'><a class='permalink' href='#int_SoTexture2::getReadStatus_(void_)_%5Bprotected%5D'>int   SoTexture2::getReadStatus (void ) [protected]</a></h2>
+<p class="Pp">ترجع حالة القراءة. 1 للنجاح، 0 للفشل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='void_SoTexture2::setReadStatus_(int_s)_[protected]'><a class='permalink' href='#void_SoTexture2::setReadStatus_(int_s)_%5Bprotected%5D'>void   SoTexture2::setReadStatus (int s) [protected]</a></h2>
+<p class="Pp">يضبط حالة القراءة.</p>
+<p class="Pp"><b>انظر أيضًا</b></p>
+<div class="Bd-indent"><b>getReadStatus()</b></div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Member_Data_Documentation'><a class='permalink' href='#Member_Data_Documentation'>توثيق بيانات الأعضاء</a></h1>
+<section class="Ss">
+<h2 class="Ss"><b>SoSFString</b> SoTexture2::filename</h2>
+<p class="Pp">اسم ملف النسيج، يشير إلى ملف بتنسيق bitmap صورة على القرص.</p>
+<p class="Pp">بشكل افتراضي، يحتوي على سلسلة فارغة، مما يعني أن النسيج سيتم قراءته من <b>SoTexture2::image</b> وليس من القرص. (حدد هذه الخاصية أو استخدم <b>SoTexture2::image</b>، وليس كليهما).</p>
+<p class="Pp">FIXME: قسم simage قديم.</p>
+<p class="Pp">لقراءة ملفات الصور من القرص، تستخدم Coin مكتبة "simage" من Kongsberg Oil &amp; Gas Technologies. يجب تثبيت هذه المكتبة لتتمكن من تحميل أي ملف صور.</p>
+<p class="Pp">تعتمد مجموعة تنسيقات الصور التي يمكنك قراءتها بالفعل على كيفية بناء مكتبة simage، حيث تعتمد simage بدورها على بعض مكتبات استيراد / تصدير الملفات منخفضة المستوى (مثل دعم JPEG و GIF و TIFF و PNG). لضمان توفر جميع التنسيقات المطلوبة، يجب عليك بناء مكتبة simage بنفسك.</p>
+<p class="Pp">مجموعة تنسيقات الصور التي تضمنها simage هي Targa (.tga) و PIC (.pic) و SGI RGB (.rgb, .bw) و XWD (.xwd).</p>
+<p class="Pp">لمزيد من المعلومات حول مكتبة simage، بما في ذلك تعليمات التنزيل والبناء، راجع مستودع Coin.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>SoSFImage</b> SoTexture2::image</h2>
+<p class="Pp">بيانات الصورة المرتبطة. بشكل افتراضي، يحتوي على صورة فارغة.</p>
+<p class="Pp">راجع توثيق فصل <b>SoSFImage</b> للحصول على وصف تفصيلي لكيفية تعريف تنسيق مواصفات بيانات الصورة، وما هي تنسيقات أنسجة الألوان المختلفة، والأنسجة شبه الشفافة، والأنسجة الرمادية، وما إلى ذلك، المدعومة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>SoSFEnum</b> SoTexture2::wrapS</h2>
+<p class="Pp">استراتيجية الالتفاف للإحداثي S عندما تكون خريطة النسيج أعرض من الكائن المراد تعيينه.</p>
+<p class="Pp">القيمة الافتراضية هي <b>SoTexture2::REPEAT</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ar" dir="rtl">
+    <head>
+        <title>
+            SoTexture2(3) - Coin 3D 4.0.5
+        </title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta http-equiv="Content-Style-Type" content="text/css" />
+        <meta name="generator" content="mandoc 1.25.1" />
+        <link rel="stylesheet" href="/css/style.css" type="text/css" />
+        <link rel="stylesheet" href="/css/coin-style.css" type="text/css" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">SoTexture2(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/coin/">coin</a></p>
+<p class="lic">التراخيص: BSD-3-Clause</p>
+
+        <main class="man-page">
+            
+            <article>
+                <section class="Sh">
+                    <h1 class="Sh" id="NAME">NAME</h1>
+                    <p class="Pp">SoTexture2 - 2D texture node</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="SYNOPSIS">SYNOPSIS</h1>
+                    <pre>
+#include &lt;Inventor/nodes/SoTexture2.h&gt;
+                    </pre>
+                    <pre>
+<b>SoTexture2</b> {
+    <b>SoSFEnum</b>  wrapT     <i>&lt;REPEAT |CLAMP |MIRROR&gt;</i>
+    <b>SoSFEnum</b>  model     <i>&lt;REPLACE | MODULATE | DECAL |BLEND | ADD&gt;</i>
+    <b>SoSFColor</b> blendColor  <i>&lt;0 0 0&gt;</i>
+    <b>SoSFBool</b>  enableCompressedTexture <i>&lt;FALSE&gt;</i>
+}
+                    </pre>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+                    <p class="Pp">This node defines a 2D texture map. A 2D texture map is
+                        an image that can be applied to the surfaces of 3D objects. The
+                        image is accessed using texture coordinates, which are associated
+                        with the vertices of the primitive objects. The texture map is
+                        automatically generated from the specified image file.</p>
+                    <p class="Pp">The texture coordinates are generated by the <b>SoTextureCoordinate2</b>
+                        node. If no <b>SoTextureCoordinate2</b> node is present in the
+                        scene graph, the texture coordinates will be generated automatically
+                        by default.</p>
+                    <p class="Pp">The <b>SoTexture2</b> node specifies the texture image,
+                        the way the texture wraps around the object, and the texture mapping
+                        model.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="MEMBER_ENUMERATION_DOCUMENTATION">MEMBER ENUMERATION DOCUMENTATION</h1>
+                    <section class="Ss">
+                        <h2 class="Ss" id="SoSFEnum_SoTexture2::wrapT"><b>SoSFEnum</b> SoTexture2::wrapT</h2>
+                        <p class="Pp">Wrapping strategy for the T coordinate when the texture map is
+                            shorter than the object to map onto.</p>
+                        <p class="Pp">Default value is <b>SoTexture2::REPEAT</b>.</p>
+                    </section>
+                    <section class="Ss">
+                        <h2 class="Ss" id="SoSFEnum_SoTexture2::model"><b>SoSFEnum</b> SoTexture2::model</h2>
+                        <p class="Pp">Texture mapping model for how the texture map is
+                            &quot;merged&quot; with the polygon primitives it is applied to. Default
+                            value is <b>SoTexture2::MODULATE</b>.</p>
+                    </section>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="CONSTRUCTOR_&amp;_DESTRUCTOR_DOCUMENTATION">CONSTRUCTOR &amp; DESTRUCTOR DOCUMENTATION</h1>
+                    <p class="Pp">No specific constructor/destructor documentation available.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="MEMBER_FUNCTION_DOCUMENTATION">MEMBER FUNCTION DOCUMENTATION</h1>
+                    <p class="Pp">No specific member function documentation available.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="MEMBER_DATA_DOCUMENTATION">MEMBER DATA DOCUMENTATION</h1>
+                    <section class="Ss">
+                        <h2 class="Ss" id="SoSFColor_SoTexture2::blendColor"><b>SoSFColor</b> SoTexture2::blendColor</h2>
+                        <p class="Pp">Blend color. Used when <b>SoTexture2::model</b> is
+                            <b>SoTexture2::BLEND</b>.</p>
+                        <p class="Pp">Default color value is [0, 0, 0], black, which means no
+                            contribution to the blending is made.</p>
+                    </section>
+                    <section class="Ss">
+                        <h2 class="Ss" id="SoSFBool_SoTexture2::enableCompressedTexture"><b>SoSFBool</b> SoTexture2::enableCompressedTexture</h2>
+                        <p class="Pp">Hint to Coin that compressed textures should be used if this is
+                            supported by the graphics hardware and OpenGL drivers. Using compressed
+                            textures usually reduces texture memory usage for a texture by 4-6
+                            times.</p>
+                        <p class="Pp"><b>Since</b></p>
+                        <div class="Bd-indent">Coin 2.4.2
+                            <p class="Pp">TGS Inventor 4.0</p>
+                        </div>
+                    </section>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="Author">Author</h1>
+                    <p class="Pp">Generated automatically by Doxygen for Coin from the source
+                        code.</p>
+                </section>
+            </article>
+            <footer>
+                <table class="foot">
+                    <tr>
+                        <td class="foot-date">Mon Sep 1 2025 19:16:41</td>
+                        <td class="foot-os">Version 4.0.5</td>
+                    </tr>
+                </table>
+            </footer>
+        </main>
+        <aside id="sidebar">
+            <section class="search">
+                <form action="/search" class="search direct-search" role="search">
+                    <input type="search" placeholder="Search manual page" name="q" value=""
+                         />
+                    <input type="submit" name="go" value="Go" />
+                </form>
+            </section>
+            <section class="package-info">
+                <p>Package information:</p>
+                <dl>
+                    <dt>Package name:</dt>
+                    <dd><a href="https://www.archlinux.org/packages/extra/x86_64/coin/">extra/coin</a></dd>
+                    <dt>Version:</dt>
+                    <dd>1:4.0.5-3</dd>
+                    <dt>Upstream:</dt>
+                    <dd><a href="https://github.com/coin3d/coin">https://github.com/coin3d/coin</a></dd>
+                    <dt>Licenses:</dt>
+                    <dd>BSD-3-Clause</dd>
+                    <dt>Manuals:</dt>
+                    <dd><a href="/listing/extra/coin/">/listing/extra/coin/</a></dd>
+                </dl>
+            </section>
+            <details>
+                <summary>Table of contents</summary>
+                <nav class="toc">
+                    <ul>
+                        <li><a href="#NAME">NAME</a></li>
+                        <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+                        <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+                        <li><a href="#MEMBER_ENUMERATION_DOCUMENTATION">MEMBER ENUMERATION DOCUMENTATION</a></li>
+                        <li><a href="#CONSTRUCTOR_&amp;_DESTRUCTOR_DOCUMENTATION">CONSTRUCTOR &amp; DESTRUCTOR DOCUMENTATION</a></li>
+                        <li><a href="#MEMBER_FUNCTION_DOCUMENTATION">MEMBER FUNCTION DOCUMENTATION</a></li>
+                        <li><a href="#MEMBER_DATA_DOCUMENTATION">MEMBER DATA DOCUMENTATION</a></li>
+                        <li><a href="#Author">Author</a></li>
+                    </ul>
+                </nav>
+            </details>
+            <nav class="other-formats">
+                <p>Other formats:
+                    <a href="/man/SoTexture2.3.en.txt">txt</a>, 
+                    <a href="/man/SoTexture2.3.en.raw">raw</a>
+                </p>
+            </nav>
+        </aside>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

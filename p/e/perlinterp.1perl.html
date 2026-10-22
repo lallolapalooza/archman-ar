@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perlinterp(1perl) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlinterp.1perl</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERLINTERP(1perl)</td>
+    <td class="head-vol">دليل مرجع مبرمجي Perl</td>
+    <td class="head-rtitle">PERLINTERP(1perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">perlinterp — نظرة عامة على مترجم Perl</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">توفر هذه الوثيقة نظرة عامة على كيفية عمل مترجم Perl على مستوى كود C، بالإضافة إلى نقاط الاتصال بملفات الكود المصدري C ذات الصلة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ELEMENTS_OF_THE_INTERPRETER'><a class='permalink' href='#ELEMENTS_OF_THE_INTERPRETER'>عناصر المترجم</a></h1>
+<p class="Pp">ينقسم عمل المترجم إلى مرحلتين رئيسيتين: ترجمة الكود إلى التمثيل الداخلي، أو الكود الثنائي، ثم تنفيذه. يشرح &quot;الكود المترجم&quot; في perlguts بالتفصيل كيف تحدث مرحلة الترجمة.</p>
+<p class="Pp">هذا تفصيل موجز لعمل perl:</p>
+<section class="Ss">
+<h2 class="Ss" id='Startup'><a class='permalink' href='#Startup'>بدء التشغيل</a></h2>
+<p class="Pp">يبدأ الإجراء في <i>perlmain.c</i>. (أو <i>miniperlmain.c</i> لـ miniperl) هذا كود رفيع المستوى للغاية، يكفي ليناسب شاشة واحدة، ويشبه الكود الموجود في perlembed؛ معظم العمل الحقيقي يتم في <i>perl.c</i></p>
+<p class="Pp">يتم إنشاء <i>perlmain.c</i> بواسطة
+    <span class="Li">&quot;ExtUtils::Miniperl&quot;</span> من
+    <i>miniperlmain.c</i> عند وقت الإنشاء، لذلك يجب عليك إنشاء perl لمتابعة ذلك.</p>
+<p class="Pp">أولاً، يقوم <i>perlmain.c</i> بتخصيص بعض الذاكرة وينشئ مترجم Perl، وفقًا لما يلي:</p>
+<pre>1 PERL_SYS_INIT3(&amp;argc,&amp;argv,&amp;env);
+2
+3 if (!PL_do_undump) {
+4     my_perl = perl_alloc();
+5     if (!my_perl)
+6         exit(1);
+7     perl_construct(my_perl);
+8     PL_perl_destruct_level = 0;
+9 }</pre>
+<p class="Pp">السطر 1 هو ماكرو، وتعريفه يعتمد على نظام التشغيل الخاص بك. يشير السطر 3 إلى
+    <span class="Li">&quot;PL_do_undump&quot;</span>، وهو متغير عام - جميع المتغيرات العامة في Perl تبدأ بـ
+    <span class="Li">&quot;PL_&quot;</span>. هذا يخبرك ما إذا كان البرنامج الذي يتم تشغيله حاليًا تم إنشاؤه باستخدام العلامة
+    <span class="Li">&quot;-u&quot;</span> إلى perl ثم <i>undump</i>، مما يعني أنه سيكون خاطئًا في أي سياق طبيعي.</p>
+<p class="Pp">السطر 4 يستدعي دالة في <i>perl.c</i> لتخصيص ذاكرة لمترجم Perl. إنها دالة بسيطة جدًا، وأجزائها الداخلية تبدو كما يلي:</p>
+<pre>my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));</pre>
+<p class="Pp">هنا ترى مثالاً على تجريد نظام Perl، والذي سنراه لاحقًا:
+    <span class="Li">&quot;PerlMem_malloc&quot;</span> إما
+    <span class="Li">&quot;malloc&quot;</span> الخاص بنظامك، أو
+    <span class="Li">&quot;malloc&quot;</span> الخاص بـ Perl كما هو محدد في
+    <i>malloc.c</i> إذا اخترت هذا الخيار وقت التكوين.</p>
+<p class="Pp">بعد ذلك، في السطر 7، نقوم بإنشاء المترجم باستخدام
+    perl_construct، الموجود أيضًا في <i>perl.c</i>؛ يقوم هذا بإعداد جميع المتغيرات الخاصة التي يحتاجها Perl، والمكدسات، وما إلى ذلك.</p>
+<p class="Pp">الآن نمرر خيارات سطر الأوامر إلى Perl، ونخبره بالبدء:</p>
+<pre>if (!perl_parse(my_perl, xs_init, argc, argv, (char **)NULL))
+    perl_run(my_perl);
+exitstatus = perl_destruct(my_perl);
+perl_free(my_perl);</pre>
+<p class="Pp"><span class="Li">&quot;perl_parse&quot;</span> هو في الواقع غلاف حول
+    <span class="Li">&quot;S_parse_body&quot;</span>، كما هو محدد في
+    <i>perl.c</i>، والذي يعالج خيارات سطر الأوامر، ويعد أي وحدات XS مرتبطة ثابتًا، ويفتح البرنامج ويستدعي
+    <span class="Li">&quot;yyparse&quot;</span> لتحليله.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Parsing'><a class='permalink' href='#Parsing'>التحليل</a></h2>
+<p class="Pp">هدف هذه المرحلة هو أخذ كود Perl، وتحويله إلى شجرة عمليات (op tree). سنرى كيف تبدو لاحقًا. بالمعنى الدقيق للكلمة، هناك ثلاثة أشياء تحدث هنا.</p>
+<p class="Pp"><span class="Li">&quot;yyparse&quot;</span>، المحلل، موجود في
+    <i>perly.c</i>، على الرغم من أنك من الأفضل قراءة مدخل YACC الأصلي في
+    <i>perly.y</i>. (نعم، هناك بالفعل قواعد YACC لـ Perl!) وظيفة المحلل هي أخذ الكود الخاص بك و&quot;فهمه&quot;، وتقسيمه إلى جمل، وتحديد أي المعاملات تذهب مع أي عوامل تشغيل وما إلى ذلك.</p>
+<p class="Pp">يساعد المحلل بشكل نبيل من قبل المحلل المعجمي (lexer)، الذي يقسم مدخلاتك إلى رموز (tokens)، ويحدد نوع كل رمز: اسم متغير، عامل تشغيل، كلمة عارية (bareword)، روتين فرعي، دالة أساسية، وما إلى ذلك. نقطة الدخول الرئيسية إلى المحلل المعجمي هي
+    <span class="Li">&quot;yylex&quot;</span>، وهو وروتيناته المرتبطة يمكن العثور عليها في
+    <i>toke.c</i>. Perl لا يشبه إلى حد كبير لغات الكمبيوتر الأخرى؛ فهو حساس للسياق بدرجة عالية في بعض الأحيان، ويمكن أن يكون من الصعب تحديد نوع الرمز الذي يمثله شيء ما، أو أين ينتهي الرمز. على هذا النحو، هناك الكثير من التفاعل بين المحلل المعجمي والمحلل، والذي يمكن أن يكون مخيفًا جدًا إذا لم تكن معتادًا عليه.</p>
+<p class="Pp">بينما يفهم المحلل برنامج Perl، فإنه يبني شجرة عمليات للمترجم لتنفيذها أثناء التنفيذ. الروتينات التي تبني وتربط العمليات المختلفة معًا موجودة في
+    <i>op.c</i>، وسيتم فحصها لاحقًا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Optimization'><a class='permalink' href='#Optimization'>التحسين</a></h2>
+<p class="Pp">الآن اكتملت مرحلة التحليل، والشجرة المكتملة تمثل العمليات التي يحتاج مترجم Perl إلى تنفيذها لتشغيل برنامجنا. بعد ذلك، يقوم Perl بإجراء تشغيل تجريبي على الشجرة بحثًا عن تحسينات: سيتم حساب التعبيرات الثابتة مثل
+    <span class="Li">&quot;3 + 4&quot;</span> الآن، وسيتحقق المُحسِّن أيضًا مما إذا كان يمكن استبدال العمليات المتعددة بعملية واحدة. على سبيل المثال، لجلب المتغير
+    <span class="Li">$foo</span>، بدلاً من الحصول على المتغير العام
+    <span class="Li">*foo</span> والنظر إلى المكون الكمي، يقوم المُحسِّن بتعديل شجرة العمليات لاستخدام دالة تبحث مباشرة عن الكمي المعني. المُحسِّن الرئيسي هو
+    <span class="Li">&quot;peep&quot;</span> في <i>op.c</i>، والعديد من العمليات لها دوال تحسين خاصة بها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Running'><a class='permalink' href='#Running'>التشغيل</a></h2>
+<p class="Pp">الآن نحن مستعدون تمامًا للانطلاق: لقد قمنا بترجمة كود Perl الثنائي، وكل ما تبقى هو تشغيله. يتم التنفيذ الفعلي بواسطة الدالة
+    <span class="Li">&quot;runops_standard&quot;</span> في
+    <i>run.c</i>؛ على وجه التحديد، يتم ذلك بواسطة هذه الأسطر الثلاثة التي تبدو بريئة:</p>
+<pre>while ((PL_op = PL_op-&gt;op_ppaddr(aTHX))) {
+    PERL_ASYNC_CHECK();
+}</pre>
+<p class="Pp">قد تكون أكثر ارتياحًا مع إصدار Perl من ذلك:</p>
+<pre>PERL_ASYNC_CHECK() while $Perl::op = &amp;{$Perl::op-&gt;{function}};</pre>
+<p class="Pp">حسنًا، ربما لا. على أي حال، تحتوي كل عملية على مؤشر دالة، يحدد الدالة التي ستقوم فعليًا بتنفيذ العملية. ستعيد هذه الدالة العملية التالية في التسلسل - هذا يسمح بأشياء مثل
+    <span class="Li">&quot;if&quot;</span> التي تختار العملية التالية ديناميكيًا في وقت التشغيل.
+    <span class="Li">&quot;PERL_ASYNC_CHECK&quot;</span> يتأكد من أن أشياء مثل الإشارات تقاطع التنفيذ إذا لزم الأمر.</p>
+<p class="Pp">الدوال الفعلية المسماة هي ما يسمى بكود PP، وهي موزعة بين أربعة ملفات: <i>pp_hot.c</i> يحتوي على الكود &quot;الساخن&quot;، والذي يستخدم غالبًا ويتم تحسينه بدرجة عالية، <i>pp_sys.c</i> يحتوي على جميع الدوال الخاصة بالنظام، <i>pp_ctl.c</i> يحتوي على الدوال التي تنفذ هياكل التحكم
+    (<span class="Li">&quot;if&quot;</span>،
+    <span class="Li">&quot;while&quot;</span> وما شابه) و <i>pp.c</i> يحتوي على كل شيء آخر. هذه، إذا أردت، هي كود C للدوال والعوامل الأساسية في Perl.</p>
+<p class="Pp">لاحظ أنه من المتوقع أن تعيد كل دالة
+    <span class="Li">&quot;pp_&quot;</span> مؤشرًا إلى العملية التالية. يتم التعامل مع استدعاءات وظائف Perl (وكتل eval) ضمن نفس حلقة runops، ولا تستهلك مساحة إضافية على مكدس C. على سبيل المثال،
+    <span class="Li">&quot;pp_entersub&quot;</span> و
+    <span class="Li">&quot;pp_entertry&quot;</span> تقوم ببساطة بدفع بنية كتلة
+    <span class="Li">&quot;CXt_SUB&quot;</span> أو
+    <span class="Li">&quot;CXt_EVAL&quot;</span> على مكدس السياق، والذي يحتوي على عنوان العملية التالية لاستدعاء الروتين الفرعي أو الكتلة. ثم تعيد العملية الأولى لهذا الروتين الفرعي أو الكتلة، ويستمر التنفيذ لذلك الروتين الفرعي أو الكتلة. لاحقًا، تقوم عملية
+    <span class="Li">&quot;pp_leavesub&quot;</span> أو
+    <span class="Li">&quot;pp_leavetry&quot;</span> بإخراج كتلة
+    <span class="Li">&quot;CXt_SUB&quot;</span> أو
+    <span class="Li">&quot;CXt_EVAL&quot;</span>، وتستعيد العملية المرتجعة منها، وتعيدها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Exception_handing'><a class='permalink' href='#Exception_handing'>معالجة الاستثناءات</a></h2>
+<p class="Pp">تعتمد معالجة الاستثناءات في Perl (أي
+    <span class="Li">&quot;die&quot;</span> إلخ) على وظائف مكتبة C ذات المستوى المنخفض
+    <span class="Li">setjmp()</span>/<span class="Li">longjmp()</span>. توفر هذه بشكل أساسي طريقة لالتقاط مسجلات PC و SP الحالية لوحدة المعالجة المركزية ولاحقًا استعادتها: أي أن
+    <span class="Li">longjmp()</span> تستمر في النقطة في الكود حيث تم استدعاء
+    <span class="Li">setjmp()</
+</div>
+</section>
+
+                
+</section>
+
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+        </footer>
+    </body>
+</html>
+ree for
+    <span class="Li">$x = $y +</span> <span class="Li">$z</span>.</p>
+<p class="Pp">أولاً، سننظر إلى الدالة
+    <span class="Li">&quot;Perl_yylex&quot;</span> في المحلل اللغوي. نريد البحث عن
+    <span class="Li">&quot;case 'x'&quot;</span>، حيث x هو الحرف الأول من المعامل. (بالمناسبة، عند البحث عن الكود الذي يتعامل مع كلمة مفتاحية، سترغب في البحث عن
+    <span class="Li">&quot;KEY_foo&quot;</span> حيث "foo" هي الكلمة المفتاحية). إليك الكود الذي يتعامل مع التعيين (هناك العديد من المعاملات التي تبدأ بـ
+    <span class="Li">&quot;=&quot;</span>، لذلك تم حذف معظمها للاختصار):</p>
+<pre>1    case '=':
+2        s++;
+         ... code that handles == =&gt; etc. and pod ...
+3        pl_yylval.ival = 0;
+4        OPERATOR(ASSIGNOP);</pre>
+<p class="Pp">يمكننا أن نرى في السطر 4 أن نوع الرمز الخاص بنا هو
+    <span class="Li">&quot;ASSIGNOP&quot;</span>
+    (<span class="Li">&quot;OPERATOR&quot;</span> هو ماكرو، معرف في
+    <i>toke.c</i>، والذي يعيد نوع الرمز، من بين أشياء أخرى). و
+    <span class="Li">&quot;+&quot;</span>:</p>
+<pre>1     case '+':
+2         {
+3             const char tmp = *s++;
+              ... code for ++ ...
+4             if (PL_expect == XOPERATOR) {
+                  ...
+5                 Aop(OP_ADD);
+6             }
+              ...
+7         }</pre>
+<p class="Pp">السطر 4 يتحقق من نوع الرمز الذي نتوقعه.
+    <span class="Li">&quot;Aop&quot;</span> يعيد رمزاً. إذا بحثت عن
+    <span class="Li">&quot;Aop&quot;</span> في أماكن أخرى من
+    <i>toke.c</i>، سترى أنه يعيد رمز
+    <span class="Li">&quot;ADDOP&quot;</span>.</p>
+<p class="Pp">الآن بعد أن عرفنا نوعي الرموز اللذين نريد البحث عنهما في المحلل، دعنا نأخذ الجزء من
+    <i>perly.y</i> الذي نحتاجه لبناء الشجرة لـ
+    <span class="Li">&quot;$x = $y + $z&quot;</span></p>
+<pre>1 term    :   term ASSIGNOP term
+2                { $$ = newASSIGNOP(OPf_STACKED, $1, $2, $3); }
+3         |   term ADDOP term
+4                { $$ = newBINOP($2, 0, scalar($1), scalar($3)); }</pre>
+<p class="Pp">إذا لم تكن معتاداً على قراءة قواعد BNF، فهذه هي كيفية عملها: يتم تزويدك بأشياء معينة بواسطة المحلل اللغوي، والتي تنتهي بشكل عام بحروف كبيرة.
+    <span class="Li">&quot;ADDOP&quot;</span> و
+    <span class="Li">&quot;ASSIGNOP&quot;</span> هي أمثلة على "رموز طرفية"، لأنها لا يمكن أن تكون أبسط من ذلك.</p>
+<p class="Pp">تخبرك القاعدة، الأسطر الأول والثالث من المقتطف أعلاه، بكيفية بناء أشكال أكثر تعقيداً. هذه الأشكال المعقدة، "الرموز غير الطرفية" توضع بشكل عام بأحرف صغيرة.
+    <span class="Li">&quot;term&quot;</span> هنا رمز غير طرفي، يمثل تعبيراً واحداً.</p>
+<p class="Pp">تمنحك القاعدة القاعدة التالية: يمكنك إنشاء الشيء الموجود على يسار النقطتين إذا رأيت كل الأشياء الموجودة على اليمين بالتسلسل. وهذا يسمى "اختزال"، وهدف التحليل هو اختزال المدخلات بالكامل. هناك عدة طرق مختلفة يمكنك من خلالها إجراء اختزال، مفصولة بأشرطة عمودية: لذا،
+    <span class="Li">&quot;term&quot;</span> متبوعاً بـ
+    <span class="Li">&quot;=&quot;</span> متبوعاً بـ
+    <span class="Li">&quot;term&quot;</span> يجعل
+    <span class="Li">&quot;term&quot;</span>، و
+    <span class="Li">&quot;term&quot;</span> متبوعاً بـ
+    <span class="Li">&quot;+&quot;</span> متبوعاً بـ
+    <span class="Li">&quot;term&quot;</span> يمكن أن يجعل أيضاً
+    <span class="Li">&quot;term&quot;</span>.</p>
+<p class="Pp">لذلك، إذا رأيت تعبيرين مع
+    <span class="Li">&quot;=&quot;</span> أو
+    <span class="Li">&quot;+&quot;</span> بينهما، يمكنك تحويلهما إلى تعبير واحد. عند القيام بذلك، تقوم بتنفيذ الكود الموجود في الكتلة في السطر التالي: إذا رأيت
+    <span class="Li">&quot;=&quot;</span>، فستقوم بتنفيذ الكود في السطر 2. إذا رأيت
+    <span class="Li">&quot;+&quot;</span>، فستقوم بتنفيذ الكود في السطر 4. هذا الكود هو الذي يساهم في شجرة العمليات.</p>
+<pre>|   term ADDOP term
+{ $$ = newBINOP($2, 0, scalar($1), scalar($3)); }</pre>
+<p class="Pp">ما يفعله هذا هو إنشاء عملية ثنائية جديدة، وتزويدها بعدد من المتغيرات. تشير المتغيرات إلى الرموز: <span class="Li">$1</span> هو الرمز الأول في المدخلات، <span class="Li">$2</span> هو الثاني، وهكذا - فكر في مراجع التعبيرات العادية.
+    <span class="Li">$$</span> هو العمل المعادة من هذا الاختزال. لذا، نستدعي
+    <span class="Li">&quot;newBINOP&quot;</span> لإنشاء عامل ثنائي جديد. المعلمة الأولى لـ
+    <span class="Li">&quot;newBINOP&quot;</span>، وهي دالة في
+    <i>op.c</i>، هي نوع العملية. إنها عملية جمع، لذا نريد أن يكون النوع
+    <span class="Li">&quot;ADDOP&quot;</span>. يمكننا تحديد ذلك مباشرة، ولكنه موجود هناك كالرمز الثاني في المدخلات، لذا نستخدم
+    <span class="Li">$2</span>. المعلمة الثانية هي علامات العملية: 0 تعني "لا شيء خاص". ثم الأشياء التي سيتم جمعها: الجانب الأيسر والأيمن من تعبيرنا، في سياق قياسي.</p>
+<p class="Pp">الدوال التي تنشئ العمليات، والتي لها أسماء مثل
+    <span class="Li">&quot;newUNOP&quot;</span> و
+    <span class="Li">&quot;newBINOP&quot;</span>، تستدعي دالة "فحص" مرتبطة بكل نوع عملية، قبل إعادة العملية. يمكن لدوال الفحص تعديل العملية كما ترغب، وحتى استبدالها بواحدة جديدة تمامًا. تم تعريف هذه الدوال في
+    <i>op.c</i>، ولها بادئة
+    <span class="Li">&quot;Perl_ck_&quot;</span>. يمكنك معرفة دالة الفحص المستخدمة لنوع عملية معين بالنظر في
+    <i>regen/opcodes</i>. خذ
+    <span class="Li">&quot;OP_ADD&quot;</span>، على سبيل المثال. (
+    <span class="Li">&quot;OP_ADD&quot;</span> هي قيمة الرمز من
+    <span class="Li">Aop(OP_ADD)</span> في
+    <i>toke.c</i> التي يمررها المحلل إلى
+    <span class="Li">&quot;newBINOP&quot;</span> كوسيطها الأول.) إليك السطر ذو الصلة:</p>
+<pre>add             addition (+)            ck_null         IfsT2   S S</pre>
+<p class="Pp">دالة الفحص في هذه الحالة هي
+    <span class="Li">&quot;Perl_ck_null&quot;</span>، والتي لا تفعل شيئاً. دعنا ننظر إلى حالة أكثر إثارة للاهتمام:</p>
+<pre>readline        &lt;HANDLE&gt;                ck_readline     t%      F?</pre>
+<p class="Pp">وهنا الدالة من
+    <i>op.c</i>:</p>
+<pre> 1 OP *
+ 2 Perl_ck_readline(pTHX_ OP *o)
+ 3 {
+ 4     PERL_ARGS_ASSERT_CK_READLINE;
+ 5 
+ 6     if (o-&gt;op_flags &amp; OPf_KIDS) {
+ 7          OP *kid = cLISTOPo-&gt;op_first;
+ 8          if (kid-&gt;op_type == OP_RV2GV)
+ 9              kid-&gt;op_private |= OPpALLOW_FAKE;
+10     }
+11     else {
+12         OP * const newop
+13             = newUNOP(OP_READLINE, 0, newGVOP(OP_GV, 0,
+14                                               PL_argvgv));
+15         op_free(o);
+16         return newop;
+17     }
+18     return o;
+19 }</pre>
+<p class="Pp">أحد الجوانب المثيرة للاهتمام بشكل خاص هو أنه إذا كانت العملية لا تحتوي على أطفال (أي،
+    <span class="Li">readline()</span> أو
+    <span class="Li">&quot;&lt;&gt;&quot;</span>) يتم تحرير العملية واستبدالها بواحدة جديدة تمامًا تشير إلى
+    <span class="Li">*ARGV</span> (الأسطر 12-16).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STACKS'><a class='permalink' href='#STACKS'>STACKS</a></h1>
+<p class="Pp">عندما ينفذ perl شيئاً مثل
+    <span class="Li">&quot;addop&quot;</span>، كيف ينقل نتائجه إلى العملية التالية؟ الإجابة هي، من خلال استخدام المكدسات. لدى perl عدد من المكدسات لتخزين الأشياء التي يعمل عليها حالياً، وسننظر إلى أهم ثلاثة منها هنا.</p>
+<section class="Ss">
+<h2 class="Ss" id='Argument_stack'><a class='permalink' href='#Argument_stack'>Argument   stack</a></h2>
+<p class="Pp">يتم تمرير الوسائط إلى كود PP وإعادتها من كود PP باستخدام مكدس الوسائط،
+    <span class="Li">&quot;ST&quot;</span>. الطريقة المعتادة للتعامل مع الوسائط هي سحبها من المكدس، والتعامل معها بالطريقة التي ترغب بها، ثم دفع النتيجة مرة أخرى إلى المكدس. هذا هو كيف، على سبيل المثال، يعمل معامل جيب التمام:</p>
+<pre>NV value;
+value = POPn;
+value = Perl_cos(value);
+XPUSHn(value);</pre>
+<p class="Pp">سنرى مثالاً أكثر تعقيداً لهذا عندما ننظر إلى وحدات الماكرو الخاصة بـ Perl أدناه.
+    <span class="Li">&quot;POPn&quot;</span> يمنحك NV (قيمة النقطة العائمة) لأعلى SV على المكدس: <span class="Li">$x</span> في
+    <span class="Li">cos($x)</span>. ثم نحسب جيب التمام، وندفع النتيجة مرة أخرى كـ NV.
+    <span class="Li">&quot;X&quot;</span> في
+    <span class="Li">&quot;XPUSHn&quot;</span> يعني أنه يجب تمديد المكدس إذا لزم الأمر - لا يمكن أن يكون ضرورياً هنا، لأننا نعرف أن هناك مساحة لعنصر واحد آخر على المكدس، لأننا أزلنا واحداً للتو! وحدات الماكرو
+    <span class="Li">&quot;XPUSH*&quot;</span> تضمن على الأقل
+  الأمان.</p>
+<p class="Pp">بدلاً من ذلك، يمكنك العبث بالمكدس مباشرة:
+    <span class="Li">&quot;SP&quot;</span> يمنحك العنصر الأول في قسمك من المكدس، و
+    <span class="Li">&quot;TOP*&quot;</span> يمنحك أعلى SV/IV/NV/إلخ على المكدس. لذا، على سبيل المثال، لإجراء النفي الأحادي لعدد صحيح:</p>
+<pre>SETi(-TOPi);</pre>
+<p class="Pp">قم فقط بتعيين قيمة العدد الصحيح لأعلى إدخال في المكدس إلى نفيها.</p>
+<p class="Pp">تلاعب مكدس الوسائط في النواة هو بالضبط نفس الشيء كما هو الحال في XSUBs - انظر perlxstut، perlxs و perlguts للحصول على وصف أطول لوحدات الماكرو المستخدمة في تلاعب المكدس.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Mark_stack'><a class='permalink' href='#Mark_stack'>Mark   stack</a></h2>
+<p class="Pp">أقول "قسمك من المكدس" أعلاه لأن كود PP لا يحصل بالضرورة على المكدس بأكمله لنفسه: إذا قامت وظيفتك باستدعاء وظيفة أخرى، فسترغب فقط في كشف الوسائط الموجهة للوظيفة المسماة، وليس (بالضرورة) السماح لها بالوصول إلى بياناتك الخاصة. الطريقة التي نفعل بها ذلك هي أن يكون لدينا "افتراضي" أسفل المكدس، مكشوف لكل وظيفة. يحتفظ مكدس العلامات بإشارات مرجعية لمواقع في مكدس الوسائط التي يمكن استخدامها بواسطة كل وظيفة. على سبيل المثال، عند التعامل مع متغير مرتبط، (داخلياً، شيء يحتوي على "P" سحر) يجب على Perl استدعاء طرق للوصول إلى المتغيرات المرتبطة. ومع ذلك، نحتاج إلى فصل الوسائط المكشوفة للطريقة عن الوسائط المكشوفة للوظيفة الأصلية - التخزين أو الاسترداد أو أي شيء آخر قد يكون. إليك كيف يتم تنفيذ طريقة الربط "push" تقريباً؛ انظر
+    <span class="Li">&quot;av_push&quot;</span> في
+    <i>av.c</i>:</p>
+<pre>1  PUSHMARK(SP);
+2  EXTEND(SP,2);
+3  PUSHs(SvTIED_obj((SV*)av, mg));
+4  PUSHs(val);
+5  PUTBACK;
+6  ENTER;
+7  call_method(&quot;PUSH&quot;, G_SCALAR|G_DISCARD);
+8  LEAVE;</pre>
+<p class="Pp">دعنا نفحص التنفيذ بالكامل، للممارسة:</p>
+<pre>1  PUSHMARK(SP);</pre>
+<p class="Pp">ادفع الحالة الحالية لمؤشر المكدس إلى مكدس العلامات. هذا حتى يعرف Perl، عندما ننتهي من إضافة عناصر إلى مكدس الوسائط، عدد الأشياء التي أضفناها مؤخراً.</p>
+<pre>2  EXTEND(SP,2);
+3  PUSHs(SvTIED_obj((SV*)av, mg));
+4  PUSHs(val);</pre>
+<p class="Pp">سنضيف عنصرين آخرين إلى مكدس الوسائط: عندما يكون لديك مصفوفة مرتبطة، تتلقى روتين
+    <span class="Li">&quot;PUSH&quot;</span> الكائن والقيمة المراد دفعها، وهذا بالضبط ما لدينا هنا - الكائن المرتبط، الذي تم استرداده باستخدام
+    <span class="Li">&quot;SvTIED_obj&quot;</span>، والقيمة، وهو SV
+    <span class="Li">&quot;val&quot;</span>.</p>
+<pre>5  PUTBACK;</pre>
+<p class="Pp">بعد ذلك، نخبر Perl بتحديث مؤشر المكدس العام من متغيرنا الداخلي:
+    <span class="Li">&quot;dSP&quot;</span> أعطانا فقط نسخة محلية، وليس مرجعاً للنسخة العامة.</p>
+<pre>6  ENTER;
+7  call_method(&quot;PUSH</pre>

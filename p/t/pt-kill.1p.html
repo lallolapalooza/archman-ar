@@ -1,0 +1,157 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pt-kill(1p)</h1>
+<link rel="stylesheet" href="basic.css">
+<a name="defaults"></a>
+<a name="defaults-file"></a>
+<dt id="defaults-file"><a class="permalink" href="#defaults">--defaults-file</a></dt>
+  <dd>short form: -F; type: string
+    <p class="Pp">فقط اقرأ خيارات mysql من الملف المحدد. يجب عليك تقديم مسار مطلق.</p>
+  </dd>
+  <dt id="filter"><a class="permalink" href="#filter">--filter</a></dt>
+  <dd>type: string
+    <p class="Pp">تجاهل الأحداث التي لا تعيد فيها كود Perl هذا قيمة صحيحة.</p>
+    <p class="Pp">هذا الخيار هو سلسلة من كود Perl أو ملف يحتوي على كود Perl يتم تجميعه في روتين فرعي بحجة واحدة: <span class="Li">$event</span>. هذا هو hashref. إذا كانت القيمة المعطاة ملفًا قابلاً للقراءة، فإن pt-kill يقرأ الملف بأكمله ويستخدم محتوياته ككود. يجب ألا يحتوي الملف على سطر shebang (#!/usr/bin/perl).</p>
+    <p class="Pp">إذا أعاد الكود قيمة صحيحة، تستمر سلسلة الاستدعاءات؛ وإلا فإنها تنتهي. الكود هو آخر عبارة في الروتين الفرعي بخلاف <span class="Li">&quot;return $event&quot;</span>. قالب الروتين الفرعي هو:</p>
+        <pre>sub { $event = shift; filter &amp;&amp; return $event; }
+</pre>
+    <p class="Pp">يتم تغليف عوامل التصفية المعطاة في سطر الأوامر داخل أقواس مثل <span class="Li">&quot;( filter )&quot;</span>. بالنسبة لعوامل التصفية المعقدة ومتعددة الأسطر، يجب وضع الكود داخل ملف حتى لا يتم تغليفه داخل أقواس. في كلتا الحالتين، يجب أن ينتج عامل التصفية كودًا صالحًا نحويًا بالنظر إلى القالب. على سبيل المثال، لن يكون فرع if-else المعطى في سطر الأوامر صالحًا:</p>
+        <pre>--filter 'if () { } else { }'  # WRONG
+</pre>
+    <p class="Pp">نظرًا لأنه يتم توفيره في سطر الأوامر، سيتم تغليف فرع if-else داخل أقواس وهذا ليس صالحًا نحويًا. لذلك، لتحقيق شيء أكثر تعقيدًا مثل هذا سيتطلب وضع الكود في ملف، على سبيل المثال filter.txt:</p>
+        <pre>my $event_ok; if (...) { $event_ok=1; } else { $event_ok=0; } $event_ok
+</pre>
+    <p class="Pp">ثم حدد <span class="Li">&quot;--filter filter.txt&quot;</span> لقراءة الكود من filter.txt.</p>
+    <p class="Pp">إذا لم يتمكن كود عامل التصفية من التجميع، فسيؤدي pt-kill إلى فشل مع حدوث خطأ. إذا تم تجميع كود عامل التصفية، فقد لا يزال يحدث خطأ في وقت التشغيل إذا حاول الكود القيام بشيء خاطئ (مثل مطابقة نمط لقيمة غير معرفة). لا يوفر pt-kill أي ضمانات، لذا اكتب الكود بعناية!</p>
+    <p class="Pp">يجوز للكود أن يكون له آثار جانبية (لتغيير <span class="Li">$event</span>).</p>
+  </dd>
+  <dt id="group"><a class="permalink" href="#group">--group-by</a></dt>
+  <dd>type: string
+    <p class="Pp">تطبيق التطابقات على كل فئة من الاستعلامات المجمعة بواسطة عمود SHOW PROCESSLIST هذا. بالإضافة إلى الأعمدة الأساسية لـ SHOW PROCESSLIST (user، host، command، state، إلخ)، يمكن مطابقة الاستعلامات بواسطة <span class="Li">&quot;fingerprint&quot;</span> الذي يجرد استعلام SQL في عمود <span class="Li">&quot;Info&quot;</span>.</p>
+    <p class="Pp">بشكل افتراضي، لا يتم تجميع الاستعلامات، لذا تنطبق التطابقات والإجراءات على جميع الاستعلامات. يسمح التجميع للتطابقات والإجراءات بتطبيقها على فئات من الاستعلامات المتشابهة، إذا تطابقت أي استعلامات في الفئة.</p>
+    <p class="Pp">على سبيل المثال، يتطلب اكتشاف الازدحام في ذاكرة التخزين المؤقت (انظر <span class="Li">&quot;all-but-oldest&quot;</span> تحت &quot;--victims&quot; لشرح هذا المصطلح) تجميع الاستعلامات حسب السمة <span class="Li">&quot;arg&quot;</span>. هذا ينشئ فئات من الاستعلامات المتطابقة (مجردة من التعليقات). لذلك، يتم تجميع الاستعلامين <span class="Li">&quot;SELECT c FROM t WHERE id=1&quot;</span> و <span class="Li">&quot;SELECT c FROM t WHERE id=1&quot;</span> في نفس الفئة، ولكن الاستعلام <span class="Li">&quot;SELECT c FROM t WHERE id=3&quot;</span> ليس مطابقًا للاستعلامين الأولين، لذا يتم تجميعه في فئة أخرى. ثم عند تحديد &quot;--victims&quot; <span class="Li">&quot;all-but-oldest&quot;</span>، يتم إنهاء كل استعلام باستثناء أقدم استعلام في كل فئة لكل فئة استعلامات تطابق معايير المطابقة.</p>
+  </dd>
+  <dt id="help"><a class="permalink" href="#help">--help</a></dt>
+  <dd>عرض المساعدة والخروج.</dd>
+  <dt id="host"><a class="permalink" href="#host">--host</a></dt>
+  <dd>short form: -h; type: string; default: localhost
+    <p class="Pp">الاتصال بالمضيف.</p>
+  </dd>
+  <dt id="interval"><a class="permalink" href="#interval">--interval</a></dt>
+  <dd>type: time
+    <p class="Pp">كم مرة للتحقق من الاستعلامات التي سيتم إنهاؤها. إذا لم يتم تحديد &quot;--busy-time&quot;، فإن الفاصل الافتراضي هو 30 ثانية. بخلاف ذلك، يكون الافتراضي نصف مدة &quot;--busy-time&quot;. إذا تم تحديد كل من &quot;--interval&quot; و &quot;--busy-time&quot;، فسيتم استخدام قيمة &quot;--interval&quot; الصريحة.</p>
+    <p class="Pp">انظر أيضًا &quot;--run-time&quot;.</p>
+  </dd>
+  <dt id="log"><a class="permalink" href="#log">--log</a></dt>
+  <dd>type: string
+    <p class="Pp">طباعة جميع المخرجات إلى هذا الملف عند تشغيل البرنامج كخدمة.</p>
+  </dd>
+  <dt>--log-dsn</dt>
+  <dd>type: DSN
+    <p class="Pp">تخزين كل استعلام تم إنهاؤه في DSN هذا.</p>
+    <p class="Pp">يحدد الوسيط جدولاً لتخزين جميع الاستعلامات التي تم إنهاؤها. يجب أن يحتوي DSN الذي تم تمريره على خيارات قاعدة البيانات (D) والجدول (t). يجب أن يحتوي الجدول على الأعمدة التالية على الأقل. يمكنك إضافة المزيد من الأعمدة لأغراضك الخاصة، ولكن لن يتم استخدامها بواسطة pt-kill. يستخدم تعريف الجدول التالي CREATE TABLE أيضًا لـ &quot;--create-log-table&quot;. MAGIC_create_log_table:</p>
+        <pre>CREATE TABLE kill_log (
+   kill_id     int(10) unsigned NOT NULL AUTO_INCREMENT,
+   server_id   bigint(4) NOT NULL DEFAULT '0',
+   timestamp   DATETIME,
+   reason      TEXT,
+   kill_error  TEXT,
+   Id          bigint(4) NOT NULL DEFAULT '0',
+   User        varchar(16) NOT NULL DEFAULT '',
+   Host        varchar(64) NOT NULL DEFAULT '',
+   db          varchar(64) DEFAULT NULL,
+   Command     varchar(16) NOT NULL DEFAULT '',
+   Time        int(7) NOT NULL DEFAULT '0',
+   State       varchar(64) DEFAULT NULL,
+   Info        longtext,
+   Time_ms     bigint(21) DEFAULT '0', # NOTE, TODO: currently not used
+   PRIMARY KEY (kill_id)
+) DEFAULT CHARSET=utf8
+</pre>
+  </dd>
+  <dt id="json"><a class="permalink" href="#json">--json</a></dt>
+  <dd>طباعة الاستعلامات التي تم إنهاؤها بتنسيق JSON، يجب استخدامه مع &quot;--print&quot;. على سبيل المثال:
+        <pre>--print --json
+</pre>
+    <p class="Pp">لن يتم عرض الإخراج النصي العادي المعتاد من &quot;--print&quot;.</p>
+    <p class="Pp">سيكون إخراج JSON بالتنسيق التالي:</p>
+        <pre>{
+   &quot;Command&quot;: &quot;Query&quot;,
+   &quot;Host&quot;: &quot;10.0.0.1:9999&quot;,
+   &quot;Id&quot;: 1234,
+   &quot;Info&quot;: &quot;SELECT SLEEP(5)&quot;,
+   &quot;State&quot;: &quot;User sleep&quot;,
+   &quot;Time&quot;: 10,
+   &quot;User&quot;: &quot;my_user&quot;,
+   &quot;Db&quot;: &quot;my_db&quot;,
+   &quot;Kill_Error&quot;: &quot;&quot;,
+   &quot;Digest&quot;: &quot;58A43A7DA83F58C1&quot;,
+   &quot;Reason&quot;: &quot;Exceeds busy time\nQuery matches Command spec&quot;,
+   &quot;Timestamp&quot;: &quot;2022-01-01T00:00:00&quot;
+}
+</pre>
+  </dd>
+  <dt>--json-fields</dt>
+  <dd>type: string
+    <p class="Pp">حدد قائمة بالأزواج الإضافية للمفتاح:القيمة لتضمينها في إخراج JSON عند استخدام &quot;--json&quot;، يجب تحديد قيمة هذا المعلمة بالتنسيق التالي:</p>
+        <pre>--json-fields key1:value1,key2:value2
+</pre>
+    <p class="Pp">سيتم تضمين أي حقول محددة باستخدام &quot;--json-fields&quot; في إخراج &quot;--json&quot;.</p>
+    <p class="Pp">على سبيل المثال:</p>
+        <pre>--print --json --json-fields hostname:$(hostname),tag:my_tag
+</pre>
+    <p class="Pp">سيؤدي إلى كتابة سجلات JSON إلى &quot;kill_log.json&quot; باستخدام هذا التنسيق:</p>
+        <pre>{
+   &quot;Command&quot;: &quot;Query&quot;,
+   &quot;Host&quot;: &quot;10.0.0.1:9999&quot;,
+   &quot;Id&quot;: 1234,
+   &quot;Info&quot;: &quot;SELECT SLEEP(5)&quot;,
+   &quot;State&quot;: &quot;User sleep&quot;,
+   &quot;Time&quot;: 10,
+   &quot;User&quot;: &quot;my_user&quot;,
+   &quot;Db&quot;: &quot;my_db&quot;,
+   &quot;Kill_Error&quot;: &quot;&quot;,
+   &quot;Digest&quot;: &quot;58A43A7DA83F58C1&quot;,
+   &quot;Reason&quot;: &quot;Exceeds busy time\nQuery matches Command spec&quot;,
+   &quot;Timestamp&quot;: &quot;2022-01-01T00:00:00&quot;,
+   &quot;hostname&quot;: &quot;my_host&quot;,
+   &quot;tag&quot;: &quot;my_tag&quot;
+}
+</pre>
+  </dd>
+  <dt id="password"><a class="permalink" href="#password">--password</a></dt>
+  <dd>short form: -p; type: string
+    <p class="Pp">كلمة المرور المستخدمة عند الاتصال. إذا كانت كلمة المرور تحتوي على فواصل، فيجب تهريبها بشرطة مائلة للخلف: &quot;exam\,ple&quot;</p>
+  </dd>
+  <dt id="pid"><a class="permalink" href="#pid">--pid</a></dt>
+  <dd>type: string
+    <p class="Pp">إنشاء ملف PID المحدد. لن يبدأ الأداة إذا كان ملف PID موجودًا بالفعل وكانت PID التي يحتوي عليها مختلفة عن PID الحالية. ومع ذلك، إذا كان ملف PID موجودًا ولم تعد PID التي يحتوي عليها قيد التشغيل، فستقوم الأداة بالكتابة فوق ملف PID باستخدام PID الحالية. يتم إزالة ملف PID تلقائيًا عند خروج الأداة.</p>
+  </dd>
+  <dt id="port"><a class="permalink" href="#port">--port</a></dt>
+  <dd>short form: -P; type: int
+    <p class="Pp">رقم المنفذ المستخدم للاتصال.</p>
+  </dd>
+  <dt id="query"><a class="permalink" href="#query">--query-id</a></dt>
+  <dd>طباعة معرف الاستعلام الذي تم إنهاؤه للتو. هذا يعادل إخراج &quot;ID&quot; من pt-query-digest. هذا يسمح بالإسناد المرجعي لمخرجات كلا الأداتين.
+    <p class="Pp">مثال:</p>
+        <pre>Query ID 0xE9800998ECF8427E
+</pre>
+    <p class="Pp">لاحظ أن هذا هو هضم (أو تجزئة) لـ &quot;بصمة&quot; الاستعلام، لذلك سيكون للاستعلامات من نفس الشكل ولكن بقيم مختلفة نفس المعرف. انظر pt-query-digest لمزيد من المعلومات.</p>
+  </dd>
+  <dt id="rds"><a class="permalink" href="#rds">--rds</a></dt>
+  <dd>يشير إلى أن المثيل المعني موجود على Amazon RDS. بشكل افتراضي، يقوم pt-kill بتشغيل أمر MySQL &quot;kill&quot; لـ &quot;--kill&quot; و &quot;kill query&quot; &quot;--kill-query&quot;. في RDS، هذان الأمران غير متوفرين ويتم استبدالهما باستدعاءات الوظائف. يعدل هذا الخيار &quot;--kill&quot; لاستخدام &quot;CALL mysql.rds_kill(thread-id)&quot; بدلاً من ذلك و &quot;--kill-query&quot; لاستخدام &quot;CALL mysql.rds_kill_query(thread-id)&quot;</dd>
+  <dt id="run"><a class="permalink" href="#run">--run-time</a></dt>
+  <dd>type: time
+    <p class="Pp">كم من الوقت للتشغيل قبل الخروج. بشكل افتراضي، يعمل pt-kill إلى الأبد، أو حتى يتم إنهاء عمليته أو إيقافه عن طريق إنشاء ملف &quot;--sentinel&quot;. إذا تم تحديد هذا الخيار، يعمل pt-kill للمدة المحددة وينام &quot;--interval&quot; ثوانٍ بين كل فحص لـ PROCESSLIST.</p>
+  </dd>
+  <dt id="sentinel"><a class="permalink" href="#sentinel">--sentinel</a></dt>
+  <dd>type: string; default: /tmp/pt-kill-sentinel
+    <p class="Pp">اخرج إذا كان هذا الملف موجودًا.</p>
+    <p class="Pp">سيؤدي وجود الملف المحدد بواسطة &quot;--sentinel&quot; إلى إنهاء جميع النسخ النشطة من pt-kill. قد تجد هذا مفيدًا لإيقاف وظائف cron بأمان إذا لزم الأمر. انظر أيضًا &quot;--stop&quot;.</p>
+  </dd>
+  <dt id="set"><a class="permalink" href="#set">--set-vars</a></dt>
+  <dd>type: Array
+    <p class="Pp">قم بتعيين متغيرات MySQL في هذه القائمة المفصولة بفواصل من أزواج <span class="Li">&quot;variable=value&quot;</span>.</p>
+    <p class="Pp">بشكل افتراضي، يقوم الأداة بتعيين:</p>
+        <pre>wait_timeout=10000
+</pre>
+   </dd>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>guestfs-ruby(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">guestfs-ruby(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libguestfs/">libguestfs</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later, LGPL-2.1-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">guestfs-ruby(3)</td>
+    <td class="head-vol">دعم المحاكاة الافتراضية</td>
+    <td class="head-rtitle">guestfs-ruby(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">guestfs-ruby - كيفية استخدام libguestfs من Ruby</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>require 'guestfs'
+g = Guestfs::Guestfs.new()
+g.add_drive_opts(&quot;disk.img&quot;,
+                 :readonly =&gt; true, :format =&gt; &quot;raw&quot;)
+g.launch()</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">توثق صفحة الدليل هذه كيفية استدعاء libguestfs من لغة برمجة Ruby. توثق هذه الصفحة فقط الاختلافات عن واجهة برمجة التطبيقات C وتقدم بعض الأمثلة. إذا لم تكن على دراية باستخدام libguestfs، يجب عليك أيضًا قراءة <a href='/man/guestfs.3.en'>guestfs(3)</a>.</p>
+<section class="Ss">
+<h2 class="Ss" id='EXCEPTIONS'><a class='permalink' href='#EXCEPTIONS'>الاستثناءات</a></h2>
+<p class="Pp">يتم تعيين الأخطاء من وظائف libguestfs إلى الاستثناء <span class="Li">&quot;Error&quot;</span>. يحتوي هذا الاستثناء على معلمة واحدة وهي رسالة الخطأ (سلسلة نصية).</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_1:_CREATE_A_DISK_IMAGE'><a class='permalink' href='#EXAMPLE_1:_CREATE_A_DISK_IMAGE'>المثال 1: إنشاء صورة قرص</a></h1>
+<pre># مثال يوضح كيفية إنشاء صورة قرص.
+
+require 'guestfs'
+
+output = &quot;disk.img&quot;
+
+g = Guestfs::Guestfs.new()
+
+# إنشاء صورة قرص متفرقة بتنسيق خام، بحجم 512 ميجابايت.
+g.disk_create (output, &quot;raw&quot;, 512 * 1024 * 1024)
+
+# تعيين علامة التتبع حتى نتمكن من رؤية كل استدعاء libguestfs.
+g.set_trace(1)
+
+# إرفاق صورة القرص بـ libguestfs.
+g.add_drive_opts(output, :format =&gt; &quot;raw&quot;)
+
+# تشغيل الخلفية لـ libguestfs.
+g.launch();
+
+# الحصول على قائمة الأجهزة. نظرًا لأننا أرفقنا محركًا واحدًا فقط
+# أعلاه، نتوقع أن تحتوي هذه القائمة على عنصر واحد.
+devices = g.list_devices()
+if devices.length != 1 then
+  raise &quot;خطأ: توقع جهازًا واحدًا من list-devices&quot;
+end
+
+# تقسيم القرص كقسم واحد بتنسيق MBR.
+g.part_disk(devices[0], &quot;mbr&quot;)
+
+# الحصول على قائمة الأقسام. نتوقع عنصرًا واحدًا، وهو
+# القسم الذي أنشأناه للتو.
+partitions = g.list_partitions()
+if partitions.length != 1 then
+  raise &quot;خطأ: توقع قسمًا واحدًا من list-partitions&quot;
+end
+
+# إنشاء نظام ملفات على القسم.
+g.mkfs(&quot;ext4&quot;, partitions[0])
+
+# الآن قم بتحميل نظام الملفات حتى نتمكن من إضافة ملفات.
+g.mount(partitions[0], &quot;/&quot;)
+
+# إنشاء بعض الملفات والمجلدات.
+g.touch(&quot;/empty&quot;)
+message = &quot;Hello, world\n&quot;
+g.write(&quot;/hello&quot;, message)
+g.mkdir(&quot;/foo&quot;)
+
+# يقوم هذا برفع الملف المحلي /etc/resolv.conf إلى
+# صورة القرص.
+g.upload(&quot;/etc/resolv.conf&quot;, &quot;/foo/resolv.conf&quot;)
+
+# نظرًا لأننا كتبنا إلى القرص ونريد اكتشاف أخطاء الكتابة، استدعِ g.shutdown. لن تحتاج إلى القيام بذلك:
+# سيقوم g.close بذلك ضمنيًا.
+g.shutdown()
+
+# لاحظ أيضًا أنه يتم إغلاق المقابض تلقائيًا إذا تم جمعها بواسطة جامع القمامة. أنت فقط بحاجة إلى استدعاء close
+# إذا كنت ترغب في إغلاق المقبض على الفور.
+g.close()</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_2:_INSPECT_A_VIRTUAL_MACHINE_DISK_IMAGE'><a class='permalink' href='#EXAMPLE_2:_INSPECT_A_VIRTUAL_MACHINE_DISK_IMAGE'>المثال 2: فحص صورة قرص جهاز افتراضي</a></h1>
+<pre># مثال يوضح كيفية فحص قرص جهاز افتراضي.
+
+require 'guestfs'
+
+if ARGV.length == 0
+  puts &quot;الاستخدام: inspect_vm disk.img&quot;
+  exit 1
+end
+disk = ARGV[0]
+
+g = Guestfs::Guestfs.new()
+
+# إرفاق صورة القرص للقراءة فقط بـ libguestfs.
+g.add_drive_opts(disk, :readonly =&gt; true)
+
+# تشغيل الخلفية لـ libguestfs.
+g.launch()
+
+# اطلب من libguestfs الفحص بحثًا عن أنظمة التشغيل.
+roots = g.inspect_os()
+if roots.length == 0
+  puts &quot;inspect_vm: لم يتم العثور على أنظمة تشغيل&quot;
+  exit 1
+end
+
+for root in roots do
+  printf(&quot;جهاز الجذر: %s\n&quot;, root)
+
+  # طباعة معلومات أساسية حول نظام التشغيل.
+  printf(&quot;  اسم المنتج: %s\n&quot;, g.inspect_get_product_name(root))
+  printf(&quot;  الإصدار:      %d.%d\n&quot;,
+         g.inspect_get_major_version(root),
+         g.inspect_get_minor_version(root))
+  printf(&quot;  النوع:         %s\n&quot;, g.inspect_get_type(root))
+  printf(&quot;  التوزيع:       %s\n&quot;, g.inspect_get_distro(root))
+
+  # تحميل الأقراص، مثل guestfish -i.
+  #
+  # فرز المفاتيح حسب الطول، الأقصر أولاً، حتى ننتهي
+  # بتحميل أنظمة الملفات بالترتيب الصحيح.
+  mps = g.inspect_get_mountpoints(root)
+  mps = mps.sort {|a,b| a[0].length &lt;=&gt; b[0].length}
+  for mp in mps do
+    begin
+      g.mount_ro(mp[1], mp[0])
+    rescue Guestfs::Error =&gt; msg
+      printf(&quot;%s (تم التجاهل)\n&quot;, msg)
+    end
+  end
+
+  # إذا كان الملف /etc/issue.net موجودًا، فقم بطباعة ما يصل إلى 3 أسطر.
+  filename = &quot;/etc/issue.net&quot;
+  if g.is_file filename then
+    printf(&quot;--- %s ---\n&quot;, filename)
+    lines = g.head_n(3, filename)
+    for line in lines do
+      puts line
+    end
+  end
+
+  # إلغاء تحميل كل شيء.
+  g.umount_all()
+end</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/guestfs.3.en'>guestfs(3)</a>، <a href='/man/guestfs-examples.3.en'>guestfs-examples(3)</a>،
+    <a href='/man/guestfs-erlang.3.en'>guestfs-erlang(3)</a>، <a href='/man/guestfs-golang.3.en'>guestfs-golang(3)</a>، <a href='/man/guestfs-java.3.en'>guestfs-java(3)</a>،
+    <a href='/man/guestfs-lua.3.en'>guestfs-lua(3)</a>، <a href='/man/guestfs-ocaml.3.en'>guestfs-ocaml(3)</a>، <a href='/man/guestfs-perl.3.en'>guestfs-perl(3)</a>، <a href='/man/guestfs-python.3.en'>guestfs-python(3)</a>،
+    <a href='/man/guestfs-recipes.1.en'>guestfs-recipes(1)</a>،
+  <a href='http://libguestfs.org/'>http://libguestfs.org/</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">Richard W.M. Jones (<span class="Li">&quot;rjones at redhat dot
+    com&quot;</span>)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright (C) 2010-2025 Red Hat Inc.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENSE'><a class='permalink' href='#LICENSE'>الترخيص</a></h1>
+<p class="Pp">تحتوي صفحة الدليل هذه على أمثلة نأمل أن تستخدمها في برامجك. يمكن نسخ الأمثلة وتعديلها وتوزيعها بحرية لأي غرض دون أي قيود.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">للحصول على قائمة بالأخطاء ضد libguestfs، استخدم هذا الرابط:
+    <a href='https://bugzilla.redhat.com/buglist.cgi?component=libguestfs'>https://bugzilla.redhat.com/buglist.cgi?component=libguestfs</a>&amp;product=Virtualization+Tools</p>
+<p class="Pp">للإبلاغ عن خطأ جديد ضد libguestfs، استخدم هذا الرابط:
+    <a href='https://bugzilla.redhat.com/enter_bug.cgi?component=libguestfs'>https://bugzilla.redhat.com/enter_bug.cgi?component=libguestfs</a>&amp;product=Virtualization+Tools</p>
+<p class="Pp">عند الإبلاغ عن خطأ، يرجى تقديم:</p>
+<ul class="Bl-bullet">
+  <li>إصدار libguestfs.</li>
+  <li>من أين حصلت على libguestfs (على سبيل المثال، أي توزيعة Linux، تم تجميعها من المصدر،
+      إلخ)</li>
+  <li>صف الخطأ بدقة وقدم طريقة لإعادة إنتاجه.</li>
+  <li>قم بتشغيل <a href='/man/libguestfs-test-tool.1.en'>libguestfs-test-tool(1)</a> والصق الإخراج <b>الكامل وغير المحرر</b>
+      في تقرير الخطأ.</li>
+</ul>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-08-13</td>
+    <td class="foot-os">libguestfs-1.56.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libguestfs/">extra/libguestfs</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.56.2-2</dd>
+        <dt>الجهة المطورة:</dt>
+        <dd><a href="https://libguestfs.org/">https://libguestfs.org/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later, LGPL-2.1-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/libguestfs/">/listing/extra/libguestfs/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#EXAMPLE_1:_CREATE_A_DISK_IMAGE">المثال 1: إنشاء صورة قرص</a></li>
+        
+            <li><a href="#EXAMPLE_2:_INSPECT_A_VIRTUAL_MACHINE_DISK_IMAGE">المثال 2: فحص صورة قرص جهاز افتراضي</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+            <li><a href="#LICENSE">الترخيص</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+  
+</nav>
+            </aside>
+        </main>
+    </body>
+</html>

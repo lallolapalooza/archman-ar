@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>pcrematching(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pcrematching(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PCREMATCHING(3)</td>
+    <td class="head-vol">دليل الوظائف المكتبية</td>
+    <td class="head-rtitle">PCREMATCHING(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">PCRE - تعابير نمطية متوافقة مع Perl</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PCRE_MATCHING_ALGORITHMS'><a class='permalink' href='#PCRE_MATCHING_ALGORITHMS'>خوارزميات مطابقة PCRE</a></h1>
+<p class="Pp">يصف هذا المستند الخوارزميتين المتاحتين في PCRE لمطابقة تعبير نمطي مجمع مع سلسلة موضوع معينة. الخوارزمية "القياسية" هي تلك التي توفرها الدوال <b>pcre_exec()</b> و <b>pcre16_exec()</b> و <b>pcre32_exec()</b>. تعمل هذه الدوال بنفس طريقة دالة المطابقة في Perl، وتوفر عملية مطابقة متوافقة مع Perl. التحسين في الوقت الحقيقي (JIT) الموضح في وثائق <b>pcrejit</b> متوافق مع هذه الدوال.</p>
+<p class="Pp">يتم توفير خوارزمية بديلة بواسطة الدوال <b>pcre_dfa_exec()</b> و <b>pcre16_dfa_exec()</b> و <b>pcre32_dfa_exec()</b>؛ وهي تعمل بطريقة مختلفة، وليست متوافقة مع Perl. لهذه البديلة مزايا وعيوب مقارنة بالخوارزمية القياسية، ويتم وصفها أدناه.</p>
+<p class="Pp">عندما يكون هناك طريقة واحدة ممكنة فقط يمكن لسلسلة موضوع معينة مطابقتها مع نمط، فإن الخوارزميتين تعطيان نفس الإجابة. ومع ذلك، يحدث الاختلاف عندما تكون هناك إمكانيات متعددة. على سبيل المثال، إذا كان النمط</p>
+<p class="Pp">
+  <br/>
+   ^&lt;.*&gt;</p>
+<p class="Pp">تتم مطابقته مع السلسلة</p>
+<p class="Pp">
+  <br/>
+   &lt;something&gt; &lt;something else&gt; &lt;something further&gt;</p>
+<p class="Pp">هناك ثلاث إجابات محتملة. الخوارزمية القياسية تجد واحدة فقط منها، بينما تجد الخوارزمية البديلة الثلاثة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REGULAR_EXPRESSIONS_AS_TREES'><a class='permalink' href='#REGULAR_EXPRESSIONS_AS_TREES'>التعبيرات النمطية كأشجار</a></h1>
+<p class="Pp">يمكن تمثيل مجموعة السلاسل التي تطابقها تعبير نمطي كهيكل شجرة. التكرار غير المحدود في النمط يجعل الشجرة ذات حجم لا نهائي، ولكنها لا تزال شجرة. مطابقة النمط لسلسلة موضوع معينة (من نقطة بداية معينة) يمكن اعتبارها بحثًا في الشجرة. هناك طريقتان للبحث في الشجرة: البحث العميق أولاً والبحث العرضي أولاً، وهما يقابلان خوارزميتي المطابقة المقدمتين من PCRE.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_STANDARD_MATCHING_ALGORITHM'><a class='permalink' href='#THE_STANDARD_MATCHING_ALGORITHM'>خوارزمية المطابقة القياسية</a></h1>
+<p class="Pp">بمصطلحات كتاب جيفري فريدل "إتقان التعبيرات النمطية"، الخوارزمية القياسية هي "خوارزمية NFA". إنها تجري بحثًا عميقًا في شجرة النمط. أي أنها تتقدم على طول مسار واحد عبر الشجرة، وتتحقق من أن الموضوع يتوافق مع ما هو مطلوب. عند حدوث عدم تطابق، تحاول الخوارزمية البدائل في النقطة الحالية، وإذا فشلت كلها، فإنها تعود إلى نقطة التفرع السابقة في الشجرة، وتجرب فرع البديل التالي عند هذا المستوى. غالبًا ما يتضمن ذلك التراجع (التحرك إلى اليسار) في سلسلة الموضوع أيضًا. يتم التحكم في ترتيب محاولة فروع التكرار بواسطة الطبيعة الطماعة أو غير الطماعة للمحدد الكمي.</p>
+<p class="Pp">إذا تم الوصول إلى عقدة ورقية، فقد تم العثور على سلسلة مطابقة، وعند هذه النقطة تتوقف الخوارزمية. وبالتالي، إذا كان هناك أكثر من تطابق ممكن واحد، فإن هذه الخوارزمية تعيد أول تطابق تجده. سواء كان هذا هو الأقصر، أو الأطول، أو طولًا متوسطًا يعتمد على طريقة تحديد المحددات الكمية الطماعة وغير الطماعة في النمط.</p>
+<p class="Pp">نظرًا لأنها تنتهي بمسار واحد عبر الشجرة، فمن السهل نسبيًا على هذه الخوارزمية تتبع السلاسل الفرعية التي تطابقها أجزاء من النمط بين قوسين. هذا يوفر دعمًا للأقواس الملتقطة والمراجع الخلفية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_ALTERNATIVE_MATCHING_ALGORITHM'><a class='permalink' href='#THE_ALTERNATIVE_MATCHING_ALGORITHM'>خوارزمية المطابقة البديلة</a></h1>
+<p class="Pp">تجري هذه الخوارزمية بحثًا عرضيًا في الشجرة. بدءًا من نقطة المطابقة الأولى في الموضوع، تقوم بمسح سلسلة الموضوع من اليسار إلى اليمين، مرة واحدة، حرفًا بحرف، وبينما تقوم بذلك، تتذكر جميع المسارات عبر الشجرة التي تمثل مطابقات صالحة. بعبارات فريدل، هذا نوع من "خوارزمية DFA"، على الرغم من أنها لا تنفذ كآلة حالة محدودة تقليدية (تحتفظ بعدة حالات نشطة في وقت واحد).</p>
+<p class="Pp">على الرغم من أن المبدأ العام لخوارزمية المطابقة هذه هو أنها تمسح سلسلة الموضوع مرة واحدة فقط، دون تراجع، هناك استثناء واحد: عند مواجهة تأكيد نظرة، يجب فحص الأحرف التي تلي النقطة الحالية أو تسبقها بشكل مستقل.</p>
+<p class="Pp">يستمر المسح حتى يتم الوصول إلى نهاية الموضوع، أو لا توجد مسارات غير منتهية. عند هذه النقطة، تمثل المسارات المنتهية إمكانيات المطابقة المختلفة (إذا لم يكن هناك أي منها، فقد فشلت المطابقة). وبالتالي، إذا كان هناك أكثر من تطابق ممكن واحد، فإن هذه الخوارزمية تجدها كلها، وبشكل خاص، تجد الأطول. يتم إرجاع المطابقات بترتيب تنازلي للطول. هناك خيار لإيقاف الخوارزمية بعد العثور على المطابقة الأولى (وهي بالضرورة الأقصر).</p>
+<p class="Pp">لاحظ أن جميع المطابقات التي تم العثور عليها تبدأ من نفس النقطة في الموضوع. إذا كان النمط</p>
+<p class="Pp">
+  <br/>
+   cat(er(pillar)?)?</p>
+<p class="Pp">تتم مطابقته مع السلسلة "the caterpillar catchment"، ستكون النتيجة السلاسل الثلاث "caterpillar"، "cater"، و "cat" التي تبدأ من الحرف الخامس في الموضوع. لا تنتقل الخوارزمية تلقائيًا للعثور على مطابقات تبدأ من مواضع لاحقة.</p>
+<p class="Pp">عادةً ما ينطبق تحسين "التملك الذاتي التلقائي" الخاص بـ PCRE على تكرارات الأحرف في نهاية النمط (وكذلك داخليًا). على سبيل المثال، يتم تجميع النمط "a\d+" كما لو كان "a\d++" لأنه لا توجد نقطة للنظر في إمكانية التراجع إلى الأرقام المكررة. بالنسبة لمطابقة DFA، هذا يعني أنه يتم العثور على تطابق واحد فقط. إذا كنت تريد بالفعل مطابقات متعددة في مثل هذه الحالات، فاستخدم تكرارًا غير طماع ("a\d+؟") أو قم بتعيين خيار PCRE_NO_AUTO_POSSESS عند التجميع.</p>
+<p class="Pp">هناك عدد من ميزات تعابير PCRE النمطية غير المدعومة بواسطة خوارزمية المطابقة البديلة. وهي كالتالي:</p>
+<p class="Pp">1. نظرًا لأن الخوارزمية تجد جميع المطابقات الممكنة، فإن الطبيعة الطماعة أو غير الطماعة للمحددات الكمية التكرارية ليست ذات صلة. يتم التعامل مع المحددات الكمية الطماعة وغير الطماعة بنفس الطريقة تمامًا. ومع ذلك، يمكن أن تحدث المحددات الكمية التملكيه فرقًا عندما يمكن لما يتبع أن يطابق ما تم تحديده كميًا، على سبيل المثال في نمط مثل هذا:</p>
+<p class="Pp">
+  <br/>
+   ^a++\w!</p>
+<p class="Pp">يطابق هذا النمط "aaab!" ولكنه لا يطابق "aaa!"، والتي سيتم مطابقتها بواسطة محدد كمي غير تملكي. وبالمثل، إذا كان هناك مجموعة ذرية، فسيتم مطابقتها كما لو كانت نمطًا قائمًا بذاته في النقطة الحالية، وسيتم "تأمين" أطول تطابق لبقية النمط العام.</p>
+<p class="Pp">2. عند التعامل مع مسارات متعددة عبر الشجرة في وقت واحد، ليس من السهل تتبع السلاسل الفرعية الملتقطة لإمكانيات المطابقة المختلفة، ولا تحاول PCRE في تنفيذها القيام بذلك. هذا يعني أنه لا تتوفر سلاسل فرعية ملتقطة.</p>
+<p class="Pp">3. نظرًا لعدم التقاط أي سلاسل فرعية، لا يتم دعم المراجع الخلفية داخل النمط، وتتسبب في أخطاء إذا تم العثور عليها.</p>
+<p class="Pp">4. لنفس السبب، لا يتم دعم التعبيرات الشرطية التي تستخدم مرجعًا خلفيًا كشرط أو اختبار لتكرار مجموعة معينة.</p>
+<p class="Pp">5. نظرًا لأنه قد تكون هناك مسارات متعددة نشطة عبر الشجرة، فإن التسلسل الهروبي \K، الذي يعيد تعيين بداية المطابقة عند العثور عليه (ولكن قد يكون على بعض المسارات وليس على البعض الآخر)، غير مدعوم. يتسبب في حدوث خطأ إذا تم العثور عليه.</p>
+<p class="Pp">6. يتم دعم الاستدعاءات، ولكن قيمة الحقل <i>capture_top</i> تكون دائمًا 1، وقيمة الحقل <i>capture_last</i> تكون دائمًا -1.</p>
+<p class="Pp">7. التسلسل الهروبي \C، الذي (في الخوارزمية القياسية) يطابق دائمًا وحدة بيانات واحدة، حتى في أوضاع UTF-8 أو UTF-16 أو UTF-32، غير مدعوم في هذه الأوضاع، لأن الخوارزمية البديلة تتحرك عبر سلسلة الموضوع حرفًا واحدًا (وليس وحدة بيانات) في كل مرة، لجميع المسارات النشطة عبر الشجرة.</p>
+<p class="Pp">8. باستثناء (*FAIL)، فإن أوامر التحكم في التراجع مثل (*PRUNE) غير مدعومة. يتم دعم (*FAIL)، ويتصرف مثل تأكيد سلبي فاشل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM'><a class='permalink' href='#ADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM'>مزايا الخوارزمية البديلة</a></h1>
+<p class="Pp">يوفر استخدام خوارزمية المطابقة البديلة المزايا التالية:</p>
+<p class="Pp">1. يتم العثور تلقائيًا على جميع المطابقات الممكنة (عند نقطة واحدة في الموضوع)، وبشكل خاص، يتم العثور على أطول تطابق.</p>
+</section>
+</div>
+</section>
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+    "html_file_structure": {
+        "section": [
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "Sh"
+                },
+                "children": [
+                    {
+                        "tag": "h1",
+                        "attributes": {
+                            "class": "Sh",
+                            "id": "ADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                        },
+                        "children": [
+                            {
+                                "tag": "a",
+                                "attributes": {
+                                    "class": "permalink",
+                                    "href": "#ADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                                },
+                                "text": "ADVANTAGES OF THE ALTERNATIVE ALGORITHM"
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "There are two main advantages to the alternative algorithm:"
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "1. It is the only way to find all possible matches for a regex that contains alternative paths (for example, \".*\" or \"a|b\"). The standard algorithm stops at the first match it finds, even if there are other possibilities. To find more than one match using the standard algorithm, you have to do kludgy things with callouts."
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "2. Because the alternative algorithm scans the subject string just once, and never needs to backtrack (except for lookbehinds), it is possible to pass very long subject strings to the matching function in several pieces, checking for partial matching each time. Although it is possible to do multi-segment matching using the standard algorithm by retaining partially matched substrings, it is more complicated. The <b>pcrepartial</b> documentation gives details of partial matching and discusses multi-segment matching."
+                    }
+                ]
+            },
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "Sh"
+                },
+                "children": [
+                    {
+                        "tag": "h1",
+                        "attributes": {
+                            "class": "Sh",
+                            "id": "DISADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                        },
+                        "children": [
+                            {
+                                "tag": "a",
+                                "attributes": {
+                                    "class": "permalink",
+                                    "href": "#DISADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                                },
+                                "text": "DISADVANTAGES OF THE ALTERNATIVE ALGORITHM"
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "The alternative algorithm suffers from a number of disadvantages:"
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "1. It is substantially slower than the standard algorithm. This is partly because it has to search for all possible matches, but is also because it is less susceptible to optimization."
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "2. Capturing parentheses and back references are not supported."
+                    },
+                    {
+                        "tag": "p",
+                        "attributes": {
+                            "class": "Pp"
+                        },
+                        "text": "3. Although atomic groups are supported, their use does not provide the performance advantage that it does for the standard algorithm."
+                    }
+                ]
+            },
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "Sh"
+                },
+                "children": [
+                    {
+                        "tag": "h1",
+                        "attributes": {
+                            "class": "Sh",
+                            "id": "AUTHOR"
+                        },
+                        "children": [
+                            {
+                                "tag": "a",
+                                "attributes": {
+                                    "class": "permalink",
+                                    "href": "#AUTHOR"
+                                },
+                                "text": "AUTHOR"
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "pre",
+                        "children": [
+                            "Philip Hazel\nUniversity Computing Service\nCambridge CB2 3QH, England."
+                        ]
+                    }
+                ]
+            },
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "Sh"
+                },
+                "children": [
+                    {
+                        "tag": "h1",
+                        "attributes": {
+                            "class": "Sh",
+                            "id": "REVISION"
+                        },
+                        "children": [
+                            {
+                                "tag": "a",
+                                "attributes": {
+                                    "class": "permalink",
+                                    "href": "#REVISION"
+                                },
+                                "text": "REVISION"
+                            }
+                        ]
+                    },
+                    {
+                        "tag": "pre",
+                        "children": [
+                            "Last updated: 12 November 2013\nCopyright (c) 1997-2012 University of Cambridge."
+                        ]
+                    }
+                ]
+            }
+        ],
+        "table": {
+            "tag": "table",
+            "attributes": {
+                "class": "foot"
+            },
+            "children": [
+                {
+                    "tag": "tr",
+                    "children": [
+                        {
+                            "tag": "td",
+                            "attributes": {
+                                "class": "foot-date"
+                            },
+                            "text": "12 November 2013"
+                        },
+                        {
+                            "tag": "td",
+                            "attributes": {
+                                "class": "foot-os"
+                            },
+                            "text": "PCRE 8.34"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "sidebar": {
+        "section": [
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "search"
+                },
+                "children": [
+                    {
+                        "tag": "form",
+                        "attributes": {
+                            "action": "/search",
+                            "class": "search direct-search",
+                            "role": "search"
+                        },
+                        "children": [
+                            {
+                                "tag": "input",
+                                "attributes": {
+                                    "name": "q",
+                                    "placeholder": "Search manual page",
+                                    "type": "search",
+                                    "value": ""
+                                }
+                            },
+                            {
+                                "tag": "input",
+                                "attributes": {
+                                    "name": "go",
+                                    "type": "submit",
+                                    "value": "Go"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "tag": "section",
+                "attributes": {
+                    "class": "package-info"
+                },
+                "children": [
+                    {
+                        "tag": "p",
+                        "text": "Package information:"
+                    },
+                    {
+                        "tag": "dl",
+                        "children": [
+                            {
+                                "tag": "dt",
+                                "text": "Package name:"
+                            },
+                            {
+                                "tag": "dd",
+                                "children": [
+                                    {
+                                        "tag": "a",
+                                        "attributes": {
+                                            "href": "https://www.archlinux.org/packages/core/x86_64/pcre/"
+                                        },
+                                        "text": "core/pcre"
+                                    }
+                                ]
+                            },
+                            {
+                                "tag": "dt",
+                                "text": "Version:"
+                            },
+                            {
+                                "tag": "dd",
+                                "text": "8.45-4"
+                            },
+                            {
+                                "tag": "dt",
+                                "text": "Upstream:"
+                            },
+                            {
+                                "tag": "dd",
+                                "children": [
+                                    {
+                                        "tag": "a",
+                                        "attributes": {
+                                            "href": "https://www.pcre.org/"
+                                        },
+                                        "text": "https://www.pcre.org/"
+                                    }
+                                ]
+                            },
+                            {
+                                "tag": "dt",
+                                "text": "Licenses:"
+                            },
+                            {
+                                "tag": "dd",
+                                "text": "BSD"
+                            },
+                            {
+                                "tag": "dt",
+                                "text": "Manuals:"
+                            },
+                            {
+                                "tag": "dd",
+                                "children": [
+                                    {
+                                        "tag": "a",
+                                        "attributes": {
+                                            "href": "/listing/core/pcre/"
+                                        },
+                                        "text": "/listing/core/pcre/"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "tag": "details",
+                "children": [
+                    {
+                        "tag": "summary",
+                        "text": "Table of contents"
+                    },
+                    {
+                        "tag": "nav",
+                        "attributes": {
+                            "class": "toc"
+                        },
+                        "children": [
+                            {
+                                "tag": "ul",
+                                "children": [
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#NAME"
+                                                },
+                                                "text": "NAME"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#PCRE_MATCHING_ALGORITHMS"
+                                                },
+                                                "text": "PCRE MATCHING ALGORITHMS"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#REGULAR_EXPRESSIONS_AS_TREES"
+                                                },
+                                                "text": "REGULAR EXPRESSIONS AS TREES"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#THE_STANDARD_MATCHING_ALGORITHM"
+                                                },
+                                                "text": "THE STANDARD MATCHING ALGORITHM"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#THE_ALTERNATIVE_MATCHING_ALGORITHM"
+                                                },
+                                                "text": "THE ALTERNATIVE MATCHING ALGORITHM"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#ADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                                                },
+                                                "text": "ADVANTAGES OF THE ALTERNATIVE ALGORITHM"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#DISADVANTAGES_OF_THE_ALTERNATIVE_ALGORITHM"
+                                                },
+                                                "text": "DISADVANTAGES OF THE ALTERNATIVE ALGORITHM"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#AUTHOR"
+                                                },
+                                                "text": "AUTHOR"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "tag": "li",
+                                        "children": [
+                                            {
+                                                "tag": "a",
+                                                "attributes": {
+                                                    "href": "#REVISION"
+                                                },
+                                                "text": "REVISION"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "tag": "nav",
+                "attributes": {
+                    "class": "other-formats"
+                },
+                "children": [
+                    {
+                        "tag": "p",
+                        "text": "Other formats: "
+                    },
+                    {
+                        "tag": "a",
+                        "attributes": {
+                            "href": "/man/pcrematching.3.en.txt"
+                        },
+                        "text": "txt"
+                    },
+                    ", \n        ",
+                    {
+                        "tag": "a",
+                        "attributes": {
+                            "href": "/man/pcrematching.3.en.raw"
+                        },
+                        "text": "raw"
+                    }
+                ]
+            }
+        ]
+    },
+    "footer": {
+        "tag": "footer",
+        "children": [
+            {
+                "tag": "p",
+                "text": "Powered by ",
+                "children": [
+                    {
+                        "tag": "a",
+                        "attributes": {
+                            "href": "https://gitlab.archlinux.org/archlinux/archmanweb"
+                        },
+                        "text": "archmanweb"
+                    },
+                    ",\n               using "
+                ]
+            },
+            {
+                "tag": "p",
+                "text": "The website is available under the terms of the ",
+                "children": [
+                    {
+                        "tag": "a",
+                        "attributes": {
+                            "href": "https://www.gnu.org/licenses/gpl-3.0.en.html"
+                        },
+                        "text": "GPL-3.0"
+                    },
+                    " license, except for the contents of the manual pages, which have their own license\nspecified in the corresponding Arch Linux package.\n            "
+                ]
+            }
+        ]
+    }
+}

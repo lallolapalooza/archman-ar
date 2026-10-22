@@ -1,0 +1,659 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">rrdtutorial(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/rrdtool/">rrdtool</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+عدادات 32 بت. هذا يعني أنها تعد
+    من 0 إلى 4294967295. سنستخدم هذه القيم في الأمثلة. يقوم الجهاز،
+    عند الطلب، بإرجاع القيمة الحالية للعداد. نحن نعرف الوقت الذي
+    مر منذ آخر مرة طلبنا فيها، لذا نعرف الآن عدد البايتات التي تم نقلها ***في المتوسط*** لكل ثانية. هذا ليس صعبًا جدًا للحساب.
+    أولاً بالكلمات، ثم بالحسابات:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>خذ العداد الحالي، اطرح القيمة السابقة منه.</dd>
+  <dt>2.</dt>
+  <dd>افعل الشيء نفسه مع الوقت الحالي والوقت السابق (بالثواني).</dd>
+  <dt>3.</dt>
+  <dd>اقسم نتيجة (1) على نتيجة (2)، والنتيجة هي كمية
+      البايتات في الثانية. اضرب في ثمانية للحصول على عدد البتات في الثانية (bps).</dd>
+</dl>
+<pre>bps = (counter_now - counter_before) / (time_now - time_before) * 8</pre>
+<p class="Pp">بالنسبة لبعض الأشخاص، قد يساعد ترجمة هذا إلى مثال سيارة. لا تحاول هذا المثال، وإذا فعلت، فلا تلومني على النتائج!</p>
+<p class="Pp">الأشخاص الذين لم يعتادوا التفكير بالكيلومترات في الساعة يمكنهم ترجمة معظمها إلى أميال في الساعة بقسمة كم على 1.6 (قريب بما فيه الكفاية). سأستخدم الاختصارات التالية:</p>
+<pre>m:    meter (متر)
+km:   kilometer (كيلومتر) (= 1000 meters).
+h:    hour (ساعة)
+s:    second (ثانية)
+km/h: kilometers per hour (كيلومتر في الساعة)
+m/s:  meters per second (متر في الثانية)</pre>
+<p class="Pp">أنت تقود سيارة. في الساعة 12:05، تقرأ العداد في لوحة القيادة ويخبرك أن السيارة قد تحركت 12345 كم حتى تلك اللحظة. في الساعة 12:10، تنظر مرة أخرى، يقرأ 12357 كم. هذا يعني أنك سافرت 12 كم في خمس دقائق. سيترجم العالم ذلك إلى أمتار في الثانية وهذا يجعل مقارنة لطيفة بين مشكلة (بايتات لكل خمس دقائق) مقابل (بتات في الثانية).</p>
+<p class="Pp">سافرنا 12 كيلومترًا أي 12000 متر. فعلنا ذلك في خمس دقائق أو 300 ثانية. سرعتنا هي 12000م / 300 ثانية أو 40 م/ث.</p>
+<p class="Pp">يمكننا أيضًا حساب السرعة بالكيلومتر في الساعة: 12 مرة 5 دقائق هي ساعة، لذا علينا ضرب 12 كم في 12 للحصول على 144 كم/ساعة. بالنسبة لأصدقائنا الناطقين باللغة الإنجليزية الأصلية: هذا 90 ميلاً في الساعة، لذا لا تجرب هذا المثال في المنزل أو حيث أعيش :)</p>
+<p class="Pp">تذكر: هذه الأرقام هي متوسطات فقط. لا توجد طريقة لمعرفة من الأرقام، ما إذا كنت تقود بسرعة ثابتة. هناك مثال لاحقًا في هذا البرنامج التعليمي يشرح ذلك.</p>
+<p class="Pp">آمل أن تفهم أنه لا يوجد فرق في حساب م/ث أو بت/ث؛ فقط الطريقة التي نجمع بها البيانات مختلفة. حتى k من كيلو هي نفسها كما في مصطلحات الشبكات، k تعني أيضًا 1000.</p>
+<p class="Pp">سنقوم الآن بإنشاء قاعدة بيانات يمكننا من خلالها الاحتفاظ بكل هذه الأرقام الشيقة. قد تختلف الطريقة المستخدمة لبدء البرنامج قليلاً من نظام تشغيل إلى آخر، لكنني أفترض أنه يمكنك اكتشافها إذا كانت تعمل بشكل مختلف على جهازك. تأكد من عدم الكتابة فوق أي ملف على نظامك عند تنفيذ الأمر التالي واكتب السطر بأكمله كسطر طويل واحد (كان علي تقسيمه للقراءة) وتخطي جميع أحرف '\'</p>
+<pre>rrdtool create test.rrd             \
+         --start 920804400          \
+         DS:speed:COUNTER:600:U:U   \
+         RRA:AVERAGE:0.5:1:24       \
+         RRA:AVERAGE:0.5:6:10</pre>
+<p class="Pp">(لذا أدخل: <span class="Li">&quot;rrdtool create test.rrd --start
+    920804400 DS ...&quot;</span>)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='What_has_been_created?'><a class='permalink' href='#What_has_been_created?'>ما الذي تم إنشاؤه؟</a></h2>
+<p class="Pp">لقد أنشأنا قاعدة بيانات دائرية تسمى test (test.rrd) والتي تبدأ عند منتصف النهار في اليوم الذي بدأت فيه كتابة هذه الوثيقة، 7 مارس 1999 (هذا التاريخ يترجم إلى 920804400 ثانية كما هو موضح أدناه). تحتفظ قاعدة بياناتنا بمصدر بيانات واحد (DS) يسمى "speed" يمثل عدادًا. يتم قراءة هذا العداد كل خمس دقائق (هذه هي القيمة الافتراضية، لذلك لا داعي لوضع
+    <span class="Li">&quot;--step=300&quot;</span>). في نفس قاعدة البيانات، يتم الاحتفاظ بأرشيفين دائريين (RRAs)، أحدهما يحسب متوسط البيانات في كل مرة يتم قراءتها (أي لا يوجد شيء لحساب متوسطه) ويحتفظ بـ 24 عينة (24 مرة 5 دقائق هي ساعتان). الآخر يحسب متوسط 6 قيم (نصف ساعة) ويحتوي على 10 متوسطات من هذا القبيل (على سبيل المثال، 5 ساعات).</p>
+<p class="Pp">يعمل RRDtool مع طوابع زمنية خاصة قادمة من عالم UNIX. هذا الطابع الزمني هو عدد الثواني التي مرت منذ 1 يناير 1970 بالتوقيت العالمي المنسق. تتم ترجمة قيمة الطابع الزمني إلى التوقيت المحلي وبالتالي ستبدو مختلفة لمناطق زمنية مختلفة.</p>
+<p class="Pp">هناك احتمالية أنك لست في نفس الجزء من العالم مثلي. هذا يعني أن منطقتك الزمنية مختلفة. في جميع الأمثلة التي أتحدث فيها عن الوقت، قد تكون الساعات خاطئة بالنسبة لك. هذا له تأثير ضئيل على نتائج الأمثلة، فقط صحح الساعات أثناء القراءة. على سبيل المثال: حيث سأرى "12:05" سيرى سكان المملكة المتحدة "11:05".</p>
+<p class="Pp">علينا الآن ملء قاعدة بياناتنا ببعض الأرقام. سنتظاهر بأننا قرأنا الأرقام التالية:</p>
+<pre>12:05  12345 km
+12:10  12357 km
+12:15  12363 km
+12:20  12363 km
+12:25  12363 km
+12:30  12373 km
+12:35  12383 km
+12:40  12393 km
+12:45  12399 km
+12:50  12405 km
+12:55  12411 km
+13:00  12415 km
+13:05  12420 km
+13:10  12422 km
+13:15  12423 km</pre>
+<p class="Pp">نقوم بملء قاعدة البيانات على النحو التالي:</p>
+<pre>rrdtool update test.rrd 920804700:12345 920805000:12357 920805300:12363
+rrdtool update test.rrd 920805600:12363 920805900:12363 920806200:12373
+rrdtool update test.rrd 920806500:12383 920806800:12393 920807100:12399
+rrdtool update test.rrd 920807400:12405 920807700:12411 920808000:12415
+rrdtool update test.rrd 920808300:12420 920808600:12422 920808900:12423</pre>
+<p class="Pp">هذا يقرأ: تحديث قاعدة بيانات الاختبار الخاصة بنا بالأرقام التالية</p>
+<pre>time 920804700, value 12345
+time 920805000, value 12357</pre>
+<p class="Pp">إلخ.</p>
+<p class="Pp">كما ترى، من الممكن تغذية أكثر من قيمة واحدة في قاعدة البيانات في أمر واحد. كان علي التوقف عند ثلاثة من أجل القراءة، لكن الحد الأقصى الفعلي لكل سطر يعتمد على نظام التشغيل.</p>
+<p class="Pp">يمكننا الآن استرداد البيانات من قاعدة بياناتنا باستخدام "rrdtool fetch":</p>
+<pre>rrdtool fetch test.rrd AVERAGE --start 920804400 --end 920809200</pre>
+<p class="Pp">يجب أن يعرض الإخراج التالي:</p>
+<pre>                         speed
+920804700: nan
+920805000: 4.0000000000e-02
+920805300: 2.0000000000e-02
+920805600: 0.0000000000e+00
+920805900: 0.0000000000e+00
+920806200: 3.3333333333e-02
+920806500: 3.3333333333e-02
+920806800: 3.3333333333e-02
+920807100: 2.0000000000e-02
+920807400: 2.0000000000e-02
+920807700: 2.0000000000e-02
+920808000: 1.3333333333e-02
+920808300: 1.6666666667e-02
+920808600: 6.6666666667e-03
+920808900: 3.3333333333e-03
+920809200: nan
+920809500: nan</pre>
+<p class="Pp">لاحظ أنك قد تحصل على صفوف أكثر مما تتوقع. السبب في ذلك هو أنك تطلب نطاقًا زمنيًا ينتهي عند 920809200. الرقم المكتوب خلف 920809200: في القائمة أعلاه يغطي النطاق الزمني من 920808900 إلى 920809200، باستثناء 920809200. لذلك، لكي تكون على الجانب الآمن، تتلقى الإدخال من 920809200 إلى 920809500 أيضًا لأنه يشمل 920809200. قد ترى أيضًا "NaN" بدلاً من "nan" وهذا يعتمد على نظام التشغيل. "NaN" تعني "ليس رقمًا". إذا كان نظام التشغيل الخاص بك يكتب "U" أو "UNKN" أو شيئًا مشابهًا، فهذا لا بأس. إذا كان هناك خطأ آخر، فمن المحتمل أن يكون بسبب خطأ ارتكبته (بافتراض أن برنامجي التعليمي صحيح بالطبع :-)). في هذه الحالة: احذف قاعدة البيانات وحاول مرة أخرى.</p>
+<p class="Pp">معنى الإخراج أعلاه سيتضح أدناه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Time_to_create_some_graphics'><a class='permalink' href='#Time_to_create_some_graphics'>حان وقت إنشاء بعض الرسومات</a></h2>
+<p class="Pp">جرب الأمر التالي:</p>
+<pre>rrdtool graph speed.png                                 \
+        --start 920804400 --end 920808000               \
+        DEF:myspeed=test.rrd:speed:AVERAGE              \
+        LINE2:myspeed#FF0000</pre>
+<p class="Pp">سيؤدي هذا إلى إنشاء speed.png الذي يبدأ في الساعة 12:00 وينتهي في الساعة 13:00. يوجد تعريف لمتغير يسمى myspeed، باستخدام البيانات من RRA "speed" من قاعدة البيانات "test.rrd". الخط المرسوم بارتفاع 2 بكسل ويمثل المتغير myspeed. اللون أحمر (محدد بتمثيل rgb الخاص به، انظر أدناه).</p>
+<p class="Pp">ستلاحظ أن بداية الرسم البياني ليست في 12:00 ولكن في 12:05. هذا لأنه لدينا بيانات غير كافية لتحديد المتوسط قبل ذلك الوقت. يحدث هذا فقط عندما تفقد بعض العينات، وهذا لا يحدث كثيرًا، نأمل.</p>
+<p class="Pp">إذا نجح هذا: تهانينا! إذا لم يكن كذلك، تحقق مما حدث بشكل خاطئ.</p>
+<p class="Pp">تتكون الألوان من الأحمر والأخضر والأزرق. لكل من المكونات، تحدد مقدار استخدامه بالنظام السداسي عشري حيث يعني 00 عدم الإدراج و FF يعني الإدراج الكامل. اللون "الأبيض" هو مزيج من الأحمر والأخضر والأزرق: FFFFFF اللون "الأسود" هو إيقاف جميع الألوان: 000000</p>
+<pre>red     #FF0000 (أحمر)
+green   #00FF00 (أخضر)
+blue    #0000FF (أزرق)
+magenta #FF00FF     (مزيج من الأحمر والأزرق)
+gray    #555555     (ثلث جميع المكونات) (رمادي)</pre>
+<p class="Pp">بالإضافة إلى ذلك، يمكنك (مع RRDtool حديث) إضافة قناة ألفا (الشفافية). الافتراضي سيكون "FF" مما يعني غير شفاف.</p>
+<p class="Pp">يمكن عرض ملف PNG الذي أنشأته للتو باستخدام عارض الصور المفضل لديك. ستعرض متصفحات الويب ملف PNG عبر عنوان URL "file:///the/path/to/speed.png"</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Graphics_with_some_math'><a class='permalink' href='#Graphics_with_some_math'>رسومات مع بعض العمليات الحسابية</a></h2>
+<p class="Pp">عند النظر إلى الصورة، تلاحظ أن المحور الأفقي مُسمى 12:10، 12:20، 12:30، 12:40، و 12:50. في بعض الأحيان لا يناسب تسمية (12:00 و 13:00 قد يكونان مرشحين محتملين) لذا يتم تخطيهما.</p>
+<p class="Pp">يعرض المحور العمودي النطاق الذي أدخلناه. قدمنا كيلومترات وعند قسمتها على 300 ثانية، نحصل على أرقام صغيرة جدًا. لكي نكون دقيقين، كانت القيمة الأولى 12 (12357-12345) وعند قسمتها على 300 تكون 0.04، والتي يعرضها RRDtool كـ "40 م" بمعنى "40/1000". "م" (مللي) ليس لها علاقة بالأمتار (أيضًا م)، الكيلومترات أو المليمترات! RRDtool لا يعرف الوحدات الفيزيائية لبياناتنا، إنه يعمل فقط مع أرقام لا أبعاد لها.</p>
+<p class="Pp">لو قمنا بقياس مسافاتنا بالأمتار، لكان ذلك (12357000-12345000)/300 = 12000/300 = 40.</p>
+<p class="Pp">نظرًا لأن معظم الناس لديهم فهم أفضل للأرقام في هذا النطاق، سنقوم بتصحيح ذلك. يمكننا إعادة إنشاء قاعدة بياناتنا وتخزين البيانات الصحيحة، ولكن هناك طريقة أفضل: نقوم ببعض العمليات الحسابية أثناء إنشاء ملف png!</p>
+<pre>rrdtool graph speed2.png                           \
+   --start 920804400 --end 920808000               \
+   --vertical-label m/s                            \
+   DEF:myspeed=test.rrd:speed:AVERAGE              \
+   CDEF:realspeed=myspeed,1000,\*                  \
+   LINE2:realspeed#FF0000</pre>
+<p class="Pp">ملاحظة: أحتاج إلى تجاوز عامل الضرب * بشرطة مائلة للخلف. إذا لم أفعل، فقد يفسره نظام التشغيل ويستخدمه لتوسيع اسم الملف. يمكنك أيضًا وضع السطر داخل علامات اقتباس على النحو التالي:</p>
+<pre>&quot;CDEF:realspeed=myspeed,1000,*&quot;                  \</pre>
+<p class="Pp">يتلخص الأمر في: RRDtool هو الذي يجب أن يرى *، وليس shell الخاص بك. و shell الخاص بك هو الذي يفسر \، وليس RRDtool. قد تحتاج إلى تعديل الأمثلة وفقًا لذلك إذا صادف أنك تستخدم نظام تشغيل</p>
+<section class="Sh">
+<h1 class="Sh" id='Graphics_Magic'><a class="permalink" href="#Graphics_Magic">Graphics Magic</a></h1>
+<p class="Pp">After viewing this PNG, you notice the "m" (milli) has
+    disappeared. This is what the correct result would be. Also, a label has
+    been added to the image. Apart from the things mentioned above, the PNG
+    should look the same.</p>
+<p class="Pp">The calculations are specified in the CDEF part above and are in
+    Reverse Polish Notation ("RPN"). What we requested RRDtool to do
+    is: "take the data source myspeed and the number 1000; multiply
+    those". Don't bother with RPN yet, it will be explained later on in
+    more detail. Also, you may want to read my tutorial on CDEFs and Steve
+    Rader's tutorial on RPN. But first finish this tutorial.</p>
+<p class="Pp">Hang on! If we can multiply values with 1000, it should also be
+    possible to display kilometers per hour from the same data!</p>
+<p class="Pp">To change a value that is measured in meters per second:</p>
+<pre>Calculate meters per hour:     value * 3600
+Calculate kilometers per hour: value / 1000
+Together this makes:           value * (3600/1000) or value * 3.6</pre>
+<p class="Pp">In our example database we made a mistake and we need to
+    compensate for this by multiplying with 1000. Applying that correction:</p>
+<pre>value * 3.6  * 1000 == value * 3600</pre>
+<p class="Pp">Now let's create this PNG, and add some more magic ...</p>
+<pre>rrdtool graph speed3.png                             \
+     --start 920804400 --end 920808000               \
+     --vertical-label km/h                           \
+     DEF:myspeed=test.rrd:speed:AVERAGE              \
+     "CDEF:kmh=myspeed,3600,&quot;*"                       \
+     CDEF:fast=kmh,100,GT,kmh,0,IF                   \
+     CDEF:good=kmh,100,GT,0,kmh,IF                   \
+     HRULE:100#0000FF:"Maximum allowed"              \
+     AREA:good#00FF00:"Good speed"                   \
+     AREA:fast#FF0000:"Too fast"</pre>
+<p class="Pp">Note: here we use another means to escape the * operator by
+    enclosing the whole string in double quotes.</p>
+<p class="Pp">This graph looks much better. Speed is shown in km/h and there is
+    even an extra line with the maximum allowed speed (on the road I travel on).
+    I also changed the colors used to display speed and changed it from a line
+    into an area.</p>
+<p class="Pp">The calculations are more complex now. For speed measurements
+    within the speed limit they are:</p>
+<pre>Check if kmh is greater than 100    ( kmh,100 ) GT
+If so, return 0, else kmh           ((( kmh,100 ) GT ), 0, kmh) IF</pre>
+<p class="Pp">For values above the speed limit:</p>
+<pre>Check if kmh is greater than 100    ( kmh,100 ) GT
+If so, return kmh, else return 0    ((( kmh,100) GT ), kmh, 0) IF</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Graphics_Magic'><a class="permalink" href="#Graphics_Magic">Graphics Magic</a></h2>
+<p class="Pp">I like to believe there are virtually no limits to how RRDtool
+    graph can manipulate data. I will not explain how it works, but look at the
+    following PNG:</p>
+<pre>rrdtool graph speed4.png                           \
+   --start 920804400 --end 920808000               \
+   --vertical-label km/h                           \
+   DEF:myspeed=test.rrd:speed:AVERAGE              \
+   CDEF:nonans=myspeed,UN,0,myspeed,IF             \
+   CDEF:kmh=nonans,3600,*                          \
+   CDEF:fast=kmh,100,GT,100,0,IF                   \
+   CDEF:over=kmh,100,GT,kmh,100,-,0,IF             \
+   CDEF:good=kmh,100,GT,0,kmh,IF                   \
+   HRULE:100#0000FF:"Maximum allowed"              \
+   AREA:good#00FF00:"Good speed"                   \
+   AREA:fast#550000:"Too fast"                     \
+   STACK:over#FF0000:"Over speed"</pre>
+<p class="Pp">Remember the note in the beginning? I had to remove unknown data
+    from this example. The 'nonans' CDEF is new, and the 6th line (which used to
+    be the 5th line) used to read 'CDEF:kmh=myspeed,3600,*'</p>
+<p class="Pp">Let's create a quick and dirty HTML page to view the three
+    PNGs:</p>
+<pre>&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Speed&lt;/TITLE&gt;&lt;/HEAD&gt;&lt;BODY&gt;
+&lt;IMG src="speed2.png" alt="Speed in meters per second"&gt;
+&lt;BR&gt;
+&lt;IMG src="speed3.png" alt="Speed in kilometers per hour"&gt;
+&lt;BR&gt;
+&lt;IMG src="speed4.png" alt="Traveled too fast?"&gt;
+&lt;/BODY&gt;&lt;/HTML&gt;</pre>
+<p class="Pp">Name the file "speed.html" or similar, and look at it in
+    your web browser.</p>
+<p class="Pp">Now, all you have to do is measure the values regularly and update
+    the database. When you want to view the data, recreate the PNGs and make
+    sure to refresh them in your browser. (Note: just clicking reload may not be
+    enough, especially when proxies are involved. Try shift-reload or
+    ctrl-F5).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Updates_in_Reality'><a class="permalink" href="#Updates_in_Reality">Updates in Reality</a></h2>
+<p class="Pp">We've already used the <span class="Li">"update"</span>
+    command: it took one or more parameters in the form of
+    "&lt;time&gt;:&lt;value&gt;". You'll be glad to know that you can
+    specify the current time by filling in a "N" as the time. Or you
+    could use the "time" function in Perl (the shortest example in
+    this tutorial):</p>
+<pre>perl -e 'print time, "\n" '</pre>
+<p class="Pp">How to run a program on regular intervals is OS specific. But here
+    is an example in pseudo code:</p>
+<pre>- Get the value and put it in variable "$speed"
+- rrdtool update speed.rrd N:$speed</pre>
+<p class="Pp">(do not try this with our test database, we'll use it in further
+    examples)</p>
+<p class="Pp">This is all. Run the above script every five minutes. When you
+    need to know what the graphs look like, run the examples above. You could
+    put them in a script as well. After running that script, view the page
+    speed.html we created above.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Some_words_on_SNMP'><a class="permalink" href="#Some_words_on_SNMP">Some words on SNMP</a></h2>
+<p class="Pp">I can imagine very few people that will be able to get real data
+    from their car every five minutes. All other people will have to settle for
+    some other kind of counter. You could measure the number of pages printed by
+    a printer, for example, the cups of coffee made by the coffee machine, a
+    device that counts the electricity used, whatever. Any incrementing counter
+    can be monitored and graphed using the stuff you learned so far. Later on we
+    will also be able to monitor other types of values like temperature.</p>
+<p class="Pp">Many people interested in RRDtool will use the counter that keeps
+    track of octets (bytes) transferred by a network device. So let's do just
+    that next. We will start with a description of how to collect data.</p>
+<p class="Pp">Some people will make a remark that there are tools which can do
+    this data collection for you. They are right! However, I feel it is
+    important that you understand they are not necessary. When you have to
+    determine why things went wrong you need to know how they work.</p>
+<p class="Pp">One tool used in the example has been talked about very briefly in
+    the beginning of this document, it is called SNMP. It is a way of talking to
+    networked equipment. The tool I use below is called "snmpget" and
+    this is how it works:</p>
+<pre>snmpget device password OID</pre>
+<p class="Pp">or</p>
+<pre>snmpget -v[version] -c[password] device OID</pre>
+<p class="Pp">For device you substitute the name, or the IP address, of your
+    device. For password you use the "community read string" as it is
+    called in the SNMP world. For some devices the default of "public"
+    might work, however this can be disabled, altered or protected for privacy
+    and security reasons. Read the documentation that comes with your device or
+    program.</p>
+<p class="Pp">Then there is this parameter, called OID, which means "object
+    identifier".</p>
+<p class="Pp">When you start to learn about SNMP it looks very confusing. It
+    isn't all that difficult when you look at the Management Information Base
+    ("MIB"). It is an upside-down tree that describes data, with a
+    single node as the root and from there a number of branches. These branches
+    end up in another node, they branch out, etc. All the branches have a name
+    and they form the path that we follow all the way down. The branches that we
+    follow are named: iso, org, dod, internet, mgmt and mib-2. These names can
+    also be written down as numbers and are 1 3 6 1 2 1.</p>
+<pre>iso.org.dod.internet.mgmt.mib-2 (1.3.6.1.2.1)</pre>
+<p class="Pp">There is a lot of confusion about the leading dot that some
+    programs use. There is *no* leading dot in an OID. However, some programs
+    can use the above part of OIDs as a default. To indicate the difference
+    between abbreviated OIDs and full OIDs they need a leading dot when you
+    specify the complete OID. Often those programs will leave out the default
+    portion when returning the data to you. To make things worse, they have
+    several default prefixes ...</p>
+<p class="Pp">Ok, lets continue to the start of our OID: we had 1.3.6.1.2.1 From
+    there, we are especially interested in the branch "interfaces"
+    which has number 2 (e.g., 1.3.6.1.2.1.2 or 1.3.6.1.2.1.interfaces).</p>
+<p class="Pp">First, we have to get some SNMP program. First look if there is a
+    pre-compiled package available for your OS. This is the preferred way. If
+    not, you will have to get the sources yourself and compile those. The
+    Internet is full of sources, programs etc. Find information using a search
+    engine or whatever you prefer.</p>
+<p class="Pp">Assume you got the program. First try to collect some data that is
+    available on most systems. Remember: there is a short name for the part of
+    the tree that interests us most in the world we live in!</p>
+<p class="Pp">I will give an example which can be used on Fedora Core 3. If it
+    doesn't work for you, work your way through the manual of snmp and adapt the
+    example to make it work.</p>
+<pre>snmpget -v2c -c public myrouter system.sysDescr.0</pre>
+<p class="Pp">The device should answer with a description of itself, perhaps an
+    empty one. Until you got a valid answer from a device, perhaps using a
+    different "password", or a different device, there is no point in
+    continuing.</p>
+<pre>snmpget -v2c -c public myrouter interfaces.ifNumber.0</pre>
+<p class="Pp">Hopefully you get a number as a result, the number of interfaces.
+    If so, you can carry on and try a different program called
+    "snmpwalk".</p>
+<pre>snmpwalk -v2c -c public myrouter interfaces.ifTable.ifEntry.ifDescr</pre>
+<p class="Pp">If it returns with a list of interfaces, you're almost there.
+    Here's an example:
+  <br/>
+   [user@host /home/alex]$ snmpwalk -v2c -c public cisco 2.2.1.2</p>
+<pre>interfaces.ifTable.ifEntry.ifDescr.1 = "BRI0: B-Channel 1"
+interfaces.ifTable.ifEntry.ifDescr.2 = "BRI0: B-Channel 2"
+interfaces.ifTable.ifEntry.ifDescr.3 = "BRI0" Hex: 42 52 49 30
+interfaces.ifTable.ifEntry.ifDescr.4 = "Ethernet0"
+interfaces.ifTable.ifEntry.ifDescr.5 = "Loopback0"</pre>
+<p class="Pp">On this cisco equipment, I would like to monitor the
+    "Ethernet0" interface and from the above output I see that it is
+    number four. I try:</p>
+<pre>[user@host /home/alex]$ snmpget -v2c -c public cisco 2.2.1.10.4 2.2.1.16.4
+interfaces.ifTable.ifEntry.ifInOctets.4 = 2290729126
+interfaces.ifTable.ifEntry.ifOutOctets.4 = 1256486519</pre>
+<p class="Pp">So now I have two OIDs to monitor and they are (in full, this
+    time):</p>
+<pre>1.3.6.1.2.1.2.2.1.1</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='OID_and_MIB'><a class='permalink' href='#OID_and_MIB'>OID and MIB</a></h2>
+<p class="Pp">Before we continue, I want to talk a bit about the numbers you see
+    when you query your router. You should know what they mean, otherwise you will
+    not understand the output of the commands. These numbers are also called OIDs.
+    They are numbers that represent the information in a Management Information
+    Base (MIB). MIBs are used to manage network devices. They contain a tree-like
+    structure of object identifiers (OIDs). Each OID represents a specific piece
+    of information in the MIB. For example, if you want to know the traffic
+    going in and out of your router, you would query two specific OIDs.</p>
+<p class="Pp">In the example below, we will use the OIDs</p>
+<pre>1.3.6.1.2.1.2.2.1.10</pre>
+<p class="Pp">and</p>
+<pre>1.3.6.1.2.1.2.2.1.16</pre>
+<p class="Pp">both with an interface number of 4.</p>
+<p class="Pp">Don't get fooled, this wasn't my first try. It took some time for
+    me too to understand what all these numbers mean. It does help a lot when
+    they get translated into descriptive text... At least, when people are
+    talking about MIBs and OIDs you know what it's all about. Do not forget the
+    interface number (0 if it is not interface dependent) and try snmpwalk if
+    you don't get an answer from snmpget.</p>
+<p class="Pp">If you understand the above section and get numbers from your
+    device, continue on with this tutorial. If not, then go back and re-read
+    this part.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='A_Real_World_Example'><a class='permalink' href='#A_Real_World_Example'>A   Real World Example</a></h2>
+<p class="Pp">Let the fun begin. First, create a new database. It contains data
+    from two counters, called input and output. The data is put into archives
+    that average it. They take 1, 6, 24 or 288 samples at a time. They also go
+    into archives that keep the maximum numbers. This will be explained later
+    on. The time in-between samples is 300 seconds, a good starting point, which
+    is the same as five minutes.</p>
+<pre>1 sample &quot;averaged&quot; stays 1 period of 5 minutes
+6 samples averaged become one average on 30 minutes
+24 samples averaged become one average on 2 hours
+288 samples averaged become one average on 1 day</pre>
+<p class="Pp">Lets try to be compatible with MRTG which stores about the
+    following amount of data:</p>
+<pre>600 5-minute samples:    2   days and 2 hours
+600 30-minute samples:  12.5 days
+600 2-hour samples:     50   days
+732 1-day samples:     732   days</pre>
+<p class="Pp">These ranges are appended, so the total amount of data stored in
+    the database is approximately 797 days. RRDtool stores the data differently,
+    it doesn't start the &quot;weekly&quot; archive where the &quot;daily&quot;
+    archive stopped. For both archives the most recent data will be near
+    &quot;now&quot; and therefore we will need to keep more data than MRTG
+  does!</p>
+<p class="Pp">We will need:</p>
+<pre>600 samples of 5 minutes  (2 days and 2 hours)
+700 samples of 30 minutes (2 days and 2 hours, plus 12.5 days)
+775 samples of 2 hours    (above + 50 days)
+797 samples of 1 day      (above + 732 days, rounded up to 797)
+  rrdtool create myrouter.rrd         \
+           DS:input:COUNTER:600:U:U   \
+           DS:output:COUNTER:600:U:U  \
+           RRA:AVERAGE:0.5:1:600      \
+           RRA:AVERAGE:0.5:6:700      \
+           RRA:AVERAGE:0.5:24:775     \
+           RRA:AVERAGE:0.5:288:797    \
+           RRA:MAX:0.5:1:600          \
+           RRA:MAX:0.5:6:700          \
+           RRA:MAX:0.5:24:775         \
+           RRA:MAX:0.5:288:797</pre>
+<p class="Pp">Next thing to do is to collect data and store it. Here is an
+    example. It is written partially in pseudo code, you will have to find out
+    what to do exactly on your OS to make it work.</p>
+<pre>while not the end of the universe
+do
+   get result of
+      snmpget router community 2.2.1.10.4
+   into variable $in
+   get result of
+      snmpget router community 2.2.1.16.4
+   into variable $out
+   rrdtool update myrouter.rrd N:$in:$out
+   wait for 5 minutes
+done</pre>
+<p class="Pp">Then, after collecting data for a day, try to create an image
+    using:</p>
+<pre>rrdtool graph myrouter-day.png --start -86400 \
+         DEF:inoctets=myrouter.rrd:input:AVERAGE \
+         DEF:outoctets=myrouter.rrd:output:AVERAGE \
+         AREA:inoctets#00FF00:&quot;In traffic&quot; \
+         LINE1:outoctets#0000FF:&quot;Out traffic&quot;</pre>
+<p class="Pp">This should produce a picture with one day worth of traffic. One
+    day is 24 hours of 60 minutes of 60 seconds: 24*60*60=86400, we start at now
+    minus 86400 seconds. We define (with DEFs) inoctets and outoctets as the
+    average values from the database myrouter.rrd and draw an area for the
+    &quot;in&quot; traffic and a line for the &quot;out&quot; traffic.</p>
+<p class="Pp">View the image and keep logging data for a few more days. If you
+    like, you could try the examples from the test database and see if you can
+    get various options and calculations to work.</p>
+<p class="Pp">Suggestion: Display in bytes per second and in bits per second.
+    Make the Ethernet graphics go red if they are over four megabits per
+  second.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Consolidation_Functions'><a class='permalink' href='#Consolidation_Functions'>Consolidation   Functions</a></h2>
+<p class="Pp">A few paragraphs back I mentioned the possibility of keeping the
+    maximum values instead of the average values. Let's go into this a bit
+  more.</p>
+<p class="Pp">Recall all the stuff about the speed of the car. Suppose we drove
+    at 144 km/h during 5 minutes and then were stopped by the police for 25
+    minutes. At the end of the lecture we would take our laptop and create and
+    view the image taken from the database. If we look at the second RRA we did
+    create, we would have the average from 6 samples. The samples measured would
+    be 144+0+0+0+0+0=144, divided by 30 minutes, corrected for the error by
+    1000, translated into km/h, with a result of 24 km/h. I would still get a
+    ticket but not for speeding anymore :)</p>
+<p class="Pp">Obviously, in this case we shouldn't look at the averages. In some
+    cases they are handy. If you want to know how many km you had traveled, the
+    averaged picture would be the right one to look at. On the other hand, for
+    the speed that we traveled at, the maximum numbers seen is much more
+    interesting. Later we will see more types.</p>
+<p class="Pp">It is the same for data. If you want to know the amount, look at
+    the averages. If you want to know the rate, look at the maximum. Over time,
+    they will grow apart more and more. In the last database we have created,
+    there are two archives that keep data per day. The archive that keeps
+    averages will show low numbers, the archive that shows maxima will have
+    higher numbers.</p>
+<p class="Pp">For my car this would translate in averages per day of 96/24=4
+    km/h (as I travel about 94 kilometers on a day) during working days, and
+    maxima of 120 km/h (my top speed that I reach every day).</p>
+<p class="Pp">Big difference. Do not look at the second graph to estimate the
+    distances that I travel and do not look at the first graph to estimate my
+    speed. This will work if the samples are close together, as they are in five
+    minutes, but not if you average.</p>
+<p class="Pp">On some days, I go for a long ride. If I go across Europe and
+    travel for 12 hours, the first graph will rise to about 60 km/h. The second
+    one will show 180 km/h. This means that I traveled a distance of 60 km/h
+    times 24 h = 1440 km. I did this with a higher speed and a maximum around
+    180 km/h. However, it probably doesn't mean that I traveled for 8 hours at a
+    constant speed of 180 km/h!</p>
+<p class="Pp">This is a real example: go with the flow through Germany (fast!)
+    and stop a few times for gas and coffee. Drive slowly through Austria and
+    the Netherlands. Be careful in the mountains and villages. If you would look
+    at the graphs created from the five-minute averages you would get a totally
+    different picture. You would see the same values on the average and maximum
+    graphs (provided I measured every 300 seconds). You would be able to see
+    when I stopped, when I was in top gear, when I drove over fast highways etc.
+    The granularity of the data is much higher, so you can see more. However,
+    this takes 12 samples per hour, or 288 values per day, so it would be a lot
+    of data over a longer period of time. Therefore we average it, eventually to
+    one value per day. From this one value, we cannot see much detail, of
+    course.</p>
+<p class="Pp">Make sure you understand the last few paragraphs. There is no
+    value in only a line and a few axis, you need to know what they mean and
+    interpret the data in an appropriate way. This is true for all data.</p>
+<p class="Pp">The biggest mistake you can make is to use the collected data for
+    something that it is not suitable for. You would be better off if you didn't
+    have the graph at all.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Let&apos;s_review_what_you_now_should_know'><a class='permalink' href='#Let&apos;s_review_what_you_now_should_know'>Let's   review what you now should know</a></h2>
+<p class="Pp">You know how to create a database and can put data in it. You can
+    get the numbers out again by creating an image, do math on the data from the
+    database and view the result instead of the raw data. You know about the
+    difference between averages and maximum, and when to use which (or at least
+    you should have an idea).</p>
+<p class="Pp">RRDtool can do more than what we have learned up to now. Before
+    you continue with the rest of this doc, I recommend that you reread from the
+    start and try some modifications on the examples. Make sure you fully
+    understand everything. It will be worth the effort and helps you not only
+    with the rest of this tutorial, but also in your day to day monitoring long
+    after you read this introduction.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_Source_Types'><a class='permalink' href='#Data_Source_Types'>Data   Source Types</a></h2>
+<p class="Pp">All right, you feel like continuing. Welcome back and get ready
+    for an increased speed in the examples and explanations.</p>
+<p class="Pp">You know that in order to view a counter over time, you have to
+    take two numbers and divide the difference of them by the time lapsed. This
+    makes sense for the examples I gave you but there are other possibilities.
+    For instance, I'm able to retrieve the temperature from my router in three
+    places namely the inlet, the so called hot-spot and the exhaust. These
+    values are not counters. If I take the difference of the two samples and
+    divide that by 300 seconds I would be asking for the temperature change per
+    second. Hopefully this is zero! If not, the computer room is probably on
+    fire :)</p>
+<p class="Pp">So, what can we do? We can tell RRDtool to store the values we
+    measure directly as they are (this is not entirely true but close enough).
+    The graphs we make will look much better, they will show a rather constant
+    value. I know when the router is busy (it works -&gt; it uses more
+    electricity -&gt; it generates more heat -&gt; the temperature rises). I
+    know when the doors are left open (the room is air conditioned) -&gt; the
+    warm air from the rest of the building flows into the computer room -&gt;
+    the inlet temperature rises). Etc. The data type we use when creating the
+    database before was counter, we now have a different data type and thus a
+    different name for it. It is called GAUGE. There are more such data
+  types:</p>
+<pre>- COUNTER   we already know this one
+- GAUGE     we just learned this one
+- DERIVE
+- ABSOLUTE</pre>
+<p class="Pp">The two additional types are DERIVE and ABSOLUTE. Absolute can be
+    used like counter with one difference: RRDtool assumes the counter is reset
+    when it's read. That is: its delta is known without calculation by RRDtool
+    whereas RRDtool needs to calculate it for the counter type. Example: our
+    first example (12345, 12357, 12363, 12363) would read: unknown, 12, 6, 0.
+    The rest of the calculations stay the same. The other one, derive, is like
+    counter. Unlike counter, it can also decrease so it can have a negative
+    delta. Again, the rest of the calculations stay the same.</p>
+<p class="Pp">Let's try them all:</p>
+<pre>rrdtool create all.rrd --start 978300900 \
+         DS:a:COUNTER:600:U:U \
+         DS:b:GAUGE:600:U:U \
+         DS:c:DERIVE:600:U:U \
+         DS:d:ABSOLUTE:600:U:U \
+    </pre>
+</section>
+GE      \
+   CDEF:unknown=seconds,UN                       \
+   LINE2:seconds#0000FF                          \
+   AREA:unknown#FF0000
+rrdtool graph seconds2.png                       \
+   --start 920804700 --end 920806200             \
+   --height 200                                  \
+   --upper-limit 1.05 --lower-limit 0.95 --rigid \
+   DEF:seconds=seconds2.rrd:seconds:AVERAGE      \
+   CDEF:unknown=seconds,UN                       \
+   LINE2:seconds#0000FF                          \
+   AREA:unknown#FF0000</pre>
+<p class="Pp">اعرض الصورتين معًا (أضفهما إلى ملف index.html الخاص بك) وقارن. يجب أن تظهر الرسوم البيانية نفسها، على الرغم من أن المدخلات مختلفة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WRAPUP'><a class='permalink' href='#WRAPUP'>خاتمة</a></h1>
+<p class="Pp">لقد حان الوقت الآن لإنهاء هذا البرنامج التعليمي. لقد غطينا جميع الأساسيات لتتمكن من العمل مع RRDtool وقراءة الوثائق الإضافية المتاحة. هناك الكثير لاكتشافه حول RRDtool وستجد المزيد والمزيد من الاستخدامات لهذه الحزمة. يمكنك إنشاء رسوم بيانية بسهولة باستخدام الأمثلة المقدمة فقط وباستخدام RRDtool فقط. يمكنك أيضًا استخدام أحد الواجهات الأمامية لـ RRDtool المتاحة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MAILINGLIST'><a class='permalink' href='#MAILINGLIST'>قائمة البريد</a></h1>
+<p class="Pp">تذكر الاشتراك في قائمة بريد RRDtool. حتى لو لم تكن تجيب على رسائل البريد الإلكتروني الواردة، فإنها تساعدك أنت والمستخدمين الآخرين. الكثير من الأشياء التي أعرفها عن MRTG (وبالتالي عن RRDtool) تعلمتها أثناء قراءة القائمة دون النشر فيها. لم أكن بحاجة إلى طرح الأسئلة الأساسية حيث تم الإجابة عليها في الأسئلة الشائعة (اقرأها!) وفي رسائل بريد إلكتروني مختلفة من مستخدمين آخرين. مع آلاف المستخدمين في جميع أنحاء العالم، سيكون هناك دائمًا أشخاص يطرحون أسئلة يمكنك الإجابة عليها لأنك قرأت هذا وغيرها من الوثائق ولم يفعلوا ذلك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp">صفحات دليل RRDtool</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">آمل أن تكون قد استمتعت بالأمثلة وشروحاتها. إذا فعلت ذلك، فساعد الآخرين بتوجيههم إلى هذه الوثيقة عندما يطرحون أسئلة أساسية. لن يحصلوا على إجاباتهم فحسب، بل سيتعلمون أيضًا الكثير.</p>
+<p class="Pp">Alex van den Bogaerdt &lt;alex@vandenbogaerdt.nl&gt;</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-29</td>
+    <td class="foot-os">1.9.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/rrdtool/">extra/rrdtool</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.9.0-8</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.rrdtool.org">https://www.rrdtool.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/rrdtool/">/listing/extra/rrdtool/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#TUTORIAL">برنامج تعليمي</a></li>
+        
+            <li><a href="#WRAPUP">خاتمة</a></li>
+        
+            <li><a href="#MAILINGLIST">قائمة البريد</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/rrdtutorial.1.en.txt">txt</a>, 
+        
+            <a href="/man/rrdtutorial.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

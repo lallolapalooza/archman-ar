@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Net::DBus::Tutorial::ExportingObjects(3pm) — صفحات الدليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Net__DBus__Tutorial__ExportingObjects(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perl-net-dbus/">perl-net-dbus</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Net::DBus::Tutorial::ExportingObjects(3)</td>
+    <td class="head-vol">وثائق مساهمات المستخدم في Perl</td>
+    <td class="head-rtitle">Net::DBus::Tutorial::ExportingObjects(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>اسم</a></h1>
+<p class="Pp">Net::DBus::Tutorial::ExportingObjects - دروس حول تقديم خدمة DBus</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يقدم هذا المستند درسًا حول تقديم خدمة DBus باستخدام روابط تطبيق Perl Net::DBus. ستستند الأمثلة في هذا المستند إلى الكود الموجود في توزيع Music::Player، وهي خدمة DBus بسيطة توفر مشغل مسارات موسيقية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CREATING_AN_OBJECT'><a class='permalink' href='#CREATING_AN_OBJECT'>إنشاء كائن</a></h1>
+<p class="Pp">الخطوة الأولى في إنشاء كائن هي إنشاء حزمة جديدة ترث من Net::DBus::Object. يوفر كائن Music::Player::Manager واجهة برمجة تطبيقات لإدارة مجموعة من مشغلات الموسيقى الخلفية لأنواع المسارات المختلفة. للبدء، لننشئ هيكل الحزمة &amp; وبانيها. يتوقع باني النوع الفائق، Net::DBus::Object، أن يتم تمرير معلمتين له: مقبض لخدمة Net::DBus التي تمتلك الكائن، ومسار يجب تصدير الكائن تحته. نظرًا لأن فئة المدير مخصصة لتكون كائنًا فريدًا، يمكننا ترميز المسار الخاص بها بشكل ثابت داخل الباني:</p>
+<pre>package Music::Player::Manager;
+use base qw(Net::DBus::Object);
+sub new {
+    my $class = shift;
+    my $service = shift;
+    my $self = $class-&gt;SUPER::new($service, &quot;/music/player/manager&quot;);
+    bless $self, $class;
+    return $self;
+}
+1;</pre>
+<p class="Pp">الآن، كما ذكرنا، سيتعامل المدير مع عدد من مشغلات الخلفية المختلفة. لذلك نحتاج إلى توفير طرق لتسجيل مشغلات خلفية جديدة، والاستعلام عن مشغلات خلفية قادرة على تشغيل نوع ملف معين. لذا، بتعديل الكود أعلاه، نضيف جدول تجزئة في الباني، لتخزين المشغلات الخلفية:</p>
+<pre>sub new {
+    my $class = shift;
+    my $service = shift;
+    my $self = $class-&gt;SUPER::new($service, &quot;/music/player/manager&quot;);
+    $self-&gt;{backends} = {};
+    bless $self, $class;
+    return $self;
+}</pre>
+<p class="Pp">والآن طريقة لتسجيل مشغل خلفي جديد. تأخذ هذه اسم وحدة Perl وتستخدمه لإنشاء مشغل خلفي. نظرًا لأن المشغلات الخلفية ستكون أيضًا كائنات DBus، نحتاج إلى تمرير مرجع للخدمة التي نرفق بها، جنبًا إلى جنب مع مسار لتسجيل المشغل الخلفي تحته. نستخدم طريقة <span class="Li">&quot;get_service&quot;</span> لاسترداد مرجع للخدمة التي يرتبط بها المدير، ونرفق مشغل الموسيقى الخلفي بنفس الخدمة: عندما يتم استدعاء طريقة على كائن DBus، فإن المعلمة الأولى هي مرجع الكائن (<span class="Li">$self</span>)، والباقي هي المعلمات المقدمة لاستدعاء الطريقة. وبالتالي، فإن كتابة تنفيذ طريقة على DBus لا تختلف حقًا عن Perl الموجه للكائنات العادية (راجع perltoot):</p>
+<pre>sub register_backend {
+    my $self = shift;
+    my $name = shift;
+    my $module = shift;
+    eval &quot;use $module&quot;;
+    if ($@) {
+        die &quot;cannot load backend $module: $@&quot; ;
+    }
+    $self-&gt;{backends}-&gt;{$name} = $module-&gt;new($self-&gt;get_service,
+                                              &quot;/music/player/backend/$name&quot;);
+}</pre>
+<p class="Pp">بالنظر إلى هذا، قد يتساءل المرء عما يحدث إذا تم تشغيل طريقة
+    <span class="Li">&quot;die&quot;</span>. في مثل هذا السيناريو، بدلاً من إنهاء عملية الخدمة، سيتم التقاط الخطأ وسيتم تمريره إلى المتصل البعيد للتعامل معه.</p>
+<p class="Pp">توفر مشغلات الموسيقى الخلفية طريقة
+    <span class="Li">&quot;get_track_types&quot;</span> التي تُرجع مرجع مصفوفة لأنواع المسارات الموسيقية التي تدعمها. يمكننا استخدام هذه الطريقة لتوفير واجهة برمجة تطبيقات للسماح بالاسترداد السهل لمشغل خلفي لنوع مسار معين. سترجع هذه الطريقة مسارًا يمكن الوصول إليه من خلاله إلى كائن المشغل الخلفي</p>
+<pre>sub find_backend {
+    my $self = shift;
+    my $extension = shift;
+    foreach my $name (keys %{$self-&gt;{backends}}) {
+       my $backend = $self-&gt;{backends}-&gt;{$name};
+       foreach my $type (@{$backend-&gt;get_track_types}) {
+          if ($type eq $extension) {
+              return $backend-&gt;get_object_path;
+          }
+       }
+    }
+    die &quot;no backend for type $extension&quot;;
+}</pre>
+<p class="Pp">دعنا نأخذ لحظة سريعة للتفكير في كيفية استخدام هذه الطريقة لتشغيل مسار موسيقي. إذا لم تكن قد فعلت ذلك بالفعل، قم بتحديث ذاكرتك من Net::DBus::Tutorial::UsingObjects. الآن، لدينا ملف MP3 نريد تشغيله، لذلك نبحث عن المسار إلى مشغل خلفي، ثم نسترد الكائن الخاص به، ونشغل المسار:</p>
+<pre>...get the music player service...
+# Ask for a path to a player for mp3 files
+my $path = $service-&gt;find_backend(&quot;mp3&quot;);
+# $path now contains '/music/player/backend/mpg123'
+# and we can get the backend object
+my $backend = $service-&gt;get_object($path);
+# and finally play the track
+$backend-&gt;play(&quot;/vol/music/beck/guero/09-scarecrow.mp3&quot;);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PROVIDING_INTROSPECTION_DATA'><a class='permalink' href='#PROVIDING_INTROSPECTION_DATA'>توفير بيانات الفحص</a></h1>
+<p class="Pp">الكود أعلاه هو كائن كامل يعمل، جاهز للتسجيل مع خدمة، وبما أن المعلمات والقيم المعادة للطريقتين هما مجرد سلاسل بسيطة، يمكننا التوقف عند هذا الحد. في بعض الحالات، قد يرغب المرء في أن يكون أكثر تحديدًا بشأن أنواع البيانات المتوقعة للمعلمات، على سبيل المثال أعداد صحيحة موقعة مقابل غير موقعة. إضافة تصنيف بيانات صريح يجعل التفاعل مع لغات البرمجة الأخرى أكثر موثوقية. يُعرف توفير تعريفات أنواع بيانات صريحة للطرق المصدرة في عالم DBus باسم
+    <span class="Li">&quot;الفحص&quot;</span>، ويجعل الأمور أكثر موثوقية لمستخدمي خدمتك الذين قد يستخدمون لغة قوية الكتابة مثل C.</p>
+<p class="Pp">الخطوة الأولى في توفير بيانات الفحص لكائن DBus في Perl هي تحديد اسم الواجهة التي يوفرها الكائن. هذا عادة ما يكون سلسلة مفصولة بنقاط، وبموجب الاصطلاح يحتوي على اسم المجال للتطبيق كمكون أول. نظرًا لأن معظم وحدات Perl تنتهي بالعيش على CPAN، قد يستخدم المرء
+    <span class="Li">&quot;org.cpan&quot;</span> كمكون أول، متبوعًا باسم الحزمة للوحدة (مع استبدال :: بـ .)، على سبيل المثال
+    <span class="Li">&quot;org.cpan.music.player.manager&quot;</span>. إذا لم يكن هناك تخطيط لاستضافة الوحدة على CPAN، يمكن استخدام مجال شخصي/مشروع، على سبيل المثال
+    <span class="Li">&quot;com.berrange.music.player.manager&quot;</span>. يتم تعريف الواجهة لكائن عن طريق تحميل الوحدة Net::DBus::Exporter، وتوفير الواجهة كمعلمتها الأولى. لذا، سيتم تعديل مثال الكود السابق ليبدو كالتالي:</p>
+<pre>package Music::Player::Manager;
+use base qw(Net::DBus);
+use Net::DBus::Exporter qw(com.berrange.music.player.manager)</pre>
+<p class="Pp">بعد ذلك، من الضروري توفير أنواع البيانات للمعلمات والقيم المعادة للطرق. توفر الوحدة Net::DBus::Exporter طريقة
+    <span class="Li">&quot;dbus_method&quot;</span> لهذا الغرض، والتي تأخذ ثلاث معلمات: اسم الطريقة التي يتم تصديرها، مرجع مصفوفة لأنواع المعلمات، ومرجع مصفوفة لأنواع القيم المعادة (يمكن حذف الأخيرة إذا لم تكن هناك قيم معادة). يمكن استدعاء هذا في أي نقطة في كود الوحدة، ولكن بموجب الاصطلاح، يفضل ربط استدعاءات
+    <span class="Li">&quot;dbus_method&quot;</span> بتنفيذ الطريقة الفعلية، وبالتالي:</p>
+<pre>dbus_method(&quot;register_backend&quot;, [&quot;string&quot;, &quot;string&quot;]);
+sub register_backend {
+    my $self = shift;
+    my $name = shift;
+    my $module = shift;
+    .. snipped rest of method body ...
+}</pre>
+<p class="Pp">وبالتالي:</p>
+<pre>dbus_method(&quot;find_backend&quot;, [&quot;string&quot;], [&quot;string&quot;])
+sub find_backend {
+    my $self = shift;
+    my $extension = shift;
+    ... snip method body...
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DEFINING_A_SERVICE'><a class='permalink' href='#DEFINING_A_SERVICE'>تعريف خدمة</a></h1>
+<p class="Pp">الآن بعد أن تمت كتابة الكائنات، حان الوقت لتعريف خدمة. الخدمة ليست أكثر من اسم معروف جيدًا لعقد واجهة برمجة تطبيقات معين. يمكن التفكير في العقد كتحديد لقائمة من مسارات الكائنات، والواجهات المقابلة التي توفرها. لذلك، يمكن لشخص آخر أن يأتي ويقدم تطبيق مشغل موسيقى بديلاً باستخدام روابط Python أو QT لـ DBus، وإذا قدم نفس مجموعة مسارات الكائنات &amp; والواجهات، فيمكنه بحق تسجيل نفس الخدمة على الناقل.</p>
+<p class="Pp">توفر وحدة Net::DBus::Service الوسيلة لتسجيل خدمة. يتوقع بانيها مرجعًا لكائن الناقل (مثال من Net::DBus)، جنبًا إلى جنب مع اسم الخدمة. كما هو الحال مع أسماء الواجهات، عادة ما يتم اشتقاق المكون الأول لاسم الخدمة من اسم مجال، ثم يتم إضافة اسم التطبيق إليه، في مثالنا يشكل
+    <span class="Li">&quot;org.cpan.Music.Player&quot;</span>. بينما سيتم إنشاء بعض الكائنات أثناء التنفيذ أثناء تشغيل التطبيق، سيتم إنشاء البعض الآخر عند بدء التشغيل الأولي. كائن مدير مشغل الموسيقى</p>
+</section>
+</div>
+</section>
+            </article>
+        </main>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id="CREATING_AN_OBJECT">إنشاء كائن</h1>
+<p class="Pp">تم إنشاء مثال سابق في هذا البرنامج التعليمي للمثال الأخير. من المعتاد إنشاء وتسجيل هذه الكائنات في المُنشئ للخدمة. وبالتالي، سيبدو كائن الخدمة لتطبيق مشغل الموسيقى كالتالي:</p>
+<pre>package Music::Player;
+use base qw(Net::DBus::Service);
+sub new {
+    my $class = shift;
+    my $bus = shift;
+    my $self = $class-&gt;SUPER::new($bus, &quot;org.cpan.music.player&quot;);
+    bless $self, $class;
+    $self-&gt;{manager} = Music::Player::Manager-&gt;new($self);
+    return $self;
+}</pre>
+<p class="Pp">يوفر Net::DBus::Service تلقائيًا كائنًا خاصًا واحدًا لجميع الخدمات، تحت المسار
+    <span class="Li">&quot;/org/freedesktop/DBus/Exporter&quot;</span>. يطبق هذا الكائن الواجهة
+    <span class="Li">&quot;org.freedesktop.DBus.Exporter&quot;</span> والتي تحتوي على طريقة <span class="Li">&quot;ListObject&quot;</span>. يتيح ذلك للعملاء تحديد قائمة بجميع الكائنات المصدرة داخل خدمة. في حين أنه ليس ضروريًا وظيفيًا لمعظم التطبيقات، إلا أنه أداة مفيدة للمطورين الذين يقومون بتصحيح الأخطاء في التطبيقات، أو يتساءلون عما توفره الخدمة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CONNECTING_TO_THE_BUS">الاتصال بالحافلة</h1>
+<p class="Pp">الخطوة النهائية في تشغيل خدمتنا هي توصيلها بالحافلة. هذا يثير معضلة مثيرة للاهتمام، هل يتم تصدير الخدمة على حافلة النظام (مشتركة بين جميع المستخدمين والعمليات على الجهاز)، أم حافلة الجلسة (واحدة لكل مستخدم مسجل الدخول إلى الجهاز). في بعض الحالات، الإجابة، مع وجود واحدة فقط من الحافلتين المفهومتين منطقية. في حالات أخرى، ومع ذلك، فإن كل من حافلة الجلسة وحافلة النظام صالحتان. في الحالة الأولى، سيتم استخدام طرق <span class="Li">&quot;session&quot;</span> أو &lt;system&gt; على Net::DBus للحصول على مقبض للحافلة المطلوبة، بينما في الحالة الأخيرة، سيتم استخدام طريقة <span class="Li">&quot;find&quot;</span>. يطبق هذا نهجًا استدلاليًا لتحديد الحافلة الصحيحة بناءً على بيئة التنفيذ. في حالة مشغل الموسيقى، تكون أي من الحافلتين ذات صلة، لذا سيبدو الكود لتوصيل الخدمة بالحافلة كالتالي:</p>
+<pre>use Net::DBus;
+my $bus = Net::DBus-&gt;find;
+my $player = Music::Player-&gt;new($bus);</pre>
+<p class="Pp">مع توصيل الخدمة بالحافلة، يكفي تشغيل حلقة معالجة الأحداث الرئيسية للاستماع إلى رسائل DBus الواردة والتعامل معها. لذلك، يتم تعديل الكود أعلاه لبدء مفاعل بسيط:</p>
+<pre>use Net::DBus;
+use Net::DBus::Reactor;
+my $bus = Net::DBus-&gt;find;
+my $player = Music::Player-&gt;new($bus);
+Net::DBus::Reactor-&gt;main-&gt;run;
+exit 0;</pre>
+<p class="Pp">حفظ هذا الكود في برنامج نصي
+    <span class="Li">&quot;/usr/bin/music-player.pl&quot;</span>، ويكتمل الترميز وتصبح الخدمة جاهزة للاستخدام من قبل العملاء على الحافلة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SERVICE_ACTIVATION">تنشيط الخدمة</h1>
+<p class="Pp">قد يتساءل المرء الآن عن أفضل طريقة لبدء الخدمة، خاصة إذا كانت خدمة قادرة على العمل على كل من حافلات النظام والجلسة. لدى DBus الإجابة في مفهوم
+    <span class="Li">&quot;التنشيط&quot;</span>. ما يحدث هو أنه عندما يحاول عميل على الحافلة استدعاء طريقة، أو تسجيل معالج إشارات ضد خدمة غير قيد التشغيل حاليًا، فإنه سيحاول أولاً بدء الخدمة. تحتاج الخدمات التي ترغب في المشاركة في هذه العملية ببساطة إلى وضع ملف تعريف خدمة بسيط في الدليل
+    <span class="Li">&quot;/usr/share/dbus-1/services&quot;</span>. يجب تسمية الملف لمطابقة اسم الخدمة، مع إضافة امتداد الملف
+    <span class="Li">&quot;.service&quot;</span>. مثال،
+    <span class="Li">&quot;/usr/share/dbus-1/services/org.cpan.music.player.service&quot;</span>. يحتوي الملف على مفتاحين، أولاً اسم الخدمة، وثانياً اسم الملف التنفيذي المستخدم لتشغيل الخدمة، أو في هذه الحالة البرنامج النصي Perl. لذلك، لخدمتنا البسيطة، سيحتوي ملف البيانات على:</p>
+<pre>[D-BUS Service]
+Name=org.cpan.music.player
+Exec=/usr/bin/music-player.pl</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO">انظر أيضًا</h1>
+<p class="Pp">Net::DBus::Tutorial للحصول على تفاصيل حول البرامج التعليمية الأخرى، و Net::DBus لتوثيق واجهة برمجة التطبيقات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS">المؤلفون</h1>
+<p class="Pp">Daniel Berrange &lt;dan@berrange.com&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COPYRIGHT">حقوق النشر</h1>
+<p class="Pp">Copyright (C) 2005 Daniel P. Berrange</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perl-net-dbus/">extra/perl-net-dbus</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.2.0-8</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://search.cpan.org/dist/Net-DBus">https://search.cpan.org/dist/Net-DBus</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-net-dbus/">/listing/extra/perl-net-dbus/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CREATING_AN_OBJECT">إنشاء كائن</a></li>
+        
+            <li><a href="#PROVIDING_INTROSPECTION_DATA">تقديم بيانات الفحص</a></li>
+        
+            <li><a href="#DEFINING_A_SERVICE">تعريف خدمة</a></li>
+        
+            <li><a href="#CONNECTING_TO_THE_BUS">الاتصال بالحافلة</a></li>
+        
+            <li><a href="#SERVICE_ACTIVATION">تنشيط الخدمة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Net::DBus::Tutorial::ExportingObjects.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Net::DBus::Tutorial::ExportingObjects.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

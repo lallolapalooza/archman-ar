@@ -1,0 +1,196 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">gl_state_of_history(3)</h1>
+<link rel="stylesheet" href="basic.css">
+one over, using the <b>start_pos</b> argument. This should be -1 if
+    you want the cursor to follow the last character of the start line. If you
+    don't want to preload the line in this manner, send <b>start_line</b> as
+    <b>NULL</b>, and set <b>start_pos</b> to -1. Note that the line pointer
+    returned by one call to <b>gl_get_line()</b> can be passed back to the next
+    call to <b>gl_get_line()</b> via the <b>start_line</b>. This allows the
+    application to take the last entered line, and if it contains an error, to
+    then present it back to the user for re-editing, with the cursor initially
+    positioned where the error was encountered.</p>
+<p class="Pp">The <b>gl_get_line()</b> function returns a pointer to the line
+    entered by the user, or <b>NULL</b> on error or at the end of the input. The
+    returned pointer is part of the specified <b>gl</b> resource object, and
+    thus should not be free'd by the caller, or assumed to be unchanging from
+    one call to the next. When reading from a user at a terminal, there will
+    always be a newline character at the end of the returned line. When standard
+    input is being taken from a pipe or a file, there will similarly be a
+    newline unless the input line was too long to store in the internal buffer.
+    In the latter case you should call <b>gl_get_line()</b> again to read the
+    rest of the line. Note that this behavior makes <b>gl_get_line()</b> similar
+    to <b>fgets()</b>. In fact when <b>stdin</b> isn't connected to a
+    terminal,<b>gl_get_line()</b> just calls <b>fgets()</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_RETURN_STATUS_OF_GL_GET_LINE'><a class='permalink' href='#THE_RETURN_STATUS_OF_GL_GET_LINE'>حالة إرجاع GL_GET_LINE</a></h1>
+<p class="Pp">As described above, the <b>gl_get_line()</b> function has two
+    possible return values; a pointer to the completed input line, or
+    <b>NULL</b>. Extra information about what caused <b>gl_get_line()</b> to
+    return is available both by inspecting <b>errno</b>, and by calling the
+    <b>gl_return_status()</b> function.</p>
+<pre>  GlReturnStatus gl_return_status(GetLine *gl);</pre>
+<p class="Pp">The following are the possible enumerated values that this
+    function returns.</p>
+<pre>  GLR_NEWLINE     -  The last call to <b>gl_get_line()</b>
+                     successfully returned a completed
+                     input line.
+  GLR_BLOCKED     -  <b>gl_get_line()</b> was in non-blocking
+                     server mode, and returned early to
+                     avoid blocking the process while
+                     waiting for terminal I/O. The
+                     <b>gl_pending_io()</b> function can be
+                     used to see what type of I/O
+                     <b>gl_get_line()</b> was waiting for.
+                     (see the <a href='/man/gl_io_mode.3.en'>gl_io_mode(3)</a> man page
+                     for details).
+  GLR_SIGNAL      -  A signal was caught by
+                     <b>gl_get_line()</b> that had an
+                     after-signal disposition of
+                     <b>GLS_ABORT</b> (See <b>gl_trap_signal()</b>).
+  GLR_TIMEOUT     -  The inactivity timer expired while
+                     <b>gl_get_line()</b> was waiting for
+                     input, and the timeout callback
+                     function returned <b>GLTO_ABORT</b>.
+                     See <b>gl_inactivity_timeout()</b> for
+                     information about timeouts.
+  GLR_FDABORT     -  An application I/O callack returned
+                     <b>GLFD_ABORT</b> (see <b>gl_watch_fd()</b>).
+  GLR_EOF         -  End of file reached. This can happen
+                     when input is coming from a file or a
+                     pipe, instead of the terminal. It also
+                     occurs if the user invokes the
+                     <b>list-or-eof</b> or <b>del-char-or-list-or-eof</b>
+                     actions at the start of a new line.
+  GLR_ERROR       -  An unexpected error caused
+                     <b>gl_get_line()</b> to abort (consult
+                     <b>errno</b> and/or
+                     <b>gl_error_message()</b> for details.</pre>
+<p class="Pp">When <b>gl_return_status()</b> returns <b>GLR_ERROR</b>, and the
+    value of <b>errno</b> isn't sufficient to explain what happened, you can use
+    the <b>gl_error_message()</b> function to request a description of the last
+    error that occurred.</p>
+<pre>  const char *gl_error_message(GetLine *gl, char *buff,
+                               size_t n);</pre>
+<p class="Pp">The return value is a pointer to the message that occurred. If the
+    <b>buff</b> argument is <b>NULL</b>, this will be a pointer to a buffer
+    within <b>gl</b>, who's value will probably change on the next call to any
+    function associated with <b>gl_get_line()</b>. Otherwise, if a
+    non-<b>NULL</b> <b>buff</b> argument is provided, the error message,
+    including a <b>'\0'</b> terminator, will be written within the first
+    <b>n</b> elements of this buffer, and the return value will be a pointer to
+    the first element of this buffer. If the message won't fit in the provided
+    buffer, it will be truncated to fit.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONAL_PROMPT_FORMATTING'><a class='permalink' href='#OPTIONAL_PROMPT_FORMATTING'>تنسيق المطالبة الاختياري</a></h1>
+<p class="Pp">Whereas by default the prompt string that you specify is displayed
+    literally, without any special interpretation of the characters within it,
+    the <b>gl_prompt_style()</b> function can be used to enable optional
+    formatting directives within the prompt.</p>
+<pre>  void gl_prompt_style(GetLine *gl, GlPromptStyle style);</pre>
+<p class="Pp">The <b>style</b> argument, which specifies the formatting style,
+    can take any of the following values:</p>
+<pre>  GL_FORMAT_PROMPT   -  In this style, the formatting
+                        directives described below, when
+                        included in prompt strings, are
+                        interpreted as follows:
+                          %B  -  Display subsequent
+                                 characters with a bold
+                                 font.
+                          %b  -  Stop displaying characters
+                                 with the bold font.
+                          %F  -  Make subsequent characters
+                                 flash.
+                          %f  -  Turn off flashing
+                                 characters.
+                          %U  -  Underline subsequent
+                                 characters.
+                          %u  -  Stop underlining
+                                 characters.
+                          %P  -  Switch to a pale (half
+                                 brightness) font.
+                          %p  -  Stop using the pale font.
+                          %S  -  Highlight subsequent
+                                 characters (also known as
+                                 standout mode).
+                          %s  -  Stop highlighting
+                                 characters.
+                          %V  -  Turn on reverse video.
+                          %v  -  Turn off reverse video.
+                          %%  -  Display a single %
+                                 character.
+                        For example, in this mode, a prompt
+                        string like <b>&quot;%UOK%u$ &quot;</b> would
+                        display the prompt <b>&quot;OK$ &quot;</b>,
+                        but with the <b>OK</b> part
+                        underlined.
+                        Note that although a pair of
+                        characters that starts with a %
+                        character, but doesn't match any of
+                        the above directives is displayed
+                        literally, if a new directive is
+                        subsequently introduced which does
+                        match, the displayed prompt will
+                        change, so it is better to always
+                        use %% to display a literal %.
+                        Also note that not all terminals
+                        support all of these text
+                        attributes, and that some substitute
+                        a different attribute for missing
+                        ones.
+  GL_LITERAL_PROMPT  -  In this style, the prompt string is
+                        printed literally. This is the
+                        default style.</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ALTERNATE_CONFIGURATION_SOURCES'><a class='permalink' href='#ALTERNATE_CONFIGURATION_SOURCES'>مصادر تكوين بديلة</a></h1>
+<p class="Pp">As mentioned above, by default users have the option of
+    configuring the behavior of <b>gl_get_line()</b> via a configuration file
+    called <b>.teclarc</b> in their home directories. The fact that all
+    applications share this same configuration file is both an advantage and a
+    disadvantage. In most cases it is an advantage, since it encourages
+    uniformity, and frees the user from having to configure each application
+    separately. In some applications, however, this single means of
+    configuration is a problem. This is particularly true of embedded software,
+    where there's no filesystem to read a configuration file from, and also in
+    applications where a radically different choice of keybindings is needed to
+    emulate a legacy keyboard interface. To cater for such cases, the following
+    function allows the application to control where configuration information
+    is read from.</p>
+<pre>  int gl_configure_getline(GetLine *gl,
+                           const char *app_string,
+                           const char *app_file,
+                           const char *user_file);</pre>
+<p class="Pp">It allows the configuration commands that would normally be read
+    from a user's <b>~/.teclarc</b> file, to be read from any or none of, a
+    string, an application specific configuration file, and/or a user-specific
+    configuration file. If this function is called before the first call to
+    <b>gl_get_line()</b>, the default behavior of reading <b>~/.teclarc</b> on
+    the first call to <b>gl_get_line()</b> is disabled, so all configuration
+    must be achieved using the configuration sources specified with this
+    function.</p>
+<p class="Pp">If <b>app_string != NULL</b>, then it is interpreted as a string
+    containing one or more configuration commands, separated from each other in
+    the string by embedded newline characters. If <b>app_file !=</b> <b>NULL</b>
+    then it is interpreted as the full pathname of an application-specific
+    configuration file. If <b>user_file != NULL</b> then it is interpreted as
+    the full pathname of a user-specific configuration file, such as
+    <b>~/.teclarc</b>. For example, in the following call,</p>
+<pre>  gl_configure_getline(gl, &quot;edit-mode vi \n nobeep&quot;,
+                           &quot;/usr/share/myapp/teclarc&quot;,
+                           &quot;~/.teclarc&quot;);</pre>
+<p class="Pp">the <b>app_string</b> argument causes the calling application to
+    start in vi edit-mode, instead of the default emacs mode, and turns off the
+    use of the terminal bell by the library. It then attempts to read
+    system-wide configuration commands from an optional file called
+    <b>/usr/share/myapp/teclarc</b>, then finally reads user-specific
+    configuration commands from an optional <b>.teclarc</b> file in the user's
+    home directory. Note that the arguments are listed in ascending order of
+    priority, with the contents of <b>app_string</b> being potentially overriden
+    by commands in <b>app_file</b>, and commands in <b>app_file</b> potentially
+    being overriden by commands in <b>user_file</b>.</p>
+<p class="Pp">You can call this function as many times as needed, the results
+    being cumulative, but note that copies of any filenames specified via the
+    <b

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POE::Component(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Component(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">POE::Component(3)</td>
+    <td class="head-vol">وثائق Perl المساهمة من قبل المستخدم</td>
+    <td class="head-rtitle">POE::Component(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">POE::Component - كائنات موجهة بالأحداث أو أنظمة فرعية</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp">انظر المكونات المحددة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تُعد &quot;مكونات&quot; POE وحدات موجهة بالأحداث تغلف بشكل عام ميزات
+    البرنامج متوسطة إلى عالية المستوى. على سبيل المثال، يقوم POE::Component::Client::DNS
+    بإجراء عمليات بحث غير متزامنة للمحللات بناءً على الرسائل. POE::Component::Server::TCP
+    هو خادم شبكة غير متزامن أساسي.</p>
+<p class="Pp">تم إنشاء مساحة اسم POE::Component كمكان للمساهمين لنشر وحداتهم
+    القائمة على POE دون الحاجة إلى التنسيق مع التوزيع الرئيسي لـ POE. تسبق
+    المساحة اسم الاتفاقية -X، وإلا كنت ستقرأ عن POEx بدلاً من ذلك.</p>
+<p class="Pp">كما هو الحال مع العديد من الأشياء في Perl، هناك أكثر من طريقة
+    لتنفيذ واجهات المكونات. تعرض المكونات الأحدث واجهات كائنية التوجه، والبعض
+    الآخر يستخدم Moose، ولكن الأقدم منها يعتمد على الرسائل فقط.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OBJECT_ORIENTED_COMPONENTS'><a class='permalink' href='#OBJECT_ORIENTED_COMPONENTS'>المكونات كائنية التوجه</a></h1>
+<p class="Pp">إحدى الطرق لإنشاء مكونات كائنية التوجه هي تضمين مثيل POE::Session
+    داخل كائن. يتم ذلك عن طريق إنشاء الجلسة أثناء مُنشئ الكائن، وتعيين اسم
+    المستعار للجلسة لشيء فريد، وحفظ نسخة من الاسم المستعار في الكائن.</p>
+<pre>package Asynchrotron;
+my $alias_index = 0;
+sub new {
+  my $class = shift;
+  my $self = bless {
+    alias =&gt; __PACKAGE__ . &quot; &quot; . ++$alias_index;
+  }, $class;
+  POE::Session-&gt;create(
+    object_states =&gt; [
+      $self =&gt; {
+        _start       =&gt; &quot;_poe_start&quot;,
+        do_something =&gt; &quot;_poe_do_something&quot;,
+      },
+    ],
+  );
+  return $self;
+}
+sub _poe_start {
+  $_[KERNEL]-&gt;alias_set($_[OBJECT]-&gt;{alias});
+}</pre>
+<p class="Pp">يسمح الاسم المستعار لطرق الكائن بتمرير الأحداث إلى الجلسة دون الحاجة
+    إلى تخزين شيء ما عن الجلسة. تنقل الدالة <b>call()</b> الخاصة بـ POE::Kernel
+    التنفيذ من سياق الجلسة المستدعية إلى جلسة المكون.</p>
+<pre>sub do_something {
+  my $self = shift;
+  print &quot;Inside the caller's session right now: @_\n&quot;;
+  $poe_kernel-&gt;call($self-&gt;{alias}, &quot;do_something&quot;, @_);
+}
+sub _poe_do_something {
+  my @args = @_[ARG0..$#_];
+  print &quot;Inside the component's session now: @args\n&quot;;
+  $_[OBJECT]{count}++;
+}</pre>
+<p class="Pp">كل من <span class="Li">$_</span>[HEAP] و <span class="Li">$_</span>[OBJECT]
+    مرئيان داخل جلسة المكون. يمكن استخدام <span class="Li">$_</span>[HEAP] للتغليف
+    الخاص للغاية، بينما يمكن استخدام <span class="Li">$_</span>[OBJECT] للبيانات
+    المرئية بواسطة الملحقات.</p>
+<pre>sub get_count {
+  my $self = shift;
+  return $self-&gt;{count}; # $_[OBJECT]{count} above
+}</pre>
+<p class="Pp">قد تؤدي كثرة الجلسات إلى إبطاء إنشاء الكائنات وتدميرها، لذا تجنب
+    إنشائها لكل كائن.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يحتوي قسم SEE ALSO في POE على جدول محتويات يغطي توزيع POE
+    بأكمله.</p>
+<p class="Pp">POE::Stage هو مشروع ناشئ لتوحيد مكونات POE، وجعل POE::Kernel
+    أكثر كائنية التوجه، وتوفير سكر مرئي ودلالي للعديد من جوانب تطوير POE::Component
+    الشائعة. كما أنه أسهل في الكتابة. يرجى استكشاف المشروع. الأفكار و<i>المساهمات
+    الصغيرة</i> مطلوبة بشدة للمساعدة في إطلاق المشروع.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TO_DO'><a class='permalink' href='#TO_DO'>قيد التنفيذ</a></h1>
+<p class="Pp">توثيق العملية المعتادة (ولكن ليست إلزامية!) لإنشاء ونشر مكون.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">تمت كتابة كل مكون وحقوق الطبع والنشر له بشكل منفصل.</p>
+<p class="Pp">يرجى الاطلاع على POE لمزيد من المعلومات حول المؤلفين والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#OBJECT_ORIENTED_COMPONENTS">المكونات كائنية التوجه</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#TO_DO">قيد التنفيذ</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Component.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Component.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

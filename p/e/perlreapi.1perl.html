@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perlreapi(1perl) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlreapi.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERLREAPI(1perl)</td>
+    <td class="head-vol">دليل مبرمجي Perl</td>
+    <td class="head-rtitle">PERLREAPI(1perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">perlreapi - واجهة توصيل التعبيرات النمطية لـ Perl</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">اعتبارًا من Perl 5.9.5، يوجد واجهة جديدة لتوصيل واستخدام محركات
+    تعبيرات نمطية غير الافتراضية.</p>
+<p class="Pp">يُفترض أن يوفر كل محرك وصولاً إلى بنية ثابتة بالتنسيق التالي:</p>
+<pre>typedef struct regexp_engine {
+    REGEXP* (*comp) (pTHX_
+                     const SV * const pattern, const U32 flags);
+    I32     (*exec) (pTHX_
+                     REGEXP * const rx,
+                     char* stringarg,
+                     char* strend, char* strbeg,
+                     SSize_t minend, SV* sv,
+                     void* data, U32 flags);
+    char*   (*intuit) (pTHX_
+                       REGEXP * const rx, SV *sv,
+                       const char * const strbeg,
+                       char *strpos, char *strend, U32 flags,
+                       struct re_scream_pos_data_s *data);
+    SV*     (*checkstr) (pTHX_ REGEXP * const rx);
+    void    (*free) (pTHX_ REGEXP * const rx);
+    void    (*numbered_buff_FETCH) (pTHX_
+                                    REGEXP * const rx,
+                                    const I32 paren,
+                                    SV * const sv);
+    void    (*numbered_buff_STORE) (pTHX_
+                                    REGEXP * const rx,
+                                    const I32 paren,
+                                    SV const * const value);
+    I32     (*numbered_buff_LENGTH) (pTHX_
+                                     REGEXP * const rx,
+                                     const SV * const sv,
+                                     const I32 paren);
+    SV*     (*named_buff) (pTHX_
+                           REGEXP * const rx,
+                           SV * const key,
+                           SV * const value,
+                           U32 flags);
+    SV*     (*named_buff_iter) (pTHX_
+                                REGEXP * const rx,
+                                const SV * const lastkey,
+                                const U32 flags);
+    SV*     (*qr_package)(pTHX_ REGEXP * const rx);
+#ifdef USE_ITHREADS
+    void*   (*dupe) (pTHX_ REGEXP * const rx, CLONE_PARAMS *param);
+#endif
+    REGEXP* (*op_comp) (...);</pre>
+<p class="Pp">عند تجميع تعبير نمطي، يتم تعيين حقله
+    <span class="Li">&quot;engine&quot;</span> ليشير إلى البنية المناسبة، بحيث
+    عندما يحتاج إلى الاستخدام، يمكن لـ Perl العثور على الروتينات الصحيحة للقيام
+    بذلك.</p>
+<p class="Pp">لتثبيت معالج تعبيرات نمطية جديد، يتم تعيين
+    <span class="Li">$^H{regcomp}</span> إلى عدد صحيح (عند تحويله بشكل مناسب)
+    يؤدي إلى أحد هذه الهياكل. عند التجميع، يتم تنفيذ طريقة
+    <span class="Li">&quot;comp&quot;</span>، ومن المتوقع أن يشير حقل
+    <span class="Li">&quot;engine&quot;</span> الخاص ببنية
+    <span class="Li">&quot;regexp&quot;</span> الناتجة مرة أخرى إلى نفس
+    البنية.</p>
+<p class="Pp">الرمز pTHX_ في التعريف هو ماكرو تستخدمه Perl تحت تعدد الخيوط
+    لتوفير وسيط إضافي للروتين الذي يحمل مؤشرًا يعود إلى المفسر الذي ينفذ التعبير
+    النمطي. لذا، تحت تعدد الخيوط، تحصل جميع الروتينات على وسيط إضافي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Callbacks'><a class='permalink' href='#Callbacks'>الاستدعاءات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='comp'><a class='permalink' href='#comp'>comp</a></h2>
+<pre>REGEXP* comp(pTHX_ const SV * const pattern, const U32 flags);</pre>
+<p class="Pp">قم بتجميع النمط المخزن في
+    <span class="Li">&quot;pattern&quot;</span> باستخدام
+    <span class="Li">&quot;flags&quot;</span> المعطاة وإرجاع مؤشر إلى بنية
+    <span class="Li">&quot;REGEXP&quot;</span> مُجهزة يمكنها إجراء المطابقة.
+    راجع "بنية REGEXP" أدناه للحصول على شرح للحقول الفردية في هيكل REGEXP.</p>
+<p class="Pp">المعلمة
+    <span class="Li">&quot;pattern&quot;</span> هي القياسية التي تم استخدامها
+    كنمط. كانت الإصدارات السابقة من Perl تمرر مؤشرين
+    <span class="Li">&quot;char*&quot;</span> يشيران إلى بداية ونهاية النمط المُمثّل
+    كسلسلة نصية؛ يمكن استخدام المقتطف التالي للحصول على المعلمات القديمة:</p>
+<pre>STRLEN plen;
+char*  exp = SvPV(pattern, plen);
+char* xend = exp + plen;</pre>
+<p class="Pp">نظرًا لأنه يمكن تمرير أي قياسية كنمط، فمن الممكن تنفيذ محرك
+    يقوم بشيء ما مع مصفوفة
+    (<span class="Li">&quot;&quot;ook&quot; =~ [ qw/ eek</span>
+    <span class="Li">hlagh / ]&quot;</span>) أو مع الشكل غير المُمثّل كسلسلة نصية
+    لتعبير نمطي مُجمّع
+    (<span class="Li">&quot;&quot;ook&quot; =~ qr/eek/&quot;</span>). سيقوم محرك Perl
+    دائمًا بتمثيل كل شيء كسلسلة نصية باستخدام المقتطف أعلاه، ولكن هذا لا يعني
+    أن المحركات الأخرى يجب أن تفعل ذلك.</p>
+<p class="Pp">المعلمة
+    <span class="Li">&quot;flags&quot;</span> هي حقل بت يشير إلى أي من علامات
+    <span class="Li">&quot;msixpn&quot;</span> تم تجميع التعبير النمطي بها. كما أنها
+    تحتوي على معلومات إضافية، مثل ما إذا كانت
+    <span class="Li">&quot;use locale&quot;</span> مفعلة.</p>
+<p class="Pp">يتم تجريد علامات
+    <span class="Li">&quot;eogc&quot;</span> قبل تمريرها إلى طريقة comp. لا يحتاج
+    محرك التعبير النمطي إلى معرفة ما إذا كانت أي من هذه العلامات مضبوطة، حيث يجب
+    أن تؤثر هذه العلامات فقط على ما تفعله Perl بالنمط ومتغيرات المطابقة الخاصة
+    به، وليس كيفية تجميعها وتنفيذها.</p>
+<p class="Pp">بحلول الوقت الذي يتم فيه استدعاء استدعاء comp، كان لبعض هذه
+    العلامات تأثير بالفعل (ملاحظة أدناه حيثما ينطبق ذلك). ومع ذلك، يحدث معظم
+    تأثيرها بعد انتهاء استدعاء comp، في الروتينات التي تقرأ حقل
+    <span class="Li">&quot;rx-&gt;extflags&quot;</span> الذي تقوم بتعبئته.</p>
+<p class="Pp">بشكل عام، يجب الاحتفاظ بالعلامات في
+    <span class="Li">&quot;rx-&gt;extflags&quot;</span> بعد التجميع، على الرغم من أن
+    محرك التعبير النمطي قد يرغب في إضافة أو حذف بعضها لتفعيل أو تعطيل سلوك خاص
+    في Perl. تم توثيق العلامات مع أي سلوك خاص تسببه أدناه:</p>
+<p class="Pp">معدلات النمط:</p>
+<dl class="Bl-tag">
+  <dt>&quot;/m&quot; - RXf_PMf_MULTILINE</dt>
+  <dd>إذا كانت هذه العلامة موجودة في
+      <span class="Li">&quot;rx-&gt;extflags&quot;</span>، فسيتم تمريرها إلى
+      <span class="Li">&quot;Perl_fbm_instr&quot;</span> بواسطة
+      <span class="Li">&quot;pp_split&quot;</span> والتي ستعامل سلسلة الموضوع
+      كسلسلة متعددة الأسطر.</dd>
+  <dt>&quot;/s&quot; - RXf_PMf_SINGLELINE</dt>
+  <dd></dd>
+  <dt>&quot;/i&quot; - RXf_PMf_FOLD</dt>
+  <dd></dd>
+  <dt>&quot;/x&quot; - RXf_PMf_EXTENDED</dt>
+  <dd>إذا كانت موجودة في تعبير نمطي، فسيتم التعامل مع تعليقات
+      <span class="Li">&quot;#&quot;</span> بشكل مختلف بواسطة المحلل اللغوي في
+      بعض الحالات.
+    <p class="Pp">TODO: وثّق تلك الحالات.</p>
+  </dd>
+  <dt>&quot;/p&quot; - RXf_PMf_KEEPCOPY</dt>
+  <dd>TODO: وثّق هذا</dd>
+  <dt id="Character"><a class="permalink" href="#Character">مجموعة الأحرف</a></dt>
+  <dd>يتم تحديد قواعد مجموعة الأحرف بواسطة تعداد (enum) موجود في هذا الحقل.
+      لا يزال هذا تجريبيًا وعرضة للتغيير، ولكن الواجهة الحالية ترجع القواعد
+      باستخدام الدالة المضمنة
+      <span class="Li">&quot;get_regex_charset(const U32 flags)&quot;</span>.
+      القيمة الوحيدة الموثقة حاليًا التي تم إرجاعها منها هي
+      REGEX_LOCALE_CHARSET، والتي يتم تعيينها إذا كانت
+      <span class="Li">&quot;use locale&quot;</span> مفعلة. إذا كانت موجودة في
+      <span class="Li">&quot;rx-&gt;extflags&quot;</span>، فستستخدم
+      <span class="Li">&quot;split&quot;</span> التعريف المعتمد على اللغة للمسافات
+      البيضاء عندما يكون RXf_SKIPWHITE أو RXf_WHITE مفعلين. يتم تعريف المسافات
+      البيضاء ASCII وفقًا لـ isSPACE، وبواسطة وحدات الماكرو الداخلية
+      <span class="Li">&quot;is_utf8_space&quot;</span> تحت UTF-8، و
+      <span class="Li">&quot;isSPACE_LC&quot;</span> تحت
+      <span class="Li">&quot;use</span>
+    <span class="Li">locale&quot;</span>.</dd>
+</dl>
+<p class="Pp">علامات إضافية:</p>
+<dl class="Bl-tag">
+  <dt id="RXf_SPLIT"><a class="permalink" href="#RXf_SPLIT">RXf_SPLIT</a></dt>
+  <dd>تمت إزالة هذه العلامة في perl 5.18.0. يتم الآن التعامل مع
+      <span class="Li">&quot;split ' '&quot;</span> بشكل خاص فقط في المحلل. لا
+      يزال RXf_SPLIT معرفًا (#define)، لذا يمكنك اختباره. هكذا كان يعمل:
+    <p class="Pp">إذا تم استدعاء
+        <span class="Li">&quot;split&quot;</span> كـ
+        <span class="Li">&quot;split ' '&quot;</span> أو بدون وسائط (مما يعني
+        في الواقع
+        <span class="Li">&quot;split(' ', $_)&quot;</span>، راجع split)،
+        فستقوم Perl بتعيين هذه العلامة. يمكن لمحرك التعبير النمطي بعد ذلك التحقق
+        منها وتعيين علامات SKIPWHITE و WHITE. للقيام بذلك، يقوم محرك Perl
+        بالتالي:</p>
+        <pre>if (flags &amp; RXf_SPLIT &amp;&amp; r-&gt;prelen == 1 &amp;&amp; r-&gt;precomp[0] == ' ')
+    r-&gt;extflags |= (RXf_SKIPWHITE|RXf_WHITE);
+</pre>
+  </dd>
+</dl>
+<p class="Pp">يمكن تعيين هذه العلامات أثناء التجميع لتمكين التحسينات في عامل
+    <span class="Li">&quot;split&quot;</span>.</p>
+<dl class="Bl-tag">
+  <dt id="RXf_SKIPWHITE"><a class="permalink" href="#RXf_SKIPWHITE">RXf_SKIPWHITE</a></dt>
+  <dd>تمت إزالة هذه العلامة في perl 5.18.0. لا يزال معرفًا (#define)، لذا
+      يمكنك تعيينه، ولكن القيام بذلك لن يكون له أي تأثير. هكذا كان يعمل:
+    <p class="Pp">إذا كانت العلامة موجودة في
+        <span class="Li">&quot;rx-&gt;extflags&quot;</span>، فستقوم
+        <span class="Li">&quot;split&quot;</span> بحذف المسافات البيضاء من بداية
+        سلسلة الموضوع قبل تشغيلها</dd>
+</dl>
+<p class="Pp">...</p>
+</div>
+</section>
+
+</article>
+        </main>
+    </body>
+</html>
+            مؤشر إلى بنية `regexp` أخرى تم اشتقاق هذه البنية منها. تعني كائنات
+    `"qr//"` أن نفس نمط التعبير العادي يمكن استخدامه في سياقات مختلفة في نفس الوقت،
+    وطالما أن معلومات حالة المطابقة مخزنة في البنية (هناك خطط لتغيير هذا في النهاية)
+    فإننا بحاجة إلى دعم وجود نسخ متعددة من البنية قيد الاستخدام في نفس الوقت.
+    الحقول المتعلقة ببرنامج التعبير العادي نفسه يتم نسخها من `mother_re`، وتعود ملكيتها
+    إلى `mother_re`، بينما تعود ملكية متغيرات حالة المطابقة إلى البنية نفسها.
+</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;extflags&amp;quot;'><a class='permalink' href='#&amp;quot;extflags&amp;quot;'>&quot;extflags&quot;</a></h2>
+<p class="Pp">سيستخدم هذا بواسطة Perl لمعرفة الأعلام التي تم تجميع التعبير العادي بها،
+    وسيتم تعيين هذا عادةً إلى قيمة معلمة `comp` بواسطة رد الاتصال `comp`.
+    راجع توثيق `comp` للأعلام الصالحة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;minlen&amp;quot;_&amp;quot;minlenret&amp;quot;'><a class='permalink' href='#&amp;quot;minlen&amp;quot;_&amp;quot;minlenret&amp;quot;'>&quot;minlen&quot;   &quot;minlenret&quot;</a></h2>
+<p class="Pp">الحد الأدنى لطول السلسلة (بالأحرف) المطلوب لمطابقة النمط.
+    يستخدم هذا لتقليم مساحة البحث عن طريق عدم الإزعاج بالمطابقة بالقرب من نهاية السلسلة
+    أكثر مما يسمح بالمطابقة. على سبيل المثال، لا فائدة من بدء محرك التعبير العادي
+    إذا كان `minlen` هو 10 ولكن السلسلة طولها 5 أحرف فقط. لا توجد طريقة يمكن للنمط
+    أن يطابق بها.</p>
+<p class="Pp">`"minlenret"` هو الحد الأدنى للطول (بالأحرف) للسلسلة التي
+    سيتم العثور عليها في $&amp; بعد المطابقة.</p>
+<p class="Pp">يمكن رؤية الفرق بين `"minlen"` و `"minlenret"` في النمط التالي:</p>
+<pre>/ns(?=\d)/</pre>
+<p class="Pp">حيث سيكون `"minlen"` هو 3 ولكن `"minlenret"` سيكون فقط 2
+    حيث أن `\d` مطلوب لمطابقته ولكنه غير مضمن فعليًا في المحتوى المطابق.
+    هذا التمييز مهم بشكل خاص لأن منطق الاستبدال يستخدم `"minlenret"`
+    لمعرفة ما إذا كان يمكنه إجراء استبدالات في المكان (والتي يمكن أن تؤدي إلى تسريع كبير).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;gofs&amp;quot;'><a class='permalink' href='#&amp;quot;gofs&amp;quot;'>&quot;gofs&quot;</a></h2>
+<p class="Pp">الإزاحة اليسرى من `pos()` لبدء المطابقة عندها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;substrs&amp;quot;'><a class='permalink' href='#&amp;quot;substrs&amp;quot;'>&quot;substrs&quot;</a></h2>
+<p class="Pp">بيانات السلسلة الفرعية حول السلاسل التي يجب أن تظهر في المطابقة النهائية.
+    يستخدم هذا حاليًا داخليًا فقط بواسطة محرك Perl، ولكن قد يتم استخدامه في المستقبل
+    لجميع المحركات لتحسينات.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;nparens&amp;quot;,_&amp;quot;logical_nparens&amp;quot;'><a class='permalink' href='#&amp;quot;nparens&amp;quot;,_&amp;quot;logical_nparens&amp;quot;'>&quot;nparens&quot;,   &quot;logical_nparens&quot;</a></h2>
+<p class="Pp">تستخدم هذه الحقول لتتبع عدد مجموعات التقاط الأقواس المادية والمنطقية،
+    والتي قد تختلف إذا كان النمط يتضمن استخدام بناء إعادة تعيين الفرع
+    `"(?| ... | ... )"`. على سبيل المثال، النمط `/(?|(foo)|(bar))/` يحتوي
+    على مخزنين مؤقتين للالتقاط ماديين، ولكن مخزن مؤقت التقاط منطقي واحد فقط.
+    معظم منطق العمليات الداخلية في محرك التعبير العادي يستخدم معرفات مخزن التقاط
+    الالتقاط المادي، ولكن المنطق المكشوف للمستخدم يستخدم معرفات مخزن التقاط الالتقاط
+    المنطقية. راجع القسم التالي لهياكل البيانات التي تسمح بالتحويل من أحدهما إلى الآخر.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;logical_to_parno&amp;quot;,_&amp;quot;parno_to_logical&amp;quot;,_&amp;quot;parno_to_logical_next&amp;quot;'><a class='permalink' href='#&amp;quot;logical_to_parno&amp;quot;,_&amp;quot;parno_to_logical&amp;quot;,_&amp;quot;parno_to_logical_next&amp;quot;'>&quot;logical_to_parno&quot;,   &quot;parno_to_logical&quot;, &quot;parno_to_logical_next&quot;</a></h2>
+<p class="Pp">تسهل هذه الحقول التحويل بين أرقام مخزن التقاط الالتقاط المنطقية والمادية.
+    `"logical_to_parno"` هي مصفوفة يحتوي عنصرها Kth على أقل معرف مخزن التقاط
+    التقاط مادي للمخزن الالتقاط المنطقي Kth.
+    `"parno_to_logical"` هي مصفوفة يحتوي عنصرها Kth على مخزن التقاط الالتقاط
+    المنطقي المرتبط بمخزن الالتقاط المادي Kth. `"parno_to_logical_next"`
+    هي مصفوفة يحتوي عنصرها Kth على مخزن التقاط الالتقاط المادي التالي بنفس معرف
+    الالتقاط المنطقي، أو 0 إذا لم يكن هناك.
+</p>
+<p class="Pp">لاحظ أن جميع هذه المصفوفات الثلاثة يتم تعبئتها فقط عندما يتضمن
+    النمط استخدام مفهوم إعادة تعيين الفرع. الأنماط التي لا تستخدم إعادة تعيين الفرع
+    يكون لها فعليًا تعيين 1:1 بين المنطقي والمادي، لذلك لا حاجة لهذه البيانات الوصفية.</p>
+<p class="Pp">الجدول التالي يقدم مثالًا على كيفية عمل ذلك.</p>
+<pre>Pattern /(a) (?| (b) (c) (d) | (e) (f) | (g) ) (h)/
+Logical: $1      $2  $3  $4    $2  $3    $2    $5
+Physical: 1       2   3   4     5   6     7     8
+Next:     0       5   6   0     7   0     0     0</pre>
+<p class="Pp">لاحظ أيضًا أن العنصر 0 من أي من هذه المصفوفات لا يتم استخدامه
+    حيث أنه يمثل "النمط الكامل".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;lastparen&amp;quot;,_and_&amp;quot;lastcloseparen&amp;quot;'><a class='permalink' href='#&amp;quot;lastparen&amp;quot;,_and_&amp;quot;lastcloseparen&amp;quot;'>&quot;lastparen&quot;,   and &quot;lastcloseparen&quot;</a></h2>
+<p class="Pp">تستخدم هذه الحقول لتتبع: أي قوس كان الأعلى الذي تم إغلاقه (انظر "$+"
+    في `perlvar`)؛ وأي قوس كان الأكثر حداثة الذي تم إغلاقه (انظر "$^N"
+    في `perlvar`).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;intflags&amp;quot;'><a class='permalink' href='#&amp;quot;intflags&amp;quot;'>&quot;intflags&quot;</a></h2>
+<p class="Pp">نسخة المحرك الخاصة بالأعلام التي تم تجميع النمط بها. عادةً ما تكون هذه
+    هي نفس `"extflags"` ما لم يقرر المحرك تعديل أحدها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;pprivate&amp;quot;'><a class='permalink' href='#&amp;quot;pprivate&amp;quot;'>&quot;pprivate&quot;</a></h2>
+<p class="Pp">مؤشر `void*` يشير إلى بنية بيانات محددة بواسطة المحرك.
+    يستخدم محرك Perl البنية `"regexp_internal"` (انظر "Base Structures"
+    في `perlreguts`) ولكن يجب على محرك مخصص استخدام شيء آخر.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;offs&amp;quot;'><a class='permalink' href='#&amp;quot;offs&amp;quot;'>&quot;offs&quot;</a></h2>
+<p class="Pp">بنية `"regexp_paren_pair"` تحدد الإزاحات في السلسلة التي تتم
+    مطابقتها والتي تتوافق مع الالتقاطات `$&amp;` و `$1`، `$2` إلخ،
+    يتم تعريف بنية `"regexp_paren_pair"` على النحو التالي:</p>
+<pre>typedef struct regexp_paren_pair {
+    I32 start;
+    I32 end;
+} regexp_paren_pair;</pre>
+<p class="Pp">إذا كان `"-&gt;offs[num].start"` أو `"-&gt;offs[num].end"`
+    هو `-1` فهذا يعني أن مجموعة الالتقاط لم تتطابق. يمثل `"-&gt;offs[0].start/end"`
+    `$&amp;` (أو `"${^MATCH}"` تحت `"/p"`) ويتطابق `"-&gt;offs[paren].end"`
+    مع `$$paren` حيث ` $paren` = 1&gt;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;RX_PRECOMP&amp;quot;_&amp;quot;RX_PRELEN&amp;quot;'><a class='permalink' href='#&amp;quot;RX_PRECOMP&amp;quot;_&amp;quot;RX_PRELEN&amp;quot;'>&quot;RX_PRECOMP&quot;   &quot;RX_PRELEN&quot;</a></h2>
+<p class="Pp">تستخدم لتحسينات الأداء.
+    `"RX_PRECOMP"` يحمل نسخة من النمط الذي تم تجميعه و `"RX_PRELEN"` طوله.
+    عندما يتم تجميع نمط جديد (مثل داخل حلقة) فإن عامل التشغيل الداخلي `"regcomp"`
+    يتحقق مما إذا كان `"RX_PRECOMP"` و `"RX_PRELEN"` الخاص بـ `"REGEXP"`
+    المجمعة مؤخرًا مكافئان للجديد، وإذا كان الأمر كذلك فإنه يستخدم النمط القديم
+    بدلاً من تجميع نمط جديد.</p>
+<p class="Pp">في الإصدارات القديمة من Perl، كان هذان الماكروان في الواقع حقلين
+    في البنية بالاسمين `"precomp"` و `"prelen"` على التوالي.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;paren_names&amp;quot;'><a class='permalink' href='#&amp;quot;paren_names&amp;quot;'>&quot;paren_names&quot;</a></h2>
+<p class="Pp">هذه خريطة تستخدم داخليًا لتتبع أسماء مجموعات الالتقاط وإزاحاتها.
+    المفاتيح هي أسماء المخازن المؤقتة والقيم هي متغيرات مزدوجة، مع احتواء خانة IV
+    على عدد المخازن المؤقتة بالاسم المعطى و pv هو مصفوفة مدمجة من I32. قد
+    يتم أيضًا احتواء القيم بشكل مستقل في مصفوفة البيانات في الحالات التي يتم فيها
+    استخدام المراجع الخلفية المسماة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;substrs&amp;quot;_2'><a class='permalink' href='#&amp;quot;substrs&amp;quot;_2'>&quot;substrs&quot;</a></h2>
+<p class="Pp">تحتوي على معلومات حول أطول سلسلة يجب أن تظهر في إزاحة ثابتة من بداية
+    النمط، وأطول سلسلة يجب أن تظهر في إزاحة عائمة من بداية النمط. تستخدم
+    لإجراء بحث Fast-Boyer-Moore على السلسلة لمعرفة ما إذا كان الأمر يستحق استخدام
+    محرك التعبير العادي على الإطلاق، وإذا كان الأمر كذلك ففي أي مكان في السلسلة
+    للبحث.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;subbeg&amp;quot;_&amp;quot;sublen&amp;quot;_&amp;quot;saved_copy&amp;quot;_&amp;quot;suboffset&amp;quot;_&amp;quot;subcoffset&amp;quot;'><a class='permalink' href='#&amp;quot;subbeg&amp;quot;_&amp;quot;sublen&amp;quot;_&amp;quot;saved_copy&amp;quot;_&amp;quot;suboffset&amp;quot;_&amp;quot;subcoffset&amp;quot;'>&quot;subbeg&quot;   &quot;sublen&quot; &quot;saved_copy&quot; &quot;suboffset&quot;   &quot;subcoffset&quot;</a></h2>
+<p class="Pp">تستخدم أثناء مرحلة التنفيذ لإدارة أنماط البحث والاستبدال، ولتوفير
+    النص لـ `$&amp;`، `$1` إلخ. يشير `"subbeg"` إلى مخزن مؤقت (إما السلسلة الأصلية،
+    أو نسخة في حالة `RX_MATCH_COPIED(rx_sv)`), و `"sublen"` هو طول المخزن
+    المؤقت. وحدات الماكرو `"RX_OFFS_START(rx_sv,n)"` و `"RX_OFFS_END(rx_sv,n)"`
+    تشير إلى هذا المخزن المؤقت. وكذلك تفعل البنية التي تم إرجاعها بواسطة
+    `RX_OFFSp(rx_sv)` ولكن يجب ألا تستخدم ذلك مباشرة.</p>
+<p class="Pp">في وجود علامة `"REXEC_COPY_STR"`، ولكن مع إضافة علامات
+    `"REXEC_COPY_SKIP_PRE"` أو `"REXEC_COPY_SKIP_POST"`، يمكن للمحرك</p>
+</section>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>perlreapi - Perl API for Regular Expressions</title>
+        <link rel="stylesheet" href="/css/style.css" />
+    </head>
+    <body>
+        <main id="content">
+            <article>
+                
+                <section class="Sh">
+                    <h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+                    <p class="Pp">perlreapi - Perl API for Regular Expressions</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+                    <p class="Pp">This document describes the API for implementing
+                        Perl regular expression engines. This includes the
+                        structures and callbacks that Perl uses to interact with
+                        an engine.</p>
+                    <section class="Ss">
+                        <h2 class="Ss" id="Callbacks"><a class="permalink" href="#Callbacks">Callbacks</a></h2>
+                        <p class="Pp">This is a list of the callbacks that a custom
+                            regular expression engine must provide. These are
+                            passed to Perl via the <span class="Li">"regcomp"</span>
+                            function.</p>
+                        <dl class="Bl-tag">
+                            <dt id="regcomp"><a href="#regcomp"><code>regcomp</code></a></dt>
+                            <dd>Compile a regular expression. Takes a string and returns
+                                a <span class="Li">"REGEXP"</span> structure. May
+                                set <span class="Li">"RXf_PMf_KEEPCOPY"</span> if
+                                the string must be copied.</dd>
+                            <dt id="regfree"><a href="#regfree"><code>regfree</code></a></dt>
+                            <dd>Free a compiled regular expression.</dd>
+                            <dt id="regexec"><a href="#regexec"><code>regexec</code></a></dt>
+                            <dd>Execute a compiled regular expression against a string.</dd>
+                            <dt id="regfree_backup"><a href="#regfree_backup"><code>regfree_backup</code></a></dt>
+                            <dd>Free the backup copy of a compiled regular expression.</dd>
+                            <dt id="regclone"><a href="#regclone"><code>regclone</code></a></dt>
+                            <dd>Clone a compiled regular expression.</dd>
+                            <dt id="regduplicate"><a href="#regduplicate"><code>regduplicate</code></a></dt>
+                            <dd>Duplicate a compiled regular expression.</dd>
+                            <dt id="reg_set_paren_bit"><a href="#reg_set_paren_bit"><code>reg_set_paren_bit</code></a></dt>
+                            <dd>Set a bit in the parenthesis capture information.</dd>
+                            <dt id="reg_get_paren_bit"><a href="#reg_get_paren_bit"><code>reg_get_paren_bit</code></a></dt>
+                            <dd>Get a bit in the parenthesis capture information.</dd>
+                            <dt id="reg_set_paren_num"><a href="#reg_set_paren_num"><code>reg_set_paren_num</code></a></dt>
+                            <dd>Set the number of a parenthesis capture.</dd>
+                            <dt id="reg_get_paren_num"><a href="#reg_get_paren_num"><code>reg_get_paren_num</code></a></dt>
+                            <dd>Get the number of a parenthesis capture.</dd>
+                            <dt id="reg_set_paren_count"><a href="#reg_set_paren_count"><code>reg_set_paren_count</code></a></dt>
+                            <dd>Set the total number of parenthesis captures.</dd>
+                            <dt id="reg_get_paren_count"><a href="#reg_get_paren_count"><code>reg_get_paren_count</code></a></dt>
+                            <dd>Get the total number of parenthesis captures.</dd>
+                            <dt id="reg_set_paren_start"><a href="#reg_set_paren_start"><code>reg_set_paren_start</code></a></dt>
+                            <dd>Set the starting position of a parenthesis capture.</dd>
+                            <dt id="reg_get_paren_start"><a href="#reg_get_paren_start"><code>reg_get_paren_start</code></a></dt>
+                            <dd>Get the starting position of a parenthesis capture.</dd>
+                            <dt id="reg_set_paren_end"><a href="#reg_set_paren_end"><code>reg_set_paren_end</code></a></dt>
+                            <dd>Set the ending position of a parenthesis capture.</dd>
+                            <dt id="reg_get_paren_end"><a href="#reg_get_paren_end"><code>reg_get_paren_end</code></a></dt>
+                            <dd>Get the ending position of a parenthesis capture.</dd>
+                            <dt id="reg_set_paren_len"><a href="#reg_set_paren_len"><code>reg_set_paren_len</code></a></dt>
+                            <dd>Set the length of a parenthesis capture.</dd>
+                            <dt id="reg_get_paren_len"><a href="#reg_get_paren_len"><code>reg_get_paren_len</code></a></dt>
+                            <dd>Get the length of a parenthesis capture.</dd>
+                            <dt id="reg_set_paren_capture_count"><a href="#reg_set_paren_capture_count"><code>reg_set_paren_capture_count</code></a></dt>
+                            <dd>Set the number of captures within a parenthesis group.</dd>
+                            <dt id="reg_get_paren_capture_count"><a href="#reg_get_paren_capture_count"><code>reg_get_paren_capture_count</code></a></dt>
+                            <dd>Get the number of captures within a parenthesis group.</dd>
+                            <dt id="reg_set_paren_name"><a href="#reg_set_paren_name"><code>reg_set_paren_name</code></a></dt>
+                            <dd>Set the name of a parenthesis capture.</dd>
+                            <dt id="reg_get_paren_name"><a href="#reg_get_paren_name"><code>reg_get_paren_name</code></a></dt>
+                            <dd>Get the name of a parenthesis capture.</dd>
+                            <dt id="reg_set_paren_name_map"><a href="#reg_set_paren_name_map"><code>reg_set_paren_name_map</code></a></dt>
+                            <dd>Set the map of names to parenthesis captures.</dd>
+                            <dt id="reg_get_paren_name_map"><a href="#reg_get_paren_name_map"><code>reg_get_paren_name_map</code></a></dt>
+                            <dd>Get the map of names to parenthesis captures.</dd>
+                            <dt id="reg_set_paren_highest_bit"><a href="#reg_set_paren_highest_bit"><code>reg_set_paren_highest_bit</code></a></dt>
+                            <dd>Set the highest bit used in parenthesis captures.</dd>
+                            <dt id="reg_get_paren_highest_bit"><a href="#reg_get_paren_highest_bit"><code>reg_get_paren_highest_bit</code></a></dt>
+                            <dd>Get the highest bit used in parenthesis captures.</dd>
+                            <dt id="reg_set_paren_save_copy"><a href="#reg_set_paren_save_copy"><code>reg_set_paren_save_copy</code></a></dt>
+                            <dd>Set whether to save a copy of the matched string.</dd>
+                            <dt id="reg_get_paren_save_copy"><a href="#reg_get_paren_save_copy"><code>reg_get_paren_save_copy</code></a></dt>
+                            <dd>Get whether to save a copy of the matched string.</dd>
+                            <dt id="reg_set_pmf_keepcopy"><a href="#reg_set_pmf_keepcopy"><code>reg_set_pmf_keepcopy</code></a></dt>
+                            <dd>Set the RXf_PMf_KEEPCOPY flag.</dd>
+                            <dt id="reg_get_pmf_keepcopy"><a href="#reg_get_pmf_keepcopy"><code>reg_get_pmf_keepcopy</code></a></dt>
+                            <dd>Get the RXf_PMf_KEEPCOPY flag.</dd>
+                            <dt id="reg_set_pmf_wrapped"><a href="#reg_set_pmf_wrapped"><code>reg_set_pmf_wrapped</code></a></dt>
+                            <dd>Set the RXf_PMf_WRAPPED flag.</dd>
+                            <dt id="reg_get_pmf_wrapped"><a href="#reg_get_pmf_wrapped"><code>reg_get_pmf_wrapped</code></a></dt>
+                            <dd>Get the RXf_PMf_WRAPPED flag.</dd>
+                            <dt id="reg_set_pmf_wrap_len"><a href="#reg_set_pmf_wrap_len"><code>reg_set_pmf_wrap_len</code></a></dt>
+                            <dd>Set the RXf_PMf_WRAPLEN flag.</dd>
+                            <dt id="reg_get_pmf_wrap_len"><a href="#reg_get_pmf_wrap_len"><code>reg_get_pmf_wrap_len</code></a></dt>
+                            <dd>Get the RXf_PMf_WRAPLEN flag.</dd>
+                            <dt id="reg_set_pmf_match_required"><a href="#reg_set_pmf_match_required"><code>reg_set_pmf_match_required</code></a></dt>
+                            <dd>Set the RXf_PMf_MATCH_REQUIRED flag.</dd>
+                            <dt id="reg_get_pmf_match_required"><a href="#reg_get_pmf_match_required"><code>reg_get_pmf_match_required</code></a></dt>
+                            <dd>Get the RXf_PMf_MATCH_REQUIRED flag.</dd>
+                            <dt id="reg_set_pmf_utf8"><a href="#reg_set_pmf_utf8"><code>reg_set_pmf_utf8</code></a></dt>
+                            <dd>Set the RXf_PMf_UTF8 flag.</dd>
+                            <dt id="reg_get_pmf_utf8"><a href="#reg_get_pmf_utf8"><code>reg_get_pmf_utf8</code></a></dt>
+                            <dd>Get the RXf_PMf_UTF8 flag.</dd>
+                            <dt id="reg_set_pmf_tainted"><a href="#reg_set_pmf_tainted"><code>reg_set_pmf_tainted</code></a></dt>
+                            <dd>Set the RXf_PMf_TAINTED flag.</dd>
+                            <dt id="reg_get_pmf_tainted"><a href="#reg_get_pmf_tainted"><code>reg_get_pmf_tainted</code></a></dt>
+                            <dd>Get the RXf_PMf_TAINTED flag.</dd>
+                            <dt id="reg_set_pmf_global"><a href="#reg_set_pmf_global"><code>reg_set_pmf_global</code></a></dt>
+                            <dd>Set the RXf_PMf_GLOBAL flag.</dd>
+                            <dt id="reg_get_pmf_global"><a href="#reg_get_pmf_global"><code>reg_get_pmf_global</code></a></dt>
+                            <dd>Get the RXf_PMf_GLOBAL flag.</dd>
+                            <dt id="reg_set_pmf_posix"><a href="#reg_set_pmf_posix"><code>reg_set_pmf_posix</code></a></dt>
+                            <dd>Set the RXf_PMf_POSIX flag.</dd>
+                            <dt id="reg_get_pmf_posix"><a href="#reg_get_pmf_posix"><code>reg_get_pmf_posix</code></a></dt>
+                            <dd>Get the RXf_PMf_POSIX flag.</dd>
+                            <dt id="reg_set_pmf_unicode_always"><a href="#reg_set_pmf_unicode_always"><code>reg_set_pmf_unicode_always</code></a></dt>
+                            <dd>Set the RXf_PMf_UNICODE_ALWAYS flag.</dd>
+                            <dt id="reg_get_pmf_unicode_always"><a href="#reg_get_pmf_unicode_always"><code>reg_get_pmf_unicode_always</code></a></dt>
+                            <dd>Get the RXf_PMf_UNICODE_ALWAYS flag.</dd>
+                            <dt id="reg_set_pmf_extended"><a href="#reg_set_pmf_extended"><code>reg_set_pmf_extended</code></a></dt>
+                            <dd>Set the RXf_PMf_EXTENDED flag.</dd>
+                            <dt id="reg_get_pmf_extended"><a href="#reg_get_pmf_extended"><code>reg_get_pmf_extended</code></a></dt>
+                            <dd>Get the RXf_PMf_EXTENDED flag.</dd>
+                            <dt id="reg_set_pmf_extra"><a href="#reg_set_pmf_extra"><code>reg_set_pmf_extra</code></a></dt>
+                            <dd>Set the RXf_PMf_EXTRA flag.</dd>
+                            <dt id="reg_get_pmf_extra"><a href="#reg_get_pmf_extra"><code>reg_get_pmf_extra</code></a></dt>
+                            <dd>Get the RXf_PMf_EXTRA flag.</dd>
+                            <dt id="reg_set_pmf_no_utf8_locale"><a href="#reg_set_pmf_no_utf8_locale"><code>reg_set_pmf_no_utf8_locale</code></a></dt>
+                            <dd>Set the RXf_PMf_NO_UTF8_LOCALE flag.</dd>
+                            <dt id="reg_get_pmf_no_utf8_locale"><a href="#reg_get_pmf_no_utf8_locale"><code>reg_get_pmf_no_utf8_locale</code></a></dt>
+                            <dd>Get the RXf_PMf_NO_UTF8_LOCALE flag.</dd>
+                            <dt id="reg_set_pmf_newline_any"><a href="#reg_set_pmf_newline_any"><code>reg_set_pmf_newline_any</code></a></dt>
+                            <dd>Set the RXf_PMf_NEWLINE_ANY flag.</dd>
+                            <dt id="reg_get_pmf_newline_any"><a href="#reg_get_pmf_newline_any"><code>reg_get_pmf_newline_any</code></a></dt>
+                            <dd>Get the RXf_PMf_NEWLINE_ANY flag.</dd>
+                            <dt id="reg_set_pmf_newline_CR"><a href="#reg_set_pmf_newline_CR"><code>reg_set_pmf_newline_CR</code></a></dt>
+                            <dd>Set the RXf_PMf_NEWLINE_CR flag.</dd>
+                            <dt id="reg_get_pmf_newline_CR"><a href="#reg_get_pmf_newline_CR"><code>reg_get_pmf_newline_CR</code></a></dt>
+                            <dd>Get the RXf_PMf_NEWLINE_CR flag.</dd>
+                            <dt id="reg_set_pmf_newline_LF"><a href="#reg_set_pmf_newline_LF"><code>reg_set_pmf_newline_LF</code></a></dt>
+                            <dd>Set the RXf_PMf_NEWLINE_LF flag.</dd>
+                            <dt id="reg_get_pmf_newline_LF"><a href="#reg_get_pmf_newline_LF"><code>reg_get_pmf_newline_LF</code></a></dt>
+                            <dd>Get the RXf_PMf_NEWLINE_LF flag.</dd>
+                            <dt id="reg_set_pmf_newline_CRLF"><a href="#reg_set_pmf_newline_CRLF"><code>reg_set_pmf_newline_CRLF</code></a></dt>
+                            <dd>Set the RXf_PMf_NEWLINE_CRLF flag.</dd>
+                            <dt id="reg_get_pmf_newline_CRLF"><a href="#reg_get_pmf_newline_CRLF"><code>reg_get_pmf_newline_CRLF</code></a></dt>
+                            <dd>Get the RXf_PMf_NEWLINE_CRLF flag.</dd>
+                            <dt id="reg_set_pmf_newline_CRLF"><a href="#reg_set_pmf_newline_CRLF"><code>reg_set_pmf_newline_CRLF</code></a></dt>
+                            <dd>Set the RXf_PMf_NEWLINE_CRLF flag.</dd>
+                            <dt id="reg_get_pmf_newline_CRLF"><a href="#reg_get_pmf_newline_CRLF"><code>reg_get_pmf_newline_CRLF</code></a></dt>
+                            <dd>Get the RXf_PMf_NEWLINE_CRLF flag.</dd>
+                            <dt id="reg_set_flags"><a href="#reg_set_flags"><code>reg_set_flags</code></a></dt>
+                            <dd>Set the flags for the regular expression.</dd>
+                            <dt id="reg_get_flags"><a href="#reg_get_flags"><code>reg_get_flags</code></a></dt>
+                            <dd>Get the flags for the regular expression.</dd>
+                            <dt id="reg_set_offset"><a href="#reg_set_offset"><code>reg_set_offset</code></a></dt>
+                            <dd>Set the offset of the match.</dd>
+                            <dt id="reg_get_offset"><a href="#reg_get_offset"><code>reg_get_offset</code></a></dt>
+                            <dd>Get the offset of the match.</dd>
+                            <dt id="reg_set_suboffset"><a href="#reg_set_suboffset"><code>reg_set_suboffset</code></a></dt>
+                            <dd>Set the suboffset of the match.</dd>
+                            <dt id="reg_get_suboffset"><a href="#reg_get_suboffset"><code>reg_get_suboffset</code></a></dt>
+                            <dd>Get the suboffset of the match.</dd>
+                            <dt id="reg_set_subcoffset"><a href="#reg_set_subcoffset"><code>reg_set_subcoffset</code></a></dt>
+                            <dd>Set the subcoffset of the match.</dd>
+                            <dt id="reg_get_subcoffset"><a href="#reg_get_subcoffset"><code>reg_get_subcoffset</code></a></dt>
+                            <dd>Get the subcoffset of the match.</dd>
+                            <dt id="reg_set_wrap_len"><a href="#reg_set_wrap_len"><code>reg_set_wrap_len</code></a></dt>
+                            <dd>Set the wrap length for wrapped matches.</dd>
+                            <dt id="reg_get_wrap_len"><a href="#reg_get_wrap_len"><code>reg_get_wrap_len</code></a></dt>
+                            <dd>Get the wrap length for wrapped matches.</dd>
+                        </dl>
+                    </section>
+                    <section class="Ss">
+                        <h2 class="Ss" id="The_REGEXP_structure"><a class="permalink" href="#The_REGEXP_structure">The
+                            REGEXP structure</a></h2>
+                        <p class="Pp">This is the structure that holds the compiled
+                            regular expression. It is opaque to the user, but
+                            the engine has access to its members.</p>
+                        <p class="Pp">The following members are relevant:</p>
+                        <dl class="Bl-tag">
+                            <dt id="RXf_PMf_KEEPCOPY"><a href="#RXf_PMf_KEEPCOPY"><code>RXf_PMf_KEEPCOPY</code></a></dt>
+                            <dd>A flag indicating whether the input string should be
+                                copied. If this is set, the engine should copy
+                                the string and return a pointer to the copy.
+                                Otherwise, it can use the original string.</dd>
+                            <dt id="PL_sawampersand"><a href="#PL_sawampersand"><code>PL_sawampersand</code></a></dt>
+                            <dd>A flag indicating whether the last match involved
+                                <span class="Li">"&amp;"</span>. This is used to
+                                determine whether to copy the matched string.</dd>
+                            <dt id="suboffset"><a href="#suboffset"><code>suboffset</code></a></dt>
+                            <dd>The offset from the logical start of the buffer to
+                                the physical start. This is used when the buffer
+                                is not contiguous (e.g., when using
+                                <span class="Li">"IO::AIO"</span>).</dd>
+                            <dt id="subcoffset"><a href="#subcoffset"><code>subcoffset</code></a></dt>
+                            <dd>The number of characters in the suboffset. This is
+                                needed to support character-based offsets like
+                                <span class="Li">"@-&quot;</span> and
+                                <span class="Li">"@+&quot;</span>.</dd>
+                        </dl>
+                        <p class="Pp">An engine may choose not to copy the full
+                            buffer (although it must still do so in the
+                            presence of <span class="Li">&quot;RXf_PMf_KEEPCOPY&quot;</span>
+                            or the relevant bits being set in
+                            <span class="Li">&quot;PL_sawampersand&quot;</span>). In
+                            this case, it may set <span class="Li">&quot;suboffset&quot;</span>
+                            to indicate the number of bytes from the logical start
+                            of the buffer to the physical start (i.e.
+                            <span class="Li">&quot;subbeg&quot;</span>). It should
+                            also set <span class="Li">&quot;subcoffset&quot;</span>,
+                            the number of characters in the offset. The latter
+                            is needed to support <span class="Li">&quot;@-&quot;</span>
+                            and <span class="Li">&quot;@+&quot;</span> which work
+                            in characters, not bytes.</p>
+                    </section>
+                    <section class="Ss">
+                        <h2 class="Ss" id="&amp;quot;RX_WRAPPED&amp;quot;_&amp;quot;RX_WRAPLEN&amp;quot;"><a class="permalink" href="#&amp;quot;RX_WRAPPED&amp;quot;_&amp;quot;RX_WRAPLEN&amp;quot;">"RX_WRAPPED"   "RX_WRAPLEN"</a></h2>
+                        <p class="Pp">Macros which access the string the
+                            <span class="Li">&quot;qr//&quot;</span> stringifies to. The
+                            Perl engine for example stores <span class="Li">&quot;(?^:eek)&quot;</span>
+                            in the case of <span class="Li">&quot;qr/eek/&quot;</span>.</p>
+                        <p class="Pp">When using a custom engine that doesn't support
+                            the <span class="Li">&quot;(?:)&quot;</span> construct for
+                            inline modifiers, it's probably best to have
+                            <span class="Li">&quot;qr//&quot;</span> stringify to the
+                            supplied pattern, note that this will create undesired
+                            patterns in cases such as:</p>
+                        <pre>my $x = qr/a|b/;  # &quot;a|b&quot;
+my $y = qr/c/i;   # &quot;c&quot;
+my $z = qr/$x$y/; # &quot;a|bc&quot;</pre>
+                        <p class="Pp">There's no solution for this problem other than
+                            making the custom engine understand a construct like
+                            <span class="Li">&quot;(?:)&quot;</span>.</p>
+                    </section>
+                    <section class="Ss">
+                        <h2 class="Ss" id="RX_REFCNT()"><a class="permalink" href="#RX_REFCNT()">RX_REFCNT()</a></h2>
+                        <p class="Pp">The number of times the structure is referenced. When
+                            this falls to 0, the regexp is automatically freed by a
+                            call to <span class="Li">&quot;pregfree&quot;</span>. This should
+                            be set to 1 in each engine's &quot;comp&quot; routine. Note
+                            that in older perls this was a member in the struct called
+                            <span class="Li">&quot;refcnt&quot;</span> but in more modern
+                            perls where the regexp structure was unified with the SV
+                            structure this is an alias to <b>SvREFCNT()</b>.</p>
+                    </section>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="HISTORY"><a class="permalink" href="#HISTORY">HISTORY</a></h1>
+                    <p class="Pp">Originally part of perlreguts.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">AUTHORS</a></h1>
+                    <p class="Pp">Originally written by Yves Orton, expanded by &#x00C6;var
+                        Arnfj&#x00F0;r&#x00F0; Bjarmason.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="LICENSE"><a class="permalink" href="#LICENSE">LICENSE</a></h1>
+                    <p class="Pp">Copyright 2006 Yves Orton and 2007 &#x00C6;var
+                        Arnfj&#x00F0;r&#x00F0; Bjarmason.</p>
+                    <p class="Pp">This program is free software; you can redistribute it
+                        and/or modify it under the same terms as Perl itself.</p>
+                </section>
+            </article>
+            <aside id="sidebar">
+                <section class="search">
+                    <form action="/search" class="search direct-search" role="search">
+                        <input type="search" placeholder="Search manual page" name="q" value="" />
+                        <input type="submit" name="go" value="Go" />
+                    </form>
+                </section>
+                <section class="package-info">
+                    <p>Package information:</p>
+                    <dl>
+                        <dt>Package name:</dt>
+                        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+                        <dt>Version:</dt>
+                        <dd>5.42.0-1</dd>
+                        <dt>Upstream:</dt>
+                        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+                        <dt>Licenses:</dt>
+                        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+                        <dt>Manuals:</dt>
+                        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+                    </dl>
+                </section>
+                <details>
+                    <summary>Table of contents</summary>
+                    <nav class="toc">
+                        <ul>
+                            <li><a href="#NAME">NAME</a></li>
+                            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+                            <li><a href="#Callbacks">Callbacks</a></li>
+                            <li><a href="#The_REGEXP_structure">The REGEXP structure</a></li>
+                            <li><a href="#HISTORY">HISTORY</a></li>
+                            <li><a href="#AUTHORS">AUTHORS</a></li>
+                            <li><a href="#LICENSE">LICENSE</a></li>
+                        </ul>
+                    </nav>
+                </details>
+                <nav class="other-formats">
+                    <p>Other formats:
+                        <a href="/man/perlreapi.1perl.en.txt">txt</a>,
+                        <a href="/man/perlreapi.1perl.en.raw">raw</a>
+                    </p>
+                </nav>
+            </aside>
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

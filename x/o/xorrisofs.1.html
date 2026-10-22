@@ -1,0 +1,969 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">xorrisofs(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libisoburn/">libisoburn</a></p>
+<link rel="stylesheet" href="basic.css">
+مختلف الهياكل المادية.
+  <br/>
+  يحتوي سجل الإقلاع الرئيسي (<b>MBR</b>) على كود الإقلاع وجدول أقسام.
+    يتم قراءته بواسطة PC-BIOS عند الإقلاع من عصا USB أو القرص الصلب،
+    ويتم قراءته بواسطة PowerPC CHRP أو PReP عند الإقلاع. يشير قسم MBR
+    بالنوع 0xee إلى وجود GPT.
+  <br/>
+  يحدد جدول أقسام GUID (<b>GPT</b>) الأقسام بطريقة أكثر حداثة.
+    يتم قراءته بواسطة EFI عند الإقلاع من عصا USB أو القرص الصلب،
+    وقد يُستخدم للعثور على قسم HFS+ وتحميله داخل صورة ISO.
+  <br/>
+  يقوم خريطة أقسام Apple (<b>APM</b>) بتحديد قسم HFS+.
+    تقوم أجهزة Mac بقراءتها للإقلاع وللتحميل.
+  <br/>
+  يمكن دمج MBR و GPT و APM. يحتل APM أول 8 بايتات من كود إقلاع MBR.
+    كل الثلاثة لا تعيق إقلاع El Torito من CDROM.
+  <br/>
+  يدعم <b>xorrisofs</b> مرافق إقلاع إضافية: MIPS Big Endian (SGI)،
+    MIPS Little Endian (DEC)، SUN SPARC، HP-PA، DEC Alpha. هذه
+    غير قابلة للدمج مع بعضها البعض، ولا يمكن دمجها مع MBR أو GPT أو APM.</p>
+<p class="Pp">تتوقع العديد من الخيارات التالية مسارات الأقراص كمدخلات،
+    ولكنها تقبل أيضًا سلاسل وصفية لقارئ الفواصل الزمني libisofs،
+    وهو قادر على استخراج البيانات من ملفات الأقراص أو -indev
+    وتصفير أجزاء من المحتوى: -G، -generic-boot، --embedded-boot،
+    --grub2-mbr، -isohybrid-mbr، -efi-boot-part، -prep-boot-part،
+    -B، -sparc-boot، -append_partition.
+  <br/>
+  تتكون سلسلة الوصف من المكونات التالية، مفصولة بنقطتين رأسيتين ":"
+  <br/>
+  
+    &quot;--interval:&quot;Flags&quot;:&quot;Interval&quot;:&quot;Zeroizers&quot;:&quot;Source
+  <br/>
+  يشير المكون &quot;--interval&quot; إلى أن هذا ليس مسار قرص عادي
+    ولكنه سلسلة وصفية لقارئ الفواصل الزمني.
+  <br/>
+  يعدل المكون Flags التفسير اللاحق:
+  <br/>
+  &quot;local_fs&quot; يطلب القراءة من ملف يمثله المسار في Source.
+  <br/>
+  &quot;imported_iso&quot; يطلب القراءة من -indev. يعمل هذا فقط إذا
+    لم يكن -outdev هو نفس -indev. يتم تجاهل مكون Source.
+  <br/>
+  &quot;appended_partition_NNN&quot; مع رقم عشري NNN يعمل فقط
+    للخيارات التي تعلن عن مسارات صور إقلاع El Torito: -b، -e، --efi-boot.
+    الرقم يعطي رقم القسم كما هو مستخدم مع الخيار المقابل
+    -append_partition.
+  <br/>
+  يتكون مكون Interval من عنواني بايت مفصولين بحرف "-".
+    على سبيل المثال، &quot;0-429&quot; يعني قراءة البايتات من 0 إلى 429.
+  <br/>
+  يتكون مكون Zeroizers من صفر أو أكثر من السلاسل المفصولة بفواصل.
+    تحدد هذه السلاسل أي جزء من البيانات المقروءة سيتم تصفيره.
+    البايت رقم 0 يعني البايت المقروء من بداية الفاصل الزمني.
+    قد تكون كل سلسلة واحدة مما يلي:
+  <br/>
+  &quot;zero_mbrpt&quot; يطلب تصفير جدول أقسام MBR إذا كانت البايتات 510
+    و 511 تحتوي على توقيع MBR 0x55 0xaa.
+  <br/>
+  &quot;zero_gpt&quot; يطلب التحقق من رأس GPT في البايتات 512 إلى 1023،
+    وتصفيره وتصفير كتل جدول أقسامه.
+  <br/>
+  &quot;zero_apm&quot; يطلب التحقق من كتلة APM 0 وتصفير كتل جدول أقسامه.
+  <br/>
+  Start_byte&quot;-&quot;End_byte يطلب تصفير البايتات المقروءة بدءًا
+    من الرقم Start_byte وانتهاءً بـ End_byte.
+  <br/>
+  المكون Source هو مسار الملف مع العلامة &quot;local_fs&quot;،
+    ويتم تجاهله مع العلامة &quot;imported_iso&quot;.
+  <br/>
+  قد يتم تحجيم أرقام البايتات بواسطة لاحقة من {k,m,g,t,s,d}
+    تعني الضرب بـ {1024, 1024k, 1024m, 1024g, 2048, 512}.
+    الرقم النهائي ذو القيمة المحجمة يمثل البايت الأخير من النطاق المحجم.
+  <br/>
+  على سبيل المثال، &quot;0d-0d&quot; هو &quot;0-511&quot;.
+  <br/>
+  أمثلة:
+  <br/>
+   &quot;local_fs:0-32767:zero_mbrpt,zero_gpt,440-443:/tmp/template.iso&quot;
+  <br/>
+   &quot;imported_iso:45056d-47103d::&quot;
+  <br/>
+</p>
+<dl class="Bl-tag">
+  <dt id="G"><a class="permalink" href="#G"><b>-G</b> disk_path</a></dt>
+  <dd>نسخ ما يصل إلى 32768 بايت من ملف القرص المحدد إلى بداية صورة ISO.
+    <br/>
+    بخلاف صورة إقلاع El Torito، لا يحتاج ملف disk_path إلى إضافته
+      إلى صورة ISO. لن يظهر كملف في هياكل الدلائل.
+    <br/>
+    في مواقف الجلسات المتعددة، يمنع مسار القرص الخاص &quot;.&quot;
+      قراءة ملف قرص ولكن مع ذلك يتسبب في تعديلات في MBR الحالي،
+      والتي تم طلبها بواسطة خيارات أخرى.</dd>
+  <dt id="generic_boot"><a class="permalink" href="#generic_boot"><b>-generic-boot</b>
+    disk_path</a></dt>
+  <dd>اسم مستعار لـ -G.</dd>
+  <dt id="embedded_boot"><a class="permalink" href="#embedded_boot"><b>--embedded-boot</b>
+    disk_path</a></dt>
+  <dd>اسم مستعار لـ -G.</dd>
+  <dt id="grub2-mbr"><a class="permalink" href="#grub2-mbr"><b>--grub2-mbr</b>
+    disk_path</a></dt>
+  <dd>تثبيت disk_path في منطقة النظام والتعامل معه كـ MBR حديث
+    لـ GRUB2. يتم تحويل عنوان بداية المحتوى لأول صورة إقلاع
+    إلى عدد كتل بحجم 512 بايت، ويتم إضافة إزاحة 4.
+    تتم كتابة النتيجة كرقم 64 بت صغير النهاية في عنوان البايت 0x1b0.</dd>
+  <dt id="isohybrid_mbr"><a class="permalink" href="#isohybrid_mbr"><b>-isohybrid-mbr</b>
+    disk_path</a></dt>
+  <dd>تثبيت disk_path كـ MBR isohybrid الخاص بـ ISOLINUX مما يجعل
+    صورة الإقلاع المقدمة بالخيار -b قابلة للإقلاع من عصي USB
+    والأقراص الصلبة عبر PC-BIOS.
+    عادةً ما يقوم برنامج ISOLINUX isohybrid بهذا الإعداد
+      على صورة ISO المنتجة بالفعل.
+    <br/>
+    يجب أن يؤدي مسار القرص إلى أحد ملفات Syslinux
+      isohdp[fp]x*.bin. يتم ترقيع MBR وفقًا لاحتياجات isohybrid.
+      يصف القسم الأول نطاق صورة ISO. يبدأ بشكل افتراضي
+      عند الكتلة 0، ولكن يمكن تعيينه إلى 64 كتلة قرص
+      بواسطة الخيار -partition_offset 16.
+    <br/>
+    لمعنى مسار القرص الخاص &quot;.&quot; انظر الخيار -G.</dd>
+  <dt id="isohybrid_gpt_basdat"><a class="permalink" href="#isohybrid_gpt_basdat"><b>-isohybrid-gpt-basdat</b></a></dt>
+  <dd>تحديد صورة الإقلاع الحالية لـ El Torito (انظر الخيارات -b و -e)
+    في GPT كقسم من نوع Basic Data. يعمل هذا فقط مع
+    -isohybrid-mbr وله نفس التأثير على منطقة النظام مثل
+    -efi-boot-part. لا يمكن دمجه مع -efi-boot-part أو -hfsplus.
+    <br/>
+    ستظهر صور الإقلاع الثلاثة الأولى التي تم تحديدها بواسطة GPT
+      كإدخالات قسم في MBR أيضًا. قسم MBR من النوع 0xEF
+      هو ما يستخدمه بالفعل نظام EFI للإقلاع من عصا USB.
+      قسم MBR لـ PC-BIOS يحصل على النوع 0x00 بدلاً من 0x17
+      في هذه الحالة. غالبًا ما تكون إدخالات MBR الإضافية
+      هي التي يستخدمها EFI بالفعل.</dd>
+  <dt id="isohybrid_gpt_hfsplus"><a class="permalink" href="#isohybrid_gpt_hfsplus"><b>-isohybrid-gpt-hfsplus</b></a></dt>
+  <dd>تحديد صورة الإقلاع الحالية لـ El Torito (انظر الخيارات -b و -e)
+    في GPT كقسم من نوع HFS+. التأثير والقيود مثل
+    -isohybrid-gpt-basdat.</dd>
+  <dt id="isohybrid_apm_hfsplus"><a class="permalink" href="#isohybrid_apm_hfsplus"><b>-isohybrid-apm-hfsplus</b></a></dt>
+  <dd>تحديد صورة الإقلاع الحالية لـ El Torito (انظر الخيارات -b و -e)
+    في Apple Partition Map كقسم من نوع HFS+. يعمل هذا فقط مع
+    -isohybrid-mbr وله تأثير مشابه على منطقة النظام مثل -hfsplus.
+    لا يمكن دمجه مع -efi-boot-part أو -hfsplus.
+    <br/>
+    يجب أن يبدأ ملف MBR isohybrid لـ ISOLINUX بنمط معروف
+      من 32 بايت من كود آلة x86 لا يفعل شيئًا في الأساس.
+      سيتم الكتابة فوقه بـ 32 بايت من واجهة APM وهمية.</dd>
+  <dt id="part_like_isohybrid"><a class="permalink" href="#part_like_isohybrid"><b>-part_like_isohybrid</b></a></dt>
+  <dd>التحكم فيما إذا كانت -isohybrid-gpt-basdat، و -isohybrid-gpt-hfsplus،
+    و -isohybrid-apm-hfsplus تنطبق حتى لو لم يكن -isohybrid-mbr موجودًا.
+    لا يظهر قسم MBR من النوع 0xee، حتى لو تم إنتاج GPT.
+    لن يتم ملء الفجوات بين أقسام GPT و APM بأقسام إضافية.
+    سيتم ذكر الأقسام الملحقة في APM إذا ظهرت أقسام APM أخرى.</dd>
+  <dt id="iso_mbr_part_type"><a class="permalink" href="#iso_mbr_part_type"><b>-iso_mbr_part_type</b>
+    &quot;default&quot;|number|type_guid</a></dt>
+  <dd>تعيين نوع القسم للقسم MBR أو GPT الذي يمثل ISO أو على الأقل
+    يحميه.
+    <br/>
+    يمكن أن يكون الرقم 0x00 إلى 0xff. النص &quot;default&quot; يعيد تمكين
+      الأنواع الافتراضية للمناسبات المختلفة لإنشاء قسم ISO MBR.
+      هذا ليس له تأثير إذا لم يظهر أي قسم من هذا القبيل بالإعدادات
+      الأخرى أو إذا كان نوع القسم محددًا إلزاميًا مثل 0xee
+      لـ MBR واقي GPT أو 0x96 لـ CHRP.
+    <br/>
+    إذا تم تقديم guid نوع بدلاً من ذلك بسلسلة سداسية عشرية من 32 رقمًا مثل
+      a2a0d0ebe5b9334487c068b6b72699c7 أو بنص منظم مثل
+      EBD0A0A2-B9E5-4433-87C0-68B6B72699C7، فسيتم استخدامه كنوع قسم
+      إذا ظهر نظام ملفات ISO كقسم في GPT. في MBR،
+      سيتم تعيين C12A7328-F81F-11D2-BA4B-00A0C93EC93B إلى 0xef.
+      سيتم تعيين أي guid آخر إلى 0x83.</dd>
+  <dt id="protective_msdos_label"><a class="permalink" href="#protective_msdos_label"><b>--protective-msdos-label</b></a></dt>
+  <dd>ترقيع منطقة النظام بجدول أقسام PC-DOS بسيط حيث يدعي القسم 1
+    نطاق صورة ISO ولكنه يترك الكتلة الأولى غير مستحقة.
+    هذا متعارض مع الخيار -isohybrid-mbr.</dd>
+  <dt id="mbr_force_bootable"><a class="permalink" href="#mbr_force_bootable"><b>--mbr-force-bootable</b></a></dt>
+  <dd>فرض قسم MBR مع علامة &quot;قابل للإقلاع/نشط&quot; إذا تم
+    تقديم خيارات مثل --protective-msdos-label أو --grub2-mbr.
+    هذه الخيارات تتسبب عادةً في تعيين العلامة إذا كان هناك قسم MBR
+      من نوع آخر غير 0xee أو 0xef. إذا لم يكن هناك مثل هذا القسم،
+      فلا يتم تعيين علامة إقلاع، إلا إذا قام --mbr-force-bootable
+      بفرض إنشاء قسم وهمي من النوع 0x00 يغطي الكتلة الأولى
+      فقط من صورة ISO.
+    <br/>
+    إذا لم يتم الإشارة إلى MBR قابل للإقلاع بواسطة خيارات أخرى
+      وتم إنشاء قسم بواسطة -append_partition، فإن --mbr-force-bootable
+      يتسبب في علامة إقلاع كما لو كان سيفعل مع، على سبيل المثال،
+      --protective-msdos-label.</dd>
+  <dt id="gpt_iso_bootable"><a class="permalink" href="#gpt_iso_bootable"><b>--gpt-iso-bootable</b></a></dt>
+  <dd>تعيين البت 2 من علامات أقسام GPT لقسم ISO 9660 إذا ظهر مثل
+    هذا القسم GPT. يتم تحديد هذا البت على أنه &quot;قابل للإقلاع
+      بواسطة BIOS القديم&quot; ولكن أهميته الحقيقية غير واضحة.
+      قد يرغب بعض BIOS المدعومة من GPT في رؤيته في قسم معين.</dd>
+  <dt id="gpt_iso_not_ro"><a class="permalink" href="#gpt_iso_not_ro"><b>--gpt-iso-not-ro</b></a></dt>
+  <dd>عدم تعيين البت 60 من علامات أقسام GPT لقسم ISO 9660 إذا ظهر
+    مثل هذا القسم GPT. يتم تحديد هذا البت على أنه &quot;للقراءة فقط&quot;
+      وبالتالي مناسب. ولكنه غير عادي في أقسام أقراص GPT.</dd>
+  <dt id="partition_offset"><a class="permalink" href="#partition_offset"><b>-partition_offset</b>
+    2kb_block_adr</a></dt>
+  <dd>التسبب في إنشاء جدول أقسام بقسم واحد يبدأ عند عنوان الكتلة المحدد.
+      يتم حساب هذا بالكُتل بحجم 2048 بايت، وليس بالكُتل بحجم 512 بايت.
+      إذا كان عنوان الكتلة غير صفري، فيجب أن يكون على الأقل 16.
+      القيم الأكبر من 16 نادرًا ما تكون مفيدة. يتسبب إزاحة القسم غير الصفرية
+      في إنشاء اثنين من superblocks ومجموعتين من أشجار الدلائل.
+      يمكن بعد ذلك تحميل الصورة من بدايتها المطلقة وكذلك من بداية القسم.
+    <br/>
+    تتم المحافظة على قيمة إزاحة صورة ISO عند إضافة جلسة جديدة
+      إلى صورة تم تحميلها. لذا فإن القيمة المحددة هنا سارية المفعول
+      فقط إذا تم كتابة صورة ISO جديدة.</dd>
+  <dt id="partition_hd_cyl"><a class="permalink" href="#partition_hd_cyl"><b>-partition_hd_cyl</b>
+    number</a></dt>
+  <dd>تعيين عدد الرؤوس لكل أسطوانة لجدول أقسام MBR. 0 يختار
+      1</dd>
+</dl>{
+  "default value. Maximum is 255.": "القيمة الافتراضية. الحد الأقصى هو 255.",
+  "-partition_sec_hd number": "-partition_sec_hd عدد",
+  "Set the number of sectors per head for the MBR partition table. 0 chooses\n      a default value. Maximum is 63.\n    <br/>\n    The product partition_sec_hd * partition_hd_cyl * 512 is the cylinder size.\n      It should be divisible by 2048 in order to make exact alignment possible.\n      With appended partitions and -appended_part_as_gpt there is no limit for\n      the number of cylinders. Else there may be at most 1024 of them. If the\n      cylinder size is too small to stay below the limit, then appropriate\n      values of partition_hd_cyl are chosen with partition_sec_hd 32 or 63. If\n      the image is larger than 8,422,686,720 bytes, then the cylinder size\n      constraints cannot be fulfilled for MBR. They seem not overly important\n      anyway. Flat block addresses in partition tables are good for 1 TiB.": "حدد عدد القطاعات لكل رأس لجدول أقسام MBR. يختار 0\n      قيمة افتراضية. الحد الأقصى هو 63.\n    <br/>\n    ناتج partition_sec_hd * partition_hd_cyl * 512 هو حجم الأسطوانة.\n      يجب أن يكون قابلاً للقسمة على 2048 لتمكين المحاذاة الدقيقة.\n      مع الأقسام الملحقة و -appended_part_as_gpt لا يوجد حد لعدد الأسطوانات. وإلا فقد يكون هناك 1024 منها كحد أقصى. إذا كان حجم الأسطوانة صغيراً جدًا للبقاء ضمن الحد، فسيتم اختيار قيم مناسبة لـ partition_hd_cyl مع partition_sec_hd 32 أو 63. إذا كانت الصورة أكبر من 8,422,686,720 بايت، فلا يمكن تلبية قيود حجم الأسطوانة لـ MBR. لا يبدو أنها مهمة للغاية على أي حال. عناوين الكتل المسطحة في جداول الأقسام جيدة لـ 1 تيرا بايت.",
+  "-partition_cyl_align mode": "-partition_cyl_align الوضع",
+  "Control image size alignment to an integer number of cylinders. It is\n      prescribed by isohybrid specs and it seems to please program fdisk.\n      Cylinder size must be divisible by 2048. Images larger than 8,323,596,288\n      bytes cannot be aligned in MBR partition table.\n    <br/>\n    Mode \"auto\" is default. Alignment by padding happens only if\n      option -isohybrid-mbr is given.\n    <br/>\n    Mode \"on\" causes alignment by padding with option\n      --protective-msdos-label too. Mode \"all\" is like \"on\"\n      but also pads up partitions from -append_partition to an aligned size.\n    <br/>\n    Mode \"off\" disables alignment unconditionally.": "التحكم في محاذاة حجم الصورة إلى عدد صحيح من الأسطوانات. إنه\n      محدد بمواصفات isohybrid ويبدو أنه يرضي برنامج fdisk.\n      يجب أن يكون حجم الأسطوانة قابلاً للقسمة على 2048. الصور التي تزيد عن 8,323,596,288\n      بايت لا يمكن محاذاتها في جدول أقسام MBR.\n    <br/>\n    الوضع \"auto\" هو الافتراضي. تحدث المحاذاة عن طريق الحشو فقط إذا\n      تم إعطاء الخيار -isohybrid-mbr.\n    <br/>\n    الوضع \"on\" يسبب المحاذاة عن طريق الحشو مع الخيار\n      --protective-msdos-label أيضًا. الوضع \"all\" يشبه \"on\"\n      ولكنه يقوم أيضًا بحشو الأقسام من -append_partition إلى حجم محاذى.\n    <br/>\n    الوضع \"off\" يعطل المحاذاة بشكل غير مشروط.",
+  "-append_partition partition_number type_code disk_path": "-append_partition رقم_القسم رمز_النوع مسار_القرص",
+  "Cause a prepared filesystem image to be appended to the ISO image and to\n      be described by a partition table entry in a boot block at the start of\n      the emerging ISO image. The partition entry will bear the size of the\n      submitted file rounded up to the next multiple of 2048 bytes or to the\n      next multiple of the cylinder size.\n    <br/>\n    Beware of subsequent multi-session runs. The appended partition will get\n      overwritten.\n    <br/>\n    partition_number may be 1 to 4. Number 1 will put the whole ISO image into\n      the unclaimed space before partition 1. So together with most xorriso MBR\n      or GPT features, number 2 would be the most natural choice.\n    <br/>\n    The type_code may be \"FAT12\", \"FAT16\",\n      \"Linux\", or a hexadecimal number between 0x00 and 0xff. Not all\n      those numbers will yield usable results. For a list of codes search the\n      Internet for \"Partition Types\" or run fdisk command\n      \"L\". If the partition appears in GPT then type_code 0xef is\n      mapped to the EFI System Partition Type GUID. All others get mapped to\n      Basic Data Type GUID.\n    <br/>\n    type_code may also be a type GUID as plain hex string like\n      a2a0d0ebe5b9334487c068b6b72699c7 or as structured text like\n      EBD0A0A2-B9E5-4433-87C0-68B6B72699C7. It will be used if the partition is\n      mentioned in GPT. In MBR, C12A7328-F81F-11D2-BA4B-00A0C93EC93B will be\n      mapped to 0xef. Any other GUID will be mapped to 0x83. In APM,\n      48465300-0000-11AA-AA11-00306543ECAC will be mapped to partition type\n      \"Apple_HFS\", any other to \"Data\".\n    <br/>\n    If some other command causes the production of GPT, then the appended\n      partitions will be mentioned there too, even if not -appended_part_as_gpt\n      is given.": "تسبب في إلحاق صورة نظام ملفات مُعدة بصورة ISO ووصفها\n      بإدخال في جدول الأقسام في كتلة بدء التشغيل في بداية صورة ISO الناشئة. سيحمل إدخال القسم حجم الملف المقدم مقربًا لأعلى إلى أقرب مضاعف لـ 2048 بايت أو إلى أقرب مضاعف لحجم الأسطوانة.\n    <br/>\n    احذر من عمليات الجلسات المتعددة اللاحقة. سيتم الكتابة فوق القسم الملحق.\n    <br/>\n    قد يكون رقم القسم 1 إلى 4. سيضع الرقم 1 صورة ISO بأكملها في\n      المساحة غير المطالب بها قبل القسم 1. لذا، جنبًا إلى جنب مع معظم ميزات MBR\n      أو GPT في xorriso، سيكون الرقم 2 هو الخيار الأكثر طبيعية.\n    <br/>\n    قد يكون رمز النوع \"FAT12\" أو \"FAT16\" أو\n      \"Linux\" أو رقمًا سداسي عشري بين 0x00 و 0xff. لن تؤدي كل\n      هذه الأرقام إلى نتائج قابلة للاستخدام. للحصول على قائمة بالرموز، ابحث في\n      الإنترنت عن \"أنواع الأقسام\" أو قم بتشغيل أمر fdisk\n      \"L\". إذا ظهر القسم في GPT، فسيتم تعيين رمز النوع 0xef\n      إلى GUID نوع قسم EFI System. سيتم تعيين جميع الأنواع الأخرى إلى\n      GUID نوع البيانات الأساسي.\n    <br/>\n    قد يكون رمز النوع أيضًا GUID نوع كسلسلة سداسية عشرية عادية مثل\n      a2a0d0ebe5b9334487c068b6b72699c7 أو كنص منظم مثل\n      EBD0A0A2-B9E5-4433-87C0-68B6B72699C7. سيتم استخدامه إذا كان القسم\n      مذكورًا في GPT. في MBR، سيتم تعيين C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n      إلى 0xef. سيتم تعيين أي GUID آخر إلى 0x83. في APM،\n      سيتم تعيين 48465300-0000-11AA-AA11-00306543ECAC إلى نوع القسم\n      \"Apple_HFS\"، وسيتم تعيين أي نوع آخر إلى \"Data\".\n    <br/>\n    إذا تسبب أمر آخر في إنتاج GPT، فسيتم ذكر الأقسام الملحقة\n      هناك أيضًا، حتى لو لم يتم إعطاء -appended_part_as_gpt.",
+  "-appended_part_as_gpt": "-appended_part_as_gpt",
+  "Marks partitions from -append_partition in GPT rather than in MBR. In this\n      case the MBR shows a single partition of type 0xee which covers the whole\n      output data.\n    <br/>\n    By default, appended partitions get marked in GPT only if GPT is produced\n      because of other options.": "يحدد الأقسام من -append_partition في GPT بدلاً من MBR. في هذه\n      الحالة، يعرض MBR قسمًا واحدًا من النوع 0xee يغطي كامل\n      بيانات الإخراج.\n    <br/>\n    افتراضيًا، يتم تحديد الأقسام الملحقة في GPT فقط إذا تم إنتاج GPT\n      بسبب خيارات أخرى.",
+  "-appended_part_as_apm": "-appended_part_as_apm",
+  "Marks partitions from -append_partition in Apple Partition Map, too.\n    <br/>\n    By default, appended partitions get marked in APM only if APM is produced\n      because of other options and -part_like_isohybrid is enabled.": "يحدد الأقسام من -append_partition في Apple Partition Map أيضًا.\n    <br/>\n    افتراضيًا، يتم تحديد الأقسام الملحقة في APM فقط إذا تم إنتاج APM\n      بسبب خيارات أخرى وتم تمكين -part_like_isohybrid.",
+  "-efi-boot-part disk_path": "-efi-boot-part مسار_القرص",
+  "Copy a file from disk into the emerging ISO image and mark it by a GPT\n      entry as EFI System Partition. EFI boot firmware is supposed to use a FAT\n      filesystem image in such a partition for booting from USB stick or hard\n      disk.\n    <br/>\n    Instead of a disk_path, the word --efi-boot-image may be given. It exposes\n      in GPT the content of the first El Torito EFI boot image as EFI system\n      partition. EFI boot images are introduced by options -e or --efi-boot. The\n      affected EFI boot image cannot show up in HFS+ because it is stored\n      outside the HFS+ partition.": "انسخ ملفًا من القرص إلى صورة ISO الناشئة وقم بتمييزه بإدخال GPT\n      كقسم EFI System. من المفترض أن تستخدم البرامج الثابتة لبدء تشغيل EFI صورة نظام ملفات FAT\n      في مثل هذا القسم للتمهيد من عصا USB أو القرص الصلب.\n    <br/>\n    بدلاً من مسار القرص، يمكن إعطاء الكلمة --efi-boot-image. وهي تعرض\n      في GPT محتوى أول صورة تمهيد EFI El Torito كقسم EFI System.\n      يتم تقديم صور تمهيد EFI بواسطة الخيارات -e أو --efi-boot. الصورة\n      التي تتأثر بصورة تمهيد EFI لا يمكن أن تظهر في HFS+ لأنها مخزنة\n      خارج قسم HFS+.",
+  "--gpt_disk_guid value": "--gpt_disk_guid قيمة",
+  "Control whether an emerging GPT shall get a randomly generated disk GUID\n      or whether the GUID is supplied by the user. Value \"random\" is\n      default. Value \"modification-date\" produces a low quality GUID\n      from the value set by option --modification-date=\n    <br/>\n    A string of 32 hex digits, or a RFC 4122 compliant GUID string may be used\n      to set the disk GUID directly. UEFI prescribes the first three components\n      of a RFC 4122 GUID string to be byte-swapped in the binary representation:\n    <br/>\n    E.g. --gpt_disk_guid 2303cd2a-73c7-424a-a298-25632da7f446 equals\n      --gpt_disk_guid 2acd0323c7734a42a29825632da7f446\n    <br/>\n    The partition GUIDs get generated by minimally varying the disk GUID.": "التحكم فيما إذا كانت GPT الناشئة ستحصل على GUID قرص تم إنشاؤه عشوائيًا\n      أو ما إذا كان المستخدم سيزود بالـ GUID. القيمة \"random\" هي\n      الافتراضية. القيمة \"modification-date\" تنتج GUID منخفض الجودة\n      من القيمة المحددة بالخيار --modification-date=\n    <br/>\n    يمكن استخدام سلسلة من 32 رقمًا سداسي عشري، أو سلسلة GUID متوافقة مع RFC 4122\n      لتعيين GUID القرص مباشرة. يحدد UEFI المكونات الثلاثة الأولى\n      من سلسلة GUID RFC 4122 ليتم تبديلها بالبايت في التمثيل الثنائي:\n    <br/>\n    مثال: --gpt_disk_guid 2303cd2a-73c7-424a-a298-25632da7f446 يساوي\n      --gpt_disk_guid 2acd0323c7734a42a29825632da7f446\n    <br/>\n    يتم إنشاء GUIDات الأقسام عن طريق تغيير GUID القرص بشكل طفيف.",
+  "-chrp-boot-part": "-chrp-boot-part",
+  "Mark the block range of the whole emerging ISO image as MBR partition of\n      type 0x96. This is not compatible with any other feature that produces MBR\n      partition entries. It makes GPT unrecognizable.\n    <br/>\n    CHRP is often used in conjunction with HFS. It is not yet tested whether\n      HFS+ filesystems produced with option -hfsplus would boot on any CHRP\n      capable machine which does not boot pure ISO 9660 as well.": "قم بتمييز نطاق الكتلة لصورة ISO الناشئة بأكملها كقسم MBR من\n      النوع 0x96. هذا غير متوافق مع أي ميزة أخرى تنتج إدخالات أقسام MBR. إنه يجعل GPT غير قابل للتعرف عليه.\n    <br/>\n    غالبًا ما يتم استخدام CHRP بالاقتران مع HFS. لم يتم بعد اختبار ما إذا كانت\n      أنظمة ملفات HFS+ التي تم إنتاجها باستخدام الخيار -hfsplus ستعمل على أي جهاز\n      يدعم CHRP ولا يقوم بتمهيد ISO 9660 نقي أيضًا.",
+  "-chrp-boot": "-chrp-boot",
+  "Alias of -chrp-boot-part.": "اسم مستعار لـ -chrp-boot-part.",
+  "-prep-boot-part disk_path": "-prep-boot-part مسار_القرص",
+  "Copy a file from disk into the emerging ISO image and mark it by a MBR\n      partition entry of type 0x41. PReP boot firmware is supposed to read the\n      content of the partition as single ELF executable file. This option is\n      compatible with other MBR partitions and with GPT.": "انسخ ملفًا من القرص إلى صورة ISO الناشئة وقم بتمييزه بإدخال قسم MBR\n      من النوع 0x41. من المفترض أن تقرأ البرامج الثابتة لبدء تشغيل PReP محتويات\n      القسم كملف تنفيذي ELF واحد. هذا الخيار متوافق مع أقسام MBR الأخرى ومع GPT.",
+  "-mips-boot iso_rr_path": "-mips-boot مسار_iso_rr",
+  "Declare a data file in the image to be a MIPS Big Endian boot file and\n      cause production of a MIPS Big Endian Volume Header. This is mutually\n      exclusive with production of other boot blocks like MBR. It will overwrite\n      the first 512 bytes of any data provided by -G. Up to 15 boot files can be\n      declared by multiple -mips-boot options.": "صرح عن ملف بيانات في الصورة كملف تمهيد MIPS Big Endian وتسبب\n      في إنتاج رأس وحدة MIPS Big Endian. هذا متعارض بشكل متبادل مع إنتاج كتل تمهيد أخرى مثل MBR. سيقوم بالكتابة فوق أول 512 بايت من أي بيانات مقدمة بواسطة -G. يمكن التصريح عن ما يصل إلى 15 ملف تمهيد عن طريق خيارات -mips-boot متعددة.",
+  "-mipsel-boot iso_rr_path": "-mipsel-boot مسار_iso_rr",
+  "Declare a data file in the image to be the MIPS Little Endian boot file.\n      This is mutually exclusive with other boot blocks. It will overwrite the\n      first 512 bytes of any data provided by -G. Only a single boot file can be\n      declared by -mipsel-boot.": "صرح عن ملف بيانات في الصورة كملف تمهيد MIPS Little Endian.\n      هذا متعارض بشكل متبادل مع كتل التمهيد الأخرى. سيقوم بالكتابة فوق أول 512 بايت من أي بيانات مقدمة بواسطة -G. يمكن التصريح عن ملف تمهيد واحد فقط بواسطة -mipsel-boot.",
+  "-B disk_path[,disk_path ...]": "-B مسار_القرص[,مسار_القرص ...]",
+  "Cause one or more data files on disk to be written after the end of the\n      ISO image. A SUN Disk Label will be written into the first 512 bytes of\n      the ISO image which lists this image as partition 1 and the given\n      disk_paths as partition 2 up to 8.\n    <br/>\n    The disk files should contain suitable boot images for SUN SPARC systems.\n    <br/>\n    The pseudo disk_path \"...\" causes that all empty partition entries\n      become copies of the last non-empty entry. If no other disk_path is given\n      before \"...\" then all partitions describe the ISO image. In this\n      case, the boot loader code has to be imported by option -G.": "تسبب في كتابة ملف أو أكثر من ملفات البيانات على القرص بعد نهاية صورة ISO.\n      سيتم كتابة تسمية قرص SUN في أول 512 بايت من صورة ISO التي تسرد هذه الصورة كقسم 1\n      ومسارات الأقراص المعطاة كقسم 2 إلى 8.\n    <br/>\n    يجب أن تحتوي ملفات الأقراص على صور تمهيد مناسبة لأنظمة SUN SPARC.\n    <br/>\n    يسبب مسار القرص الزائف \"...\" أن تصبح جميع إدخالات الأقسام الفارغة\n      نسخًا من آخر إدخال غير فارغ. إذا لم يتم إعطاء مسار قرص آخر\n      قبل \"...\"، فستصف جميع الأقسام صورة ISO. في هذه\n      الحالة، يجب استيراد كود محمل التمهيد بواسطة الخيار -G.",
+  "-sparc-boot disk_path[,disk_path ...]": "-sparc-boot مسار_القرص[,مسار_القرص ...]",
+  "Alias of -B.": "اسم مستعار لـ -B.",
+  "-sparc-label text": "-sparc-label نص",
+  "Set the ASCII label text of a SUN Disk Label.": "تعيين نص تسمية ASCII لتسمية قرص SUN.",
+  "--grub2-sparc-core iso_rr_path": "--grub2-sparc-core مسار_iso_rr",
+  "Cause the content address and size of the given data file in the image to\n      be written after the SUN Disk Label. Both numbers are counted in bytes.\n      The address is written as 64 bit big-endian number to byte 0x228. The size\n      is written as 32 bit big-endian number to byte 0x230.": "تسبب في كتابة عنوان المحتوى وحجم ملف البيانات المعطى في الصورة بعد\n      تسمية قرص SUN. يتم عد كلا الرقمين بالبايت. يتم كتابة العنوان كرقم 64 بت big-endian في البايت 0x228. يتم كتابة الحجم كرقم 32 بت big-endian في البايت 0x230.",
+  "-hppa-cmdline text": "-hppa-cmdline نص",
+  "Set the PALO command line for HP-PA. Up to 1023 characters are permitted\n      by default. With -hppa-hdrversion 4 the limit is 127.\n    <br/>\n    Note that the first five -hppa options are mandatory, if any of the -hppa\n      options is given. Only option -hppa-hdrversion is allowed to be\n      missing.": "تعيين سطر أوامر PALO لـ HP-PA. يُسمح بما يصل إلى 1023 حرفًا\n      افتراضيًا. مع -hppa-hdrversion 4 الحد هو 127.\n    <br/>\n    لاحظ أن الخيارات الخمسة الأولى لـ -hppa إلزامية، إذا تم إعطاء أي من خيارات -hppa.\n      يُسمح فقط بخيار -hppa-hdrversion بأن يكون مفقودًا.",
+  "-hppa-bootloader iso_rr_path": "-hppa-bootloader مسار_iso_rr",
+  "Designate the given path as HP-PA bootloader file.": "حدد المسار المعطى كملف تحميل تشغيل HP-PA.",
+  "-hppa-kernel-32 iso_rr_path": "-hppa-kernel-32 مسار_iso_rr",
+  "Designate the given path as HP-PA 32 bit kernel file.": "حدد المسار المعطى كملف نواة HP-PA 32 بت.",
+  "-hppa-kernel-64 iso_rr_path": "-hppa-kernel-64 مسار_iso_rr",
+  "Designate the given path as HP-PA 64 bit kernel file.": "حدد المسار المعطى كملف نواة HP-PA 64 بت.",
+  "-hppa-ramdisk iso_rr_path": "-hppa-ramdisk مسار_iso_rr",
+  "Designate the given path as HP-PA RAM disk file.": "حدد المسار المعطى كملف قرص RAM لـ HP-PA.",
+  "-hppa-hdrversion number": "-hppa-hdrversion عدد",
+  "Choose between PALO header version 5 (default) and version 4. For the\n      appropriate value see in PALO source code: PALOHDRVERSION.": "اختر بين إصدار رأس PALO 5 (افتراضي) والإصدار 4. للحصول على\n      القيمة المناسبة، راجع كود مصدر PALO: PALOHDRVERSION.",
+  "-alpha-boot iso_rr_path": "-alpha-boot مسار_iso_rr",
+  "Declare a data file in the image to be the DEC Alpha SRM Secondary\n      Bootstrap Loader and cause production of a boot sector which points to it.\n      This is mutually exclusive with production of other boot blocks like\n    MBR.": "صرح عن ملف بيانات في الصورة كـ DEC Alpha SRM Secondary\n      Bootstrap Loader وتسبب في إنتاج قطاع تمهيد يشير إليه.\n      هذا متعارض بشكل متبادل مع إنتاج كتل تمهيد أخرى مثل MBR.",
+  "Character sets:": "مجموعات الأحرف:",
+  "Character sets should not matter as long as only english\n    alphanumeric characters are used for file names or as long as all writers\n    and readers of the medium use the same character set. Outside these\n    constraints it may be necessary to let xorriso convert byte codes.\n  <br/>\n  A conversion from input character set to the output character set is performed\n    when an ISO image gets written. Vice versa there is a conversion from output\n    character set to the input character set when an ISO image gets loaded. The\n    sets can be defined": "لا ينبغي أن تهتم مجموعات الأحرف طالما أنه يتم استخدام الأحرف\n    الأبجدية الرقمية الإنجليزية فقط لأسماء الملفات أو طالما أن جميع كتاب ومشتركي الوسيط يستخدمون نفس مجموعة الأحرف. خارج هذه\n    القيود، قد يكون من الضروري السماح لـ xorriso بتحويل رموز البايت.\n  <br/>\n  يتم إجراء تحويل من مجموعة أحرف الإدخال إلى مجموعة أحرف الإخراج\n    عند كتابة صورة ISO. والعكس صحيح، هناك تحويل من مجموعة أحرف الإخراج\n    إلى مجموعة أحرف الإدخال عند تحميل صورة ISO. يمكن تحديد المجموعات"
+}
+<p>بواسطة الخيارات <code>-input-charset</code> و <code>-output-charset</code>، إذا لزم الأمر.
+  <br/>
+</p>
+<dl class="Bl-tag">
+  <dt id="input_charset"><a class="permalink" href="#input_charset"><b>-input-charset</b>
+    character_set_name</a></dt>
+  <dd>تعيين مجموعة الأحرف التي سيتم تحويل أسماء ملفات القرص منها عند إدراجها
+      في صورة ISO.</dd>
+  <dt id="output_charset"><a class="permalink" href="#output_charset"><b>-output-charset</b>
+    character_set_name</a></dt>
+  <dd>تعيين مجموعة الأحرف التي سيتم تحويل أسماء صور ISO المحملة منها وإليها
+      عند كتابة صور ISO.</dd>
+  <dt id="Jigdo"><a class="permalink" href="#Jigdo"><b>استخراج قالب Jigdo:</b></a></dt>
+  <dd></dd>
+</dl>
+<p class="Pp">من man genisoimage: &quot;Jigdo هي أداة للمساعدة في توزيع الملفات الكبيرة مثل صور CD و DVD؛ انظر
+    <a href='http://atterer.net/jigdo/'>http://atterer.net/jigdo/</a> لمزيد من التفاصيل. يتم نشر صور أقراص Debian CD و DVD بتنسيق jigdo على الويب للسماح للمستخدمين النهائيين بتنزيلها بشكل أكثر كفاءة.&quot;
+  <br/>
+  إذا تم تمكين استخدام libjte عند تجميع xorriso، فيمكن لـ
+    <b>xorrisofs</b> إنشاء ملف .jigdo وملف .template معًا مع صورة ISO بجلسة واحدة. إذا لم يكن الأمر كذلك، فإن خيارات Jigdo ستؤدي إلى حدث فشل (FAILURE)، والذي يؤدي عادةً إلى إنهاء البرنامج.
+  <br/>
+  يمكن تحديد القدرة على استخدام Jigdo عن طريق:
+  <br/>
+   $ xorrisofs -version 2&gt;&amp;1 | grep '^libjte' &amp;&amp; echo YES
+  <br/>
+</p>
+<p class="Pp">يحتوي ملف .jigdo على مجاميع التحقق وعناوين الملفات الرمزية. يحتوي ملف .template على صورة ISO المضغوطة مع علامات مرجعية بدلاً من بايتات المحتوى للملفات المدرجة.
+  <br/>
+  المدخلات لهذه العملية هي الوسائط العادية لجلسة <b>xorrisofs</b> بدون تحميل صورة، وملف مجاميع التحقق الذي يسرد تلك الملفات البيانات التي يمكن إدراجها في ملف .jigdo والإشارة إليها خارجيًا في ملف .template. يتم تمثيل كل ملف معين في ملف مجاميع التحقق بسطر نص واحد:
+  <br/>
+  مجموع التحقق بالأرقام الست عشرية، مسافتان، الحجم كـ 12 رقمًا عشريًا أو مسافات، مسافتان، عنوان الملف الرمزي
+  <br/>
+  يتم اختيار نوع مجموع التحقق بواسطة <code>-jigdo</code> &quot;checksum_algorithm&quot; مع القيم &quot;md5&quot; (32 رقمًا ست عشريًا) أو &quot;sha256&quot; (64 رقمًا ست عشريًا). وسيتم استخدامه أيضًا لأسطر عناوين الملفات في ملف .jigdo.
+  <br/>
+   الافتراضي هو &quot;md5&quot;.
+  <br/>
+  يجب أن يحمل عنوان الملف في سطر ملف مجاميع التحقق نفس الاسم الأساسي لمسار القرص (disk_path) للملف الذي يجب مطابقته. المسار الدليل لعنوان الملف حاسم لتعيين To=From، وليس للتعرف على الملف. بعد تعيين To=From، يتم كتابة عنوان الملف في ملف .jigdo. ستقوم أدوات استعادة Jigdo بتحويل هذه العناوين إلى عناوين مصدر بيانات قابلة للوصول فعليًا يمكنها القراءة منها.
+  <br/>
+  إذا لم تكن قائمة معلمات jigdo فارغة، فسيتم احتساب الحشو (padding) كجزء من صورة ISO.
+  <br/>
+</p>
+<dl class="Bl-tag">
+  <dt id="jigdo_checksum_algorithm"><a class="permalink" href="#jigdo_checksum_algorithm"><b>-jigdo-checksum-algorithm</b>
+    &quot;md5&quot;|&quot;sha256&quot;</a></dt>
+  <dd>تعيين خوارزمية مجموع التحقق التي يجب استخدامها لإدخالات ملف البيانات في ملف .jigdo والمتوقعة في ملف مجاميع التحقق. الافتراضي هو &quot;md5&quot;.</dd>
+  <dt id="jigdo_jigdo"><a class="permalink" href="#jigdo_jigdo"><b>-jigdo-jigdo</b>
+    disk_path</a></dt>
+  <dd>تعيين مسار القرص (disk_path) لملف .jigdo مع مجاميع التحقق وعناوين التنزيل لملء الثقوب في .template.</dd>
+  <dt id="jigdo_template"><a class="permalink" href="#jigdo_template"><b>-jigdo-template</b>
+    disk_path</a></dt>
+  <dd>تعيين مسار القرص (disk_path) لملف .template مع نسخة صورة ISO المضغوطة والمثقوبة.</dd>
+  <dt id="jigdo_min_file_size"><a class="permalink" href="#jigdo_min_file_size"><b>-jigdo-min-file-size</b>
+    size</a></dt>
+  <dd>تعيين الحد الأدنى لحجم ملف البيانات الذي سيتم إدراجه في ملف .jigdo وكونه ثقبًا في ملف .template. يمكن أن يكون الحجم رقمًا عاديًا يعد البايتات، أو رقمًا مرفقًا بالحرف &quot;k&quot; أو &quot;m&quot; أو &quot;g&quot; لعد الكيلوبايت (1024 بايت) أو الميجابايت (1024 كيلوبايت) أو الجيجابايت (1024 ميجابايت).</dd>
+  <dt id="jigdo_force_checksum"><a class="permalink" href="#jigdo_force_checksum"><b>-jigdo-force-checksum</b>
+    disk_path_pattern</a></dt>
+  <dd>يضيف نمط تعبير عادي سيتم مقارنته مع مسار القرص المطلق (absolute disk_path) لأي ملف بيانات لم يتم العثور عليه في ملف مجاميع التحقق. التطابق يؤدي إلى حدث خطأ (MISHAP)، والذي لا يؤدي عادةً إلى إنهاء تشغيل البرنامج ولكنه يؤدي في النهاية إلى قيمة خروج غير صفرية للبرنامج.</dd>
+  <dt id="jigdo_force_md5"><a class="permalink" href="#jigdo_force_md5"><b>-jigdo-force-md5</b>
+    disk_path_pattern</a></dt>
+  <dd>اسم مستعار قديم لـ <code>-jigdo-force-checksum</code>.</dd>
+  <dt id="jigdo_exclude"><a class="permalink" href="#jigdo_exclude"><b>-jigdo-exclude</b>
+    disk_path_pattern</a></dt>
+  <dd>أضف نمط تعبير عادي سيتم مقارنته مع مسار القرص المطلق (absolute disk_path) لأي ملف بيانات. التطابق يتسبب في بقاء الملف في .template في أي حال.</dd>
+  <dt id="jigdo_map"><a class="permalink" href="#jigdo_map"><b>-jigdo-map</b>
+    To=From</a></dt>
+  <dd>أضف زوجًا من السلاسل النصية بالشكل To=From إلى قائمة المعلمات. إذا تم إدراج ملف بيانات في ملف .jigdo، فسيتم الإشارة إليه بواسطة عنوان الملف من سطره في ملف مجاميع التحقق. سيتم فحص عنوان الملف هذا لمعرفة ما إذا كان يبدأ بالسلسلة From. إذا كان الأمر كذلك، فسيتم استبدال هذه السلسلة بالسلسلة To وحرف ":"، قبل أن يذهب إلى ملف .jigdo. يجب أن تنتهي السلسلة From بحرف '/'.</dd>
+  <dt id="checksum_list"><a class="permalink" href="#checksum_list"><b>-checksum-list</b>
+    disk_path</a></dt>
+  <dd>تعيين مسار القرص (disk_path) حيث يتم العثور على ملف مجاميع التحقق مع عناوين الملفات الرمزية ومجاميع التحقق وفقًا لـ <code>-jigdo-checksum-algorithm</code>.</dd>
+  <dt id="md5-list"><a class="permalink" href="#md5-list"><b>-md5-list</b>
+    disk_path</a></dt>
+  <dd>اسم مستعار قديم لـ <code>-checksum-list</code>.</dd>
+  <dt id="jigdo_template_compress"><a class="permalink" href="#jigdo_template_compress"><b>-jigdo-template-compress</b>
+    &quot;gzip&quot;|&quot;bzip2&quot;</a></dt>
+  <dd>اختر أحد &quot;bzip2&quot; أو &quot;gzip&quot; لضغط ملف القالب. يتم إخراج ملف jigdo غير مضغوط.</dd>
+  <dt id="checksum_algorithm_iso"><a class="permalink" href="#checksum_algorithm_iso"><b>-checksum_algorithm_iso</b>
+    list_of_names</a></dt>
+  <dd>اختر واحدًا أو أكثر من &quot;md5&quot; أو &quot;sha1&quot; أو
+    &quot;sha256&quot; أو &quot;sha512&quot; لمجاميع التحقق المساعدة &quot;# Image
+    Hex&quot; في ملف .jigdo. قد تبدو قائمة الأسماء (list_of_names) مثل: &quot;md5,sha1,sha512&quot;. القيمة &quot;all&quot; تختار جميع الخوارزميات المتاحة. لاحظ أن MD5 يبقى ممكّنًا دائمًا.</dd>
+  <dt id="checksum_algorithm_template"><a class="permalink" href="#checksum_algorithm_template"><b>-checksum_algorithm_template</b>
+    list_of_names</a></dt>
+  <dd>اختر الخوارزميات لمجاميع التحقق &quot;# Template Hex&quot; في ملف .jigdo. قواعد قائمة الأسماء (list_of_names) هي نفسها كما في
+    <code>-checksum_algorithm_iso</code>.</dd>
+  <dt id="Miscellaneous"><a class="permalink" href="#Miscellaneous"><b>خيارات متنوعة:</b></a></dt>
+  <dd></dd>
+  <dt id="print_size"><a class="permalink" href="#print_size"><b>-print-size</b></a></dt>
+  <dd>طباعة عدد الكتل المتوقع بحجم 2048 بايت في صورة ISO الناشئة إلى الإخراج القياسي. لا يتم إنشاء هذه الصورة.
+    <br/>
+    تعتمد النتيجة على عدة إعدادات.
+    <br/>
+    إذا تم توفير الخيار <code>--emul-toc</code>، فلن يتم احتساب الحشو (انظر <code>-pad</code>) كجزء من حجم الصورة. في هذه الحالة، استخدم <code>-no-pad</code> أو أضف 150 (= 300 كيلوبايت) إلى الرقم الناتج.
+    <br/>
+    إذا انتهى محاكاة mkisofs بعد الخيار <code>-print-size</code>، فلا يمكن تعديل خصائص أحدث ملف صورة تمهيد محدد بواسطة أوامر xorriso لاحقة.
+    <br/>
+  </dd>
+  <dt id="no_rc"><a class="permalink" href="#no_rc"><b>--no_rc</b></a></dt>
+  <dd>فقط إذا تم استخدامه كوسيط أول، يمنع هذا الخيار قراءة وتفسير ملفات بدء التشغيل. انظر قسم الملفات أدناه.
+    <br/>
+  </dd>
+  <dt id="help"><a class="permalink" href="#help"><b>-help</b></a></dt>
+  <dd>
+    <br/>
+    يسرد الخيارات المدعومة إلى stderr. تحمل خيارات mkisofs الأصلية نصوص وصف mkisofs الأصلية الخاصة بها.
+    <br/>
+  </dd>
+  <dt id="quiet"><a class="permalink" href="#quiet"><b>-quiet</b></a></dt>
+  <dd>
+    <br/>
+    يقمع معظم رسائل تشغيل البرنامج، باستثناء تلك التي تشير إلى مشاكل أو أخطاء.
+    <br/>
+  </dd>
+  <dt id="gui"><a class="permalink" href="#gui"><b>-gui</b></a></dt>
+  <dd>
+    <br/>
+    يزيد من تكرار رسائل المطمئن (pacifier) أثناء كتابة صورة ISO.
+    <br/>
+  </dd>
+  <dt id="log_file"><a class="permalink" href="#log_file"><b>-log-file</b>
+    disk_path</a></dt>
+  <dd>
+    <br/>
+    يقوم بقص الملف disk_path إلى حجم 0 وإعادة توجيه جميع الرسائل التي تظهر عادةً على stderr إليه. <code>-log-file</code> مع نص فارغ كمسار قرص (disk_path) يعيد تمكين الإخراج إلى stderr.
+    <br/>
+  </dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>
+    <br/>
+    يمكّن إخراج رسائل البرنامج المعلوماتية.
+    <br/>
+  </dd>
+  <dt id="verbose"><a class="permalink" href="#verbose"><b>-verbose</b></a></dt>
+  <dd>اسم مستعار لـ <code>-v</code>.</dd>
+  <dt id="version"><a class="permalink" href="#version"><b>-version</b></a></dt>
+  <dd>طباعة نص يبدأ بـ
+    <br/>
+     &quot;mkisofs 2.01-Emulation Copyright (C)&quot;
+    <br/>
+    إلى الإخراج القياسي، ومعلومات الإصدار الخاصة بـ xorriso إلى الإخراج القياسي للخطأ.
+    <br/>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;نظرة_عامة_على_الأمثلة:&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;نظرة_عامة_على_الأمثلة:&lt;/b&gt;'><b>نظرة عامة على الأمثلة:</b></a></h2>
+<p class="Pp">تشغيل بسيط لإنتاج صورة
+  <br/>
+  تعيين مسارات صورة ISO بواسطة <code>-graft-points</code>
+  <br/>
+  إجراء تشغيل متعدد الجلسات
+  <br/>
+  دع xorrisofs يعمل تحت growisofs
+  <br/>
+  نسخ احتياطي تدريجي لبعض أشجار الدلائل
+  <br/>
+  نسخ احتياطي تدريجي مع أشجار مجمعة
+  <br/>
+  إنشاء صور قابلة للتمهيد لـ PC-BIOS و EFI</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;تشغيل_بسيط_لإنتاج_صورة&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;تشغيل_بسيط_لإنتاج_صورة&lt;/b&gt;'><b>تشغيل بسيط لإنتاج صورة</b></a></h2>
+<p class="Pp">يتم نسخ شجرة ملفات مُعدة في الدليل ./for_iso إلى الدليل الجذر لصورة ISO. يتم تعيين أذونات الملفات للقراءة فقط للجميع. يتم إضافة سمات Joliet لأنظمة Microsoft. يتم كتابة الصورة الناتجة كملف بيانات ./image.iso على القرص.
+  <br/>
+   $ xorrisofs -r -J -o ./image.iso ./for_iso</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;تعيين_مسارات_صورة_ISO_بواسطة_-graft-points&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;تعيين_مسارات_صورة_ISO_بواسطة_-graft-points&lt;/b&gt;'><b>تعيين مسارات صورة ISO بواسطة -graft-points</b></a></h2>
+<p class="Pp">بدون الخيار <code>-graft-points</code>، يتم نسخ كل ملف قرص مُعطى إلى الدليل الجذر لصورة ISO، مع الاحتفاظ باسمه. إذا تم توفير دليل، فسيتم نسخ ملفاته وأدلته الفرعية إلى الدليل الجذر، مع الاحتفاظ بأسمائها.
+  <br/>
+   $ xorrisofs ... /home/me/datafile /tmp/directory
+  <br/>
+  ينتج في الدليل الجذر لصورة ISO:
+  <br/>
+   /datafile
+  <br/>
+   /file_1_from_directory
+  <br/>
+   ...
+  <br/>
+   /file_N_from_directory</p>
+<p class="Pp">مع الخيار <code>-graft-points</code>، من الممكن وضع الملفات والأدلة في مسارات عشوائية في صورة ISO.
+  <br/>
+   $ xorrisofs ... -graft-points /home/me/datafile /dir=/tmp/directory
+  <br/>
+  ينتج في الدليل الجذر لصورة ISO</p>
+</section>
+</section>
+y:
+  <br/>
+   /datafile
+  <br/>
+   /dir
+  <br/>
+  سيتم إنشاء الدلائل الأصلية المطلوبة في الصورة تلقائيًا:
+  <br/>
+   /datafiles/file1=/home/me/datafile
+  <br/>
+  ينتج عنه في صورة ISO:
+  <br/>
+   /datafiles/file1
+  <br/>
+  يتم نسخ سمات الدليل /datafiles من /home/me على القرص.</p>
+<p class="Pp">عادةً يجب تجنب أحرف = و \ في جزء ISO من مواصفات المسار. ولكن إذا كان ذلك ضروريًا، فيمكن الهروب منها:
+  <br/>
+   /with_\=_and_\\/file=/tmp/directory/file
+  <br/>
+  ينتج عنه في صورة ISO:
+  <br/>
+   /with_=_and_\/file</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Perform_multi-session_runs&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Perform_multi-session_runs&lt;/b&gt;'><b>قم   بإجراء تشغيلات متعددة الجلسات</b></a></h2>
+<p class="Pp">هذا المثال يعمل للوسائط متعددة الجلسات فقط: CD-R[W]، DVD-R[W]، DVD+R، BD-R. أضف خيار cdrskin --grow_overwriteable_iso إلى جميع تشغيلات xorriso -as cdrecord لتمكين محاكاة الجلسة المتعددة على الوسائط القابلة للكتابة فوقها.
+  <br/>
+  تتم كتابة الجلسة الأولى على النحو التالي:
+  <br/>
+   $ xorrisofs -graft-points \
+  <br/>
+   /tree1=prepared_for_iso/tree1 \
+  <br/>
+   | xorriso -as cdrecord -v dev=/dev/sr0 blank=fast -multi -eject -
+  <br/>
+  تتم كتابة الجلسات اللاحقة على النحو التالي (تشغيل dd فقط لإعطاء الشياطين فرصة لإفسادها):
+  <br/>
+   $ m=$(xorriso -as cdrecord dev=/dev/sr0 -msinfo)
+  <br/>
+   $ dd if=/dev/sr0 count=1 &gt;/dev/null 2&gt;&amp;1
+  <br/>
+   $ xorrisofs -M /dev/sr0 -C $m -graft-points \
+  <br/>
+   /tree2=prepared_for_iso/tree2 \
+  <br/>
+   | xorriso -as cdrecord -v dev=/dev/sr0 -waiti -multi -eject -
+  <br/>
+  قم دائمًا بإخراج درج محرك الأقراص بين الجلسات.
+  <br/>
+  سيقوم تشغيل xorriso -as mkisofs بقراءة الجلسات القديمة عبر مشغل CD-ROM الخاص بـ /dev/sr0. قد لا يكون هذا المشغل على دراية بالمحتوى المتغير طالما لم يتم تحميل الوسائط مرة أخرى. في هذه الحالة، لن يتم تقييم الجلسة السابقة بشكل صحيح بواسطة xorriso وستحتوي الجلسة الجديدة على الملفات المضافة حديثًا فقط.
+  <br/>
+  بعض الأنظمة ليست صبورة بما يكفي مع تحميل الدرج التلقائي وقد تتداخل بعض الشياطين مع محاولة قراءة مشغل CD-ROM الأولى من وسائط تم تحميلها حديثًا.
+  <br/>
+  عند تحميل الدرج يدويًا، انتظر 10 ثوانٍ بعد توقف محرك الأقراص عن الوميض.
+  <br/>
+  تبدو الطريقة التلقائية الآمنة هي تشغيل منفصل لـ xorriso لتحميل الدرج مع الانتظار المناسب، وتشغيل لاحق لـ dd والذي يجب أن يقدم نفسه لأي مشاكل ناتجة عن الشياطين التي تقيم حالة محرك الأقراص المتغيرة. إذا لم يساعد ذلك، فأدخل تشغيل "sleep 10" بين xorriso و dd.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Let_xorrisofs_work_underneath_growisofs&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Let_xorrisofs_work_underneath_growisofs&lt;/b&gt;'><b>دع   xorrisofs تعمل تحت growisofs</b></a></h2>
+<p class="Pp">يتوقع growisofs برنامج تنسيق ISO يفهم الخيارات -C و -M. يتم تعريف متغير لتجاوز اسم الافتراضي الثابت.
+  <br/>
+   $ export MKISOFS=&quot;xorrisofs&quot;
+  <br/>
+   $ growisofs -Z /dev/dvd /some/files
+  <br/>
+   $ growisofs -M /dev/dvd /more/files
+  <br/>
+  إذا لم يكن "xorrisofs" متاحًا على نظامك، فسيتعين عليك إنشاء رابط يشير إلى ثنائي xorriso وإخبار growisofs باستخدامه. على سبيل المثال عن طريق:
+  <br/>
+   $ ln -s $(which xorriso) &quot;$HOME/xorrisofs&quot;
+  <br/>
+   $ export MKISOFS=&quot;$HOME/xorrisofs&quot;
+  <br/>
+  يمكن إنهاء محاكاة mkisofs بواسطة الوسيط "--" والاستفادة من جميع أوامر xorriso. يكره growisofs الخيارات التي تبدأ بـ "-o" ولكن يجب تعيين -outdev إلى "-". لذا استخدم "outdev" بدلاً من ذلك:
+  <br/>
+   $ growisofs -Z /dev/dvd --for_backup -- \
+  <br/>
+   outdev - -update_r /my/files /files
+  <br/>
+   $ growisofs -M /dev/dvd --for_backup -- \
+  <br/>
+   outdev - -update_r /my/files /files
+  <br/>
+  لاحظ أن --for_backup يتم تقديمه في محاكاة mkisofs. للحفاظ على البيانات الإضافية المسجلة، يجب أن تكون سارية المفعول بالفعل عند تحميل المحاكاة للصورة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Incremental_backup_of_a_few_directory_trees&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Incremental_backup_of_a_few_directory_trees&lt;/b&gt;'><b>نسخ   احتياطي تدريجي لبعض أشجار الدلائل</b></a></h2>
+<p class="Pp">يقوم هذا بتغيير أشجار الدلائل /open_source_project و /personal_mail في صورة ISO بحيث تصبح نسخًا طبق الأصل من نظيراتها على القرص. يتم إنشاء كائنات ملفات ISO وحذفها أو تعديل سماتها وفقًا لذلك.
+  <br/>
+  سيتم تسجيل ACL و xattr والروابط الصلبة وتجزئات MD5. من المتوقع أن تكون أرقام inode في نظام ملفات القرص ثابتة عبر دورات التركيب والتمهيد. يتم استبعاد الملفات ذات الأسماء المطابقة لـ *.o أو *.swp صراحةً.</p>
+<p class="Pp">سيتم استخدامه عدة مرات على نفس الوسائط، كلما رغبت في تحديث شجرتي القرص إلى الوسائط. ابدأ بوسائط فارغة وقم بتحديثها حتى يفشل التشغيل بأمان بسبب نقص المساحة المتبقية على الوسائط القديمة.
+  <br/>
+  قم دائمًا بإخراج درج محرك الأقراص بين الجلسات. سيمنح تشغيل dd الشياطين فرصة لإفساد القراءة الأولى للوسائط التي تم تحميلها حديثًا.
+  <br/>
+   $ msinfo=$(xorriso -as cdrecord dev=/dev/sr0 -msinfo)
+  <br/>
+   $ dd if=/dev/sr0 count=1 &gt;/dev/null 2&gt;&amp;1
+  <br/>
+   $ load_opts=
+  <br/>
+   $ test -n &quot;$msinfo&quot; &amp;&amp; load_opts=&quot;-M /dev/sr0 -C
+    $msinfo&quot;
+  <br/>
+   $ xorrisofs $load_opts -o - --for_backup -m '*.o' -m '*.swp' \
+  <br/>
+   -V PROJ_MAIL_&quot;$(date '+%Y_%m_%d_%H%M%S')&quot; -graft-points \
+  <br/>
+   -old-root / \
+  <br/>
+   /projects=/home/thomas/projects \
+  <br/>
+   /personal_mail=/home/thomas/personal_mail \
+  <br/>
+   | xorriso -as cdrecord dev=/dev/sr0 -v -multi -waiti -eject -</p>
+<p class="Pp">هذا منطقي إذا تركت النسخة الاحتياطية الكاملة سعة متبقية كبيرة على الوسائط وإذا كانت التغييرات المتوقعة أصغر بكثير من النسخة الاحتياطية الكاملة.</p>
+<p class="Pp"><b>من الأفضل عدم استخدام أحدث نسخة احتياطية لك مع -old-root</b>. احتفظ بوسيطين على الأقل تستخدمهما بالتناوب. لذلك فإن النسخ الاحتياطية الأقدم فقط هي المعرضة للخطر بسبب عملية الكتابة الجديدة، بينما يتم تخزين النسخة الاحتياطية الأحدث بأمان على وسيط مختلف.
+  <br/>
+  احتفظ دائمًا بوسيط فارغ جاهزًا لإجراء نسخة احتياطية كاملة في حالة فشل محاولة التحديث بسبب عدم كفاية المساحة المتبقية. لن يؤدي هذا الفشل إلى إتلاف الوسيط القديم بالطبع.</p>
+<p class="Pp">إذا لم تكن أرقام inode على القرص ثابتة، فاستخدم الخيار --old-root-no-ino. في هذه الحالة، سيقوم تشغيل التحديث بمقارنة تجزئات MD5 المسجلة مع المحتوى الحالي للملف على القرص الصلب.</p>
+<p class="Pp">مع خيار <b>mount</b> <b>-o &quot;sbsector=&quot;</b> على GNU/Linux أو <b>-s</b> على FreeBSD أو NetBSD، من الممكن الوصول إلى أشجار الجلسات التي تمثل إصدارات النسخ الاحتياطي الأقدم. مع وسائط CD، يقبل GNU/Linux mount أرقام الجلسات مباشرةً من خلال خياره &quot;session=&quot;.
+  <br/>
+  يمكن للوسائط متعددة الجلسات ومعظم الوسائط القابلة للكتابة فوقها والتي كتبتها xorriso إخبار sbsectors بجلساتها بواسطة خيار xorriso -toc:
+  <br/>
+   $ xorriso -dev /dev/sr0 -toc
+  <br/>
+  يمكن لـ xorriso طباعة أمر التركيب المطابق لرقم الجلسة:
+  <br/>
+   $ xorriso -mount_cmd /dev/sr0 session 12 /mnt
+  <br/>
+  أو لمعرف حجم يتطابق مع تعبير بحث:
+  <br/>
+   $ xorriso -mount_cmd /dev/sr0 volid '*2008_12_05*' /mnt
+  <br/>
+  كلاهما ينتج عنه على الإخراج القياسي شيء مثل:
+  <br/>
+   mount -t iso9660 -o nodev,noexec,nosuid,ro,sbsector=1460256 '/dev/sr0' '/mnt'
+  <br/>
+  يمكن للمستخدم الخارق السماح لـ xorriso بتنفيذ أمر التركيب مباشرة:
+  <br/>
+   # osirrox -mount /dev/sr0 &quot;volid&quot; '*2008_12_05*' /mnt</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Incremental_backup_with_accumulated_trees&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Incremental_backup_with_accumulated_trees&lt;/b&gt;'><b>نسخ   احتياطي تدريجي مع أشجار مجمعة</b></a></h2>
+<p class="Pp">لا تقدم Solaris خيارًا لتركيب الجلسات الأقدم. للحفاظ عليها في متناول اليد، يمكن تعيين جميع الملفات إلى شجرة ملفات تحت دليل جلسة وتجميع هذه الدلائل من جلسة إلى أخرى. يتم استنساخ شجرة -root من شجرة -old-root قبل مقارنتها بالأشجار المناسبة على القرص.
+  <br/>
+  هذا يتطلب معرفة اسم دليل الجلسة المستخدم سابقًا.
+  <br/>
+  مع الجلسة الأولى:
+  <br/>
+   $ xorrisofs -root /session1 \
+  <br/>
+   -o - --for_backup -m '*.o' -m '*.swp' \
+  <br/>
+   -V PROJ_MAIL_&quot;$(date '+%Y_%m_%d_%H%M%S')&quot; -graft-points \
+  <br/>
+   /projects=/home/thomas/projects \
+  <br/>
+   /personal_mail=/home/thomas/personal_mail \
+  <br/>
+   | xorriso -as cdrecord dev=/dev/sr0 -v blank=as_needed \
+  <br/>
+   -multi -waiti -eject -</p>
+<p class="Pp">مع الجلسة الثانية، يشير الخيار -old-root إلى /session1 و -root الجديد هو /session2.
+  <br/>
+  قم دائمًا بإخراج درج محرك الأقراص بين الجلسات. سيمنح تشغيل dd الشياطين فرصة لإفساد القراءة الأولى للوسائط التي تم تحميلها حديثًا.
+  <br/>
+   $ msinfo=$(xorriso -as cdrecord dev=/dev/sr0 -msinfo)
+  <br/>
+   $ dd if=/dev/sr0 count=1 &gt;/dev/null 2&gt;&amp;1
+  <br/>
+   $ load_opts=
+  <br/>
+   $ test -n &quot;$msinfo&quot; &amp;&amp; load_opts=&quot;-M /dev/sr0 -C
+    $msinfo&quot;
+  <br/>
+   $ xorrisofs $load_opts -root /session2 -old-root /session1 \
+  <br/>
+   -o - --for_backup -m '*.o' -m '*.swp' \
+  <br/>
+   -V PROJ_MAIL_&quot;$(date '+%Y_%m_%d_%H%M%S')&quot; -graft-points \
+  <br/>
+   /projects=/home/thomas/projects \
+  <br/>
+   /personal_mail=/home/thomas/personal_mail \
+  <br/>
+   | xorriso -as cdrecord dev=/dev/sr0 -v -multi -waiti -eject -
+  <br/>
+  مع الجلسة الثالثة، يشير الخيار -old-root إلى /session2. -root الجديد هو /session3. وهكذا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Create_bootable_images_for_PC-BIOS_and_EFI&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Create_bootable_images_for_PC-BIOS_and_EFI&lt;/b&gt;'><b>قم   بإنشاء صور قابلة للتمهيد لـ PC-BIOS و EFI</b></a></h2>
+<p class="Pp">مجموعة أدوات تحميل التمهيد SYSLINUX/ISOLINUX شائعة لتمهيد PC-BIOS. يصف wiki الخاص بـ ISOLINUX إنشاء دليل ./CD_root على القرص ونسخ جميع الملفات المطلوبة تحته. خاصةً يجب نسخ الملف isolinux.bin إلى ./CD_root/isolinux/isolinux.bin. هذه هي ملف صورة التمهيد.
+  <br/>
+  يمكن استخدام خيارات mkisofs الموصوفة دون تغيير مع <b>xorrisofs</b>:
+  <br/>
+   $ xorrisofs -o output.iso \
+  <br/>
+   -b isolinux/isolinux.bin -c isolinux/boot.cat \
+  <br/>
+   -no-emul-boot -boot-load-size 4 -boot-info-table \
+  <br/>
+   ./CD_root
+  <br/>
+  قم بتضمينه على قرص CD باستخدام برنامج حرق. على سبيل المثال:
+  <br/>
+   $ xorriso -as cdrecord -v dev=/dev/sr0 blank=as_needed output.iso</p>
+<p class="Pp">ستتم تهيئة الصورة من المثال أعلاه للتمهيد من CD أو DVD أو BD، ولكن ليس من عصا USB أو أجهزة أخرى شبيهة بالقرص الصلب. يمكن القيام بذلك بمساعدة MBR هجين. يوفر Syslinux ملفات قوالب مطابقة مثل isohdp[fp]x*.bin. على سبيل المثال /usr/lib/syslinux/isohdpfx.bin.
+  <br/>
+  إذا لم تكن بضع مئات كيلوبايت من الحجم مهمة، فيمكن استخدام الخيار -partition_offset لإنشاء جدول تقسيم حيث يبدأ القسم 1 ليس عند الكتلة 0. هذا يسهل التلاعب اللاحق بعصا USB باستخدام أدوات التقسيم والتنسيق.
+  <br/>
+  سيتم إعداد الصورة من المثال التالي للتمهيد عبر MBR وسيتم بدء القسم الأول عند الكتلة 64 للقرص الصلب.
+  <br/>
+  سيتم تمهيده أيضًا من الوسائط الضوئية.
+  <br/>
+   $ xorrisofs -o output.iso \
+  <br/>
+   -b isolinux/isolinux.bin -c isolinux/boot.cat \
+  <br/>
+   -no-emul-boot -boot-load-size 4 -boot-info-table \
+  <br/>
+   -isohybrid-mbr /usr/lib/syslinux/isohdpfx.bin</p>
+</section>
+ <br/>
+   -partition_offset 16 \
+  <br/>
+   ./CD_root
+  <br/>
+  كن مستخدمًا خارقًا وانسخ الصورة إلى ملف الجهاز الأساسي غير المقسّم لـ
+    عصا USB. على GNU/Linux، يكون هذا على سبيل المثال /dev/sdb، وليس /dev/sdb1.
+  <br/>
+  تنبيه: سيؤدي هذا إلى الكتابة فوق أي تقسيم على عصا USB وسيصبح
+    البيانات المتبقية غير قابلة للوصول.
+  <br/>
+  لذا تأكد أولاً من حصولك على العنوان الصحيح للجهاز المقصود. على سبيل المثال، عن طريق
+    قراءة 100 ميبيبايت من البيانات منه ومشاهدة وميضه:
+  <br/>
+   # dd bs=2K if=/dev/sdb count=50K &gt;/dev/null
+  <br/>
+  الآن انسخ الصورة إليه
+  <br/>
+   # dd bs=2K if=output.iso of=/dev/sdb</p>
+<p class="Pp">الآن بالنسبة لـ EFI:
+  <br/>
+  يجب أن يكون ملف صورة التمهيد هو صورة قسم EFI للنظام، أي نظام ملفات FAT
+    مع الدليل /EFI/BOOT وملفات التمهيد بأسماء EFI المنصوص عليها: BOOTIA32.EFI
+    لـ 32 بت x86، BOOTx64.EFI لـ 64 بت AMD/x86 (في
+    UEFI-2.4 توجد بالفعل "x" صغيرة)، BOOTAA64.EFI لـ 64
+    بت ARM. يجب أن يكون البرنامج الموجود في نظام ملفات FAT قادرًا على العثور على
+    فحص نظام ملفات ISO لتكوين محمل التمهيد وبدء تشغيل
+    نظام التشغيل. يمكن لأداة GRUB2 grub-mkimage إنتاج نظام ملفات FAT بمحتوى مناسب،
+    والذي يستخدم بعد ذلك برامج GRUB2 أخرى من نظام ملفات ISO.
+  <br/>
+  يمكن دمج معدات تمهيد EFI مع isohybrid ISOLINUX المذكور أعلاه لـ PC-BIOS
+    بطريقة ليست متوافقة تمامًا مع UEFI-2.4، والتي تعمل بشكل جيد بشكل واضح. إنها
+    تنتج جداول أقسام MBR و GPT، وكلاهما مع أقسام متداخلة. بافتراض أن صورة قسم EFI للنظام
+    جاهزة كـ ./CD_root/boot/grub/efi.img، أضف
+    الخيارات التالية قبل عنوان الدليل ./CD_root:
+  <br/>
+   -eltorito-alt-boot -e 'boot/grub/efi.img' -no-emul-boot \
+  <br/>
+   -isohybrid-gpt-basdat \
+  <br/>
+  الأكثر توافقًا مع UEFI-2.4 هو الاختيار بين MBR أو GPT وإلحاق
+    نسخة من قسم EFI للنظام لتجنب تداخل قسم ISO
+    وقسم EFI. هنا لـ MBR:
+  <br/>
+   -eltorito-alt-boot -e 'boot/grub/efi.img' -no-emul-boot \
+  <br/>
+   -append_partition 2 0xef ./CD_root/boot/grub/efi.img \
+  <br/>
+  من المفترض أن تقوم صور ISO الناتجة بالتمهيد من الوسائط البصرية وعصا USB. قد
+    يتم حذف الخيار -eltorito-alt-boot إذا لم يتم استخدام الخيار -b لجعل ISO
+    قابلاً للتمهيد عبر PC-BIOS.
+</p>
+<p class="Pp">بالنسبة لصور ISO التي تحتوي على معدات تمهيد GRUB2 خالصة، فكر في استخدام أداة GRUB2
+    grub-mkrescue كواجهة أمامية لـ xorrisofs.</p>
+<p class="Pp">إذا كان لديك نظام ملفات ISO قابل للتمهيد وترغب في معرفة معداته
+    بالإضافة إلى اقتراح حول كيفية إعادة إنتاجه، جرب:
+  <br/>
+   $ xorriso -hfsplus on -indev IMAGE.iso \
+  <br/>
+   -report_el_torito plain -report_system_area plain \
+  <br/>
+   -print "" -print "======= Proposal for xorrisofs
+    options:" \
+  <br/>
+   -report_el_torito as_mkisofs</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILES'><a class='permalink' href='#FILES'>الملفات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='&lt;b&gt;Startup_files:&lt;/b&gt;'><a class='permalink' href='#&lt;b&gt;Startup_files:&lt;/b&gt;'><b>ملفات بدء التشغيل:</b></a></h2>
+<p class="Pp">إذا لم يتم تمرير --no_rc كأول وسيط، فسيحاول
+    <b>xorriso</b> عند بدء التشغيل قراءة وتنفيذ الأسطر من الملفات التالية:
+  <br/>
+   /etc/default/xorriso
+  <br/>
+   /etc/opt/xorriso/rc
+  <br/>
+   /etc/xorriso/xorriso.conf
+  <br/>
+   $HOME/.xorrisorc
+  <br/>
+  تتم قراءة الملفات بالترتيب المحدد هنا، ولكن لا يلزم وجود أي منها. لا يتم تفسير
+    الأسطر كخيارات لـ <b>xorrisofs</b> ولكن كأوامر xorriso عامة. انظر man xorriso.</p>
+<p class="Pp">بعد ملفات بدء تشغيل xorriso، يحاول البرنامج واحدًا تلو الآخر فتح ما يلي للقراءة:
+  <br/>
+   ./.mkisofsrc
+  <br/>
+   $MKISOFSRC
+  <br/>
+   $HOME/.mkisofsrc
+  <br/>
+   $(dirname $0)/.mkisofsrc
+  <br/>
+  عند النجاح، يفسر محتوى الملف ولا يحاول مع ملفات أخرى. يُستخدم العنوان الأخير فقط
+    إذا كان الوسيط 0 له dirname غير تافه.
+  <br/>
+  يفسر القارئ حاليًا أزواج NAME=VALUE التالية:
+  <br/>
+   APPI افتراضي لـ -A
+  <br/>
+   PUBL افتراضي لـ -publisher
+  <br/>
+   SYSI افتراضي لـ -sysid
+  <br/>
+   VOLI افتراضي لـ -V
+  <br/>
+   VOLS افتراضي لـ -volset
+  <br/>
+  سيتم تجاهل أي أسطر أخرى بصمت.
+  <br/>
+</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>البيئة</a></h1>
+<p class="Pp">تؤثر متغيرات البيئة التالية على سلوك البرنامج:
+  <br/>
+  يُستخدم HOME للعثور على ملفات بدء تشغيل xorriso و mkisofs.
+  <br/>
+  قد يُستخدم MKISOFSRC للإشارة إلى البرنامج إلى ملف بدء تشغيل mkisofs.
+  <br/>
+  ينتمي SOURCE_DATE_EPOCH إلى مواصفات reproducible-builds.org. من المفترض أن يكون إما غير محدد أو
+    أن يحتوي على رقم عشري يخبر بالثواني منذ الأول من يناير 1970. إذا كان يحتوي على
+    رقم، فسيتم استخدامه كقيمة زمنية لتعيين افتراضي لـ --modification-date=.
+    سيتم افتراضي --gpt_disk_guid إلى "modification-date". ثم سيكون الافتراضي لـ
+    --set_all_file_dates هو "set_to_mtime". علاوة على ذلك، سيتم تعيين وقت "الآن"
+    لعقد ISO بدون مصدر قرص إلى قيمة SOURCE_DATE_EPOCH.
+  <br/>
+  يمكن لملفات بدء التشغيل وخيارات البرنامج تجاوز تأثير
+    SOURCE_DATE_EPOCH.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضا</a></h1>
+<dl class="Bl-tag">
+  <dt id="For"><a class="permalink" href="#For">لوضع أمر xorriso عام</a></dt>
+  <dd><a href='/man/xorriso.1.en'>xorriso(1)</a></dd>
+  <dt id="For~2"><a class="permalink" href="#For~2"> لمحاكاة cdrecord
+    لـ xorriso</a></dt>
+  <dd><a href='/man/xorrecord.1.en'>xorrecord(1)</a></dd>
+  <dt id="For~3"><a class="permalink" href="#For~3"> لتركيب صور ISO 9660 التي تم إنشاؤها
+    بواسطة xorriso (-t iso9660)</a></dt>
+  <dd><a href='/man/mount.8.en'>mount(8)</a></dd>
+  <dt id="Other"><a class="permalink" href="#Other"> برامج أخرى تنتج
+    صور ISO 9660</a></dt>
+  <dd><b>mkisofs(8)،</b> <a href='/man/genisoimage.8.en'>genisoimage(8)</a></dd>
+  <dt id="Programs"><a class="permalink" href="#Programs"> برامج تحرق
+    جلسات على وسائط بصرية</a></dt>
+  <dd><b>growisofs(1)،</b> <b>cdrecord(1)،</b> <b>wodim(1)،</b>
+      <b>cdrskin(1)،</b> <a href='/man/xorriso.1.en'>xorriso(1)</a></dd>
+  <dt id="ACL"><a class="permalink" href="#ACL"> ACL و xattr</a></dt>
+  <dd><b>getfacl(1)،</b> <b>setfacl(1)،</b> <b>getfattr(1)،</b>
+      <a href='/man/setfattr.1.en'>setfattr(1)</a></dd>
+  <dt id="MD5"><a class="permalink" href="#MD5"> مجاميع تدقيق MD5</a></dt>
+  <dd><a href='/man/md5sum.1.en'>md5sum(1)</a></dd>
+  <dt id="On"><a class="permalink" href="#On"> في FreeBSD تختلف الأوامر الخاصة بـ xattr
+    و MD5</a></dt>
+  <dd><b>getextattr(8)،</b> <b>setextattr(8)،</b> <a href='/man/md5.1.en'>md5(1)</a></dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">للإبلاغ عن أخطاء، أو طلب المساعدة، أو اقتراح تحسينات لـ
+    <b>xorriso</b>، يرجى إرسال بريد إلكتروني إلى القائمة العامة
+    &lt;bug-xorriso@gnu.org&gt;. إذا كنت ترغب في مزيد من الخصوصية، أرسل بريدًا إلى
+    &lt;scdbackup@gmx.net&gt;.
+  <br/>
+  يرجى وصف ما تتوقعه من <b>xorriso</b> أن يفعله، والوسائط أو أوامر الحوار التي حاولت
+    من خلالها تحقيق ذلك، ورسائل <b>xorriso</b>، والنتيجة غير المرغوب فيها لتشغيل البرنامج.
+  <br/>
+  توقع أن يُطرح عليك المزيد من الأسئلة قبل تقديم الحلول.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Thomas Schmitt &lt;scdbackup@gmx.net&gt;
+  <br/>
+  لمشروع libburnia.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">حقوق النشر (c) 2011 - 2023 Thomas Schmitt
+  <br/>
+  يُمنح الإذن بتوزيع هذا النص بحرية. يجب تعديله فقط بالتزامن مع الخصائص التقنية
+    لـ xorriso. إذا استخدمت الرخصة لاشتقاق إصدارات معدلة من xorriso، فأنت
+    مخول بتعديل هذا النص بموجب نفس الرخصة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CREDITS'><a class='permalink' href='#CREDITS'>شكر وتقدير</a></h1>
+<p class="Pp">يعتمد <b>xorrisofs</b> جزئيًا على عمل Vreixo Formoso الذي يوفر libisofs
+    بالتعاون مع Mario Danic الذي يقود أيضًا فريق libburnia. ساهم Vladimir Serbinenko
+    في كود نظام ملفات HFS+ والمعرفة ذات الصلة.
+  <br/>
+  تحياتنا لـ Joerg Schilling الذي خدمتني أدواته cdrtools لمدة عشر
+  سنوات.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">الإصدار 1.5.6، 7 يونيو 2023</td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libisoburn/">extra/libisoburn</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.5.6-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://dev.lovelyhq.com/libburnia">https://dev.lovelyhq.com/libburnia</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL2</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/libisoburn/">/listing/extra/libisoburn/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#OPTIONS">الخيارات</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#FILES">الملفات</a></li>
+        
+            <li><a href="#ENVIRONMENT">البيئة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضا</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+            <li><a href="#CREDITS">شكر وتقدير</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/xorrisofs.1.en.txt">txt</a>, 
+        
+            <a href="/man/xorrisofs.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

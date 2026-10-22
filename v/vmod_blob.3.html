@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>vmod_blob(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">vmod_blob(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">VMOD_BLOB(3)</td>
+    <td class="head-vol">Library Functions Manual</td>
+    <td class="head-rtitle">VMOD_BLOB(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">vmod_blob - Utilities for the VCL blob type, encoding and decoding</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>import blob [as name] [from "path"]
+BLOB decode(ENUM decoding, INT length, STRING encoded)
+STRING encode(ENUM encoding, ENUM case, BLOB blob)
+STRING transcode(ENUM decoding, ENUM encoding, ENUM case, INT length, STRING encoded)
+BOOL same(BLOB, BLOB)
+BOOL equal(BLOB, BLOB)
+INT length(BLOB)
+BLOB sub(BLOB, BYTES length, BYTES offset)
+new xblob = blob.blob(ENUM decoding, STRING encoded)
+    BLOB xblob.get()
+    STRING xblob.encode(ENUM encoding, ENUM case)</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">This VMOD provides utility functions and an object for the VCL data type <b>BLOB</b>, which may contain arbitrary data of any length.</p>
+<p class="Pp">Examples:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>sub vcl_init {
+    # Create blob objects from encodings such as base64 or hex.
+    new myblob   = blob.blob(BASE64, "Zm9vYmFy");
+    new yourblob = blob.blob(encoded="666F6F", decoding=HEX);
+}
+sub vcl_deliver {
+    # The .get() method retrieves the BLOB from an object.
+    set resp.http.MyBlob-As-Hex
+        = blob.encode(blob=myblob.get(), encoding=HEX);
+    # The .encode() method efficiently retrieves an encoding.
+    set resp.http.YourBlob-As-Base64 = yourblob.encode(BASE64);
+    # decode() and encode() functions convert blobs to text and
+    # vice versa at runtime.
+    set resp.http.Base64-Encoded
+        = blob.encode(BASE64,
+                      blob=blob.decode(HEX,
+                                       encoded=req.http.Hex-Encoded));
+}
+sub vcl_recv {
+    # transcode() converts from one encoding to another.
+    # case=UPPER specifies upper-case hex digits A-F.
+    set req.http.Hex-Encoded
+        = blob.transcode(decoding=BASE64, encoding=HEX,
+                         case=UPPER, encoded="YmF6");
+    # transcode() from URL to IDENTITY effects a URL decode.
+    set req.url = blob.transcode(encoded=req.url, decoding=URL);
+    # transcode() from IDENTITY to URL effects a URL encode.
+    set req.http.url_urlcoded
+        = blob.transcode(encoded=req.url, encoding=URL);
+}</pre>
+</div>
+</div>
+<section class="Ss">
+<h2 class="Ss" id="ENCODING_SCHEMES"><a class='permalink' href='#ENCODING_SCHEMES'>ENCODING SCHEMES</a></h2>
+<p class="Pp">Binary-to-text encoding schemes are specified by ENUMs in the VMOD's constructor, methods and functions. Decodings convert a (possibly concatenated) string into a blob, while encodings convert a blob into a string.</p>
+<p class="Pp">ENUM values for an encoding scheme can be one of:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><b>IDENTITY</b></li>
+  <li><b>BASE64</b></li>
+  <li><b>BASE64URL</b></li>
+  <li><b>BASE64URLNOPAD</b></li>
+  <li><b>BASE64CF</b></li>
+  <li><b>HEX</b></li>
+  <li><b>URL</b></li>
+</ul>
+</div>
+<p class="Pp">Empty strings are decoded into a "null blob" (of length 0), and conversely a null blob is encoded as the empty string.</p>
+<p class="Pp">For encodings with <b>HEX</b> or <b>URL</b>, you may also specify a <i>case</i> ENUM with one of the values <b>LOWER</b>, <b>UPPER</b> or <b>DEFAULT</b> to produce a string with lower- or uppercase hex digits (in <b>[a-f]</b> or <b>[A-F]</b>). The default value for <i>case</i> is <b>DEFAULT</b>, which for <b>HEX</b> and <b>URL</b> means the same as <b>LOWER</b>.</p>
+<p class="Pp">The <i>case</i> ENUM is not relevant for decodings; <b>HEX</b> or <b>URL</b> strings to be decoded as BLOBs may have hex digits in either case, or in mixed case.</p>
+<p class="Pp">The <i>case</i> ENUM MUST be set to <b>DEFAULT</b> for the other encodings (<b>BASE64*</b> and <b>IDENTITY</b>). You cannot, for example, produce an uppercase string by using the <b>IDENTITY</b> scheme with <b>case=UPPER</b>. To change the case of a string, use the <b>std.toupper()</b> or <b>std.tolower()</b> functions from <a href='/man/vmod_std.3.en'>vmod_std(3)</a>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="IDENTITY"><a class='permalink' href='#IDENTITY'>IDENTITY</a></h2>
+<p class="Pp">The simplest encoding converts between the BLOB and STRING data types, leaving the contents byte-identical.</p>
+<p class="Pp">Note that a BLOB may contain a null byte at any position before its end; if such a BLOB is decoded with <b>IDENTITY</b>, the resulting STRING will have a null byte at that position. Since VCL strings, like C strings, are represented with a terminating null byte, the string will be truncated, appearing to contain less data than the original blob. For example:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># Decode from the hex encoding for "foo\0bar".
+# The header will be seen as "foo".
+set resp.http.Trunced-Foo1
+    = blob.encode(IDENTITY, blob=blob.decode(HEX,
+                                             encoded="666f6f00626172"));</pre>
+</div>
+</div>
+<p class="Pp"><b>IDENTITY</b> is the default encoding and decoding. So the above can also be written as:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># Decode from the hex encoding for "foo\0bar".
+# The header will be seen as "foo".
+set resp.http.Trunced-Foo2
+  = blob.encode(blob=blob.decode(HEX, encoded="666f6f00626172"));</pre>
+</div>
+</div>
+<p class="Pp">The <i>case</i> ENUM MUST be set to <b>DEFAULT</b> for <b>IDENTITY</b> encodings.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="BASE64*"><a class='permalink' href='#BASE64*'>BASE64*</a></h2>
+<p class="Pp">The base64 encoding schemes use 4 characters to encode 3 bytes. There are no newlines or maximal line lengths -- whitespace is not permitted.</p>
+<p class="Pp">The <b>BASE64</b> encoding uses the alphanumeric characters, <b>+</b> and <b>/</b>; and encoded strings are padded with the <b>=</b> character so that their length is always a multiple of four.</p>
+<p class="Pp">The <b>BASE64URL</b> encoding also uses the alphanumeric characters, but <b>-</b> and <b>_</b> instead of <b>+</b> and <b>/</b>, so that an encoded string can be used safely in a URL. This scheme also uses the padding character <b>=</b>.</p>
+<p class="Pp">The <b>BASE64URLNOPAD</b> encoding uses the same alphabet as <b>BASE6URL</b>, but leaves out the padding. Thus the length of an encoding with this scheme is not necessarily a multiple of four.</p>
+<p class="Pp">The <b>BASE64CF` is similar to ``BASE64URL</b>, with the following changes to <b>BASE64</b>: <b>+</b> replaced with <b>-</b>, <b>/</b> replaced with <b>~</b> and <b>_</b> as the padding character. It is used by a certain CDN provider who also inspired the name.</p>
+<p class="Pp">The <i>case</i> ENUM MUST be set to <b>DEFAULT</b> for all of the <b>BASE64*</b> encodings.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="HEX"><a class='permalink' href='#HEX'>HEX</a></h2>
+<p class="Pp">The <b>HEX</b> encoding scheme converts hex strings into blobs and vice versa. For encodings, you may use the <i>case</i> ENUM to specify upper- or lowercase hex digits <b>A</b> through <b>f</b> (default <b>DEFAULT</b>, which means the same as <b>LOWER</b>). A prefix such as <b>0x</b> is not used for an encoding and is illegal for a decoding.</p>
+<p class="Pp">If a hex string to be decoded has an odd number of digits, it is decoded as if a <b>0</b> is prepended to it; that is, the first digit is interpreted as representing the least significant nibble of the first byte. For example:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># The concatenated string is "abcdef0", and is decoded as "0abcdef0".
+set resp.http.First = "abc";
+set resp.http.Second = "def0";
+set resp.http.Hex-Decoded
+    = blob.encode(HEX, blob=blob.decode(HEX,
+                       encoded=resp.http.First + resp.http.Second));</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="URL"><a class='permalink' href='#URL'>URL</a></h2>
+<p class="Pp">The <b>URL</b> decoding replaces any <b>%&lt;2-hex-digits&gt;</b> substrings with the binary value of the hexadecimal number after the <b>%</b> sign.</p>
+<p class="Pp">The <b>URL</b> encoding implements "percent encoding" as per RFC3986. The <i>case</i> ENUM determines the case of the hex digits, but does not affect alphabetic characters that are not percent-encoded.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="BLOB_decode(ENUM_decoding,_INT_length,_STRING_encoded)"><a class='permalink' href='#BLOB_decode(ENUM_decoding,_INT_length,_STRING_encoded)'>BLOB decode(ENUM decoding, INT length, STRING encoded)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>BLOB decode(
+   ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} decoding=IDENTITY,
+   INT length=0,
+   STRING encoded
+)</pre>
+</div>
+</div>
+<p class="Pp">Returns the BLOB derived from the string <i>encoded</i> according to the scheme specified by <i>decoding</i>.</p>
+<p class="Pp">If <i>length</i> &gt; 0, only decode the first <i>length</i> characters of the encoded string. If <i>length</i> &lt;= 0 or greater than the length of the string, then decode the entire string. The default value of <i>length</i> is 0.</p>
+<p class="Pp"><i>decoding</i> defaults to IDENTITY.</p>
+<p class="Pp">Example:</p>
+<div cla
+</div>
+</div>
+</section>
+
+</section>
+
+            </article>
+            
+        </main>
+    </body>
+</html>
+ss="Bd-indent">
+<div class="Bd-indent">
+<pre>blob.decode(BASE64, encoded="Zm9vYmFyYmF6");
+# نفس الشيء مع المعلمات المسماة
+blob.decode(encoded="Zm9vYmFyYmF6", decoding=BASE64);
+# تحويل السلسلة إلى blob
+blob.decode(encoded="foo");</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='STRING_encode(ENUM_encoding,_ENUM_case,_BLOB_blob)'><a class='permalink' href='#STRING_encode(ENUM_encoding,_ENUM_case,_BLOB_blob)'>STRING   encode(ENUM encoding, ENUM case, BLOB blob)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>STRING encode(
+   ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} encoding=IDENTITY,
+   ENUM {LOWER, UPPER, DEFAULT} case=DEFAULT,
+   BLOB blob
+)</pre>
+</div>
+</div>
+<p class="Pp">يعيد تمثيل سلسلة نصية للكائن <i>blob</i> كما هو محدد بواسطة <i>encoding</i>. تحدد <i>case</i> حالة الأرقام السداسية عشرية لتشفير <b>HEX</b> و <b>URL</b>، ويتم تجاهلها للتشفيرات الأخرى.</p>
+<p class="Pp">الافتراضي لـ <i>encoding</i> هو <b>IDENTITY</b>، والافتراضي لـ <i>case</i> هو <b>DEFAULT</b>. يتم تفسير <b>DEFAULT</b> على أنه <b>LOWER</b> لتشفير <b>HEX</b> و <b>URL</b>، وهو القيمة المطلوبة للتشفيرات الأخرى.</p>
+<p class="Pp">مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>set resp.http.encode1
+    = blob.encode(HEX,
+                  blob=blob.decode(BASE64, encoded="Zm9vYmFyYmF6"));
+# نفس الشيء مع المعلمات المسماة
+set resp.http.encode2
+    = blob.encode(blob=blob.decode(encoded="Zm9vYmFyYmF6",
+                                           decoding=BASE64),
+                      encoding=HEX);
+# تحويل blob إلى سلسلة
+set resp.http.encode3
+    = blob.encode(blob=blob.decode(encoded="foo"));</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='STRING_transcode(ENUM_decoding,_ENUM_encoding,_ENUM_case,_INT_length,_STRING_encoded)'><a class='permalink' href='#STRING_transcode(ENUM_decoding,_ENUM_encoding,_ENUM_case,_INT_length,_STRING_encoded)'>STRING   transcode(ENUM decoding, ENUM encoding, ENUM case, INT length, STRING   encoded)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>STRING transcode(
+   ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} decoding=IDENTITY,
+   ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} encoding=IDENTITY,
+   ENUM {LOWER, UPPER, DEFAULT} case=DEFAULT,
+   INT length=0,
+   STRING encoded
+)</pre>
+</div>
+</div>
+<p class="Pp">ينقل من ترميز إلى آخر، عن طريق فك ترميز السلسلة <i>encoded</i> أولاً وفقًا للمخطط <i>decoding</i>، ثم إرجاع ترميز الكائن الناتج وفقًا للمخطط <i>encoding</i>. تحدد <i>case</i> حالة الأرقام السداسية عشرية لتشفير <b>HEX</b> و <b>URL</b>، ويتم تجاهلها للتشفيرات الأخرى.</p>
+<p class="Pp">كما هو الحال مع blob.decode(): إذا كان <i>length</i> &gt; 0، فقم بفك ترميز أول <i>length</i> حرف من السلسلة المشفرة فقط، وإلا فقم بفك ترميز السلسلة بأكملها. القيمة الافتراضية لـ <i>length</i> هي 0.</p>
+<p class="Pp">الافتراضات لـ <i>decoding</i> و <i>encoding</i> هي IDENTITY، والافتراضي لـ <i>case</i> هو <b>DEFAULT</b>. يتم تفسير <b>DEFAULT</b> على أنه <b>LOWER</b> لتشفير <b>HEX</b> و <b>URL</b>، وهو القيمة المطلوبة للتشفيرات الأخرى.</p>
+<p class="Pp">مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>set resp.http.Hex2Base64-1
+     = blob.transcode(HEX, BASE64, encoded="666f6f");
+ # نفس الشيء مع المعلمات المسماة
+ set resp.http.Hex2Base64-2
+    = blob.transcode(encoded="666f6f",
+                          encoding=BASE64, decoding=HEX);
+ # فك ترميز URL -- تذكر أن IDENTITY هو الترميز الافتراضي.
+ set resp.http.urldecoded
+    = blob.transcode(encoded="foo%20bar", decoding=URL);
+ # ترميز URL
+ set resp.http.urlencoded
+     = blob.transcode(encoded="foo bar", encoding=URL);</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='BOOL_same(BLOB,_BLOB)'><a class='permalink' href='#BOOL_same(BLOB,_BLOB)'>BOOL   same(BLOB, BLOB)</a></h2>
+<p class="Pp">يعيد <b>true</b> إذا وفقط إذا كان كائن BLOB متطابقين، أي أنهما يشيران إلى نفس المنطقة من الذاكرة بالضبط، أو كلاهما فارغ. </p>
+<p class="Pp">إذا كان كائن BLOB فارغين (الطول 0 و/أو المؤشر الداخلي <b>NULL</b>)، فإن blob.same() يعيد <b>true</b>. إذا تمت مقارنة أي كائن BLOB غير فارغ بكائن BLOB فارغ، فإن blob.same() يعيد <b>false</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='BOOL_equal(BLOB,_BLOB)'><a class='permalink' href='#BOOL_equal(BLOB,_BLOB)'>BOOL   equal(BLOB, BLOB)</a></h2>
+<p class="Pp">يعيد true إذا وفقط إذا كانت محتويات كائن BLOB متساوية (ربما في مناطق ذاكرة مختلفة).</p>
+<p class="Pp">كما هو الحال مع blob.same(): إذا كان كائن BLOB فارغين، فإن blob.equal() يعيد <b>true</b>. إذا تمت مقارنة أي كائن BLOB غير فارغ بكائن BLOB فارغ، فإن blob.equal() يعيد <b>false</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='INT_length(BLOB)'><a class='permalink' href='#INT_length(BLOB)'>INT   length(BLOB)</a></h2>
+<p class="Pp">يعيد طول الكائن BLOB.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='BLOB_sub(BLOB,_BYTES_length,_BYTES_offset=0)'><a class='permalink' href='#BLOB_sub(BLOB,_BYTES_length,_BYTES_offset=0)'>BLOB   sub(BLOB, BYTES length, BYTES offset=0)</a></h2>
+<p class="Pp">يعيد كائن BLOB جديد يتكون من <i>length</i> بايت من الكائن <i>BLOB</i> بدءًا من <i>offset</i> بايت من بداية منطقة الذاكرة الخاصة به. القيمة الافتراضية لـ <i>offset</i> هي <b>0B</b>.</p>
+<p class="Pp">يفشل blob.sub() ويعيد NULL إذا كان الكائن <i>BLOB</i> فارغًا، أو إذا كان <b>offset + length</b> يتطلب بايتات أكثر مما هو متاح في الكائن <i>BLOB</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='new_xblob_=_blob.blob(ENUM_decoding,_STRING_encoded)'><a class='permalink' href='#new_xblob_=_blob.blob(ENUM_decoding,_STRING_encoded)'>new   xblob = blob.blob(ENUM decoding, STRING encoded)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>new xblob = blob.blob(
+   ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} decoding=IDENTITY,
+   STRING encoded
+)</pre>
+</div>
+</div>
+<p class="Pp">ينشئ كائنًا يحتوي على BLOB المشتق من السلسلة <i>encoded</i> وفقًا للمخطط <i>decoding</i>.</p>
+<p class="Pp">مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>new theblob1 = blob.blob(BASE64, encoded="YmxvYg==");
+# نفس الشيء مع المعلمات المسماة
+new theblob2 = blob.blob(encoded="YmxvYg==", decoding=BASE64);
+# سلسلة كـ blob
+new stringblob = blob.blob(encoded="bazz");</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='BLOB_xblob.get()'><a class='permalink' href='#BLOB_xblob.get()'>BLOB   xblob.get()</a></h2>
+<p class="Pp">يعيد الكائن BLOB الذي تم إنشاؤه بواسطة المنشئ.</p>
+<p class="Pp">مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>set resp.http.The-Blob1 =
+    blob.encode(blob=theblob1.get());
+set resp.http.The-Blob2 =
+    blob.encode(blob=theblob2.get());
+set resp.http.The-Stringblob =
+    blob.encode(blob=stringblob.get());</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='STRING_xblob.encode(ENUM_encoding,_ENUM_case)'><a class='permalink' href='#STRING_xblob.encode(ENUM_encoding,_ENUM_case)'>STRING   xblob.encode(ENUM encoding, ENUM case)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>STRING xblob.encode(
+      ENUM {IDENTITY, BASE64, BASE64URL, BASE64URLNOPAD, BASE64CF, HEX, URL} encoding=IDENTITY,
+      ENUM {LOWER, UPPER, DEFAULT} case=DEFAULT
+)</pre>
+</div>
+</div>
+<p class="Pp">يعيد ترميز BLOB الذي تم إنشاؤه بواسطة المنشئ، وفقًا للمخطط <i>encoding</i>. تحدد <i>case</i> حالة الأرقام السداسية عشرية لتشفير <b>HEX</b> و <b>URL</b>، ويجب تعيينها إلى <b>DEFAULT</b> للتشفيرات الأخرى.</p>
+<p class="Pp">مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># blob كنص
+set resp.http.The-Blob = theblob1.encode();
+# blob كـ base64
+set resp.http.The-Blob-b64 = theblob1.encode(BASE64);</pre>
+</div>
+</div>
+<p class="Pp">لأي كائن blob.blob()، <i>encoding</i> و <i>case</i>، تكون الترميزات عبر طريقة xblob.encode() ووظيفة blob.encode() متساوية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># صحيح دائمًا:
+blob.encode(ENC, CASE, blob.get()) == blob.encode(ENC, CASE)</pre>
+</div>
+</div>
+<p class="Pp">ولكن طريقة xblob.encode() أكثر كفاءة - يتم حساب الترميز مرة واحدة وتخزينه مؤقتًا (مع تخصيص في ذاكرة الكومة)، ويتم استرداد الترميز المخزن مؤقتًا في كل استدعاء لاحق. وظيفة blob.encode() تحسب الترميز في كل مرة، وتخصص مساحة للسلسلة في مساحات عمل Varnish.</p>
+<p class="Pp">لذلك، إذا كانت البيانات في BLOB ثابتة في وقت تهيئة VCL، بحيث تكون ترميزاتها دائمًا هي نفسها، فمن الأفضل إنشاء كائن blob.blob(). يجب استخدام وظائف VMOD للبيانات التي لا تكون معروفة حتى وقت التشغيل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERRORS'><a class='permalink' href='#ERRORS'>الأخطاء</a></h1>
+<p class="Pp">قد تفشل المرمزات، وفكوك الترميز، و blob.sub() إذا لم تكن هناك مساحة كافية لإنشاء كائن BLOB أو السلسلة الجديدة. قد تفشل فكوك الترميز أيضًا إذا كانت السلسلة المشفرة بتنسيق غير قانوني لمخطط فك الترميز. ستفشل المرمزات لتشفيرات <b>IDENTITY</b> و <b>BASE64*</b> إذا لم يتم تعيين ENUM <i>case</i> إلى <b>DEFAULT</b>.</p>
+<p class="Pp">إذا فشلت أي من طرق VMOD أو وظائفها أو منشئها، فسيتم استدعاء فشل VCL، تمامًا كما لو تم استدعاء <b>return(fail)</b> في مصدر VCL. هذا يعني أن:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إذا فشل المنشئ object constructor الخاص بـ blob.blob()، أو إذا فشلت أي طرق أو وظائف أثناء <b>vcl_init{}</b>، فسيفشل تحميل برنامج VCL، وسيصدر مترجم VCC رسالة خطأ.</li>
+  <li>إذا فشلت طريقة أو وظيفة في أي روتين VCL آخر غير <b>vcl_synth{}</b>، فسيتم توجيه التحكم إلى <b>vcl_synth{}</b>. سيتم تعيين حالة الاستجابة إلى 503 مع سلسلة السبب <b>"VCL</b> <b>failed"</b>، وسيتم كتابة رسالة خطأ إلى
+      <a href='/man/vsl.7.en'>vsl(7)</a> باستخدام العلامة <b>VCL_Error</b>.</li>
+  <li>إذا حدث الفشل أثناء <b>vcl_synth{}</b>، فسيتم إلغاء <b>vcl_synth{}</b>. سيتم إرجاع سطر الاستجابة <b>"503 VCL failed"</b>، وسيتم كتابة رسالة <b>VCL_Error</b> إلى السجل.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIMITATIONS'><a class='permalink' href='#LIMITATIONS'>القيود</a></h1>
+<p class="Pp">يخصص VMOD الذاكرة بطرق مختلفة لكائنات BLOB والسلاسل الجديدة. يخصص الكائن object الخاص بـ blob.blob() وطرقها الذاكرة من الكومة، وبالتالي فهي محدودة فقط بالذاكرة الافتراضية المتاحة.</p>
+<p class="Pp">تخصص وظائف blob.encode() و blob.decode() و blob.transcode() مساحة عمل Varnish، وكذلك blob.sub() للكائن BLOB الجديد. إذا فشلت هذه الوظائف، كما يتضح من رسائل "نفاد المساحة" في سجل Varnish (مع العلامة <b>VCL_Error</b>)، فستحتاج إلى زيادة معلمات varnishd <b>workspace_client</b> و/أو <b>workspace_backend</b>.</p>
+<p class="Pp">تخصص وظيفة blob.transcode() أيضًا مساحة على المكدس لكائن BLOB مؤقت. إذا تسببت هذه الوظيفة في تجاوز سعة المكدس، فقد تحتاج إلى زيادة معلمة varnishd <b>thread_pool_stack</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><a href='/man/varnish

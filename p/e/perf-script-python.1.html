@@ -1,0 +1,440 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perf-script-python(1)</h1>
+<link rel="stylesheet" href="basic.css">
+<div class="Bd-indent">
+<pre>.ft C
+import os
+import sys
+sys.path.append(os.environ['PERF_EXEC_PATH'] + \
+        '/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
+from perf_trace_context import *
+from Core import *
+def trace_end():
+        print "in trace_end"
+def raw_syscalls__sys_enter(event_name, context, common_cpu,
+        common_secs, common_nsecs, common_pid, common_comm,
+        id, args):
+.ft</pre>
+</div>
+<p class="Pp">في الدالة trace_end()، سنقوم ببساطة بطباعة النتائج، ولكن أولاً
+    نحتاج إلى إنشاء بعض النتائج للطباعة. للقيام بذلك، نحتاج إلى أن يقوم معالج
+    الدالة sys_enter() بإجراء التعداد اللازم حتى يتم حساب جميع الأحداث. جدول
+    هاش مفهرس بمعرف استدعاء النظام هو طريقة جيدة لتخزين هذه المعلومات؛ في كل مرة
+    يتم فيها استدعاء معالج الدالة sys_enter()، نقوم ببساطة بزيادة عداد مرتبط
+    بإدخال الهاش هذا المفهرس بمعرف استدعاء النظام هذا:</p>
+<div class="Bd-indent">
+<pre>.ft C
+  syscalls = autodict()
+  try:
+    syscalls[id] += 1
+  except TypeError:
+    syscalls[id] = 1
+.ft</pre>
+</div>
+<p class="Pp">الكائن autodict لاستدعاءات النظام هو نوع خاص من قواميس بايثون
+    (مُنفذ في Core.py) الذي ينفذ جداول الهاش ذاتية الإنشاء في Perl في بايثون، أي
+    مع جداول الهاش ذاتية الإنشاء، يمكنك تعيين قيم هاش متداخلة دون الحاجة إلى
+    الذهاب إلى مشقة إنشاء مستويات وسيطة إذا لم تكن موجودة، على سبيل المثال
+    syscalls[comm][pid][id] = 1 سيقوم بإنشاء مستويات الهاش الوسيطة وأخيراً
+    تعيين القيمة 1 لإدخال الهاش لـ <i>id</i> (لأن القيمة التي يتم تعيينها ليست
+    كائن هاش بحد ذاتها، يتم تعيين القيمة الأولية في استثناء TypeError. حسناً، قد
+    يكون هناك طريقة أفضل للقيام بذلك في بايثون ولكن هذا ما يعمل حاليًا).</p>
+<p class="Pp">بوضع هذا الكود في معالج الدالة raw_syscalls__sys_enter()،
+    ننتهي بشكل فعال بقاموس أحادي المستوى مفتاحه هو معرف استدعاء النظام وقيمه هي
+    العدادات التي قمنا بتجميعها.</p>
+<p class="Pp">تقوم الدالة print_syscall_totals() بالمرور عبر الإدخالات في
+    القاموس وتعرض سطراً لكل إدخال يحتوي على اسم استدعاء النظام (تحتوي مفاتيح
+    القاموس على معرفات استدعاءات النظام، والتي يتم تمريرها إلى دالة الأداة
+    syscall_name()، والتي تترجم أرقام استدعاءات النظام الخام إلى سلاسل أسماء
+    استدعاءات النظام المقابلة). يتم عرض المخرجات بعد معالجة جميع الأحداث في
+    التتبع، عن طريق استدعاء الدالة print_syscall_totals() من معالج الدالة
+    trace_end() الذي يتم استدعاؤه في نهاية معالجة النص البرمجي.</p>
+<p class="Pp">النص البرمجي النهائي الذي ينتج المخرجات الموضحة أعلاه موضح بالكامل
+    أدناه (الأداة المساعدة syscall_name() غير متاحة بعد، يمكنك فقط التعامل مع
+    المعرفات حاليًا):</p>
+<div class="Bd-indent">
+<pre>.ft C
+import os
+import sys
+sys.path.append(os.environ['PERF_EXEC_PATH'] + \
+        '/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
+from perf_trace_context import *
+from Core import *
+from Util import *
+syscalls = autodict()
+def trace_end():
+        print_syscall_totals()
+def raw_syscalls__sys_enter(event_name, context, common_cpu,
+        common_secs, common_nsecs, common_pid, common_comm,
+        id, args):
+        try:
+                syscalls[id] += 1
+        except TypeError:
+                syscalls[id] = 1
+def print_syscall_totals():
+    if for_comm is not None:
+            print "\nsyscall events for %s:\n\n" % (for_comm),
+    else:
+            print "\nsyscall events:\n\n",
+    print "%-40s  %10s\n" % ("event", "count"),
+    print "%-40s  %10s\n" % ("----------------------------------------", \
+                                 "-----------"),
+    for id, val in sorted(syscalls.iteritems(), key = lambda(k, v): (v, k), \
+                                  reverse = True):
+            print "%-40s  %10d\n" % (syscall_name(id), val),
+.ft</pre>
+</div>
+<p class="Pp">يمكن تشغيل النص البرمجي تمامًا كما كان من قبل:</p>
+<div class="Bd-indent">
+<pre># perf script -s syscall-counts.py</pre>
+</div>
+<p class="Pp">إذًا، هذه هي الخطوات الأساسية في كتابة وتشغيل نص برمجي. يمكن تعميم
+    العملية على أي نقطة تتبع أو مجموعة من نقاط التتبع التي تهتم بها - بشكل أساسي
+    ابحث عن نقطة (نقاط) التتبع التي تهتم بها بالنظر إلى قائمة الأحداث المتاحة
+    التي يعرضها <i>perf list</i> و/أو ابحث في /sys/kernel/tracing/events/ للحصول
+    على معلومات مفصلة حول الأحداث والحقول، وسجل بيانات التتبع المقابلة باستخدام
+    <i>perf record</i>، مع تمرير قائمة الأحداث المثيرة للاهتمام، قم بإنشاء نص
+    برمجي هيكلي باستخدام <i>perf script -g python</i> وقم بتعديل الكود لتجميع
+    وعرضه لاحتياجاتك الخاصة.</p>
+<p class="Pp">بعد الانتهاء من ذلك، قد ينتهي بك الأمر بنص برمجي للأغراض العامة
+    ترغب في الاحتفاظ به وإتاحته للاستخدام المستقبلي. عن طريق كتابة عدد قليل من
+    النصوص البرمجية البسيطة للغاية ووضعها في المكان الصحيح، يمكنك إدراج النص
+    البرمجي الخاص بك جنبًا إلى جنب مع النصوص البرمجية الأخرى المدرجة بواسطة
+    الأمر <i>perf script -l</i>، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>.ft C
+# perf script -l
+List of available trace scripts:
+  wakeup-latency                       system-wide min/max/avg wakeup latency
+  rw-by-file &lt;comm&gt;                    r/w activity for a program, by file
+  rw-by-pid                            system-wide r/w activity
+.ft</pre>
+</div>
+<p class="Pp">أثر جانبي لطيف لهذا هو أنك تلتقط أيضًا أمر <i>perf record</i>
+    الطويل المحتمل المطلوب لتسجيل الأحداث للنص البرمجي.</p>
+<p class="Pp">لجعل النص البرمجي يظهر كنص برمجي <i>مدمج</i>، تكتب نصين
+    برمجيين بسيطين، أحدهما للتسجيل والآخر <i>للإبلاغ</i>.</p>
+<p class="Pp">النص البرمجي <i>record</i> هو نص برمجي شل بنفس الاسم الأساسي
+    لنصك البرمجي، ولكن مع إضافة -record. يجب وضع النص البرمجي الشل في دليل
+    perf/scripts/python/bin في شجرة مصادر النواة. في هذا النص البرمجي، تكتب
+    سطر أوامر <i>perf record</i> المطلوب للنص البرمجي الخاص بك:</p>
+<div class="Bd-indent">
+<pre>.ft C
+# cat kernel-source/tools/perf/scripts/python/bin/syscall-counts-record
+#!/bin/bash
+perf record -a -e raw_syscalls:sys_enter
+.ft</pre>
+</div>
+<p class="Pp">النص البرمجي <i>report</i> هو أيضًا نص برمجي شل بنفس الاسم الأساسي
+    لنصك البرمجي، ولكن مع إضافة -report. يجب أن يكون موجودًا أيضًا في دليل
+    perf/scripts/python/bin. في هذا النص البرمجي، تكتب سطر أوامر <i>perf
+    script -s</i> المطلوب لتشغيل النص البرمجي الخاص بك:</p>
+<div class="Bd-indent">
+<pre>.ft C
+# cat kernel-source/tools/perf/scripts/python/bin/syscall-counts-report
+#!/bin/bash
+# description: system-wide syscall counts
+perf script -s ~/libexec/perf-core/scripts/python/syscall-counts.py
+.ft</pre>
+</div>
+<p class="Pp">لاحظ أن موقع نص بايثون المقدم في النص البرمجي الشل موجود في دليل
+    libexec/perf-core/scripts/python - هذا هو المكان الذي سيتم فيه نسخ النص
+    البرمجي بواسطة <i>make install</i> عند تثبيت perf. لتثبيت النص البرمجي الخاص
+    بك هناك، يجب أن يكون النص البرمجي الخاص بك موجودًا في دليل
+    perf/scripts/python في شجرة مصادر النواة:</p>
+<div class="Bd-indent">
+<pre>.ft C
+# ls -al kernel-source/tools/perf/scripts/python
+total 32
+drwxr-xr-x 4 trz trz 4096 2010-01-26 22:30 .
+drwxr-xr-x 4 trz trz 4096 2010-01-26 22:29 ..
+drwxr-xr-x 2 trz trz 4096 2010-01-26 22:29 bin
+-rw-r--r-- 1 trz trz 2548 2010-01-26 22:29 check-perf-script.py
+drwxr-xr-x 3 trz trz 4096 2010-01-26 22:49 Perf-Trace-Util
+-rw-r--r-- 1 trz trz 1462 2010-01-26 22:30 syscall-counts.py
+.ft</pre>
+</div>
+<p class="Pp">بمجرد الانتهاء من ذلك (لا تنسَ إجراء <i>make install</i> جديد،
+    وإلا فلن يظهر النص البرمجي الخاص بك في وقت التشغيل)، يجب أن يعرض <i>perf
+    script -l</i> إدخالًا جديدًا للنص البرمجي الخاص بك:</p>
+<div class="Bd-indent">
+<pre>.ft C
+# perf script -l
+List of available trace scripts:
+  wakeup-latency                       system-wide min/max/avg wakeup latency
+  rw-by-file &lt;comm&gt;                    r/w activity for a program, by file
+  rw-by-pid                            system-wide r/w activity
+  syscall-counts                       system-wide syscall counts
+.ft</pre>
+</div>
+<p class="Pp">يمكنك الآن إجراء خطوة التسجيل عبر <i>perf script
+    record</i>:</p>
+<div class="Bd-indent">
+<pre># perf script record syscall-counts</pre>
+</div>
+<p class="Pp">وعرض المخرجات باستخدام <i>perf script report</i>:</p>
+<div class="Bd-indent">
+<pre># perf script report syscall-counts</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STARTER_SCRIPTS'><a class='permalink' href='#STARTER_SCRIPTS'>نصوص برمجية للمبتدئين</a></h1>
+<p class="Pp">يمكنك البدء بسرعة في كتابة نص برمجي لمجموعة معينة من بيانات التتبع
+    عن طريق إنشاء نص برمجي هيكلي باستخدام <i>perf script -g python</i> في نفس
+    الدليل الذي يوجد به ملف تتبع perf.data موجود. سيؤدي ذلك إلى إنشاء نص
+    برمجي للمبتدئين يحتوي على معالج لكل نوع حدث في ملف التتبع؛ يقوم ببساطة
+    بطباعة كل حقل متاح لكل حدث في ملف التتبع.</p>
+<p class="Pp">يمكنك أيضًا إلقاء نظرة على النصوص البرمجية الموجودة في
+    ~/libexec/perf-core/scripts/python للحصول على أمثلة نموذجية توضح كيفية القيام
+    بالأشياء الأساسية مثل تجميع بيانات الأحداث، وطباعة النتائج، وما إلى ذلك. أيضًا،
+    النص البرمجي check-perf-script.py، على الرغم من أنه ليس مثيرًا للاهتمام
+    بالنسبة لنتائجه، يحاول ممارسة جميع ميزات البرمجة النصية الرئيسية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EVENT_HANDLERS'><a class='permalink' href='#EVENT_HANDLERS'>معالجات الأحداث</a></h1>
+<p class="Pp">عند استدعاء perf script باستخدام نص برمجي للتتبع، يتم استدعاء
+    <i>دالة معالج</i> محددة من قبل المستخدم لكل حدث في التتبع. إذا لم تكن هناك
+    دالة معالج معرفة لنوع حدث معين، يتم تجاهل الحدث (أو تمريره إلى دالة
+    <i>trace_unhandled</i>، انظر أدناه) ويتم معالجة الحدث التالي.</p>
+<p class="Pp">يتم تمرير معظم قيم حقول الأحداث كوسائط إلى دالة المعالج؛ بعضها
+    غير شائع - هذه متاحة كاستدعاءات رجعية إلى تنفيذ perf (انظر أدناه).</p>
+<p class="Pp">على سبيل المثال، يمكن استخدام أمر perf record التالي لتسجيل جميع
+    أحداث sched_wakeup في النظام:</p>
+<div class="Bd-indent">
+<pre># perf record -a -e sched:sched_wakeup</pre>
+</div>
+<p class="Pp">يجب تسجيل عمليات التتبع المقصود معالجتها باستخدام نص برمجي بالخيار
+    أعلاه: -a لتمكين الجمع على مستوى النظام.</p>
+<p class="Pp">يحدد ملف التنسيق لحدث sched_wakeup الحقول التالية (انظر
+    /sys/kernel/tracing/events/sched/sched_wakeup/format):</p>
+<div class="Bd-indent">
+<pre>.ft C
+ format:
+        field:unsigned short common_type;
+        field:unsigned char common_flags;
+        field:unsigned char common_preempt_count;
+        field:int common_pid;
+        field:char comm[TASK_COMM_LEN];
+        field:pid_t pid;
+        field:int prio;
+        field:int success;
+        field:int target_cpu;
+.ft</pre>
+</div>
+<p class="Pp">ستكون دالة المعالج لهذا الحدث معرفة على النحو التالي:</p>
+<div class="Bd-indent">
+<pre>.ft C
+def sched__sched_wakeup(event_name, context, common_cpu, common_secs,
+       common_nsecs, common_pid, common_comm,
+       comm, pid, prio, success, target_cpu):
+       pass
+.ft</pre>
+</div>
+<p class="Pp">تأخذ دالة المعالج الشكل subsystem__event_name.</p>
+<p class="Pp">الوسائط common_* في قائمة وسائط المعالج هي مجموعة الوسائط التي
+    يتم تمريرها إلى جميع معالجات الأحداث؛ بعض الحقول تتوافق مع حقول common_*
+    في ملف التنسيق، ولكن بعضها مُصنّع، وبعض حقول common_* ليست شائعة بما يكفي
+    لتمريرها إلى كل حدث كوسائط ولكنها متاحة كدوال مكتبة.</p>
+<p class="Pp">إليك وصف موجز لكل وسيط حدث ثابت:</p>
+<div class="Bd-indent">
+<pre>event_name                 
+</pre>
+</div>
+# The name of the event as text
+# context: an opaque 'cookie' used in calls back into perf
+# common_cpu: the cpu the event occurred on
+# common_secs: the secs portion of the event timestamp
+# common_nsecs: the nsecs portion of the event timestamp
+# common_pid: the pid of the current task
+# common_comm: the name of the current process
+# All of the remaining fields in the event's format file have counterparts as handler function arguments of the same name, as can be seen in the example above.
+# The above provides the basics needed to directly access every field of every event in a trace, which covers 90% of what you need to know to write a useful trace script. The sections below cover the rest.
+name: اسم الحدث كنص
+context: "سياق: 'ملف تعريف' معتم يستخدم في الاستدعاءات الراجعة إلى perf"
+common_cpu: "وحدة المعالجة المركزية المشتركة التي وقع فيها الحدث"
+common_secs: "الجزء الثواني من الطابع الزمني للحدث"
+common_nsecs: "الجزء النانو ثانية من الطابع الزمني للحدث"
+common_pid: "معرف العملية للمهمة الحالية"
+common_comm: "اسم العملية الحالية"
+# شرح:
+# جميع الحقول المتبقية في ملف تنسيق الحدث لها نظائر كوسائط دوال معالجة بنفس الاسم، كما يمكن رؤيته في المثال أعلاه.
+# يوفر ما سبق الأساسيات اللازمة للوصول المباشر إلى كل حقل في كل حدث في تتبع، مما يغطي 90% مما تحتاج لمعرفته لكتابة برنامج نصي مفيد للتتبع. الأقسام أدناه تغطي الباقي.
+section:
+  name: SCRIPT_LAYOUT
+  title: "تخطيط البرنامج النصي"
+  content: |
+    # يجب أن يبدأ كل برنامج نصي Python لتتبع perf بإعداد مسار بحث وحدات Python و'استيراد' بضع وحدات دعم (انظر وصف الوحدات أدناه):
+    script_setup: |
+      import os
+      import sys
+      sys.path.append(os.environ['PERF_EXEC_PATH'] + \
+                   '/scripts/python/Perf-Trace-Util/lib/Perf/Trace')
+      from perf_trace_context import *
+      from Core import *
+    # يمكن أن يحتوي باقي البرنامج النصي على دوال معالجة ودوال دعم بأي ترتيب.
+    # بصرف النظر عن دوال معالجة الأحداث الموضحة أعلاه، يمكن لكل برنامج نصي تنفيذ مجموعة من الدوال الاختيارية:
+    trace_begin:
+      description: "trace_begin، إذا تم تعريفه، يتم استدعاؤه قبل معالجة أي حدث ويعطي البرامج النصية فرصة للقيام بمهام الإعداد:"
+      example: |
+        def trace_begin():
+            pass
+    trace_end:
+      description: "trace_end، إذا تم تعريفه، يتم استدعاؤه بعد معالجة جميع الأحداث ويعطي البرامج النصية فرصة للقيام بمهام نهاية البرنامج النصي، مثل عرض النتائج:"
+      example: |
+        def trace_end():
+            pass
+    trace_unhandled:
+      description: "trace_unhandled، إذا تم تعريفه، يتم استدعاؤه لأي حدث لا يحتوي على معالج معرف بشكل صريح له. يتم تمرير المجموعة القياسية من الوسائط الشائعة إليه:"
+      example: |
+        def trace_unhandled(event_name, context, event_fields_dict):
+            pass
+    process_event:
+      description: "process_event، إذا تم تعريفه، يتم استدعاؤه لأي حدث غير نقطة تتبع"
+      example: |
+        def process_event(param_dict):
+            pass
+    context_switch:
+      description: "context_switch، إذا تم تعريفه، يتم استدعاؤه لأي تبديل سياق"
+      example: |
+        def context_switch(ts, cpu, pid, tid, np_pid, np_tid, machine_pid, out, out_preempt, *x):
+            pass
+    auxtrace_error:
+      description: "auxtrace_error، إذا تم تعريفه، يتم استدعاؤه لأي خطأ في تتبع منطقة AUX"
+      example: |
+        def auxtrace_error(typ, code, cpu, pid, tid, ip, ts, msg, cpumode, *x):
+            pass
+    # توفر الأقسام المتبقية وصفًا لكل وحدة من وحدات Python النصية المدمجة المتاحة ووظائفها المرتبطة بها.
+section:
+  name: AVAILABLE_MODULES_AND_FUNCTIONS
+  title: "الوحدات والوظائف المتاحة"
+  content: |
+    # تصف الأقسام التالية الوظائف والمتغيرات المتاحة من خلال وحدات Python النصية المختلفة. لاستخدام الوظائف والمتغيرات من الوحدة المعطاة، أضف سطر 'from XXXX import' المقابل إلى البرنامج النصي لـ perf الخاص بك.
+  subsection:
+    name: Core.py_Module
+    title: "وحدة Core.py"
+    content: |
+      # توفر هذه الوظائف بعض الوظائف الأساسية للبرامج النصية للمستخدم.
+      # توفر وظيفتا flag_str و symbol_str سلاسل نصية سهلة القراءة للحقول الرمزية والحقول الرمزية. تتوافق هذه مع السلاسل والقيم التي تم تحليلها من حقول 'print fmt' لملفات تنسيق الحدث:
+      functions:
+        - name: flag_str
+          description: "flag_str(event_name, field_name, field_value) - تعيد التمثيل النصي المقابل لقيمة field_value للحقل الرمزي field_name للحدث event_name"
+        - name: symbol_str
+          description: "symbol_str(event_name, field_name, field_value) - تعيد التمثيل النصي المقابل لقيمة field_value للحقل الرمزي field_name للحدث event_name"
+      # تعيد الوظيفة autodict قاموس Python من نوع خاص ينفذ جداول Perl 'autovivifying' في Python، أي مع جداول autovivifying، يمكنك تعيين قيم جداول متداخلة دون الحاجة إلى إنشاء مستويات وسيطة إذا لم تكن موجودة.
+      functions:
+        - name: autodict
+          description: "autodict() - تعيد نسخة قاموس autovivifying"
+  subsection:
+    name: perf_trace_context_Module
+    title: "وحدة perf_trace_context"
+    content: |
+      # بعض الحقول 'common' في ملف تنسيق الحدث ليست شائعة تمامًا، ولكن يجب جعلها متاحة للبرامج النصية للمستخدم على أي حال.
+      # تحدد perf_trace_context مجموعة من الوظائف التي يمكن استخدامها للوصول إلى هذه البيانات في سياق الحدث الحالي. تتوقع كل من هذه الوظائف متغير سياق، وهو نفس متغير السياق الذي تم تمريره إلى كل معالج حدث نقطة تتبع كوسيط ثانٍ. بالنسبة للأحداث غير نقاط التتبع، يكون متغير السياق موجودًا أيضًا كـ perf_trace_context.perf_script_context.
+      functions:
+        - name: common_pc
+          description: "common_pc(context) - تعيد عدد الاستباق الشائع للحدث الحالي"
+        - name: common_flags
+          description: "common_flags(context) - تعيد الأعلام الشائعة للحدث الحالي"
+        - name: common_lock_depth
+          description: "common_lock_depth(context) - تعيد عمق القفل الشائع للحدث الحالي"
+        - name: perf_sample_insn
+          description: "perf_sample_insn(context) - تعيد تعليمة رمز الآلة"
+        - name: perf_set_itrace_options
+          description: "perf_set_itrace_options(context, itrace_options) - تعيين خيارات --itrace إذا لم يتم تعيينها بالفعل"
+        - name: perf_sample_srcline
+          description: "perf_sample_srcline(context) - تعيد اسم ملف المصدر، رقم السطر"
+        - name: perf_sample_srccode
+          description: "perf_sample_srccode(context) - تعيد اسم ملف المصدر، رقم السطر، سطر المصدر"
+        - name: perf_config_get
+          description: "perf_config_get(config_name) - تعيد قيمة عنصر التكوين المسمى، أو None إذا لم يتم تعيينه"
+  subsection:
+    name: Util.py_Module
+    title: "وحدة Util.py"
+    content: |
+      # وظائف أدوات متنوعة للاستخدام مع نصوص perf:
+      functions:
+        - name: nsecs
+          description: "nsecs(secs, nsecs) - تعيد إجمالي نانو ثانية مع إعطاء زوج ثواني/نانو ثانية"
+        - name: nsecs_secs
+          description: "nsecs_secs(nsecs) - تعيد جزء الثواني الكلي مع إعطاء نانو ثانية"
+        - name: nsecs_nsecs
+          description: "nsecs_nsecs(nsecs) - تعيد باقي نانو ثانية مع إعطاء نانو ثانية"
+        - name: nsecs_str
+          description: "nsecs_str(nsecs) - تعيد سلسلة نصية قابلة للطباعة بالشكل ثواني.نانو ثانية"
+        - name: avg
+          description: "avg(total, n) - تعيد المتوسط مع إعطاء مجموع وعدد إجمالي للقيم"
+section:
+  name: SUPPORTED_FIELDS
+  title: "الحقول المدعومة"
+  content: |
+    # الحقول المدعومة حاليًا:
+    supported_fields:
+      - ev_name
+      - comm
+      - id
+      - stream_id
+      - pid
+      - tid
+      - cpu
+      - ip
+      - time
+      - period
+      - phys_addr
+      - addr
+      - symbol
+      - symoff
+      - dso
+      - time_enabled
+      - time_running
+      - values
+      - callchain
+      - brstack
+      - brstacksym
+      - datasrc
+      - datasrc_decode
+      - iregs
+      - uregs
+      - weight
+      - transaction
+      - raw_buf
+      - attr
+      - cpumode
+    # الحقول التي قد تكون موجودة أيضًا:
+    additional_fields:
+      - flags: "أعلام العينة"
+      - flags_disp: "عرض أعلام العينة"
+      - insn_cnt: "عدد التعليمات لتحديد التعليمات لكل دورة (IPC)"
+      - cyc_cnt: "عدد الدورات لتحديد IPC"
+      - addr_correlates_sym: "يمكن لـ addr الارتباط بالرمز"
+      - addr_dso: "addr dso"
+      - addr_symbol: "رمز addr"
+      - addr_symoff: "إزاحة رمز addr"
+    # تحتوي بعض الحقول على عناصر فرعية:
+    sub_items:
+      brstack:
+        - from
+        - to
+        - from_dsoname
+        - to_dsoname
+        - mispred
+        - predicted
+        - in_tx
+        - abort
+        - cycles
+      brstacksym:
+        - items:
+            - from
+            - to
+            - pred
+            - in_tx
+            - abort (string converted)
+    # على سبيل المثال، يمكننا استخدام هذا الرمز لطباعة brstack "from"، "to"، "cycles".
+    example: |
+      if 'brstack' in dict:
+          for entry in dict['brstack']:
+              print("from %s, to %s, cycles %s" % (entry["from"], entry["to"], entry["cycles"]))
+section:
+  name: SEE_ALSO
+  title: "انظر أيضًا"
+  content: |
+    - perf-script(1)

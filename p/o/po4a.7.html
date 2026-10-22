@@ -1,0 +1,97 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">po4a(7)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='TransTractors_and_project_architecture'><a class='permalink' href='#TransTractors_and_project_architecture'>TransTractors وهيكلية المشروع</a></h1>
+<p class="Pp">في جوهر مشروع po4a، الفئة
+    <a href='/man/Locale::Po4a::TransTractor.3pm.en'>Locale::Po4a::TransTractor(3pm)</a> هي السلف المشترك لجميع محللات po4a. هذا الاسم الغريب يأتي من حقيقة أنه مسؤول في نفس الوقت عن ترجمة المستندات واستخلاص النصوص.</p>
+<p class="Pp">بشكل رسمي أكثر، تأخذ مستندًا لترجمته بالإضافة إلى ملف PO يحتوي على الترجمات لاستخدامه كمدخلات مع إنتاج مخرجين منفصلين: ملف PO آخر (ناتج عن استخلاص النصوص القابلة للترجمة من المستند المدخل)، ومستند مترجم (له نفس بنية المستند المدخل، ولكن مع استبدال جميع النصوص القابلة للترجمة بمحتوى ملف PO المدخل). إليك تمثيل رسومي لهذا:</p>
+<pre>المستند المدخل --\                             /---&gt; المستند المخرج
+                  \      TransTractor::       /       (مترجم)
+                   +--&gt;--   parse()  --------+
+                  /                           \
+ملف PO المدخل --------/                             \---&gt; ملف PO المخرج
+                                                    (مستخلص)</pre>
+<p class="Pp">هذه العظمة الصغيرة هي جوهر هيكلية po4a بأكملها. إذا قمت بتوفير المدخلات وتجاهلت ملف PO المخرج، تحصل على
+    <b>po4a-translate</b>. إذا تجاهلت المستند المخرج بدلاً من ذلك، تحصل على
+    <b>po4a-updatepo</b>. يستخدم <b>po4a</b> TransTractor أولاً للحصول على ملف POT مخرج محدث (متجاهلاً المستندات المخرجة)، يستدعي
+    <b>msgmerge -U</b> لتحديث ملفات PO للترجمة على القرص، ويبني TransTractor ثانيًا بهذه الملفات المحدثة لتحديث المستندات المخرجة. باختصار، يوفر <b>po4a</b> حلاً شاملاً لتحديث ما يحتاج إلى تحديث، باستخدام ملف تكوين واحد.</p>
+<p class="Pp">يستخدم <b>po4a-gettextize</b> أيضًا TransTractors، ولكن بطريقة مختلفة: يبني TransTractor لكل لغة، ثم يبني ملف PO جديد باستخدام msgids للمستند الأصلي كـ msgids، و msgids للمستند المترجم كـ msgstrs. يجب توخي الكثير من الحذر لضمان أن النصوص المطابقة بهذه الطريقة تتطابق بالفعل، كما هو موضح في
+    <a href='/man/po4a-gettextize.1.en'>po4a-gettextize(1)</a>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Format-specific_parsers'><a class='permalink' href='#Format-specific_parsers'>محللات خاصة بالتنسيق</a></h2>
+<p class="Pp">جميع محللات تنسيقات po4a مطبقة فوق TransTractor. بعضها بسيط للغاية، مثل محللات Text و Markdown و AsciiDoc. تقوم بتحميل الأسطر سطراً بسطر باستخدام
+    <span class="Li">TransTractor::shiftline()</span>، وتجميع محتوى الفقرات أو غيرها. بمجرد تحليل النص بالكامل، يستخدم المحلل
+    <span class="Li">TransTractor::translate()</span> لـ (1) إضافة هذا النص إلى ملف PO المخرج و (2) الحصول على الترجمة من ملف PO المدخل. ثم يدفع المحلل النتيجة إلى الملف المخرج باستخدام
+    <span class="Li">TransTractor::pushline()</span>.</p>
+<p class="Pp">بعض المحللات الأخرى أكثر تعقيدًا لأنها تعتمد على محلل خارجي لتحليل المستند المدخل. محللات Xml و HTML و SGML و Pod مبنية فوق محللات SAX. تعلن عن استدعاءات للأحداث مثل "لقد وجدت عنوانًا جديدًا محتواه هو ما يلي" لتحديث المستند المخرج وملفات POT المخرجة وفقًا للمحتوى المدخل باستخدام
+    <span class="Li">TransTractor::translate()</span> و
+    <span class="Li">TransTractor::pushline()</span>. محلل Yaml مشابه ولكنه مختلف: يقوم بتحويل بنية بيانات منتجة بواسطة محلل YAML::Tiny. هذا هو السبب في أن وحدة Yaml في po4a تفشل في الإعلان عن أسطر المرجع: لا يتم الاحتفاظ بموقع كل نص في الملف المدخل بواسطة المحلل، لذلك يمكننا فقط تقديم "اسم الملف: 1" كموقع نص. المحللات الموجهة نحو SAX تستخدم متغيرات عامة وحيل أخرى لحفظ اسم الملف وأرقام الأسطر للمراجع.</p>
+<p class="Pp">تنشأ مشكلة محددة من ترميزات الملفات وعلامات BOM. يمكن للمحللات البسيطة أن تنسى هذه المشكلة، والتي يتم التعامل معها بواسطة
+    <span class="Li">TransTractor::read()</span> (المستخدمة داخليًا للحصول على أسطر المستند المدخل)، ولكن الوحدات التي تعتمد على محلل خارجي يجب أن تضمن أن جميع الملفات تُقرأ بطبقة فك تشفير PerlIO مناسبة. الأسهل هو فتح الملف بنفسك، وتوفير مقبض ملف أو السلسلة الكاملة مباشرة لمحللك الخارجي. تحقق من
+    <span class="Li">Pod::read()</span> و
+    <span class="Li">Pod::parse()</span> كمثال. يتم تجاهل المحتوى الذي يقرأه TransTractor، ولكن يتم تمرير مقبض ملف جديد إلى المحلل الخارجي. الجزء المهم هو وضع
+    <span class="Li">&quot;&lt;:encoding($charset)&quot;</span> الذي يتم تمريره إلى الدالة <b>open()</b> في Perl.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Po_objects'><a class='permalink' href='#Po_objects'>كائنات Po</a></h2>
+<p class="Pp">الفئة <a href='/man/Locale::Po4a::Po.3pm.en'>Locale::Po4a::Po(3pm)</a> مسؤولة عن تحميل واستخدام ملفات PO و POT. بشكل أساسي، يمكنك قراءة ملف، إضافة إدخالات، الحصول على ترجمات باستخدام طريقة <b>gettext()</b>، وكتابة ملف PO إلى ملف. يتم تفويض الميزات الأكثر تقدمًا مثل دمج ملف PO مقابل ملف POT أو التحقق من صحة ملف إلى <b>msgmerge</b> و <b>msgfmt</b> على التوالي.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Contributing_to_po4a'><a class='permalink' href='#Contributing_to_po4a'>المساهمة في po4a</a></h2>
+<p class="Pp">حتى لو لم تساهم في أي مشروع مفتوح المصدر من قبل، فمرحباً بك: نحن على استعداد لمساعدتك وتوجيهك هنا. po4a تتم صيانتها بشكل أفضل من قبل مستخدميها حاليًا. نظرًا لنقص الموظفين، نحاول جعل المشروع مرحبًا به من خلال تحسين الوثائق والاختبارات الآلية لجعلك واثقًا من المساهمة في المشروع. يرجى الرجوع إلى ملف CONTRIbUTING.md لمزيد من التفاصيل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Open-source_projects_using_po4a'><a class='permalink' href='#Open-source_projects_using_po4a'>المشاريع مفتوحة المصدر التي تستخدم po4a</a></h1>
+<p class="Pp">هذه قائمة جزئية جدًا بالمشاريع التي تستخدم po4a في الإنتاج لوثائقها. إذا كنت ترغب في إضافة مشروعك إلى القائمة، فقط أرسل لنا بريدًا إلكترونيًا (أو طلب دمج).</p>
+<ul class="Bl-bullet">
+  <li>adduser (man): أداة إدارة المستخدمين والمجموعات.</li>
+  <li>apt (man, docbook): مدير حزم دبيان.</li>
+  <li>aptitude (docbook, svg): مدير حزم قائم على الطرفية لدبيان</li>
+  <li>موقع F-Droid <a href='https://gitlab.com/fdroid/fdroid-website'>https://gitlab.com/fdroid/fdroid-website</a>
+      (markdown): فهرس قابل للتثبيت لبرامج FOSS (برامج مجانية ومفتوحة المصدر)
+      لنظام Android.</li>
+  <li>git <a href='https://github.com/jnavila/git-manpages-l10n'>https://github.com/jnavila/git-manpages-l10n</a> (asciidoc):
+      نظام تتبع التغييرات الموزع لتتبع التغييرات في شفرة المصدر.</li>
+  <li>صفحات دليل Linux
+      <a href='https://salsa.debian.org/manpages-l10n-team/manpages-l10n'>https://salsa.debian.org/manpages-l10n-team/manpages-l10n</a> (man)
+    <p class="Pp">يوفر هذا المشروع بنية تحتية لترجمة العديد من صفحات الدليل إلى لغات مختلفة، جاهزة للدمج في العديد من التوزيعات الرئيسية (Arch Linux، Debian ومشتقاتها، Fedora).</p>
+  </li>
+  <li>Stellarium <a href='https://github.com/Stellarium/stellarium'>https://github.com/Stellarium/stellarium</a> (HTML): برنامج
+      مجاني مفتوح المصدر للمحاكاة الفلكية على جهاز الكمبيوتر الخاص بك. يستخدم po4a لترجمة أوصاف ثقافة السماء.</li>
+  <li>Jamulus <a href='https://jamulus.io/'>https://jamulus.io/</a> (markdown, yaml, HTML): تطبيق FOSS
+      للموسيقى عبر الإنترنت في الوقت الفعلي. تتم صيانة وثائق الموقع بلغات متعددة باستخدام po4a.</li>
+  <li>بند آخر لفرزه: <a href='https://gitlab.com/fdroid/fdroid-website/'>https://gitlab.com/fdroid/fdroid-website/</a>
+      <a href='https://github.com/fsfe/reuse-docs/pull/61'>https://github.com/fsfe/reuse-docs/pull/61</a></li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FAQ'><a class='permalink' href='#FAQ'>الأسئلة المتكررة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='How_do_you_pronounce_po4a?'><a class='permalink' href='#How_do_you_pronounce_po4a?'>كيف تنطق po4a؟</a></h2>
+<p class="Pp">أنا شخصياً أنطقها "بوا"
+    <a href='https://en.wiktionary.org/wiki/pouah'>https://en.wiktionary.org/wiki/pouah</a>، وهي صوت يعبر عن الاشمئزاز بالفرنسية نستخدمه بدلاً من "مقرف" :) قد يكون لدي حس فكاهة غريب :)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Why_are_the_individual_scripts_deprecated?'><a class='permalink' href='#Why_are_the_individual_scripts_deprecated?'>لماذا تم إهمال البرامج النصية الفردية؟</a></h2>
+<p class="Pp">بالفعل، تم إهمال <b>po4a-updatepo</b> و <b>po4a-translate</b> لصالح <b>po4a</b>. السبب هو أنه بينما يمكن استخدام <b>po4a</b> كبديل مباشر لهذه البرامج النصية، هناك قدر كبير من تكرار التعليمات البرمجية هنا. تستغرق البرامج النصية الفردية حوالي 150 سطرًا من التعليمات البرمجية بينما يستغرق برنامج <b>po4a</b> 1200 سطر، لذا فهي تفعل الكثير بالإضافة إلى الأجزاء الداخلية المشتركة. يؤدي تكرار التعليمات البرمجية إلى حدوث أخطاء في كلا الإصدارين وتتطلب إصلاحين. أحد الأمثلة على هذا التكرار هو الأخطاء #1022216 في دبيان والمشكلة #442 في GitHub التي كان لها نفس الإصلاح بالضبط، ولكن واحد في <b>po4a</b> والآخر في <b>po4a-updatepo</b>.</p>
+<p class="Pp">على المدى الطويل، أود إسقاط البرامج النصية الفردية والاحتفاظ بإصدار واحد فقط من هذه التعليمات البرمجية. الشيء المؤكد هو أن البرامج النصية الفردية لن تتحسن بعد الآن، لذلك سيحصل <b>po4a</b> فقط على الميزات الجديدة. ومع ذلك، لا يوجد استعجال لإهمالها. أخطط للاحتفاظ بالبرامج النصية الفردية لأطول فترة ممكنة، وعلى الأقل حتى عام 2030. إذا كان مشروعك لا يزال يستخدم <b>po4a-updatepo</b> و <b>po4a-translate</b> في عام 2030، فقد تواجه مشكلة.</p>
+<p class="Pp">قد نقوم أيضًا بإزالة إهمال هذه البرامج النصية في مرحلة ما، إذا أدى إعادة الهيكلة إلى تقليل تكرار التعليمات البرمجية إلى الصفر. إذا كان لديك فكرة (أو أفضل: تصحيح)، فإن مساعدتك مرحب بها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='What_about_the_other_translation_tools_for_documentation_using_gettext?'><a class='permalink' href='#What_about_the_other_translation_tools_for_documentation_using_gettext?'>ماذا عن أدوات الترجمة الأخرى للوثائق التي تستخدم gettext؟</a></h2>
+<p class="Pp">هناك عدد قليل منها. إليك قائمة قد تكون غير مكتملة، والمزيد من الأدوات قادمة في الأفق.</p>
+<dl class="Bl-tag">
+  <dt id="poxml"><a class="permalink" href="#poxml"><b>poxml</b></a></dt>
+  <dd>هذه هي الأداة التي طورها فريق KDE للتعامل مع DocBook XML. على حد علمي، كانت أول برنامج لاستخلاص النصوص المراد ترجمتها من الوثائق إلى ملفات PO، وحقنها مرة أخرى بعد الترجمة.
+    <p class="Pp">يمكنها التعامل مع XML فقط، ومع DTD معينة فقط. أنا غير راضٍ تمامًا عن التعامل مع القوائم، والتي تنتهي في msgid كبير واحد. عندما تصبح القائمة كبيرة، يصبح الجزء أصعب في الابتلاع.</p>
+  </dd>
+  <dt id="po"><a class="permalink" href="#po"><b>po-debiandoc</b></a></dt>
+  <dd>هذا البرنامج الذي قام به Denis Barbier هو نوع من السلائف لوحدة SGML في po4a، والتي تهمله تقريبًا. كما يوحي الاسم، فإنه يتعامل فقط مع DebianDoc DTD، وهي DTD مهملة تقريبًا.</dd>
+  <dt id="xml2po.py"><a class="permalink" href="#xml2po.py"><b>xml2po.py</b></a></dt>
+  <dd>استخدمه فريق وثائق GIMP منذ عام 2004، ويعمل بشكل جيد جدًا على الرغم من أنه، كما يوحي الاسم، يعمل فقط مع ملفات XML.</dd>
+</dl>
+</section>
+</section>

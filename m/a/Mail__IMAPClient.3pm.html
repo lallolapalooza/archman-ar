@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Mail::IMAPClient(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Mail__IMAPClient(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-mail-imapclient/">perl-mail-imapclient</a></p>
+<p class="lic">التراخيص: GPL</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Mail::IMAPClient(3)</td>
+    <td class="head-vol">وثائق Perl المساهمة</td>
+    <td class="head-rtitle">Mail::IMAPClient(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Mail::IMAPClient - واجهة برمجية لعميل IMAP</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الموجز</a></h1>
+<pre>use Mail::IMAPClient;
+my $imap = Mail::IMAPClient-&gt;new(
+  Server   =&gt; 'localhost',
+  User     =&gt; 'username',
+  Password =&gt; 'password',
+  Ssl      =&gt; 1,
+  Uid      =&gt; 1,
+);
+my $folders = $imap-&gt;folders
+  or die &quot;خطأ في قائمة المجلدات: &quot;, $imap-&gt;LastError, &quot;\n&quot;;
+print &quot;المجلدات: @$folders\n&quot;;
+$imap-&gt;select( $Opt{folder} )
+  or die &quot;خطأ في تحديد '$Opt{folder}': &quot;, $imap-&gt;LastError, &quot;\n&quot;;
+$imap-&gt;fetch_hash(&quot;FLAGS&quot;, &quot;INTERNALDATE&quot;, &quot;RFC822.SIZE&quot;)
+  or die &quot;خطأ في جلب الـ hash لـ '$Opt{folder}': &quot;, $imap-&gt;LastError, &quot;\n&quot;;
+$imap-&gt;logout
+  or die &quot;خطأ في تسجيل الخروج: &quot;, $imap-&gt;LastError, &quot;\n&quot;;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">توفر هذه الوحدة طرقًا تنفذ بروتوكول IMAP للتفاعل مع مخازن رسائل IMAP.</p>
+<p class="Pp">تُستخدم الوحدة عن طريق إنشاء أو تهيئة كائن من نوع IMAPClient من خلال الدالة البانية <b>new</b>. بمجرد تهيئة الكائن، يتم استدعاء الدالة <b>connect</b> ضمنيًا أو صراحةً. في هذه المرحلة، تصبح الطرق التي تنفذ أوامر عميل IMAP وفقًا لـ RFC 3501 متاحة. عند الانتهاء من العملية، يجب استدعاء الدالة <b>logout</b> للكائن.</p>
+<p class="Pp">لا ينبغي أن تحل هذه الوثائق محل RFC 3501 أو RFCs أخرى متعلقة بـ IMAP.</p>
+<p class="Pp">ملاحظة: تستخدم هذه الوثائق مصطلح <i>مجلد</i> بدلاً من <i>صندوق البريد</i> المستخدم في RFC 3501. تحتفظ هذه الوثائق باستخدام مصطلح <i>صندوق بريد</i> للإشارة إلى مجموعة من المجلدات المملوكة لمعرف IMAP محدد.</p>
+<section class="Ss">
+<h2 class="Ss" id='Connection_State'><a class='permalink' href='#Connection_State'>حالة الاتصال</a></h2>
+<p class="Pp">تحدد RFC 3501 أربع حالات ممكنة لاتصال IMAP: غير مصادق عليه، مصادق عليه، محدد، وغير متصل. تتوافق هذه مع ثوابت IMAPClient <span class="Li">&quot;Connected&quot;</span>، <span class="Li">&quot;Authenticated&quot;</span>، <span class="Li">&quot;Selected&quot;</span>، و <span class="Li">&quot;Disconnected&quot;</span>، على التوالي. يمكن استخدام هذه الثوابت جنبًا إلى جنب مع الدالة <b>Status</b> لتحديد حالة كائن IMAPClient وجلسته الأساسية.</p>
+<p class="Pp">ملاحظة: قد يكون كائن IMAPClient في حالة <span class="Li">&quot;Disconnected&quot;</span> إما قبل الاتصال بالخادم أو بعد انتهاء الاتصال. يختلف هذا الاختلاف قليلاً عن RFC 3501، الذي لا يحدد حالة ما قبل الاتصال. لمناقشة الدوال المتاحة لفحص حالة كائن IMAPClient، راجع القسم المسمى &quot;دوال الحالة&quot;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Advanced_Authentication_Mechanisms'><a class='permalink' href='#Advanced_Authentication_Mechanisms'>آليات المصادقة المتقدمة</a></h2>
+<p class="Pp">تحدد RFC 3501 دالتين للمصادقة على خادم IMAP:</p>
+<dl class="Bl-tag">
+  <dt id="LOGIN"><a class="permalink" href="#LOGIN">LOGIN</a></dt>
+  <dd>LOGIN للمصادقة بالنص العادي.</dd>
+  <dt id="AUTHENTICATE"><a class="permalink" href="#AUTHENTICATE">AUTHENTICATE</a></dt>
+  <dd>AUTHENTICATE للمصادقة الأكثر تقدمًا و/أو الأمان.</dd>
+</dl>
+<p class="Pp">يدعم Mail::IMAPClient آليات المصادقة التالية:</p>
+<dl class="Bl-tag">
+  <dt id="DIGEST"><a class="permalink" href="#DIGEST">DIGEST-MD5</a></dt>
+  <dd>يتطلب DIGEST-MD5 وحدات Authen::SASL و Digest::MD5. راجع أيضًا &quot;المصادقة&quot;.</dd>
+  <dt id="CRAM"><a class="permalink" href="#CRAM">CRAM-MD5</a></dt>
+  <dd>يتطلب CRAM-MD5 وحدة Digest::HMAC_MD5.</dd>
+  <dt id="PLAIN"><a class="permalink" href="#PLAIN">PLAIN (SASL)</a></dt>
+  <dd>يسمح PLAIN (SASL) بالاستخدام الاختياري للمعامل &quot;Proxy&quot;. توثق RFC 4616 هذا التنسيق لـ SASL PLAIN:
+        <pre>message = [authzid] UTF8NUL authcid UTF8NUL passwd
+</pre>
+    <p class="Pp">عند تعريف &quot;Proxy&quot;، يتم استخدام &quot;User&quot; كـ 'authzid' و &quot;Proxy&quot; كـ 'authcid'. بخلاف ذلك، يتم استخدام &quot;User&quot; كـ 'authcid'.</p>
+  </dd>
+  <dt id="NTLM"><a class="permalink" href="#NTLM">NTLM</a></dt>
+  <dd>يتطلب NTLM وحدة Authen::NTLM. راجع أيضًا &quot;المجال&quot;.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Errors'><a class='permalink' href='#Errors'>الأخطاء</a></h2>
+<p class="Pp">إذا حاولت إجراء عملية ينتج عنها خطأ، يمكنك استرداد نص رسالة الخطأ باستخدام الدالة <b>LastError</b>. ومع ذلك، فإن الدالة <b>LastError</b> هي دالة للكائن (وليس دالة فئة) ولا يمكن استخدامها إلا بعد إنشاء الكائن بنجاح. في الحالات التي لا يتم فيها إنشاء الكائن بنجاح، يتم تعيين المتغير <span class="Li">$@</span> برسالة خطأ.</p>
+<p class="Pp">يقوم Mail::IMAPClient بإعادة تعيين <span class="Li">$@</span> و <b>LastError</b> قبل العديد من طلبات IMAP، لذلك فإن القيم لها عمر قصير فقط. ستحتوي <b>LastError</b> دائمًا على معلومات الخطأ حتى يتم العثور على خطأ آخر، أو إصدار أمر IMAP آخر، أو مسحها بشكل صريح.</p>
+<p class="Pp">ملاحظة: يخضع استخدام <span class="Li">$@</span> للتغيير في الإصدارات المستقبلية، لذا من الأفضل استخدام <b>LastError</b> للتحقق من الأخطاء بمجرد إنشاء كائن Mail::IMAPClient.</p>
+<p class="Pp">قد تمنع الأخطاء في الدالة <b>new</b> إنشاء كائنك أبدًا. إذا تم توفير المعاملات <span class="Li">Server</span> و <span class="Li">User</span> و <span class="Li">Password</span> إلى <b>new</b>، فستحاول استدعاء <b>connect</b> و <b>login</b>. قد تفشل أي دالة وتتسبب في أن ترجع الدالة <b>new</b> <span class="Li">&quot;undef&quot;</span>، مع تعيين المتغير <span class="Li">$@</span> برسالة خطأ.</p>
+<p class="Pp">تحذير: (بسبب سلوك API القديم) في حالة حدوث أخطاء، قد ترجع العديد من الدوال undef بغض النظر عن سياق LIST/SCALAR. لذلك، من الحكمة استخدام معظم الدوال في سياق قياسي. ومع ذلك، تحقق من <b>LastError</b> للحصول على تفاصيل حول الأخطاء.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Transactions'><a class='permalink' href='#Transactions'>المعاملات</a></h2>
+<p class="Pp">تتطلب RFC 3501 أن يسبق كل سطر في محادثة IMAP علامة. تتكون المحادثة النموذجية من العميل الذي يصدر سلسلة من الأوامر المسبوقة بعلامة، والخادم الذي يستجيب بسطر إخراج واحد أو أكثر. ستتضمن أسطر الإخراج رمز حالة اكتمال الأمر الأصلي، مسبوقًا بنفس العلامة.</p>
+<p class="Pp">تستخدم وحدة IMAPClient عدادًا بسيطًا لضمان إصدار كل أمر من العميل بقيمة علامة فريدة. تشير قيمة العلامة هذه إلى رقم معاملة وحدة IMAPClient. يتم الاحتفاظ بسجل للمعاملات بواسطة كائن IMAPClient، والذي يوثق كل معاملة. ترجع الدالة <b>Transaction</b> رقم المعاملة الأخيرة، ويمكن استخدامها لاسترداد أسطر نص من سجل الكائن.</p>
+<p class="Pp">يُستخدم المعامل <b>Clear</b> للتحكم في حجم سجل الجلسة، لمنع الجلسات الطويلة من استهلاك الكثير من الذاكرة. راجع مناقشة المعامل <b>Clear</b> لمزيد من المعلومات.</p>
+<p class="Pp">ترجع الدالة <b>Report</b> سجل الجلسة الكاملة لـ IMAP منذ الاتصال الأولي أو لآخر معاملات <b>Clear</b>. يوفر هذا سجلًا كاملاً للمحادثة، بما في ذلك سلاسل أوامر العميل واستجابات الخادم، وهو أداة ممتازة لتصحيح الأخطاء بالإضافة إلى مصدر مفيد للبيانات الأولية للتحليل المخصص.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CLASS_METHODS'><a class='permalink' href='#CLASS_METHODS'>دوال الفئة</a></h1>
+<p class="Pp">هناك العديد من الدوال التي يمكن استدعاؤها كدوال فئة. بشكل عام، يمكن استدعاؤها أيضًا كدوال كائن. ملاحظة: إذا تم استدعاء الدالة <b>new</b> كدالة كائن، فإن الكائن الذي تم إرجاعه مطابق للكائن الذي كان سيتم إرجاعه إذا تم استدعاء <b>new</b> كدالة فئة. لا يمنحك نسخة من الكائن الأصلي.</p>
+<section class="Ss">
+<h2 class="Ss" id='new'><a class='permalink' href='#new'>new</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my $imap = Mail::IMAPClient-&gt;new(%args)
+  or die &quot;فشلت new: $@\n&quot;;</pre>
+<p class="Pp">تنشئ الدالة <b>new</b> نسخة جديدة من كائن IMAPClient.</p>
+<p class="Pp">إذا تم تمرير المعامل <span class="Li">Server</span> كوسيطة إلى <b>new</b>، فستقوم <b>new</b> باستدعاء الدالة <b>connect</b> ضمنيًا، مما يضع الكائن الجديد في حالة <i>Connected</i>. إذا تم أيضًا توفير قيم <span class="Li">User</span> و <span class="Li">Password</span>، فستقوم <b>connect</b> باستدعاء <b>login</b>، وسيتم إرجاع الكائن الناتج من <b>new</b> في حالة <i>Au</b></p>
+</section>
+</section>
+</div>
+</section>
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "If the \"Server\" parameter is not supplied then the IMAPClient object is created in the <i>Unconnected</i> state."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "If the <b>new</b> method is passed arguments then those arguments will be treated as a list of key=>value pairs. The key should be one of the parameters as documented under \"Parameters\" below."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Here are some examples:"
+    },
+    {
+      "type": "preformatted",
+      "content": "use Mail::IMAPClient;\n\n# returns an unconnected Mail::IMAPClient object:\nmy $imap = Mail::IMAPClient->new;\n# ...\n# intervening code using the 1st object, then:\n# (returns a new, authenticated Mail::IMAPClient object)\n$imap = Mail::IMAPClient->new(\n    Server   => $host,\n    User     => $id,\n    Password => $pass,\n    Clear    => 5,   # Unnecessary since '5' is the default\n    # ...            # Other key=>value pairs go here\n) or die \"Cannot connect to $host as $id: $@\";"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "See also \"Parameters\", \"connect\" and \"login\" for more information on how to manually connect and login after <b>new</b>."
+    }
+  ],
+  "title": "new",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Example:"
+    },
+    {
+      "type": "preformatted",
+      "content": "$imap->search( HEADER => 'Message-id' => \$imap->Quote($msg_id) );"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Quote</b> method accepts a value as an argument and returns its argument as a correctly quoted string or a literal string. Since version 3.17 Mail::IMAPClient automatically quotes search arguments we use a SCALARREF so search will not modify or re-quote the value returned by <b>Quote</b>."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Note this method should not be used on folder names for Mail::IMAPClient methods, since methods that accept folder names as an argument will quote the folder name arguments automatically."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "If you are getting unexpected results when running methods with values that have (or might have) embedded spaces, double quotes, braces, or parentheses, then calling <b>Quote</b> may be necessary. This method should <b>not</b> be used with arguments that are wrapped in quotes or parens if those quotes or parens are required by RFC3501. For example, if the RFC requires an argument in this format:"
+    },
+    {
+      "type": "preformatted",
+      "content": "( argument )"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "and the argument is (or might be) \"pennies (from heaven)\", then one could use:"
+    },
+    {
+      "type": "preformatted",
+      "content": "$argument = \"(\" . $imap->Quote($argument) . \")\""
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Of course, the fact that sometimes these characters are sometimes required delimiters is precisely the reason you must quote them when they are <i>not</i> delimiting."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "However, there are times when a method fails unexpectedly and may require the use of <b>Quote</b> to work. Should this happen, you can probably file a bug/enhancement request for Mail::IMAPClient to safeguard the particular call/case better."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "An example is RFC822 Message-id's, which <i>usually</i> don't contain quotes or parens. When dealing with these it is usually best to take proactive, defensive measures from the very start and use <b>Quote</b>."
+    }
+  ],
+  "title": "Quote",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Example:"
+    },
+    {
+      "type": "preformatted",
+      "content": "my $parsed = $imap->parse_headers(\n    $imap->Range( $imap->messages ), \"Date\", \"Subject\"\n);"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Range</b> method will condense a list of message sequence numbers or message UID's into the most compact format supported by RFC3501. It accepts one or more arguments, each of which can be:"
+    },
+    {
+      "type": "list",
+      "list_type": "Bl-tag",
+      "items": [
+        {
+          "tag": "a) a message number,",
+          "content": ""
+        },
+        {
+          "tag": "b) a comma-separated list of message numbers,",
+          "content": ""
+        },
+        {
+          "tag": "c) a colon-separated range of message numbers (i.e. \"$begin:$end\")",
+          "content": ""
+        },
+        {
+          "tag": "d) a combination of messages and message ranges, separated by commas (i.e. 1,3,5:8,10), or",
+          "id": "d)"
+        },
+        {
+          "tag": "e) a reference to an array whose elements are like a) through d).",
+          "id": "e)"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Range</b> method returns a Mail::IMAPClient::MessageSet object. The object uses overload and if treated as a string it will act like a string. This means you can ignore its objectivity and just treat it like a string whose value is your message set expressed in compact format."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "This method provides an easy way to add or remove messages from a message set."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "For more information see Mail::IMAPClient::MessageSet."
+    }
+  ],
+  "title": "Range",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Example:"
+    },
+    {
+      "type": "preformatted",
+      "content": "$Rfc3501_date = $imap->Rfc3501_date($seconds);\n# or:\n$Rfc3501_date = Mail::IMAPClient->Rfc3501_date($seconds);"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Rfc3501_date</b> method accepts one input argument, a number of seconds since the epoch date. It returns an RFC3501 compliant date string for that date (as required in date-related arguments to SEARCH, such as \"since\", \"before\", etc.)."
+    }
+  ],
+  "title": "Rfc3501_date",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Example:"
+    },
+    {
+      "type": "preformatted",
+      "content": "$date = $imap->Rfc3501_datetime($seconds);\n# or:\n$date = Mail::IMAPClient->Rfc3501_datetime($seconds);"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Rfc3501_datetime</b> method accepts one or two arguments: a obligatory timestamp and an optional zone. The zone shall be formatted as \"[+-]\\d{4}\", and defaults to \"+0000\". The timestamp follows the definition of the output of the platforms specific \"time\", usually in seconds since Jan 1st 1970. However, you have to correct the number yourself for the zone."
+    }
+  ],
+  "title": "Rfc3501_datetime",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Example:"
+    },
+    {
+      "type": "preformatted",
+      "content": "$Rfc822_date = $imap->Rfc822_date($seconds);\n# or:\n$Rfc822_date = Mail::IMAPClient->Rfc822_date($seconds);"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Rfc822_date</b> method accepts one input argument, a number of seconds since the epoch date. It returns an RFC822 compliant date string for that date (without the 'Date:' prefix). Useful for putting dates in message strings before calling \"append\", \"search\", etc."
+    }
+  ],
+  "title": "Rfc822_date",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Examples:"
+    },
+    {
+      "type": "preformatted",
+      "content": "my $stripped = $imap->Strip_cr($string);\n# or:\nmy @list = $imap->some_imap_method;\n@list = $imap->Strip_cr(@list);\n# or:\nmy $list = [ $imap->some_imap_method ];   # returns an array ref\n$list = $imap->Strip_cr($list);"
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "The <b>Strip_cr</b> method strips carriage returns from input and returns the new string to the caller. This method accepts one or more lines of text as arguments, and returns those lines with all <CR><LF> sequences changed to <LF>. Any input argument with no carriage returns is returned unchanged. If the first argument (not counting the class name or object reference) is an array reference, then members of that array are processed as above and subsequent arguments are ignored. If the method is called in scalar context then an array reference is returned instead of an array of results."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "NOTE: <b>Strip_cr</b> does not remove new line characters."
+    }
+  ],
+  "title": "Strip_cr",
+  "section_type": "Ss"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Object methods must be invoked against objects created via the \"new\" method and cannot be invoked as class methods."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "There object methods typically fall into one of two categories. There are mailbox methods which participate in the IMAP session's conversation (i.e. they issue IMAP client commands) and object control methods which do not result in IMAP commands but which may affect later commands or provide details of previous ones."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "This object control methods can be further broken down into two types, Parameter accessor methods, which affect the behavior of future mailbox methods, and \"Status Methods\", which report on the affects of previous mailbox methods."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "Methods that do not result in new IMAP client commands being issued (such as the \"Transaction\", \"Status\", and \"History\" methods) all begin with an uppercase letter, to distinguish them from methods that do correspond to IMAP client commands. Class methods and eponymous parameter methods likewise begin with an uppercase letter because they also do not correspond to an IMAP client command."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "As a general rule, mailbox control methods return \"undef\" on failure and something besides \"undef\" when they succeed. This rule is modified in the case of methods that return search results. When called in a list context, searches that do not find matching results return an empty list. When called in a scalar context, searches with no hits return 'undef' instead of an array reference. If you want to know why you received no hits, you should check \"LastError\" or $@, which will be empty if the search was successful but had no matching results but populated with an error message if the search encountered a problem (such as invalid parameters)."
+    },
+    {
+      "type": "section",
+      "section_type": "Pp",
+      "content": "A number of IMAP commands do not have corresponding Mail::IMAPClient methods. Patches are welcome. In the pre-2.99 releases of this module, they were automatically created (AUTOLOAD), but that was very error-prone and stalled the progress of this module."
+    }
+  ],
+  "title": "OBJECT METHODS",
+  "section_type": "Sh"
+}
+```
+
+```json
+{
+  "content": [
+    {
+      "type": "section",
+      "section_type": "Ss",
+      "content": {
+        "title": "append",
+        "content": [
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "Example:"
+          },
+          {
+            "type": "preformatted",
+            "content": "my $uid_or_true = $imap->append( $folder, $msgtext )\n  or die \"Could not append: \", $imap->LastError;"
+          },
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "WARNING: This method may be deprecated in the future, consider using \"append_string\" instead of this method."
+          },
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "The <b>append</b> method adds a message to the specified folder. See \"append_string\" for details as it is effectively an alias for that method."
+          },
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "DEPRECATED BEHAVIOR: Additional arguments are added to the message text, separated with <CR><LF>."
+          }
+        ]
+      }
+    },
+    {
+      "type": "section",
+      "section_type": "Ss",
+      "content": {
+        "title": "append_string",
+        "content": [
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "Example:"
+          },
+          {
+            "type": "preformatted",
+            "content": "# brackets indicate optional arguments (not array refs):\nmy $uidort = $imap->append_string( $folder, $msgtext [,$flags [,$date ] ] )\n    or die \"Could not append_string: \", $imap->LastError;"
+          },
+          {
+            "type": "section",
+            "section_type": "Pp",
+            "content": "Arguments:"
+          },
+          {
+            "type": "list",
+            "list_type": "Bl-tag",
+            "items": [
+              {
+                "tag": "$folder",
+                "content": "the name of the folder to append the message to"
+              },
+              {
+                "tag": "$msgtext",
+                "content": "the message text (including headers) of the message"
+              },
+              {
+                "tag": "$flags",
+                "content": "An optional list of flags to set. The list must be specified as a space-separated list of flags, including any backslashes that may be necessary and optionally enclosed by parenthesis."
+              },
+              {
+                "tag": "$date",
+                "content": ""
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "title": "Mailbox Control Methods",
+  "section_type": "Sh"
+}
+<section class="Ss">
+<h2 class="Ss" id='fetch'><a class='permalink' href='#fetch'>fetch</a></h2>
+<p class="Pp">الاستخدام:</p>
+<pre>$imap-&gt;fetch( [$seq_set|ALL], @msg_data_items )</pre>
+<p class="Pp">مثال:</p>
+<pre>my $output = $imap-&gt;fetch(@args) or die &quot;Could not fetch: $@\n&quot;;</pre>
+<p class="Pp">ينفذ الأسلوب <b>fetch</b> أمر IMAP FETCH. يستقبل قائمة من الوسائط، والتي يتم تحويلها إلى قائمة مفصولة بمسافات لوسائط أمر IMAP FETCH. إذا لم يتم تحديد أي وسائط، فسيقوم <b>fetch</b> بإجراء FETCH ALL. إذا تم تعيين المعلمة <b>Uid</b> على قيمة صحيحة، فسيتم التعامل مع الوسيط الأول كـ UID أو قائمة من UIDs، مما يعني أنه سيتم تنفيذ أمر IMAP UID FETCH بدلاً من FETCH. (سيكون من الجيد في هذه المرحلة مراجعة RFC3501.)</p>
+<p class="Pp">إذا تم استدعاؤه في سياق مصفوفة، فسيقوم <b>fetch</b> بإرجاع مصفوفة من سطور الإخراج. يتم إرجاع سطور الإخراج كما تم استلامها من الخادم، لذلك يجب أن يكون برنامجك مستعدًا لتحليل الأجزاء التي تريدها. الاستثناء الوحيد هو النص الحرفي، والذي يتم إدراجه في سطر الإخراج فور العثور عليه (بدون مؤشر حقل الحرف {nnn}). راجع RFC3501 للحصول على وصف للحقول الحرفية.</p>
+<p class="Pp">إذا تم استدعاء <b>fetch</b> في سياق قياسي، فسيتم إرجاع مرجع لمصفوفة (كما هو موضح أعلاه) بدلاً من المصفوفة الكاملة.</p>
+<p class="Pp">يعيد الأسلوب <b>fetch</b> القيمة <span class="Li">&quot;undef&quot;</span> عند حدوث خطأ. افحص <span class="Li">&quot;LastError&quot;</span> أو <span class="Li">$@</span> لشرح خطئك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='fetch_hash'><a class='permalink' href='#fetch_hash'>fetch_hash</a></h2>
+<p class="Pp">الاستخدام:</p>
+<pre>$imap-&gt;fetch_hash( [$seq_set|ALL], @msg_data_items, [\%msg_by_ids] )</pre>
+<p class="Pp">أمثلة:</p>
+<pre> my $hashref = $imap-&gt;fetch_hash(&quot;RFC822.SIZE&quot;);
+OR
+ my $hashref = {};
+ $imap-&gt;fetch_hash( &quot;RFC822.SIZE&quot;, $hashref );
+ print &quot;Msg #$_ is $hashref-&gt;{$_}-&gt;{'RFC822.SIZE'} bytes\n&quot; for (keys %$hashref);</pre>
+<p class="Pp">يقبل الأسلوب <b>fetch_hash</b> قائمة بسمات الرسالة للحصول عليها (كما هو موضح في RFC3501). يعيد مجلدًا تكون مفاتيحه هي جميع الرسائل في المجلد المحدد وتكون قيمه هي أزواج المفتاح والقيمة لاسم المجسم والقيمة الخاصة بالرسالة لهذا المفتاح (انظر الإخراج النموذجي).</p>
+<p class="Pp">إذا تم استدعاء <b>fetch_hash</b> في سياق قياسي، فإنه يعيد مرجعًا إلى المجلد بدلاً من المجلد نفسه. إذا كان الوسيط الأخير مرجعًا إلى مجلد، فسيتم استخدام هذا المرجع كمكان لتخزين النتائج (وسيتم إرجاعه عند اكتمال الأسلوب بنجاح). إذا لم يكن الوسيط الأخير مرجعًا، فسيتم التعامل معه كواحد من سمات FETCH وسيتم إنشاء مجلد جديد (اعتمادًا على السياق الذي تم استدعاء الأسلوب <b>fetch_hash</b> فيه).</p>
+<p class="Pp">على سبيل المثال، إذا كان لديك مجلد به 3 رسائل وتريد حجم كل منها وتاريخها الداخلي، يمكنك القيام بما يلي:</p>
+<pre>use Mail::IMAPClient;
+use Data::Dumper;
+# ... باقي الكود
+$imap-&gt;select($folder);
+my $hash = $imap-&gt;fetch_hash( &quot;RFC822.SIZE&quot;, &quot;INTERNALDATE&quot; );
+# (نفس الشيء مثل:
+#  my $hash = $imap-&gt;fetch_hash(&quot;RFC822.SIZE&quot;);
+#  $imap-&gt;fetch_hash( &quot;INTERNALDATE&quot;, $hash );
+# ).
+print Data::Dumper-&gt;Dumpxs( [$hash], ['$hash'] );</pre>
+<p class="Pp">سيؤدي هذا إلى إخراج Data::Dumper مشابه لما يلي:</p>
+<pre>$hash = {
+    '1' =&gt; {
+               'INTERNALDATE' =&gt; '21-Sep-2002 18:21:56 +0000',
+               'RFC822.SIZE' =&gt; '1586',
+           },
+    '2' =&gt; {
+               'INTERNALDATE' =&gt; '22-Sep-2002 11:29:42 +0000',
+               'RFC822.SIZE' =&gt; '1945',
+           },
+    '3' =&gt; {
+               'INTERNALDATE' =&gt; '23-Sep-2002 09:16:51 +0000',
+               'RFC822.SIZE' =&gt; '134314',
+           }
+  };</pre>
+<p class="Pp">يمكن أن يكون هذا الأسلوب مفيدًا بحد ذاته لمهام مثل الحصول على حجم كل رسالة في مجلد. يقوم بإصدار أمر واستلام رد (ربما طويل!) من الخادم.</p>
+<p class="Pp">إذا تسبب طلب fetch في أن يقوم الخادم بإرجاع البيانات في قائمة متداخلة، فقد يتم فك تشفير البيانات داخل القائمة المتداخلة باستخدام الأسلوب <b>Escape()</b>. استخدم الأسلوب <b>Unescape()</b> لاستعادة القيم الأولية في هذه الحالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='flags'><a class='permalink' href='#flags'>flags</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my $flags = $imap-&gt;flags($msgid)
+  or die &quot;flags failed: $@\n&quot;;</pre>
+<p class="Pp">ينفذ الأسلوب <b>flags</b> أمر IMAP FETCH لسرد علامات رسالة واحدة. يستقبل وسيطًا واحدًا، وهو رقم تسلسل الرسالة (أو UID، إذا تم تمكين المعلمة <b>Uid</b>)، ويعيد مصفوفة (أو مرجع لمصفوفة، إذا تم استدعاؤه في سياق قياسي) تسرد العلامات التي تم تعيينها. يتم توفير أسماء العلامات بحرف backslash في البداية.</p>
+<p class="Pp">منذ الإصدار 1.11، يمكنك توفير قائمة بمعرفات الرسائل أو مرجع لمصفوفة من معرفات الرسائل (مما يعني، في حالة تعطيل المعلمة <b>Uid</b>، تسلسل رقمي، أو في حالة تمكين المعلمة <b>Uid</b>، معرفات الرسائل) بدلاً من توفير رقم تسلسل الرسالة أو UID. إذا قمت بذلك، فلن تكون القيمة المرجعة مصفوفة أو مرجعًا لمصفوفة، بل مرجعًا لمجلد، حيث يكون كل مفتاح رقم تسلسل رسالة (أو UID) وكل قيمة مرجعًا لمصفوفة من العلامات المعينة لهذه الرسالة.</p>
+<p class="Pp">على سبيل المثال، إذا كنت تريد عرض العلامات لكل رسالة في المجلد الذي تحتفظ فيه بالبريد الإلكتروني المتعلق بخطط سيطرتك على العالم، يمكنك القيام بشيء كهذا:</p>
+<pre>use Mail::IMAPClient;
+my $imap = Mail::IMAPClient-&gt;new(
+    Server   =&gt; $imaphost,
+    User     =&gt; $login,
+    Password =&gt; $pass,
+    Uid      =&gt; 1,        # اختياري
+);
+$imap-&gt;select($folder);
+# الحصول على العلامات لكل رسالة في مجلدي 'World Domination'
+$flaghash = $imap-&gt;flags( scalar( $imap-&gt;search(&quot;ALL&quot;) ) );
+# المرور عبر مفاتيح المجلد المرتبة لطباعة النتائج:
+for my $k ( sort { $flaghash-&gt;{$a} &lt;=&gt; $flaghash-&gt;{$b} } keys %$flaghash ) {
+    # طباعة: رسالة 1: \Flag1, \Flag2, \Flag3
+    print &quot;Message $k:\t&quot;, join( &quot;, &quot;, @{$flaghash-&gt;{$k}} ), &quot;\n&quot;;
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='folders'><a class='permalink' href='#folders'>folders</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;folders or die &quot;Could not list folders: $@\n&quot;;</pre>
+<p class="Pp">يعيد الأسلوب <b>folders</b> مصفوفة تسرد المجلدات المتاحة. سيكون ناجحًا فقط إذا كان الكائن في حالة <i>Authenticated</i> أو <i>Selected</i>.</p>
+<p class="Pp">يقبل الأسلوب <b>folders</b> وسيطًا اختياريًا، وهو بادئة. إذا تم توفير بادئة للأسلوب <b>folders</b>، فسيتم إرجاع المجلدات التي تبدأ بالبادئة فقط.</p>
+<p class="Pp">على سبيل المثال:</p>
+<pre>print join( &quot;, &quot;, $imap-&gt;folders ), &quot;.\n&quot;;
+# طباعة:
+# INBOX, Sent, Projects, Projects/Completed, Projects/Ongoing, Projects Software.
+print join( &quot;, &quot;, $imap-&gt;folders(&quot;Projects&quot;) ), &quot;.\n&quot;;
+# طباعة:
+# Projects, Projects/Completed, Projects/Ongoing, Projects Software.
+print join( &quot;, &quot;, $imap-&gt;folders(&quot;Projects&quot; . $imap-&gt;separator) ), &quot;.\n&quot;;
+# طباعة:
+# Projects/Completed, Projects/Ongoing</pre>
+<p class="Pp">ملاحظة: سابقًا، اقترح التوثيق أنه إذا كنت تريد فقط سرد المجلدات الفرعية لمجلد (وليس المجلد نفسه)، فستحتاج إلى تضمين فاصل التسلسل الهرمي (كما هو موضح بواسطة الأسلوب <b>separator</b>). ومع ذلك، هذا لا يتوافق مع سلوك التنفيذ الحالي، لذا ستحتاج إلى استبعاد المجلد الأصل يدويًا من النتائج.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='folders_hash'><a class='permalink' href='#folders_hash'>folders_hash</a></h2>
+<pre>my @fhashes = $imap-&gt;folders_hash
+  or die &quot;Could not get list of folder hashes.\n&quot;;</pre>
+<p class="Pp">يقبل الأسلوب <b>folders_hash</b> وسيطًا اختياريًا، وهو بادئة. إذا تم توفير بادئة للأسلوب <b>folders_hash</b>، فسيتم إرجاع المجلدات التي تبدأ بالبادئة فقط.</p>
+<p class="Pp">يتم إرجاع مصفوفة (مرجع) من المجلدات التي تحتوي على معلومات حول المجلدات المطلوبة. يحتوي كل مجلد على ثلاثة مفاتيح (name، attrs، delim) ويبدو على النحو التالي:</p>
+<pre>{
+  name  =&gt; 'Mail/Box/Name',
+  attrs =&gt; [ '\Marked', '\HasNoChildren' ],
+  delim =&gt; '/',
+}</pre>
+<p class="Pp">تقوم خوادم IMAP التي تنفذ RFC6154 بإرجاع سمات لتحديد المجلدات المتخصصة (مجلدات ذات استخدام خاص).</p>
+<pre>my $sattr_re = /\A\\(?:All|Archive|Drafts|Flagged|Junk|Sent|Trash)\Z/;
+foreach my $fhash (@fhashes) {
+    next unless defined $fhash-&gt;{name};
+    my @special = grep { $sattr_re } @{ $fhash-&gt;{attrs} };
+    print(&quot;special: $fhash-&gt;{name} : @special\n&quot;) if (@special);
+}</pre>
+<p class="Pp">ملاحظة الإصدار: تم إضافة الأسلوب إلى Mail::IMAPClient 3.34.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='xlist_folders_(DEPRECATED)'><a class='permalink' href='#xlist_folders_(DEPRECATED)'>xlist_folders   (مهمل)</a></h2>
+<p class="Pp">يعتبر هذا الأسلوب مهملًا منذ الإصدار 3.34. يرجى استخدام <b>folders_hash</b> بدلاً من ذلك. استشر RFC6154 للحصول على السمات المستخدمة لتحديد المجلدات المتخصصة (مجلدات ذات استخدام خاص).</p>
+<p class="Pp">مثال:</p>
+<pre>my $xlist = $imap-&gt;xlist_folders
+  or die &quot;Could not get xlist folders.\n&quot;;</pre>
+<p class="Pp">تقوم خوادم IMAP التي تنفذ امتداد XLIST (مثل Gmail) بتعيين مجلدات محددة للاستخدام في وظائف محددة. هذا مفيد عندما تريد معرفة المجلد الذي يجب استخدامه لسلة المهملات عندما لا يمكن التنبؤ باسم المجلد الفعلي (على سبيل المثال، في حالة Gmail، تتغير أسماء المجلدات بناءً على إعدادات لغة المستخدم).</p>
+<p class="Pp">يعيد الأسلوب <b>xlist_folders</b> مجلدًا يسرد أي أسماء مجلدات "xlist" متاحة، مع القيم التي تسرد المجلدات الفعلية التي يجب استخدامها لهذه الأسماء. على سبيل المثال، استخدام هذا الأسلوب مع مستخدم Gmail يستخدم اللغة الإنجليزية (US) قد يؤدي إلى إخراج Data::Dumper التالي:</p>
+<pre>$VAR1 = {
+    'Inbox'   =&gt; 'Inbox',
+    'AllMail' =&gt; '[Gmail]/All Mail',
+    'Trash'   =&gt; '[Gmail]/Trash',
+    'Drafts'  =&gt; '[Gmail]/Drafts',
+    'Sent'    =&gt; '[Gmail]/Sent Mail',
+    'Spam'    =&gt; '[Gmail]/Spam',
+    'Starred' =&gt; '[Gmail]/Starred'
+};</pre>
+<p class="Pp">قد تبدو نفس القائمة لمستخدم يستخدم اللغة الفرنسية كالتالي:</p>
+<pre>$VAR1 = {
+    'Inbox'   =&gt; 'Bo&amp;AO4-te de r&amp;AOk-ception',
+    'AllMail' =&gt; '[Gmail]/Tous les messages',
+    'Trash'   =&gt; '[Gmail]/Corbeille',
+    'Drafts'  =&gt; '[Gmail]/Brouillons',
+    'Sent'    =&gt; '[Gmail]/Messages envoy&amp;AOk-s',
+    'Spam'    =&gt; '[Gmail]/Spam',
+    'Starred' =&gt; '[Gmail]/Suivis'
+};</pre>
+<p class="Pp">يتعرف Mail::IMAPClient على أسماء المجلدات "xlist" التالية:</p>
+<dl class="Bl-tag">
+  <dt id="Inbox"><a class="permalink" href="#Inbox">Inbox</a></dt>
+  <dd></dd>
+  <dt id="AllMail"><a class="permalink" href="#AllMail">AllMail</a></dt>
+  <dd></dd>
+  <dt id="Trash"><a class="permalink" href="#Trash">Trash</a></dt>
+  <dd></dd>
+  <dt id="Drafts"><a class="permalink" href="#Drafts">Drafts</a></dt>
+  <dd></dd>
+  <dt id="Sent"><a class="permalink" href="#Sent">Sent</a></dt>
+  <dd></dd>
+  <dt id="Spam"><a class="permalink" href="#Spam">Spam</a></dt>
+  <dd></dd>
+  <dt id="Starred"><a class="permalink" href="#Starred">Starred</a></dt>
+  <dd></dd>
+</dl>
+<section class="Ss">
+<h2 class="Ss" id='see'><a class='permalink' href='#see'>see</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;see(@msgs) or die &quot;see failed: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>see</b> قائمة من رقم رسالة تسلسلي واحد أو أكثر، أو مرجعًا واحدًا لمصفوفة من رقم رسالة تسلسلي واحد أو أكثر، كوسيط لها. ثم تقوم بتعيين علامة <i>\Seen</i> لهذه الرسائل. في الواقع، إذا تم تعيين المعلمة &quot;Uid&quot; إلى قيمة صحيحة، فيجب أن تكون أرقام الرسائل هذه أرقام رسائل فريدة، ولكنك تعلم بالفعل أن هذا هو ما كنت تعرفه.</p>
+<p class="Pp">ملاحظة: كتابة <span class="Li">&quot;$imap-&gt;see(@msgs)&quot;</span> هي مجرد اختصار لكتابة <span class="Li">&quot;$imap-&gt;&quot;set_flag&quot;(&quot;Seen&quot;,@msgs)&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='seen'><a class='permalink' href='#seen'>seen</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @seenMsgs = $imap-&gt;seen or warn &quot;No seen msgs: $@\n&quot;;</pre>
+<p class="Pp">تقوم الطريقة <b>seen</b> بإجراء بحث IMAP SEEN على المجلد المحدد وتعيد مصفوفة من أرقام الرسائل التسلسلية التي تم رؤيتها بالفعل (أي تم تعيين علامة <i>\Seen</i> الخاصة بها). إذا تم تعيين المعلمة &quot;Uid&quot; إلى قيمة صحيحة، فسيتم إرجاع مصفوفة من أرقام الرسائل. إذا تم استدعاؤها في سياق قياسي، فسيتم إرجاع مرجع إلى المصفوفة (بدلاً من المصفوفة نفسها).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='select'><a class='permalink' href='#select'>select</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;select($folder) or die &quot;select failed: $@\n&quot;;</pre>
+<p class="Pp">تقوم الطريقة <b>select</b> بتحديد مجلد وتغيير حالة الكائن إلى <i>Selected</i>. تقبل وسيطًا واحدًا، وهو اسم المجلد المراد تحديده.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='selectable'><a class='permalink' href='#selectable'>selectable</a></h2>
+<p class="Pp">مثال:</p>
+<pre>foreach my $f ( grep( $imap-&gt;selectable($_), $imap-&gt;folders ) ) {
+    $imap-&gt;select($f);
+}</pre>
+<p class="Pp">تقبل الطريقة <b>selectable</b> قيمة، اسم مجلد، وتعيد صحيحًا إذا كان المجلد قابلاً للتحديد أو خاطئًا إذا لم يكن كذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='sentbefore'><a class='permalink' href='#sentbefore'>sentbefore</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @msgs = $imap-&gt;sentbefore($Rfc3501_date)
+  or warn &quot;Could not find any msgs sent before $Rfc3501_date: $@\n&quot;;</pre>
+<p class="Pp">تعمل الطريقة <b>sentbefore</b> تمامًا مثل <span class="Li">&quot;sentsince&quot;</span>، ولكنها تبحث عن الرسائل المرسلة قبل اليوم المحدد كوسيط.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='senton'><a class='permalink' href='#senton'>senton</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @msgs = $imap-&gt;senton($Rfc3501_date)
+  or warn &quot;Could not find any messages sent on $Rfc3501_date: $@\n&quot;;</pre>
+<p class="Pp">تعمل الطريقة <b>senton</b> تمامًا مثل <span class="Li">&quot;sentsince&quot;</span>، ولكنها تبحث عن الرسائل المرسلة بالضبط في اليوم المحدد كوسيط.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='sentsince'><a class='permalink' href='#sentsince'>sentsince</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @msgs = $imap-&gt;sentsince($Rfc3501_date)
+  or warn &quot;Could not find any messages sent since $Rfc3501_date: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>sentsince</b> وسيطًا، تاريخًا بتنسيق وقت epoch (ثوانٍ منذ 1/1/1970، أو كما يتم إخراجه بواسطة <span class="Li">&quot;time&quot;</span> في perlfunc وكما يقبله <span class="Li">&quot;localtime&quot;</span> في perlfunc) أو بتنسيق <i>date_text</i> كما هو محدد في RFC3501 (dd-Mon-yyyy، حيث Mon هو الاختصار الإنجليزي للشهر). تبحث الطريقة عن الرسائل المرسلة منذ اليوم الذي يتم فيه تحديد التاريخ كوسيط. تستخدم رأس RFC822 <i>Date:</i> لتحديد تاريخ <i>sentsince</i> (في الواقع، يستخدم الخادم رأس <i>Date:</i>؛ تفترض هذه الوثيقة أن التاريخ يأتي من رأس <i>Date:</i> لأن هذا هو ما يشير إليه RFC3501).</p>
+<p class="Pp">في حالة تحديد الوسائط كرقم ثوانٍ، ستكون النتيجة قائمة بالرسائل المرسلة أو بعد هذا اليوم، بغض النظر عما إذا كانت قد وصلت قبل الوقت المحدد في ذلك اليوم. بروتوكول IMAP لا يدعم عمليات البحث بدقة أكبر من يوم واحد، لذلك لا أدعمها أيضًا. من ناحية أخرى، الشيء الوحيد الذي أتحقق منه في وسيط <i>date_text</i> هو أنه يتطابق مع النمط <span class="Li">&quot;/\d\d-\D\D\D-\d\d\d\d/&quot;</span> (لاحظ غياب المرساة)، لذلك إذا سمح خادمك بإضافة شيء إضافي إلى سلسلة <i>date_text</i> فستقوم <span class="Li">Mail::IMAPClient</span> بذلك أيضًا.</p>
+<p class="Pp">إذا أردت، يمكنك استخدام الطريقة <span class="Li">&quot;Rfc3501_date&quot;</span> للتحويل من وقت epoch (كما يتم إرجاعه بواسطة <span class="Li">&quot;time&quot;</span>) إلى مواصفات تاريخ RFC3501.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='separator'><a class='permalink' href='#separator'>separator</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my $sepChar = $imap-&gt;separator(@args)
+  or die &quot;Could not get separator: $@\n&quot;;</pre>
+<p class="Pp">تعيد الطريقة <b>separator</b> الحرف المستخدم كفاصل في التسلسلات الهرمية للمجلدات. في أنظمة UNIX، هذا عادةً ما يكون شرطة مائلة (/) ولكنه ليس بالضرورة. تقبل وسيطًا واحدًا، وهو اسم مجلد يجب أن تعيد هيكليته الفاصل. إذا لم يتم تحديد اسم مجلد، فسيتم إرجاع فاصل مجلد INBOX، والذي سيكون على الأرجح كافيًا.</p>
+<p class="Pp">إذا كنت تريد أن تكون برامجك قابلة للنقل من علامة تجارية لخادم IMAP X إلى علامة تجارية لخادم IMAP Y، فلا يجب عليك أبدًا استخدام أحرف فاصل ثابتة لتحديد المجلدات الفرعية. (في الواقع، الأمر أكثر تعقيدًا من ذلك، نظرًا لأن بعض تطبيقات الخادم لا تسمح بالمجلدات الفرعية، فقط المجلدات الفرعية تحت مجلد INBOX، أو تمنع المجلدات الفرعية في مجلد INBOX ولكن تسمح بها "بجانب" مجلد INBOX. بالإضافة إلى ذلك، لا تسمح بعض تطبيقات الخادم للمجلدات باحتواء كل من المجلدات الفرعية ورسائل البريد الإلكتروني؛ بينما تسمح بها تطبيقات أخرى).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='set_flag'><a class='permalink' href='#set_flag'>set_flag</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;set_flag( &quot;Seen&quot;, @msgs )
+  or die &quot;Could not set flag: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>set_flag</b> اسم علامة كوسيط أول وقائمة من رقم رسالة تسلسلي واحد أو أكثر، أو مرجعًا واحدًا لمصفوفة من رقم رسالة تسلسلي واحد أو أكثر، كوسيط ثانٍ. ثم تقوم بتعيين العلامة المحددة لهذه الرسائل. من الواضح، إذا تم تعيين المعلمة &quot;Uid&quot; إلى قيمة صحيحة، فيجب أن تكون أرقام الرسائل هذه فريدة من الرسائل، وهو ما تتوقعه.</p>
+<p class="Pp">ملاحظة: الشرطة المائلة العكسية (\) قبل اسم العلامة في مواصفات العلامة اختيارية. (بالنسبة لك، الأمر كذلك. لا يزال يتعين على Mail::IMAPClient تذكر إضافتها قبل تمرير الأمر إلى الخادم إذا كانت العلامة إحدى العلامات المحجوزة المحددة في RFC3501. هذا مهم جدًا لدرجة أن الطريقة تتحقق من وسيطها وتضيف الشرطة المائلة العكسية عند الضرورة، لذلك لا داعي للقلق كثيرًا بشأن ذلك).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='setacl'><a class='permalink' href='#setacl'>setacl</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;setacl( $folder, $userid, $aclstring )
+  or die &quot;Could not set acl: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>setacl</b> ثلاثة وسائط إدخال، اسم مجلد، مستخدم (أو معرف مصادقة، حسب لغة RFC2086)، وسلسلة من تعديلات حقوق الوصول. انظر RFC2086 لمزيد من المعلومات. (هذا تجريب معقول جدًا وقد يتغير تنفيذه).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='since'><a class='permalink' href='#since'>since</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @msgs = $imap-&gt;since($date)
+  or warn &quot;Could not find any messages since $date: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>since</b> تاريخًا بتنسيق وقت epoch (ثوانٍ منذ 1/1/1970، أو كما يتم إخراجه بواسطة <span class="Li">&quot;time&quot;</span> في perlfunc وكما يقبله <span class="Li">&quot;localtime&quot;</span> في perlfunc) أو بتنسيق <i>date_text</i> كما هو محدد في RFC3501 (dd-Mon-yyyy، حيث Mon هو الاختصار الإنجليزي للشهر). تبحث عن الرسائل في المجلد المحدد التي تكون تواريخها الداخلية بعد أو تساوي اليوم الذي يتم فيه تحديد التاريخ كوسيط. تستخدم تاريخ الرسالة الداخلي لتحديد ما إذا كانت تلك الرسالة قد أُرسلت بعد التاريخ المحدد.</p>
+<p class="Pp">في حالة تحديد الوسائط كرقم ثوانٍ، ستكون النتيجة قائمة بالرسائل التي تكون تواريخها الداخلية بعد أو تساوي اليوم، بغض النظر عما إذا كانت قد وصلت قبل الوقت المحدد في ذلك اليوم.</p>
+<p class="Pp">إذا تم استدعاء <b>since</b> في سياق قائمة، فسوف تعيد قائمة بالرسائل التي تلبي معيار <i>SEARCH SINCE</i>، أو قائمة فارغة إذا لم تكن هناك رسائل تلبي المعيار. إذا تم استدعاء <b>since</b> في سياق قياسي، فسوف تعيد مرجعًا إلى مصفوفة من الرسائل التي تلبي معيار <i>SEARCH SINCE</i>، أو <span class="Li">&quot;undef&quot;</span> إذا لم تكن هناك رسائل تلبي المعيار.</p>
+<p class="Pp">نظرًا لأنها واجهة أمامية للطريقة <i>search</i>، تنطبق بعض القواعد بشكل مشابه. على سبيل المثال، يتم تفريغ المتغير <span class="Li">$@</span> دائمًا قبل إصدار أمر <i>SEARCH</i> للخادم، ويظل فارغًا حتى يعيد الخادم استجابة <i>BAD</i> أو <i>NO</i> إلى أمر <i>SEARCH</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='size'><a class='permalink' href='#size'>size</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my $size = $imap-&gt;size($msgId)
+  or die &quot;Could not find size of message $msgId: $@\n&quot;;</pre>
+<p class="Pp">تقبل الطريقة <b>size</b> وسيط إدخال واحد، رقم تسلسلي (أو رقم رسالة UID إذا تم تفعيل المعلمة &quot;Uid&quot;). تعيد حجم الرسالة في المجلد الحالي مع t</p>
+{
+  "content": {
+    "sections": [
+      {
+        "title": "sort",
+        "id": "sort",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my @msgs = $imap->sort(@args);\nwarn \"Error in sort: $@\\n\" if $@;"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>sort</b> method is just like the \"search\" method, only different. It implements the SORT extension as described in https://tools.ietf.org/html/rfc5256. It would be wise to use the \"has_capability\" method to verify that the SORT capability is available on your server before trying to use the <b>sort</b> method. If you forget to check and you're connecting to a server that doesn't have the SORT capability then <b>sort</b> will return undef. \"LastError\" will then say you are \"BAD\". If your server doesn't support the SORT capability then you'll have to use \"search\" and then sort the results yourself."
+          },
+          {
+            "type": "paragraph",
+            "text": "The first argument to <b>sort</b> is a space-delimited list of sorting criteria. The Internet Draft that describes SORT requires that this list be wrapped in parentheses, even if there is only one sort criterion. If you forget the parentheses then the <b>sort</b> method will add them. But you have to forget both of them, or none. This isn't CMS running under VM!"
+          },
+          {
+            "type": "paragraph",
+            "text": "The second argument is a character set to use for sorting. Different character sets use different sorting orders, so this argument is important. Since all servers must support UTF-8 and US-ASCII if they support the SORT capability at all, you can use one of those if you don't have some other preferred character set in mind."
+          },
+          {
+            "type": "paragraph",
+            "text": "The rest of the arguments are searching criteria, just as you would supply to the \"search\" method. These are all documented in RFC3501. If you just want all of the messages in the currently selected folder returned to you in sorted order, use <i>ALL</i> as your only search criterion."
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>sort</b> method returns an array containing sequence numbers of messages that passed the SORT IMAP client command's search criteria. If the \"Uid\" parameter is true then the array will contain message UID's. If <b>sort</b> is called in scalar context then a pointer to the array will be passed, instead of the array itself. The message sequence numbers or unique identifiers are ordered according to the sort criteria specified. The sort criteria are nested in the order specified; that is, items are sorted first by the first criterion, and within the first criterion they are sorted by the second criterion, and so on."
+          },
+          {
+            "type": "paragraph",
+            "text": "The sort method will clear <span class=\"Li\">$@</span> before attempting the <i>SORT</i> operation just as the \"search\" method does."
+          }
+        ]
+      },
+      {
+        "title": "starttls",
+        "id": "starttls",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "$imap->starttls() or die \"starttls failed: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>starttls</b> method accepts no arguments. This method is used to upgrade an exiting connection which is not authenticated to a TLS/SSL connection by using the IMAP STARTTLS command followed by using the <b>start_SSL</b> class method from IO::Socket::SSL to do the necessary TLS negotiation. The negotiation is done in a blocking fashion with a default <b>Timeout</b> of 30 seconds. The arguments used in the call to <b>start_SSL</b> can be controlled by setting the Mail::IMAPClient \"Starttls\" attribute to an ARRAY reference containing the desired arguments."
+          },
+          {
+            "type": "paragraph",
+            "text": "Version note: method added in Mail::IMAPClient 3.22"
+          }
+        ]
+      },
+      {
+        "title": "status",
+        "id": "status",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my @rawdata = $imap->status( $folder, qw/(Messages)/ )\nor die \"Error obtaining status: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>status</b> method accepts one argument, the name of a folder (or mailbox, to use RFC3501's terminology), and returns an array containing the results of running the IMAP STATUS client command against that folder. If additional arguments are supplied then they are appended to the IMAP STATUS client command string, separated from the rest of the string and each other with spaces."
+          },
+          {
+            "type": "paragraph",
+            "text": "If <b>status</b> is not called in an array context then it returns a reference to an array rather than the array itself."
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>status</b> method should not be confused with the <b>Status</b> method (with an uppercase 'S'), which returns information about the IMAPClient object. (See the section labeled \"Status Methods\", below)."
+          }
+        ]
+      },
+      {
+        "title": "store",
+        "id": "store",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "$imap->store(@args) or die \"Could not store: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>store</b> method accepts a message sequence number or comma-separated list of message sequence numbers as a first argument, a message data item name, and a value for the message data item. Currently, data items are the word \"FLAGS\" followed by a space and a list of flags (in parens). The word \"FLAGS\" can be modified by prefixing it with either a \"+\" or a \"-\" (to indicate \"add these flags\" or \"remove these flags\") and by suffixing it with \".SILENT\" (which reduces the amount of output from the server; very useful with large message sets). Normally you won't need to call <b>store</b> because there are oodles of methods that will invoke store for you with the correct arguments. Furthermore, these methods are friendlier and more flexible with regards to how you specify your arguments. See for example \"see\", \"deny_seeing\", \"delete_message\", and \"restore_message\". Or \"mark\", \"unmark\", \"set_flag\", and \"unset_flag\"."
+          }
+        ]
+      },
+      {
+        "title": "subject",
+        "id": "subject",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my $subject = $imap->subject($msg);"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>subject</b> method accepts one argument, a message sequence number (or a message UID, if the <i>Uid</i> parameter is true). The text in the \"Subject\" header of that message is returned (without the \"Subject: \" prefix). This method is a short-cut for:"
+          },
+          {
+            "type": "code",
+            "text": "my $subject = $imap->get_header($msg, \"Subject\");"
+          }
+        ]
+      },
+      {
+        "title": "subscribed",
+        "id": "subscribed",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my @subscribedFolders = $imap->subscribed\nor warn \"Could not find subscribed folders: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>subscribed</b> method works like the <b>folders</b> method, above, except that the returned list (or array reference, if called in scalar context) contains only the subscribed folders."
+          },
+          {
+            "type": "paragraph",
+            "text": "Like \"folders\", you can optionally provide a prefix argument to the <b>subscribed</b> method."
+          }
+        ]
+      },
+      {
+        "title": "tag_and_run",
+        "id": "tag_and_run",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my $output = $imap->tag_and_run(@args)\nor die \"Could not tag_and_run: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>tag_and_run</b> method accepts one or two arguments. The first argument is a string containing an IMAP client command, without a tag but with all required arguments. The optional second argument is a string to look for that will indicate success (without pattern delimiters). The default is <span class=\"Li\">\"OK.*\"</span>."
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>tag_and_run</b> method will prefix your string (from the first argument) with the next transaction number and run the command. It returns an array of output lines from the command, which you are free to parse as you see fit. Using this method instead of <b>run</b> (above) will free you from having to worry about handling the tags (and from worrying about the side affects of naming your own tags)."
+          }
+        ]
+      },
+      {
+        "title": "uidexpunge",
+        "id": "uidexpunge",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "$imap->uidexpunge(@uids) or die \"Could not uidexpunge: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>uidexpunge</b> method implements the UID EXPUNGE IMAP (RFC4315 UIDPLUS ext) client command to permanently remove all messages that have the \\Deleted flag set and have a UID that is included in the list of UIDs."
+          },
+          {
+            "type": "paragraph",
+            "text": "<b>uidexpunge</b> returns an array or arrayref (scalar context) of output lines returned from the UID EXPUNGE command."
+          },
+          {
+            "type": "paragraph",
+            "text": "<b>uidexpunge</b> returns undef on failure."
+          },
+          {
+            "type": "paragraph",
+            "text": "If the server does not support the UIDPLUS extension, this method returns undef."
+          }
+        ]
+      },
+      {
+        "title": "uidnext",
+        "id": "uidnext",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my $nextUid = $imap->uidnext($folder) or die \"uidnext failed: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>uidnext</b> method accepts one argument, the name of a folder, and returns the numeric string that is the next available message UID for that folder."
+          }
+        ]
+      },
+      {
+        "title": "thread",
+        "id": "thread",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my $thread = $imap->thread( $algorithm, $charset, @search_args );"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>thread</b> method accepts zero to three arguments. The first argument is the threading algorithm to use, generally either <i>ORDEREDSUBJECT</i> or <i>REFERENCES</i>. The second argument is the character set to use, and the third argument is the set of search arguments to use."
+          },
+          {
+            "type": "paragraph",
+            "text": "If the algorithm is not supplied, it defaults to <i>REFERENCES</i> if available, or <i>ORDEREDSUBJECT</i> if available. If neither of these is available then the <b>thread</b> method returns undef."
+          },
+          {
+            "type": "paragraph",
+            "text": "If the character set is not specified it will default to <i>UTF-8</i>."
+          },
+          {
+            "type": "paragraph",
+            "text": "If the search arguments are not specified, the default is <i>ALL</i>."
+          },
+          {
+            "type": "paragraph",
+            "text": "If <b>thread</b> is called for an object connected to a server that does not support the THREADS extension then the <b>thread</b> method will return <span class=\"Li\">\"undef\"</span>."
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>threads</b> method will issue the <i>THREAD</i> command as defined in https://tools.ietf.org/html/rfc5256. It returns an array of threads. Each element in the array is either a message id or a reference to another array of (sub)threads."
+          },
+          {
+            "type": "paragraph",
+            "text": "If the \"Uid\" parameter is set to a true value then the message id's returned in the thread structure will be message UID's. Otherwise they will be message sequence numbers."
+          }
+        ]
+      },
+      {
+        "title": "uidvalidity",
+        "id": "uidvalidity",
+        "content": [
+          {
+            "type": "paragraph",
+            "text": "Example:",
+            "children": []
+          },
+          {
+            "type": "code",
+            "text": "my $validity = $imap->uidvalidity($folder)\n  or die \"uidvalidity failed: $@\\n\";"
+          },
+          {
+            "type": "paragraph",
+            "text": "The <b>uidvalidity</b> method accepts one argument, the name of a folder, and returns the numeric string that is the unique identifier validity value for the folder."
+          }
+        ]
+      }
+    ]
+  }
+}
+<section class="Ss">
+<h2 class="Ss" id='Clear'><a class='permalink' href='#Clear'>Clear</a></h2>
+<p class="Pp">المعلمة <i>Clear</i> لن تتسبب في مسح مخزن السجل.</p>
+<p class="Pp">ضبط <i>Clear</i> على 0 يعطل إعادة توجيه مخزن السجل، وضبطه على 1 يعطل وظيفة مخزن السجل (باستثناء المعاملة الأخيرة، التي لا يمكن تعطيلها دون كسر وحدة IMAPClient). ضبط <i>Clear</i> على 0 لن يتسبب في مسح فوري لمخزن السجل؛ ضبطه على 1 (أو أي قيمة أخرى) سيفعل ذلك (باستثناء المعاملة الأخيرة الحتمية).</p>
+<p class="Pp">القيمة الافتراضية لـ <i>Clear</i> هي خمسة (5) للحفاظ على الذاكرة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Compress'><a class='permalink' href='#Compress'>Compress</a></h2>
+<p class="Pp">إذا تم ضبطه، تحاول Mail::IMAPClient تمكين استخدام ملحق RFC4978 COMPRESS DEFLATE. يتطلب هذا أن يدعم الخادم القدرة. يمكن ضبط هذه السمة إلى قيمة صحيحة للتمكين أو إلى ARRAYREF للتحكم في الوسائط المستخدمة في استدعاء <b>Compress::Zlib::deflateInit()</b>.</p>
+<p class="Pp">ستستخدم Mail::IMAPClient تلقائيًا Compress::Zlib لضغط / فك ضغط البيانات الواردة / الصادرة من الخادم. يتم استخدام هذه السمة في طريقة "login".</p>
+<p class="Pp">انظر أيضًا "compress" و "capability".</p>
+<p class="Pp">ملاحظة: تمت إضافة السمة في Mail::IMAPClient 3.30.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Debug'><a class='permalink' href='#Debug'>Debug</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Debug = $imap-&gt;Debug();
+# أو:
+$imap-&gt;Debug($true_or_false);</pre>
+<p class="Pp">يضبط علامة التصحيح على قيمة صحيحة أو خاطئة. يمكن توفيرها مع استدعاء طريقة <b>new</b> أو بشكل مستقل عن طريق استدعاء طريقة <b>Debug</b> للكائن <b>Debug</b>. يوصى باستخدام هذا المعامل عند تصحيح الأخطاء في البرامج النصية وهو مطلوب عند الإبلاغ عن الأخطاء.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Debug_fh'><a class='permalink' href='#Debug_fh'>Debug_fh</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Debug_fh = $imap-&gt;Debug_fh();
+# أو:
+$imap-&gt;Debug_fh($fileHandle);</pre>
+<p class="Pp">يحدد مقبض الملف الذي سيتم طباعة معلومات التصحيح إليه. يمكن أن يكون كائن مرجع إلى مقبض ملف أو مقبض ملف عالمي. القيمة الافتراضية هي طباعة معلومات التصحيح إلى STDERR.</p>
+<p class="Pp">على سبيل المثال، يمكنك:</p>
+<pre>use Mail::IMAPClient;
+use IO::File;
+# ضبط $user و $pass و $server هنا
+my $dh = IO::File-&gt;new(&quot;&gt;debugging.output&quot;)
+  or die &quot;Can't open debugging.output: $!\n&quot;;
+my $imap = Mail::IMAPClient-&gt;new(
+    User=&gt;$user, Password=&gt;$pass, Server=&gt;$server, Debug=&gt;1, Debug_fh =&gt; $dh
+);</pre>
+<p class="Pp">وهو ما يعادل:</p>
+<pre>use Mail::IMAPClient;
+use IO::File;
+# ضبط $user و $pass و $server هنا
+my $imap = Mail::IMAPClient-&gt;new(
+    User     =&gt; $user,
+    Password =&gt; $pass,
+    Server   =&gt; $server,
+    Debug    =&gt; &quot;yes, please&quot;,
+    Debug_fh =&gt; IO::File-&gt;new(&quot;&gt;debugging.output&quot;)
+      || die &quot;Can't open debugging.output: $!\n&quot;
+);</pre>
+<p class="Pp">يمكنك أيضًا:</p>
+<pre>use Mail::IMAPClient;
+# ضبط $user و $pass و $server هنا
+open(DBG,&quot;&gt;debugging.output&quot;)
+  or die &quot;Can't open debugging.output: $!\n&quot;;
+my $imap = Mail::IMAPClient-&gt;new(
+  User=&gt;$user, Password=&gt;$pass, Server=&gt;$server, Debug=&gt; 1, Debug_fh =&gt; *DBG
+);</pre>
+<p class="Pp">تحديد هذا المعامل ليس مفيدًا جدًا إلا إذا تم ضبط المعامل <b>Debug</b> على قيمة صحيحة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Domain'><a class='permalink' href='#Domain'>Domain</a></h2>
+<p class="Pp">تستخدم المعلمة <i>Domain</i> بواسطة آلية NTLM "Authmechanism". المجال هو معلمة اختيارية للمصادقة NTLM.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='EnableServerResponseInLiteral'><a class='permalink' href='#EnableServerResponseInLiteral'>EnableServerResponseInLiteral</a></h2>
+<p class="Pp">تمت الإزالة في 2.99_01 (يتم اكتشافه تلقائيًا الآن)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Fast_io'><a class='permalink' href='#Fast_io'>Fast_io</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Fast_io = $imap-&gt;Fast_io();
+# أو:
+$imap-&gt;Fast_io($true_or_false);</pre>
+<p class="Pp">تتحكم المعلمة <i>Fast_io</i> فيما إذا كان كائن <b>Mail::IMAPClient</b> سيحاول استخدام I/O غير مانع على اتصال IMAP. يتم تمكينها افتراضيًا (ما لم يوفر المتصل الاتصال).</p>
+<p class="Pp">انظر أيضًا "Buffer".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Folder'><a class='permalink' href='#Folder'>Folder</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Folder = $imap-&gt;Folder();
+# أو:
+$imap-&gt;Folder($new_value);</pre>
+<p class="Pp">تعيد المعلمة <i>Folder</i> اسم المجلد المحدد حاليًا (في حال نسيت). يمكن استخدامها أيضًا لتعيين اسم المجلد المحدد حاليًا، وهو أمر غير ضروري تمامًا إذا تم استخدام طريقة "select" (أو ما يعادلها للقراءة فقط، طريقة "examine").</p>
+<p class="Pp">تنبيه بأن المعلمة <i>Folder</i> لا تحدد مجلدًا جديدًا تلقائيًا؛ يجب عليك استخدام طريقة "select" أو "examine" لذلك. بشكل عام، يجب استشارة المعلمة <i>Folder</i> (باستخدام شكل الطريقة <b>Folder</b> بدون معلمات). يجب عليك تعيين المعلمة <i>Folder</i> فقط إذا كنت تستخدم أي تقنية غامضة لتحديد مجلد، والتي من المحتمل ألا تفعلها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Ignoresizeerrors'><a class='permalink' href='#Ignoresizeerrors'>Ignoresizeerrors</a></h2>
+<p class="Pp">تُبلغ بعض الخوادم (مثل Exchange 2007) غالبًا عن أحجام رسائل غير صحيحة. بدلاً من تقسيم الرسالة إلى حجم يتناسب مع الحجم المحدد، سيتم تجاهل الحجم المبلغ عنه عندما يتم تعيين هذه المعلمة إلى 1.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Keepalive'><a class='permalink' href='#Keepalive'>Keepalive</a></h2>
+<p class="Pp">تقوم بعض جدران الحماية ومعدات الشبكة بإنهاء الاتصالات مبكرًا إذا كان الاتصال غير نشط. المعلمة <b>Keepalive</b>، عند تعيينها إلى قيمة صحيحة، تؤثر على سلوك طريقة "new" و "Socket" عن طريق تمكين SO_KEEPALIVE على الاتصال.</p>
+<p class="Pp">ملاحظة: تمت إضافة هذه السمة في Mail::IMAPClient 3.17.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Maxcommandlength'><a class='permalink' href='#Maxcommandlength'>Maxcommandlength</a></h2>
+<p class="Pp">تستخدم السمة <b>Maxcommandlength</b> بواسطة <b>fetch()</b> لتحديد طول الأوامر المرسلة إلى الخادم. القيمة الافتراضية هي 1000 حرف، باتباع توصية RFC2683 القسم 3.2.1.5.</p>
+<p class="Pp">ملاحظة: يجب استخدام هذه السمة أيضًا في طرق أخرى مختلفة ولكن لم يتم تنفيذها بعد، لذا يمكنك تسجيل المشاكل مع هذه الطرق.</p>
+<p class="Pp">يجب أن تزيل هذه السمة الحاجة إلى استخدام أدوات مساعدة مثل imapsync لإنشاء <b>split()</b> الخاصة بك وبدلاً من ذلك تسمح لـ Mail::IMAPClient بالعمل.</p>
+<p class="Pp">عمليًا، أثبتت هذه المعلمة فائدتها في تجاوز حد 8000 بايت في خوادم UW-IMAPD و 16384 بايت في خوادم Courier/Cyrus IMAP.</p>
+<p class="Pp">ملاحظة: تمت إضافة هذه السمة في Mail::IMAPClient 3.17.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Maxtemperrors'><a class='permalink' href='#Maxtemperrors'>Maxtemperrors</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Maxtemperrors = $imap-&gt;Maxtemperrors();
+# أو:
+$imap-&gt;Maxtemperrors($number);</pre>
+<p class="Pp">تحدد المعلمة <i>Maxtemperrors</i> عدد المرات التي يمكن أن تفشل فيها عملية قراءة أو كتابة بخطأ "Resource Temporarily Available" (مثل EAGAIN). القيمة الافتراضية هي <i>undef</i> مما يعني عدم وجود حد.</p>
+<p class="Pp">ضبط هذه المعلمة على السلسلة "unlimited" (بدلاً من <i>undef</i>) لتجاهل أخطاء "Resource Temporarily Unavailable" يعتبر قديمًا.</p>
+<p class="Pp">ملاحظة: يجب استخدام هذا الضبط بحذر وقد يتم إزالته في إصدار مستقبلي. قد يؤدي ضبطه إلى إرجاع الطرق إلى المستدعي قبل تلقي البيانات (ثم معالجتها) مما قد يترك الوحدة في حالة سيئة. في المستقبل، قد يتم تغيير هذا السلوك لتجنب هذا الموقف.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Password'><a class='permalink' href='#Password'>Password</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Password = $imap-&gt;Password();
+# أو:
+$imap-&gt;Password($new_value);</pre>
+<p class="Pp">يحدد كلمة المرور المستخدمة عند الاتصال بخدمة IMAP على المضيف المحدد في المعلمة <i>Server</i> كمستخدم محدد في المعلمة <i>User</i>. يمكن توفيرها مع استدعاء طريقة <b>new</b> أو بشكل مستقل عن طريق استدعاء طريقة <b>Password</b> للكائن <b>Password</b>.</p>
+<p class="Pp">إذا تم توفير <i>Server</i> و <i>User</i> و <i>Password</i> لطريقة <b>new</b>، فستتصل الكائن المثيل حديثًا بالمضيف المحدد في <i>Server</i> (على المنفذ المحدد في <i>Port</i> أو المنفذ الافتراضي 143) ثم تتصل كمستخدم محدد في المعلمة <i>User</i> (باستخدام كلمة المرور المحددة في المعلمة <i>Password</i>).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Peek'><a class='permalink' href='#Peek'>Peek</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Peek = $imap-&gt;Peek();
+# أو:
+$imap-&gt;Peek($true_or_false);</pre>
+<p class="Pp">يمنع ضبط <i>Peek</i> على قيمة صحيحة طرق "body_string" و "message_string" و "message_to_file" من تعيين العلامة <i>\Seen</i>. ضبط <i>Peek</i> على 0 (صفر) سيجبر طرق "body_string" و "message_string" و "message_to_file" و "parse_headers" على تعيين العلامة <i>\Seen</i> دائمًا.</p>
+<p class="Pp">القيمة الافتراضية هي تعيين العلامة <i>Seen</i> عند جلب جسم الرسالة ولكن ليس عند جلب الرؤوس فقط. تمرير <i>undef</i> إلى الطريقة المتناظرة <b>Peek</b> سيعيد تعيين المعلمة <i>Peek</i> إلى حالتها الأصلية والافتراضية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Port'><a class='permalink' href='#Port'>Port</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Port = $imap-&gt;Port();
+# أو:
+$imap-&gt;Port($new_value);</pre>
+<p class="Pp">يحدد المنفذ الذي تستمع إليه خادم IMAP. القيمة الافتراضية هي 993 (إذا كان <i>Ssl</i> صحيحًا) أو 143 إذا لم يتم تحديد أي قيمة بواسطة المتصل. يمكن توفير هذه المعلمة مع استدعاء طريقة <b>new</b> أو بشكل مستقل عن طريق استدعاء طريقة <b>Port</b> للكائن <b>Port</b>.</p>
+</section>
+class="Pp">من المحتمل أن يحتاج <i>Prewritemethod</i> الخاص بك إلى معرفة المزيد مما هو مذكور أعلاه للقيام بما يفعله. يوصى بتشفير جميع المعلومات ذات الصلة في تجزئة وتخزين مرجع لهذه التجزئة في مكان يمكن لطريقتك الوصول إليه ، ربما في كائن <i>Mail::IMAPClient</i> نفسه.</p>
+<p class="Pp">ملاحظة: لا يجب أن ترسل هذه الطريقة أي شيء عبر اتصال الخادم ؛ إنها تحول البيانات فقط قبل إرسالها.</p>
+<p class="Pp">انظر أيضًا &quot;Readmethod&quot;.</p>
+<section class="Ss">
+<h2 class="Ss" id='Ranges'><a class='permalink' href='#Ranges'>Ranges</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;Ranges(1);
+# أو:
+my $search = $imap-&gt;search(@search_args);
+if ( $imap-&gt;Ranges) { # $search هو كائن Mail::IMAPClient::MessageSet
+    print &quot;هذه هي نتيجة البحث المكثفة الخاصة بي: $search\n&quot;;
+    print &quot;هذه هي كل رسالة في نتيجة البحث: &quot;,
+      join(&quot;,&quot;,@$search),&quot;\n;
+}</pre>
+<p class="Pp">إذا تم تعيينه إلى قيمة صحيحة ، فستقوم طريقة &quot;search&quot; بإرجاع كائن Mail::IMAPClient::MessageSet إذا تم استدعاؤها في سياق قياسي ، بدلاً من مرجع لمصفوفة عادةً ما ترجعها &lt;b&gt;fetch&lt;/b&gt; عند استدعائها في سياق قياسي. إذا تم تعيينه إلى صفر أو إذا كان غير معرف ، ستستمر طريقة &lt;b&gt;search&lt;/b&gt; في إرجاع مرجع لمصفوفة عند استدعائها في سياق قياسي.</p>
+<p class="Pp">لا يكون لهذا المعامل أي تأثير على طريقة &lt;b&gt;search&lt;/b&gt; عندما يتم استدعاء &lt;b&gt;search&lt;/b&gt; في سياق قائمة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='RawSocket'><a class='permalink' href='#RawSocket'>RawSocket</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$socket = $imap-&gt;RawSocket;
+# أو:
+$imap-&gt;RawSocket($socketh);</pre>
+<p class="Pp">يمكن استخدام طريقة <i>RawSocket</i> للحصول على مقبض المقبس للاتصال الحالي (على سبيل المثال ، لإجراء I/O على الاتصال الذي لا تدعمه Mail::IMAPClient بالفعل) أو لاستبدال المقبس الحالي بمقبض جديد (على سبيل المثال ، مقبس SSL ، انظر IO::Socket::SSL ، ولكن تأكد من النظر أيضًا في طريقة &quot;Socket&quot;).</p>
+<p class="Pp">إذا قمت بتوفير مقبض مقبس بنفسك ، إما عن طريق القيام بشيء مثل:</p>
+<pre>$imap = Mail::IMAPClient-&gt;new(RawSocket =&gt; $sock, User =&gt; ... );</pre>
+<p class="Pp">أو عن طريق القيام بشيء مثل:</p>
+<pre>$imap = Mail::IMAPClient-&gt;new(User =&gt; $user,
+            Password =&gt; $pass, Server =&gt; $host);
+# إلخ إلخ
+$imap-&gt;RawSocket($ssl);</pre>
+<p class="Pp">فستكون مسؤولاً عن إنشاء الاتصال والمصادقة ، إما عن طريق طريقة &quot;login&quot; أو &quot;authenticate&quot; الأكثر أناقة ، أو ، نظرًا لأنك تعرف كل شيء ، ببساطة عن طريق إجراء I/O مباشر على المقبس حتى يتم تسجيل الدخول. إذا قمت بأي من هذه الإجراءات ، فيجب عليك أيضًا تعيين معلمة &quot;State&quot; بنفسك لتعكس الحالة الحالية للكائن (أي متصل ، مصادق عليه ، إلخ).</p>
+<p class="Pp">ملاحظة: لن يتم إجراء أي عملية على المقبس عند استدعاء هذه الطريقة. على وجه الخصوص ، بعد إنشاء اتصال TCP بخادم IMAP ، يفرض البروتوكول على الخادم إرسال رسالة ترحيب أولية ، وسيتعين عليك التعامل مع هذه الرسالة بشكل صريح قبل إجراء أي عمليات أخرى ، على سبيل المثال ، محاولة استدعاء &quot;login&quot;. التحذير: على مسؤوليتك.</p>
+<p class="Pp">لنهج أكثر بديهية لإنشاء المقبس ، انظر &quot;Socket&quot;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Readmethod'><a class='permalink' href='#Readmethod'>Readmethod</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$imap-&gt;Readmethod(   # IMAP, HANDLE, BUFFER, LENGTH, OFFSET
+    sub {
+        my ( $self, $handle, $buffer, $count, $offset ) = @_;
+        my $rc = sysread( $handle, $$buffer, $count, $offset );
+        # افعل شيئًا مفيدًا هنا ...
+    }
+);</pre>
+<p class="Pp">يجب أن تحتوي طريقة <b>Readmethod</b> على مرجع لدالة فرعية ستحل محل sysread. سيتم تمرير الوسيطات التالية إلى الدالة الفرعية: أولاً كائن Mail::IMAPClient المستخدم. ثانيًا ، مرجع لمقبس. ثالثًا ، مرجع لمتغير قياسي يتم فيه قراءة البيانات (BUFFER). يجب أن تكون البيانات الموجودة هنا &quot;بيانات نهائية&quot; ، لذلك إذا كنت تقوم بفك تشفير أو إزالة التوقيعات ، فتأكد من القيام بذلك قبل إدخال البيانات في هذا المخزن المؤقت. رابعًا ، عدد البايتات المطلوبة للقراءة ؛ طول الطلب. خامسًا ، الإزاحة في المخزن المؤقت حيث يجب قراءة البيانات. إذا لم يتم تحديده ، فيجب أن يكون قيمته الافتراضية صفرًا.</p>
+<p class="Pp">ملاحظة: هذه الطريقة تحل تمامًا محل عمليات القراءة من الاتصال بالخادم ، لذلك إذا حددت واحدة من هذه ، فستحتاج الدالة الفرعية الخاصة بك إلى إجراء القراءة فعليًا. لهذا السبب لدينا المعامل &quot;Socket&quot; والطريقة المسماة له.</p>
+<p class="Pp">من المحتمل أن يحتاج <i>Readmethod</i> الخاص بك إلى معرفة المزيد مما هو مذكور أعلاه للقيام بما يفعله. يوصى بتشفير جميع المعلومات ذات الصلة في تجزئة وتخزين مرجع لهذه التجزئة في مكان يمكن لطريقتك الوصول إليه ، ربما في كائن <i>Mail::IMAPClient</i> نفسه.</p>
+<p class="Pp">انظر أيضًا &quot;Prewritemethod&quot;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Readmoremethod'><a class='permalink' href='#Readmoremethod'>Readmoremethod</a></h2>
+<p class="Pp">يجب أن تحتوي طريقة <b>Readmoremethod</b> على مرجع لدالة فرعية ستحل محل / تعزز سلوك الطريقة الداخلية <b>_read_more()</b>. سيتم تمرير الوسيطات التالية إلى الدالة الفرعية: أولاً كائن Mail::IMAPClient المستخدم. ثانيًا ، مرجع لمقبس. ثالثًا ، قيمة مهلة تستخدم كقيمة مهلة لـ <b>CORE::select()</b> افتراضيًا. اعتمادًا على التغييرات / الوظائف التي أدخلتها تغييرات Readmethod ، قد يكون ذلك ضروريًا هنا.</p>
+<p class="Pp">ملاحظة الإصدار: تمت إضافة المعامل في Mail::IMAPClient 3.30</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Reconnectretry'><a class='permalink' href='#Reconnectretry'>Reconnectretry</a></h2>
+<p class="Pp">إذا أصبح اتصال IMAP غير نشط لفترة طويلة جدًا ، فقد يتم إغلاقه بواسطة الخادم أو جدار الحماية ، وما إلى ذلك. سيؤدي المعامل <b>Reconnectretry</b> ، عند إعطائه قيمة موجبة ، إلى قيام Mail::IMAPClient بإعادة محاولة أوامر IMAP حتى X مرات عند حدوث خطأ مثل EPIPE أو ECONNRESET. يتم تعطيل هذا (0) افتراضيًا.</p>
+<p class="Pp">انظر أيضًا &quot;Keepalive&quot;</p>
+<p class="Pp">ملاحظة الإصدار: تمت إضافة المعامل في Mail::IMAPClient 3.17</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Server'><a class='permalink' href='#Server'>Server</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Server = $imap-&gt;Server();
+# أو:
+$imap-&gt;Server($hostname);</pre>
+<p class="Pp">يشير إلى عنوان IP أو اسم المضيف الذي يقوم بتشغيل خادم IMAP. إذا تم توفيره كجزء من استدعاء طريقة &quot;new&quot; ، فسيتصل كائن IMAP الجديد تلقائيًا عند الإنشاء. (انظر طريقة &quot;new&quot; ، أدناه.) يمكن توفيره كجزء من استدعاء طريقة &quot;new&quot; أو بشكل منفصل عن طريق استدعاء الطريقة المسماة <b>Server</b> للكائن.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Showcredentials'><a class='permalink' href='#Showcredentials'>Showcredentials</a></h2>
+<p class="Pp">عادةً ، ستقوم مخرجات التصحيح بإخفاء بيانات اعتماد تسجيل الدخول عند استخدام آلية تسجيل الدخول كنص عادي. يؤدي تعيين <i>Showcredentials</i> إلى قيمة صحيحة إلى قمع هذا ، مما يسمح برؤية السلسلة التي يتم إرسالها واستقبالها أثناء تسجيل الدخول كنص عادي. استخدمه فقط عند تصحيح المشكلات المتعلقة بأمر IMAP LOGIN ، ثم قم بإيقافه فورًا عند الانتهاء من هذه المشكلة.</p>
+<p class="Pp">مثال:</p>
+<pre>print &quot;هذا محفوف بالمخاطر للغاية!\n&quot; if $imap-&gt;Showcredentials();
+# أو:
+$imap-&gt;Showcredentials(0);    # إخفاء بيانات الاعتماد مرة أخرى</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Socket'><a class='permalink' href='#Socket'>Socket</a></h2>
+<p class="Pp"><b>ملاحظة!</b> تغير معنى هذه الطريقة منذ الإصدار 2.99_04 من هذه الوحدة. إذا كنت بحاجة إلى المعنى القديم ، استخدم &quot;RawSocket&quot;.</p>
+<p class="Pp">مثال:</p>
+<pre>$Socket = $imap-&gt;Socket();
+# أو:
+$imap-&gt;Socket($socket_fh);</pre>
+<p class="Pp">يمكن استخدام طريقة <i>Socket</i> للحصول على مقبض المقبس للاتصال الحالي. قد يكون هذا ضروريًا لإجراء I/O على الاتصال الذي لا تدعمه Mail::IMAPClient بالفعل) أو لاستبدال المقبس الحالي بمقبض جديد (على سبيل المثال ، مقبس SSL ، انظر IO::Socket::SSL).</p>
+<p class="Pp">إذا قمت بتوفير مقبض مقبس بنفسك ، إما عن طريق القيام بشيء مثل:</p>
+<pre>$imap = Mail::IMAPClient-&gt;new( Socket =&gt; $sock, User =&gt; ... );</pre>
+<p class="Pp">أو عن طريق القيام بشيء مثل:</p>
+<pre>$imap = Mail::IMAPClient-&gt;new(
+  User =&gt; $user, Password =&gt; $pass, Server =&gt; $host
+);
+$imap-&gt;Socket($ssl);</pre>
+<p class="Pp">فستكون مسؤولاً عن إنشاء الاتصال ، أي تأكد من أن $ssl في المثال هو مقبس صالح ومتصل.</p>
+<p class="Pp">تُستخدم هذه الطريقة بشكل أساسي لتوفير استبدال للسقوط لـ IO::Socket::(INET|IP) ، المستخدمة بواسطة &quot;connect&quot; افتراضيًا. في الواقع ، يتم استدعاء هذه الطريقة بواسطة &quot;connect&quot; نفسه بعد إنشاء اتصال IO::Socket::(INET|IP) مناسب بالخادم المستهدف ؛ لهذا السبب ، تقوم هذه الطريقة أيضًا بتنفيذ العمليات العادية المرتبطة بـ &quot;connect&quot; ، وهي:</p>
+<ul class="Bl-bullet">
+  <li>قراءة رسالة الترحيب الأولية من الخادم ؛</li>
+  <li>استدعاء &quot;login&quot; إذا كانت الشروط تنطبق (انظر &quot;connect&quot; للحصول على التفاصيل) ؛</li>
+  <li>ترك كائن <i>Mail::IMAPClient</i> في حالة مناسبة.</li>
+</ul>
+<p class="Pp">لهذه الأسباب ، سيعمل المثال التالي &quot;دون الحاجة إلى إعداده&quot;:</p>
+<pre>use IO::Socket::SSL;
+my $imap = Mail::IMAPClient-&gt;new
+ ( User     =&gt; 'your-username',
+   Password =&gt; 'your-password',
+   Socket   =&gt; IO::Socket::SSL-&gt;new
+   (  Proto    =&gt; 'tcp',
+      PeerAddr =&gt; 'some.imap.server',
+      PeerPort =&gt; 993, # منفذ IMAP القياسي عبر SSL
+   ),
+);</pre>
+<p class="Pp">إذا كنت بحاجة إلى مزيد من التحكم في المقبس ، على سبيل المثال ، إذا كان عليك تنفيذ طريقة مصادقة أكثر تعقيدًا ، فانظر &quot;RawSocket&quot;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Starttls'><a class='permalink' href='#Starttls'>Starttls</a></h2>
+<p class="Pp">إذا كان يجب بدء اتصال IMAP بـ TLS / SSL بعد الاتصال بالخادم ، فقم بتعيين هذا الخاصية. إذا كانت القيمة هي arrayref ، فستستخدم هذه الوسيطات لـ IO::Socket::SSL-&gt;start_SSL. افتراضيًا ، يتم تعيين هذا الاتصال في وضع الحظر أثناء التفاوض على TLS. سيتم إعادة تعيين المقبس إلى قيمة الحظر / عدم الحظر الأصلية بعد التفاوض الناجح على TLS. يمكن التحكم في الوسيطات المستخدمة في استدعاء start_SSL عن طريق تعيين هذه الخاصية إلى arrayref تحتوي على الوسيطات المطلوبة.</p>
+<p class="Pp">ملاحظة الإصدار: تمت إضافة المعامل في Mail::IMAPClient 3.22</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Socketargs'><a class='permalink' href='#Socketargs'>Socketargs</a></h2>
+<p class="Pp">يمكن التحكم في الوسيطات المستخدمة في استدعاء IO::Socket::{UNIX|INET|IP|SSL}-&gt;new عن طريق تعيين هذه الخاصية إلى arrayref تحتوي على الوسيطات المطلوبة.</p>
+<p class="Pp">على سبيل المثال ، لتمرير MultiHomed =&gt; 1 دائمًا إلى IO::Socket::...-&gt;new ، يمكنك استخدام:</p>
+<pre>$imap = Mail::IMAPClient-&gt;new(
+  ..., Socketargs =&gt; [ MultiHomed =&gt; 1 ], ...
+);</pre>
+<p class="Pp">انظر أيضًا &quot;Ssl&quot; للتحكم في وسيطات IO::</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Ssl'><a class='permalink' href='#Ssl'>Ssl</a></h2>
+<p class="Pp">إذا كان اتصال IMAP يتطلب SSL، فيمكنك تعيين السمة Ssl إلى '1'، وسوف يستخدم Mail::IMAPClient تلقائيًا IO::Socket::SSL بدلاً من IO::Socket::(INET|IP) للاتصال بالخادم. تُستخدم هذه السمة في طريقة "connect". يمكن التحكم في الوسائط المستخدمة في استدعاء IO::Socket::SSL-&gt;new عن طريق تعيين هذه السمة إلى مرجع مصفوفة يحتوي على الوسائط المطلوبة.</p>
+<p class="Pp">انظر أيضًا "connect" لمعرفة التفاصيل حول بدء الاتصال، و "Socket" و "Rawsocket" إذا كنت ترغب في مزيد من التحكم في إدارة الاتصال.</p>
+<p class="Pp">ملاحظة: تمت إضافة السمة في Mail::IMAPClient 3.18.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Supportedflags'><a class='permalink' href='#Supportedflags'>Supportedflags</a></h2>
+<p class="Pp">خاصة عند استخدام "migrate()"، قد يحتاج مستقبل الرسائل إلى تهيئته صراحةً بقائمة الأعلام المدعومة؛ قد يختلف هذا عن خادم IMAP الأصلي.</p>
+<p class="Pp">يجب تحديد الأسماء كمصفوفة. سيتم تجاهل الشرطات والشرطات المائلة وحالة الأحرف في الأسماء.</p>
+<p class="Pp">يمكنك أيضًا تحديد مرجع لدالة سيتم استدعاؤها لكل علم. في هذه الحالة، لا يتم تطبيع الأعلام (حتى الآن). القوائم التي تعيدها استدعاءات CODE هي التي تحدد القائمة النهائية للأعلام.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Timeout'><a class='permalink' href='#Timeout'>Timeout</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Timeout = $imap-&gt;Timeout();
+# أو:
+$imap-&gt;Timeout($seconds);</pre>
+<p class="Pp">تعيين قيمة مهلة الانتظار بالثواني للقراءات (القيمة الافتراضية هي 600). على وجه التحديد، سيمنع المعامل Timeout Mail::IMAPClient من التعليق أثناء القراءة.</p>
+<p class="Pp">نظرًا لأن مهلات الانتظار يتم تنفيذها باستخدام معامل Perl select، يمكن تعيين المعامل Timeout إلى عدد كسري من الثواني. يؤدي تعيين Timeout إلى 0 (صفر) إلى تعطيل وظيفة مهلة الانتظار.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Uid'><a class='permalink' href='#Uid'>Uid</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$Uid = $imap-&gt;Uid();
+# أو:
+$imap-&gt;Uid($true_or_false);</pre>
+<p class="Pp">إذا تم تعيين Uid إلى قيمة صحيحة (أي 1)، يتم تعديل سلوك طرق fetch و search و copy و store (والطرق المشتقة منها)، حيث يتم التعامل مع الوسائط التي تكون عادةً تسلسلات رسائل على أنها UID's. يتم إرجاع القيم المرتجعة (في حالة طرق search والطرق المشتقة منها) والتي ستكون عادةً تسلسلات رسائل على هيئة UID's.</p>
+<p class="Pp">يتم تنفيذه داخليًا كمفتاح يقوم، إذا تم تمكينه، بجعل الطرق التي تصدر عادةً أمر IMAP FETCH أو STORE أو SEARCH أو COPY، تصدر على التوالي UID FETCH أو UID STORE أو UID SEARCH أو UID COPY. الفرق الرئيسي بين تسلسلات الرسائل و UID's هو أنه، وفقًا لـ RFC3501، لا ينبغي تغيير UID's أثناء الجلسة ولا ينبغي تغييرها بين الجلسات، ويجب عدم إعادة استخدامها أبدًا. تسلسلات الرسائل ليس لديها هذا الضمان وقد يتم إعادة استخدامها على الفور.</p>
+<p class="Pp">نظرًا لأن أسماء المجلدات لديها أيضًا معرف فريد (UIDVALIDITY)، يتم توفيره عند تحديد المجلد أو فحصه أو من خلال شيء مثل "$imap-&gt;status($folder,"UIDVALIDITY")"، فمن الممكن تحديد كل رسالة بشكل فريد على الخادم، على الرغم من أنك لا تحتاج عادةً إلى القلق بشأن ذلك.</p>
+<p class="Pp">الطرق المتأثرة بالمعامل Uid هي:</p>
+<pre>copy            fetch
+search          store
+message_string  message_uid
+body_string     flags
+move            size
+parse_headers   thread</pre>
+<p class="Pp">ملاحظة: إذا كنت ترغب، لأي سبب، في تمكين المعامل Uid لتعليمات فردية فقط، فيمكنك الاختيار بين المقتطفين التاليين، وهما متكافئان:</p>
+<p class="Pp">مثال 1:</p>
+<pre>$imap-&gt;Uid(1);
+my @uids = $imap-&gt;search('SUBJECT',&quot;Just a silly test&quot;); #
+$imap-&gt;Uid(0);</pre>
+<p class="Pp">مثال 2:</p>
+<pre>my @uids;
+foreach $r ($imap-&gt;UID(&quot;SEARCH&quot;,&quot;SUBJECT&quot;,&quot;Just a silly test&quot;) {
+    chomp $r;
+    $r =~ s/\r$//;
+    $r =~ s/^\*\s+SEARCH\s+// or next;
+    push @uids, grep(/\d/,(split(/\s+/,$r)));
+}</pre>
+<p class="Pp">في المثال الثاني، نستخدم الطريقة الافتراضية لإصدار أمر IMAP UID العميل، مع الحرص على استخدام اسم طريقة مكتوب بالكامل بأحرف كبيرة لتجنب استدعاء الطريقة "Uid" عن طريق الخطأ. ثم نقوم بتحليل UID's الرسائل يدويًا، حيث لا نمتلك ميزة الطريقة المدمجة "search".</p>
+<p class="Pp">يرجى توخي الحذر الشديد عند تمكين وتعطيل المعامل "Uid" أثناء البرنامج النصي. إذا فقدت تتبع ما إذا كنت تقوم بتمكين أو تعطيل المعامل "Uid"، فقد تقوم بشيء مأساوي، مثل حذف الرسالة الخاطئة. تذكر، مثل جميع طرق الوصول ذات الأسماء المتشابهة، أن طريقة "Uid" بدون معلمات تعيد القيمة الحالية للمعامل "Uid"، لذا افعل لنفسك معروفًا وتحقق. الطريقة الأكثر أمانًا هي تمكينها في البداية (أو ببساطة تركها في الحالة الممكّنة افتراضيًا) ثم الحفاظ عليها ممكّنة. (تذكر أن تركها في الحالة المعطلة يمكن أن يسبب مشاكل إذا أدت التغييرات في محتوى المجلد إلى إعادة ترتيب.)</p>
+<p class="Pp">افتراضيًا، المعامل "Uid" ممكّن.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='User'><a class='permalink' href='#User'>User</a></h2>
+<p class="Pp">مثال:</p>
+<pre>$User = $imap-&gt;User();
+# أو:
+$imap-&gt;User($userid);</pre>
+<p class="Pp">تحدد معرف المستخدم الذي سيتم استخدامه عند تسجيل الدخول إلى خدمة IMAP. يمكن توفيره إما عن طريق استدعاء الطريقة "new" أو عن طريق استدعاء طريقة الكائن "User".</p>
+<p class="Pp">يمكن تعيين المعلمات إما أثناء استدعاء الطريقة "new" عن طريق تمرير معلمات مسماة/قيمة، أو لاحقًا عن طريق استدعاء طريقة المعلمة ذات الاسم المتشابه.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Status_Methods'><a class='permalink' href='#Status_Methods'>Status Methods</a></h1>
+<p class="Pp">هناك العديد من طرق الكائن التي تعيد حالة الكائن. يمكن استخدامها في أي وقت للتحقق من حالة كائن IMAPClient، ولكنها مفيدة بشكل خاص في تحديد سبب الأخطاء عند محاولة الاتصال والمصادقة كجزء من استدعاء واحد للطريقة "new". طرق الحالة هي:</p>
+<section class="Ss">
+<h2 class="Ss" id='Escaped_history'><a class='permalink' href='#Escaped_history'>Escaped_history</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @history = $imap-&gt;Escaped_history;</pre>
+<p class="Pp">الطريقة "Escaped_history" مطابقة تقريبًا للطريقة "History". ومع ذلك، على غرار الطريقة "History"، يتم إرسال مخرجات الخادم التي تم نقلها حرفيًا بين علامتي اقتباس مزدوجتين، مع الهروب من جميع علامات الاقتباس المزدوجة. إذا تم استدعاؤها في سياق قياسي، تعيد "Escaped_history" مرجع مصفوفة بدلاً من مصفوفة.</p>
+<p class="Pp">تكون "Escaped_history" مفيدة إذا كنت تسترجع المخرجات وتعالجها يدويًا، وتعتمد على الأحرف الخاصة المذكورة أعلاه لتحديد البيانات. إنها غير مفيدة عند استرجاع محتويات الرسائل؛ استخدم "message_string" أو "body_string" في هذه الحالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Escaped_results'><a class='permalink' href='#Escaped_results'>Escaped_results</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @results = $imap-&gt;Escaped_results;</pre>
+<p class="Pp">الطريقة "Escaped_results" مطابقة تقريبًا للطريقة "Results". ومع ذلك، على غرار الطريقة "Results"، يتم إرسال مخرجات الخادم التي تم نقلها حرفيًا بين علامتي اقتباس مزدوجتين، مع الهروب من جميع علامات الاقتباس المزدوجة. إذا تم استدعاؤها في سياق قياسي، تعيد "Escaped_results" مرجع مصفوفة بدلاً من مصفوفة.</p>
+<p class="Pp">تكون "Escaped_results" مفيدة إذا كنت تسترجع المخرجات وتعالجها يدويًا، وتعتمد على الأحرف الخاصة المذكورة أعلاه لتحديد البيانات. إنها غير مفيدة عند استرجاع محتويات الرسائل؛ استخدم "message_string" أو "body_string" في هذه الحالة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='History'><a class='permalink' href='#History'>History</a></h2>
+<p class="Pp">مثال:</p>
+<pre>my @history = $imap-&gt;History;</pre>
+<p class="Pp">الطريقة "History" مطابقة تقريبًا للطريقة "Results". ومع ذلك، على غرار الطريقة "Results"، لا يتم تضمين أمر IMAP الذي تم إصداره لإنشاء النتائج التي تم إرجاعها في النتائج المرتجعة. إذا تم استدعاؤها في سياق قياسي، تعيد "History" مرجع مصفوفة بدلاً من مصفوفة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IsUnconnected'><a class='permalink' href='#IsUnconnected'>IsUnconnected</a></h2>
+<p class="Pp">تعيد قيمة صحيحة إذا كان الكائن في حالة "Unconnected".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IsConnected'><a class='permalink' href='#IsConnected'>IsConnected</a></h2>
+<p class="Pp">تعيد قيمة صحيحة إذا كان الكائن في حالة "Connected" أو "Authenticated" أو "Selected".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IsAuthenticated'><a class='permalink' href='#IsAuthenticated'>IsAuthenticated</a></h2>
+<p class="Pp">تعيد قيمة صحيحة إذا كان الكائن في حالة "Authenticated" أو "Selected".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IsSelected'><a class='permalink' href='#IsSelected'>IsSelected</a></h2>
+<p class="Pp">تعيد قيمة صحيحة إذا كان الكائن في حالة "Selected".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LastError'><a class='permalink' href='#LastError'>LastError</a></h2>
+<p class="Pp">داخليًا، يتم تنفيذ "LastError" تقريبًا كمعلمة (كما هو موضح في "Parameters"، أعلاه). توجد سمة "LastError" وطريقة وصول ذات اسم متشابه تعيد سلسلة "LastError" تصف آخر حالة خطأ اكتشفها الخادم.</p>
+<p class="Pp">ملاحظة: بعض الأخطاء أكثر خطورة من غيرها، لذا فإن قيمة "LastError" ذات مغزى فقط إذا واجهت خطأ لا يعجبك. على سبيل المثال، إذا استخدمت الطريقة "exists" لمعرفة ما إذا كان المجلد موجودًا ولم يكن المجلد موجودًا، فسيتم تسجيل رسالة خطأ في "LastError" على الرغم من أن هذا ليس خطأ خطيرًا بشكل خاص. من ناحية أخرى، إذا لم تستخدم "exists" وحاولت ببساطة "select" مجلدًا غير موجود، فإن "select" ستعيد "undef" بعد تعيين "LastError" إلى شيء مثل "NO SELECT failed: Can't open mailbox "mailbox": no such mailbox". في ذلك الوقت سيكون من المفيد طباعة محتويات "LastError" بينما أنت على وشك الموت.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LastIMAPCommand'><a class='permalink' href='#LastIMAPCommand'>LastIMAPCommand</a></h2>
+<p class="Pp">جديدة في الإصدار 2.0.4، "LastIMAPCommand" تعيد السلسلة الدقيقة لأمر IMAP الذي سيتم إرساله إلى الخادم. وهي مفيدة بشكل أساسي في</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Constructing'><a class='permalink' href='#Constructing'>إنشاء</a></h1>
+<p class="Pp">تقوم الدالة <b>Constructing</b> بإرجاع مصفوفة تحتوي على سجل لجلست IMAP حتى اللحظة التي تم فيها استدعاء <b>Constructing</b>. وهي مفيدة بشكل أساسي للمساعدة في التصحيح ولكن يمكن استخدامها أيضًا لاسترداد مخرجات نصية لتحليلها يدويًا. تتحكم قيمة المعلمة <b>Clear</b> في عدد المعاملات التي يتم تضمينها في السجل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Report'><a class='permalink' href='#Report'>تقرير</a></h2>
+<p class="Pp">تقوم الدالة <b>Report</b> بإرجاع مصفوفة تحتوي على سجل لجلست IMAP حتى اللحظة التي تم فيها استدعاء <b>Report</b>. وهي مفيدة بشكل أساسي للمساعدة في التصحيح ولكن يمكن استخدامها أيضًا لاسترداد مخرجات نصية لتحليلها يدويًا. تتحكم قيمة المعلمة <b>Clear</b> في عدد المعاملات التي يتم تضمينها في السجل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Results'><a class='permalink' href='#Results'>نتائج</a></h2>
+<p class="Pp">تقوم الدالة <b>Results</b> بإرجاع مصفوفة تحتوي على نتائج أمر عميل IMAP. تقبل وسيطة واحدة، وهي رقم المعامل للأمر الذي ترغب في الحصول على نتائجه. إذا لم يتم تحديد رقم المعامل، فإن <b>Results</b> تقوم بإرجاع نتائج آخر أمر عميل IMAP تم إصداره. إذا تم استدعاؤها في سياق قياسي، فإن <b>Results</b> تقوم بإرجاع مصفوفة مرجعية بدلاً من مصفوفة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='State'><a class='permalink' href='#State'>الحالة</a></h2>
+<p class="Pp">تقوم الدالة <b>State</b> بإرجاع قيمة رقمية تشير إلى الحالة الحالية لكائن IMAPClient. إذا تم استدعاؤها بوسيطة، فإنها تضبط حالة الكائن على تلك القيمة. إذا لم يتم استدعاؤها بوسيطة، فإنها تتصرف ببساطة كـ <b>Status</b>، الموضحة أدناه.</p>
+<p class="Pp">بشكل عام، لن تحتاج إلى استدعاء هذه الدالة. الاستثناء هو إذا كنت تتجنب الوحدة النمطية Mail::IMAPClient's <b>connect</b> و/أو <b>login</b> لإعداد اتصالك الخاص (على سبيل المثال، باستخدام مأخذ توصيل آمن)، وفي هذه الحالة ستحتاج إلى القيام بما تفعله الدالتان <b>connect</b> و <b>login</b> عادةً لك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Status'><a class='permalink' href='#Status'>الحالة</a></h2>
+<p class="Pp">تقوم الدالة <b>Status</b> بإرجاع قيمة رقمية تشير إلى الحالة الحالية لكائن IMAPClient. (لا تخلط بينها وبين الدالة <b>status</b>، بأحرف صغيرة، وهي تنفيذ أمر <i>STATUS</i> الخاص بعميل IMAP.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Transaction'><a class='permalink' href='#Transaction'>معاملة</a></h2>
+<p class="Pp">تقوم الدالة <b>Transaction</b> بإرجاع قيمة التسمية (أو رقم المعامل) لآخر أمر عميل IMAP.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Custom_Authentication_Mechanisms'><a class='permalink' href='#Custom_Authentication_Mechanisms'>آليات المصادقة المخصصة</a></h1>
+<p class="Pp">إذا كنت تريد استخدام المصادقة النصية العادية فقط أو أي من آليات المصادقة المتقدمة المدعومة، فلن تحتاج إلى قراءة هذا القسم.</p>
+<p class="Pp">هناك العديد من الدوال والمعلمات التي يمكنك استخدامها لبناء آلية المصادقة الخاصة بك. تم وصف جميع الدوال والمعلمات التي تمت مناقشتها في هذا القسم بمزيد من التفصيل في مكان آخر في هذا المستند. يوفر هذا القسم نقطة انطلاق لبناء آلية المصادقة الخاصة بك.</p>
+<p class="Pp">هناك العديد من آليات المصادقة المتاحة، إذا لم تكن آلية المفضلة لديك مدعومة حاليًا ولكنك تمكنت من جعلها تعمل، ففكر في التبرع بها لهذه الوحدة النمطية. الاقتراحات والتصحيحات مرحب بها دائمًا.</p>
+<p class="Pp">الدعم لآليات المصادقة الإضافية في Mail::IMAPClient سهل جدًا. قم بإنشاء دالة رد اتصال لتوفير الرد على تحدي الخادم. تحتوي المعلمة <b>Authcallback</b> على مرجع إلى دالة رد الاتصال هذه، والتي يمكن أن تكون دالة مجهولة أو دالة مسمّاة. ثم، حدد آلية المصادقة الخاصة بك، إما باستخدام المعلمة <b>Authmechanism</b> أو كوسيطة لـ <b>authenticate</b>.</p>
+<p class="Pp">قد تحتاج أيضًا إلى توفير دالة لتشفير (أو ما شابه) البيانات قبل إرسالها إلى الخادم. يجب أن تحتوي المعلمة <b>Prewritemethod</b> على مرجع لهذه الدالة. وبالمثل، ستحتاج إلى فك تشفير البيانات الواردة من الخادم؛ يجب تخزين مرجع للدالة التي تقوم بذلك في المعلمة <b>Readmethod</b>.</p>
+<p class="Pp">يعتمد هذا الإطار على الافتراضات التي مفادها أ) أن الآلية التي تستخدمها تتطلب تبادل تحديات وردود، وب) أن الآلية لا تغير بشكل أساسي التبادل بين العميل والخادم، بل تغلفه في طبقة تشفير. تفترض أيضًا أن الطبيعة الخطية لمحادثة IMAP يتم الحفاظ عليها؛ قد تظل آليات المصادقة التي تقسم الرسائل إلى كتل ذات حجم محدد مسبقًا ممكنة، على الرغم من أنها ستكون أصعب في التنفيذ.</p>
+<p class="Pp">بدلاً من ذلك، إذا كان لديك وصول إلى <b>imtest</b>، وهي أداة مضمنة في توزيع Cyrus IMAP، يمكنك استخدام هذه الأداة لتسهيل اتصالاتك بخادم IMAP. هذا سهل التنفيذ إلى حد ما. تجد مثالًا، <i>examples/imtestExample.pl</i>، في الدليل الفرعي <span class="Li">&quot;examples&quot;</span> لتوزيع المصدر.</p>
+<p class="Pp">تلخص القائمة التالية الدوال والمعلمات التي قد تجدها مفيدة في تنفيذ المصادقة المتقدمة:</p>
+<dl class="Bl-tag">
+  <dt id="The"><a class="permalink" href="#The">الدالة authenticate</a></dt>
+  <dd>تستخدم الدالة <b>authenticate</b> المعلمة <b>Authmechanism</b> لتحديد كيفية المصادقة مع الخادم، راجع وثائق الدالة <b>authenticate</b> للحصول على التفاصيل.</dd>
+  <dt>Socket and RawSocket</dt>
+  <dd>توفر الدالتان <b>Socket</b> و <b>RawSocket</b> الوصول إلى اتصال المأخذ. يتم إنشاء المأخذ عادةً بواسطة الدالة <b>connect</b>، ولكن إذا كنت تقوم بتنفيذ تقنية مصادقة متقدمة، فقد تختار إنشاء اتصال المأخذ الخاص بك ثم ضبط هذه المعلمة يدويًا، وبالتالي تجنب الدالة <b>connect</b>. هذا مفيد أيضًا إذا كنت ترغب في استخدام بدائل مثل <span class="Li">IO::Socket::SSL</span> وتحتاج إلى تحكم كامل.</p>
+  <p class="Pp"><b>RawSocket</b> ببساطة تحصل/تضبط المأخذ دون محاولة التفاعل معه. في هذه الحالة، يجب عليك التأكد من التعامل مع جميع العمليات الأولية وتكوين كائن <b>Mail::IMAPClient</b> يدويًا بما يتزامن مع حالته الفعلية فيما يتعلق بهذا المأخذ (راجع المزيد من المعلمات ذات الصلة بهذا، خاصة المعلمة <b>State</b>).</p>
+  <p class="Pp">بينما لا تحاول <b>RawSocket</b> إجراء مراحل اتصال أولية إذا كانت المعلمات موجودة، تحاول <b>Socket</b> القيام بذلك إذا كانت الظروف تنطبق. إذا تم تقديم كلتا المعلمتين، فلهما الأولوية على <b>RawSocket</b>. إذا تم تعيين <b>Starttls</b>، فسيتم استدعاء الدالة <b>starttls</b> بواسطة الدالة <b>Socket</b>.</p>
+  <p class="Pp"><b>ملاحظة</b> كجزء من الإصدار 2.99_04 من هذه الوحدة، تغيرت معاني المعلمة <b>Socket</b> لتكون أكثر <b>DWIM</b> (افعل ما تتوقعه). تم تقديم <b>RawSocket</b> كبديل للمعلمة <b>Socket</b> في الإصدارات القديمة.</p>
+  </dd>
+  <dt id="State,"><a class="permalink" href="#State,">معلمات State, Server, User, Password, Proxy and Domain</a></dt>
+  <dd>إذا كنت ترغب في إنشاء اتصالك الخاص بالخادم والمصادقة يدويًا، يمكنك تعيين هذه المعلمات للحفاظ على كائن <b>Mail::IMAPClient</b> متزامنًا مع حالته الفعلية. من بين هذه، المعلمة <b>State</b> هي دائمًا مطلوبة. يجب تعيين المعلمات الأخرى فقط إذا كنت تعتقد أن برنامجك سيحتاجها لاحقًا.</dd>
+  <dt id="Authmechanism~2"><a class="permalink" href="#Authmechanism~2">Authmechanism</a></dt>
+  <dd>قم بتعيين هذه القيمة كآلية المصادقة التي يجب أن يرسلها AUTHENTICATE إلى الخادم. إذا كنت تقوم بتنظيم المصادقة الخاصة بك، فقد تكون هذه المعلمة أقل فائدة. وهي موجودة بشكل أساسي لتتمكن من تعيينها عند إنشاء كائنك باستخدام الدالة <b>new</b>. ستستدعي الدالة <b>new</b> الدالة <b>connect</b>، والتي بدورها ستستدعي الدالة <b>login</b>. إذا رأت <b>login</b> أنك قمت بتعيين <b>Authmechanism</b>، فستستدعي الدالة <b>authenticate</b>، باستخدام <b>Authmechanism</b> و <b>Authcallback</b> كوسائط.</dd>
+  <dt id="Authcallback~2"><a class="permalink" href="#Authcallback~2">Authcallback</a></dt>
+  <dd>تحتوي <b>Authcallback</b>، إذا تم تعيينها، على مؤشر إلى دالة (CODEREF). ستستخدم الدالة <b>login</b> هذه كوسيطة رد اتصال للدالة <b>authenticate</b> إذا تم تعيين كل من المعلمتين <b>Authmechanism</b> و <b>Authcallback</b>. إذا قمت بتعيين <b>Authmechanism</b> ولكن ليس <b>Authcallback</b>، فستستخدم رد الاتصال الافتراضي لآليتك. جميع آليات المصادقة المدعومة لها رد اتصال افتراضي؛ بخلاف ذلك، فإن عدم توفير رد الاتصال يؤدي إلى حدوث خطأ.</p>
+  <p class="Pp">تتطلب معظم آليات المصادقة المتقدمة تبادل تحديات وردود. بعد أن ترسل الدالة <b>authenticate</b> &lt;tag&gt; AUTHENTICATE &lt;Authmechanism&gt;\015\012 إلى خادم IMAP، يستجيب الخادم بتحدي. ثم تستدعي الدالة <b>authenticate</b> الكود الذي يشير مرجعه مخزن في المعلمة <b>Authcallback</b> على النحو التالي:</p>
+  <pre>$Authcallback-&gt;($challenge, $imap)</pre>
+  <p class="Pp">حيث <span class="Li">$Authcallback</span> هو مرجع الدالة المخزن في المعلمة <b>Authcallback</b>، <span class="Li">$challenge</span> هو التحدي المستلم من خادم IMAP، و <span class="Li">$imap</span> هو مؤشر لكائن <b>Mail::IMAPClient</b>. يجب أن تكون القيمة التي تعيدها دالة <b>Authcallback</b> هي الرد على التحدي، وسيتم إرسال تلك القيمة بواسطة الدالة <b>authenticate</b> إلى الخادم.</p>
+  </dd>
+  <dt id="Prewritemethod/Readmethod"><a class="permalink" href="#Prewritemethod/Readmethod">Prewritemethod/Readmethod</a></dt>
+  <dd>يمكن أن تحتوي <b>Prewritemethod</b> على دالة تقوم بأي تشفير ضروري وتعيد النتيجة إلى المتصل، وفي هذه الحالة يمكن إرسالها إلى الخادم.</p>
+  <p class="Pp">يمكن أن تحتوي <b>Readmethod</b> على دالة يتم استخدامها لاستبدال <b>sysread</b> الذي يتم تنفيذه عادةً بواسطة <b>Mail::IMAPClient</b>.</p>
+  <p class="Pp">راجع التفاصيل حول <b>Prewritemethod</b> و <b>Readmethod</b>.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REPORTING_BUGS'><a class='permalink' href='#REPORTING_BUGS'>الإبلاغ عن الأخطاء</a></h1>
+<p class="Pp">يرجى تسجيل تقارير الأخطاء على <a href='https://github.com/plobbes/mail-imapclient/issues'>https://github.com/plobbes/mail-imapclient/issues</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENSE'><a class='permalink' href='#COPYRIGHT_AND_LICENSE'>حقوق النشر والترخيص</a></h1>
+<pre>Copyright (C) 1999-2003 The Kernen Group, Inc.
+Copyright (C) 2007-2009 Mark Overmeer
+Copyright (C) 2010-2021 Phil Pearl (Lobbes)
+All rights reserved.</pre>
+<p class="Pp">هذه المكتبة هي برمجيات حرة؛ يمكنك إعادة توزيعها و/أو تعديلها تحت نفس الشروط التي تطبقها Perl نفسها، سواء كان ذلك الإصدار Perl 5.8.0 أو، حسب اختيارك، أي إصدار لاحق من Perl 5 متاح.</p>
+<p class="Pp">يتم توزيع هذا البرنامج على أمل أن يكون مفيدًا، ولكن بدون أي ضمان؛ حتى بدون ضمان ضمني للتسويق أو الملاءمة لغرض معين. انظر إما</p>
+</section>
+<section id="COPYRIGHT_AND_LICENSE">
+    <h1>COPYRIGHT AND LICENSE</h1>
+    <p>Copyright (c) 2002-2023,      The Mail::IMAPClient Authors. All rights reserved.</p>
+    <p>This program is free software; you can redistribute it and/or modify it
+    under the terms of either the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or (at
+    your option) any later version.</p>
+    <p>This program is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.</p>
+    <p>You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA</p>
+    <p>The Artistic License is also available, see the <a href="/man/perlgpl.html">perlgpl</a> manpage.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-mail-imapclient/">extra/perl-mail-imapclient</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>3.43-7</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://search.cpan.org/dist/Mail-IMAPClient">https://search.cpan.org/dist/Mail-IMAPClient</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-mail-imapclient/">/listing/extra/perl-mail-imapclient/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CLASS_METHODS">أساليب الفئة</a></li>
+        
+            <li><a href="#OBJECT_METHODS">أساليب الكائن</a></li>
+        
+            <li><a href="#Mailbox_Control_Methods">أساليب التحكم في صندوق البريد</a></li>
+        
+            <li><a href="#Other_IMAP_Client_Commands">أوامر عميل IMAP أخرى</a></li>
+        
+            <li><a href="#Parameters">المعلمات</a></li>
+        
+            <li><a href="#Status_Methods">أساليب الحالة</a></li>
+        
+            <li><a href="#Custom_Authentication_Mechanisms">آليات المصادقة المخصصة</a></li>
+        
+            <li><a href="#REPORTING_BUGS">الإبلاغ عن الأخطاء</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENSE">حقوق النشر والترخيص</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Mail::IMAPClient.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Mail::IMAPClient.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

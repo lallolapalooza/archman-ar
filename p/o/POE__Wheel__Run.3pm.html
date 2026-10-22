@@ -1,0 +1,613 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Wheel__Run(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+<link rel="stylesheet" href="basic.css">
+ conduit. وهو غير مطلوب تقريبًا أبدًا. إذا تم حذفه، فإن POE::Wheel::Run سينشئ داخليًا ويستخدم كائن POE::Driver::SysRW.</p>
+<p class="Pp">StderrDriver</p>
+<p class="Pp"><span class="Li">&quot;StderrDriver&quot;</span> يحدد المشغل الذي سيتم استخدامه للقراءة من مجرى STDERR الخاص بالعملية الفرعية. كما هو الحال مع &quot;StdoutDriver&quot;، من الأفضل دائمًا ترك POE::Wheel::Run يقوم بإنشاء المشغل الخاص به.</p>
+<p class="Pp">CloseEvent</p>
+<p class="Pp">يحتوي CloseEvent على اسم حدث سيصدره العجلة عندما تغلق العملية الفرعية آخر مقبض إخراج مفتوح لها. هذه إشارة متسقة إلى أن العملية الفرعية قد انتهت من إرسال المخرجات. يرجى ملاحظة أنها لا تشير إلى وقت خروج العملية الفرعية. يجب على البرامج استخدام <b>sig_child()</b> للكشف عن ذلك.</p>
+<p class="Pp">على الرغم من أنه من المستحيل حدوث ErrorEvent أو StdoutEvent بعد CloseEvent، لا يوجد ضمان مماثل لـ CHLD، والذي قد يحدث قبل أو بعد CloseEvent.</p>
+<p class="Pp">بالإضافة إلى معلمات POE المعتادة، يأتي كل CloseEvent مع معلمة خاصة به:</p>
+<p class="Pp"><span class="Li">&quot;ARG0&quot;</span> يحتوي على المعرف الفريد للعجلة. يمكن استخدام هذا لفصل عدة عمليات فرعية عند إدارتها بواسطة نفس الجلسة.</p>
+<p class="Pp">مثال لمعالج حدث الإغلاق:</p>
+<pre>sub close_state {
+  my ($heap, $wheel_id) = @_[HEAP, ARG0];
+  my $child = delete $heap-&gt;{child}-&gt;{$wheel_id};
+  print &quot;Child &quot;, $child-&gt;PID, &quot; has finished.\n&quot;;
+}</pre>
+<p class="Pp">ErrorEvent</p>
+<p class="Pp">يحتوي ErrorEvent على اسم حدث ليتم إصداره في حالة فشل شيء ما. إنه اختياري؛ إذا تم حذفه، فلن تقوم العجلة بإعلام جلستها في حالة حدوث أي أخطاء. ومع ذلك، سيظل POE::Wheel::Run-&gt;<b>new()</b> يرمي استثناءً إذا فشل.</p>
+<p class="Pp"><span class="Li">&quot;ARG0&quot;</span> يحتوي على اسم العملية التي فشلت. قد تكون 'read' أو 'write' أو 'fork' أو 'exec' أو اسم وظيفة أو مهمة أخرى. القيم الفعلية لم يتم تعريفها بعد. من المحتمل ألا تتوافق بشكل مباشر مع أسماء وظائف Perl المدمجة.</p>
+<p class="Pp"><span class="Li">&quot;ARG1&quot;</span> و <span class="Li">&quot;ARG2&quot;</span> تحتفظان بالقيم الرقمية والنصية لـ <span class="Li">$!</span>، على التوالي. <span class="Li">&quot;$!&quot;</span> سيكون مساويًا لـ <span class="Li">&quot;&quot;</span> لخطأ القراءة 0 (أغلقت العملية الفرعية مقبض الملف).</p>
+<p class="Pp"><span class="Li">&quot;ARG3&quot;</span> يحتوي على المعرف الفريد للعجلة.</p>
+<p class="Pp"><span class="Li">&quot;ARG4&quot;</span> يحتوي على اسم مقبض ملف الطفل الذي به الخطأ. قد يكون &quot;STDIN&quot; أو &quot;STDOUT&quot; أو &quot;STDERR&quot;. سيكون معنى <span class="Li">&quot;ARG0&quot;</span> معاكسًا لما قد تتوقعه عادةً لهذه المقابض. على سبيل المثال، سيبلغ POE::Wheel::Run عن خطأ "read" على &quot;STDOUT&quot; لأنه حاول قراءة بيانات من STDOUT الخاص بالعملية الفرعية.</p>
+<p class="Pp">مثال لمعالج حدث الخطأ:</p>
+<pre>sub error_state {
+  my ($operation, $errnum, $errstr, $wheel_id) = @_[ARG0..ARG3];
+  $errstr = &quot;remote end closed&quot; if $operation eq &quot;read&quot; and !$errnum;
+  warn &quot;Wheel $wheel_id generated $operation error $errnum: $errstr\n&quot;;
+}</pre>
+<p class="Pp">لاحظ أنه ما لم تقم بتعطيل أنبوب الإشارة، فقد ترى أيضًا خطأ <span class="Li">&quot;EIO&quot;</span> (5) أثناء عمليات القراءة.</p>
+<p class="Pp">StdinEvent</p>
+<p class="Pp">يحتوي StdinEvent على اسم حدث يصدره Wheel::Run كلما تم إرسال كل ما تم وضعه في قائمة الانتظار بواسطة طريقة <b>put()</b> الخاصة به إلى مقبض STDIN للعملية الفرعية. إنه يعادل FlushedEvent الخاص بـ POE::Wheel::ReadWrite.</p>
+<p class="Pp">يأتي StdinEvent مع معلمة إضافية واحدة فقط: <span class="Li">&quot;ARG0&quot;</span> يحتوي على المعرف الفريد للعجلة التي أرسلت الحدث.</p>
+<p class="Pp">StdoutEvent</p>
+<p class="Pp">يحتوي StdoutEvent على اسم حدث يصدره Wheel::Run كلما كتبت العملية الفرعية شيئًا إلى مقبض STDOUT الخاص بها. بمعنى آخر، مهما قامت العملية الفرعية بطباعته إلى STDOUT، يستقبل الوالد StdoutEvent - بشرط أن تقوم العملية الفرعية بطباعة شيء متوافق مع StdoutFilter الخاص بالوالد.</p>
+<p class="Pp">يأتي StdoutEvent مع معلمتين. <span class="Li">&quot;ARG0&quot;</span> يحتوي على المعلومات التي كتبتها العملية الفرعية إلى STDOUT. <span class="Li">&quot;ARG1&quot;</span> يحتفظ بالمعرف الفريد للعجلة التي قرأت المخرجات.</p>
+<pre>sub stdout_state {
+  my ($heap, $input, $wheel_id) = @_[HEAP, ARG0, ARG1];
+  print &quot;Child process in wheel $wheel_id wrote to STDOUT: $input\n&quot;;
+}</pre>
+<p class="Pp">StderrEvent</p>
+<p class="Pp">يتصرف StderrEvent بنفس طريقة StdoutEvent تمامًا، باستثناء البيانات التي تكتبها العملية الفرعية إلى مقبض STDERR الخاص بها.</p>
+<p class="Pp">يأتي StderrEvent مع معلمتين. <span class="Li">&quot;ARG0&quot;</span> يحتوي على المعلومات التي كتبتها العملية الفرعية إلى STDERR. <span class="Li">&quot;ARG1&quot;</span> يحتفظ بالمعرف الفريد للعجلة التي قرأت المخرجات.</p>
+<pre>sub stderr_state {
+  my ($heap, $input, $wheel_id) = @_[HEAP, ARG0, ARG1];
+  print &quot;Child process in wheel $wheel_id wrote to STDERR: $input\n&quot;;
+}</pre>
+<p class="Pp">RedirectStdout</p>
+<p class="Pp">هذا مقبض ملف أو اسم ملف سيتم إعادة توجيه المخرجات القياسية إليه. يعد استخدام هذا الخيار مع StdoutEvent خطأ. هذا مفيد في حال احتاج برنامجك إلى إدخال/إخراج قياسي، ولكنك لا تهتم فعليًا بأن تكون محتوياته مرئية للوالد.</p>
+<p class="Pp">RedirectStderr</p>
+<p class="Pp">تمامًا مثل RedirectStdout، ولكن مع الخطأ القياسي. يعد استخدام هذا مع StderrEvent خطأ.</p>
+<p class="Pp">RedirectStdin</p>
+<p class="Pp">هذا مقبض ملف أو اسم ملف ستستخدمه العملية الفرعية كمدخل قياسي لها. يعد استخدام هذا الخيار مع StdinEvent خطأ.</p>
+<p class="Pp">RedirectOutput</p>
+<p class="Pp">سيؤدي هذا إلى إعادة توجيه stderr و stdout إلى نفس مقبض الملف. هذا يعادل القيام بشيء مثل</p>
+<pre>$ something &gt; /path/to/output 2&gt;&amp;1</pre>
+<p class="Pp">في shell bourne.</p>
+<p class="Pp">NoStdin</p>
+<p class="Pp">بينما سيتم إغلاق مقابض ملفات الإخراج إذا لم تكن هناك أحداث لتلقيها عليها، فإن stdin مفتوح افتراضيًا - لأن عدم وجود معالج أحداث لا يعني بالضرورة عدم وجود تيار إدخال مرغوب فيه. هذا الخيار يعطل صراحةً إنشاء مجرى stdin لـ IPC.</p>
+<p class="Pp">StdioFilter</p>
+<p class="Pp">يجب أن يحتوي StdioFilter، إذا تم استخدامه، على مثيل لفئة فرعية من POE::Filter. يصف هذا المرشح كيفية تنسيق الوالد لبيانات <b>put()</b> لـ STDIN الخاص بالعملية الفرعية، وكيف يقوم الوالد بتحليل STDOUT الخاص بالعملية الفرعية.</p>
+<p class="Pp">إذا كان سيتم تحليل STDERR أيضًا، فستكون هناك حاجة إلى StderrFilter منفصل.</p>
+<p class="Pp">افتراضيًا، StdioFilter هو مثيل POE::Filter::Line، ولكن فقط إذا لم يتم تحديد كل من StdinFilter و StdoutFilter. إذا تم استخدام أي من StdinFilter أو StdoutFilter، فإن StdioFilter غير قانوني.</p>
+<p class="Pp">StdinFilter</p>
+<p class="Pp">يمكن استخدام StdinFilter لتحديد مسلسل STDIN معين يختلف عن محلل STDOUT. إذا تم تحديده، فإنه يتعارض مع StdioFilter. يجب أن تكون قيمة StdinFilter، إذا تم تحديدها، مثيلًا لفئة فرعية من POE::Filter.</p>
+<p class="Pp">بدون StdinEvent، StdinFilter غير قانوني.</p>
+<p class="Pp">StdoutFilter</p>
+<p class="Pp">يمكن استخدام StdoutFilter لتحديد محلل STDOUT معين يختلف عن مسلسل STDIN. إذا تم تحديده، فإنه يتعارض مع StdioFilter. يجب أن تكون قيمة StdoutFilter، إذا تم تحديدها، مثيلًا لفئة فرعية من POE::Filter.</p>
+<p class="Pp">بدون StdoutEvent، StdoutFilter غير قانوني.</p>
+<p class="Pp">StderrFilter</p>
+<p class="Pp">يمكن استخدام StderrFilter لتحديد مرشح لمخرجات STDERR الخاصة بالعملية الفرعية. إذا تم حذفه، فإن POE::Wheel::Run سينشئ ويستخدم مثيله الخاص POE::Filter::Line، ولكن فقط إذا تم تحديد StderrEvent.</p>
+<p class="Pp">بدون StderrEvent، StderrFilter غير قانوني.</p>
+<p class="Pp">Group</p>
+<p class="Pp">يحتوي Group على معرف مجموعة رقمي يجب أن تعمل العملية الفرعية ضمنه. افتراضيًا، ستعمل العملية الفرعية في نفس مجموعة العملية الأم.</p>
+<p class="Pp">لا يمكن نقل Group بشكل كامل. قد لا تعمل على الأنظمة التي ليس لديها مفهوم للمجموعات. أيضًا، قد تحتاج العملية الأم إلى العمل بصلاحيات مرتفعة للسماح للعملية الفرعية بتغيير المجموعات.</p>
+<p class="Pp">User</p>
+<p class="Pp">يحتوي User على معرف مستخدم رقمي يجب أن يمتلك العملية الفرعية. افتراضيًا، ستعمل العملية الفرعية بنفس مستخدم العملية الأم.</p>
+<p class="Pp">لا يمكن نقل User بشكل كامل. قد لا تعمل على الأنظمة التي ليس لديها مفهوم للمستخدمين. أيضًا، قد تحتاج العملية الأم إلى العمل بصلاحيات مرتفعة للسماح للعملية الفرعية بتغيير المستخدمين.</p>
+<p class="Pp">NoSetSid</p>
+<p class="Pp">عندما تكون صحيحة، فإن NoSetSid يعطل <b>setsid()</b> في العملية الفرعية. افتراضيًا، يتم استدعاء <b>setsid()</b> في العملية الفرعية حتى تتمكن من التنفيذ في جلسة UNIX منفصلة.</p>
+<p class="Pp">هذا الخيار مهمل. نظرًا لأن IO::Pty يستخدم <span class="Li">setsid()</span>، فإن هذه الوحدة ليس لديها سيطرة على ما إذا كان سيتم استدعاؤه أم لا.</p>
+<p class="Pp">NoSetPgrp</p>
+<p class="Pp">عندما تكون صحيحة، فإن NoSetPgrp يعطل <b>setprgp()</b> في العملية الفرعية. افتراضيًا، تقوم العملية الفرعية باستدعاء <b>setpgrp()</b> لتغيير مجموعة العمليات الخاصة بها، إذا كان نظام التشغيل يدعم ذلك.</p>
+<p class="Pp">يتم استخدام <b>setsid()</b> بدلاً من <b>setpgrp()</b> إذا كان Conduit هو pty أو pty-pipe. انظر &quot;NoSetSid&quot;.</p>
+<p class="Pp">Priority</p>
+<p class="Pp">يضبط Priority مستوى لطافة أو أولوية العملية الفرعية، اعتمادًا على أي (إن وجدت) يدعمها نظام التشغيل الأساسي. يحتوي Priority على إزاحة رقمية ستتم إضافتها إلى أولوية الوالد لتحديد أولوية العملية الفرعية.</p>
+<p class="Pp">قد تكون إزاحة الأولوية سالبة، مما يمثل أولوية أعلى في UNIX. ومع ذلك، يتطلب UNIX صلاحيات مرتفعة لزيادة أولوية العملية.</p>
+<p class="Pp">Program</p>
+<p class="Pp">يحدد Program البرنامج الذي سيتم <b>exec()</b> أو كتلة التعليمات البرمجية التي سيتم تشغيلها في العملية الفرعية. نوع Program مهم.</p>
+<p class="Pp">إذا احتوى Program على قيمة قياسية، فسيتم تنفيذ قيمتها على أنها exec($program). تكون حروف التعريف الخاصة بالصدفة مهمة، وفقًا لمعاني exec(SCALAR).</p>
+<p class="Pp">إذا احتوى Program على مرجع مصفوفة، فسيتم تنفيذه على أنه exec(@$program). وفقًا لـ exec(ARRAY)، لن تكون حروف التعريف الخاصة بالصدفة مهمة.</p>
+<p class="Pp">إذا احتوى Program على مرجع رمز، فسيتم استدعاء هذا الرمز في العملية الفرعية. يسمح هذا الوضع لـ POE::Wheel::Run بتنفيذ التعليمات البرمجية الداخلية طويلة الأمد بشكل غير متزامن، بينما تقوم الأوضاع العادية بتنفيذ برامج خارجية. ستخرج العملية الفرعية بعد انتهاء هذه التعليمات البرمجية، بطريقة تتجنب تنفيذ كتل DESTROY و END. انظر &quot;تأثيرات جانبية لتنفيذ Coderef&quot; لمزيد من التفاصيل.</p>
+<p class="Pp">تحتوي perlfunc على مزيد من المعلومات حول <b>exec()</b> والطرق المختلفة لاستدعائها.</p>
+<p class="Pp">يرجى تجنب استدعاء <b>exit()</b> بشكل صريح عند تنفيذ روتين فرعي. ترث العملية الفرعية جميع الكائنات من العملية الأم، بما في ذلك تلك التي قد تؤدي إلى آثار جانبية. يتخذ POE::Wheel::Run عناية خاصة لتجنب مدمرات الكائنات وكتل END في العملية الفرعية، ولكن استدعاء <b>exit()</b> سيؤدي إلى تشغيلها.</p>
+<p class="Pp">ProgramArgs</p>
+<p class="Pp">إذا تم تحديده، يجب أن يشير ProgramArgs إلى قائمة معلمات للبرنامج قيد التشغيل.</p>
+<pre>my @parameters = qw(foo bar baz);  # will be passed to Program
+ProgramArgs =&gt; \@parameters;</pre>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp"><span class="Li">POE::Wheel::Run</span> - Run external commands and
+    interact with them.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre>    use POE::Wheel::Run;
+
+    POE::Session-&gt;create(
+        package_poop =&gt; &quot;main&quot;,
+        heap =&gt; { program =&gt; &quot;some_program&quot; },
+        code =&gt; sub {
+            my ($heap) = @_[HEAP];
+
+            # Create the wheel.
+            $heap-&gt;{wheel} = POE::Wheel::Run-&gt;new(
+                program =&gt; $heap-&gt;{program},
+                # Capture STDOUT and STDERR.
+                stdout_handler =&gt; sub {
+                    my ($h, $chunk) = @_;
+                    # Process chunk.
+                },
+                stderr_handler =&gt; sub {
+                    my ($h, $chunk) = @_;
+                    # Process chunk.
+                },
+                # We need to explicitly tell POE::Wheel::Run what to do when the
+                # child process exits.
+                close_handler =&gt; sub {
+                    my ($h, $why) = @_;
+                    # The child has exited. $why explains why.
+                    # It will be &quot;signal&quot;, &quot;exited&quot;, or &quot;died&quot;.
+                },
+            );
+
+            # Send a command to the child.
+            $heap-&gt;{wheel}-&gt;print(&quot;command\n&quot;);
+        },
+    );
+
+    # ... run POE kernel ...
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">POE::Wheel::Run is a POE wheel that starts an external command in
+    a child process and provides an interface to communicate with it. It can
+    capture the child's STDOUT and STDERR, and send input to its STDIN.</p>
+<p class="Pp">A POE::Wheel::Run object is a POE::Wheel object. It runs an
+    external command. It's the most flexible wheel for running external
+    commands.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_METHODS'><a class='permalink' href='#PUBLIC_METHODS'>PUBLIC METHODS</a></h1>
+<p class="Pp">See POE::Wheel for details on the methods that POE::Wheel::Run
+    inherits.</p>
+<dl class="Bl-tag">
+<dt id="program=item"><b>program</b></dt>
+<dd>The program to run. This can be a simple string (e.g. <span class="Li">&quot;ls&quot;</span>)
+    or an array reference (e.g. <span class="Li">&quot;[ &#039;ls&#039;, &#039;-l&#039; ]&quot;</span>).</dd>
+<dt id="argv0=item"><b>argv0</b></dt>
+<dd>The first argument to the program (like <span class="Li">$0</span> in
+    Perl). Defaults to <span class="Li">program</span>.</dd>
+<dt id="args=item"><b>args</b></dt>
+<dd>An array reference of arguments to pass to the program. Defaults to
+    <span class="Li">[]</span>.</dd>
+<dt id="input_handler=item"><b>input_handler</b></dt>
+<dd>A callback that will be invoked when the child process requires input. The
+    handler will be passed the wheel object as its only argument. The handler
+    should return the data to be sent to the child's STDIN. If the handler
+    returns <span class="Li">undef</span>, no input will be sent.</dd>
+<dt id="output_handler=item"><b>output_handler</b></dt>
+<dd>A callback that will be invoked with data read from the child's STDOUT. The
+    handler will be passed the wheel object and the data chunk as arguments.</dd>
+<dt id="error_handler=item"><b>error_handler</b></dt>
+<dd>A callback that will be invoked with data read from the child's STDERR. The
+    handler will be passed the wheel object and the data chunk as arguments.</dd>
+<dt id="close_handler=item"><b>close_handler</b></dt>
+<dd>A callback that will be invoked when the child process has exited. The handler
+    will be passed the wheel object and a string indicating why the child
+    exited. The string will be one of <span class="Li">&quot;signal&quot;</span>,
+    <span class="Li">&quot;exited&quot;</span>, or <span class="Li">&quot;died&quot;</span>.</dd>
+<dt id="child_pid=item"><b>child_pid</b></dt>
+<dd>The process ID of the child process. This is a read-only attribute.</dd>
+<dt id="print=item"><b>print</b></dt>
+<dd>Sends data to the child process's STDIN. This is a shortcut for
+    <span class="Li">&quot;$_[0]-&gt;{_writer}-&gt;print(@_ )&quot;</span>.</dd>
+<dt id="child_error=item"><b>child_error</b></dt>
+<dd>The error that caused the child process to exit. This is only valid if the
+    child exited with <span class="Li">&quot;exited&quot;</span> or
+    <span class="Li">&quot;died&quot;</span>. It will contain the exit status or
+    signal number, respectively.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TIPS_AND_TRICKS'><a class='permalink' href='#TIPS_AND_TRICKS'>TIPS AND TRICKS</a></h1>
+<p class="Pp"><b>Exiting Child Processes</b></p>
+<p class="Pp">When a child process is created by <span class="Li">fork()</span>,
+    all the file descriptors that were open in the parent process are copied into
+    the child. When the child exits normally, any DESTROY and END blocks are
+    executed there. Later, when the parent exits, they may run again.</p>
+<p class="Pp">POE::Wheel::Run takes steps to avoid running DESTROY and END
+    blocks in the child process. It uses <b>POSIX::_exit()</b> to bypass them.
+    If that fails, it may even <b>kill()</b> itself.</p>
+<p class="Pp">If an application needs to exit explicitly, for example to return
+    an error code to the parent process, then please use <b>POSIX::_exit()</b>
+    rather than Perl's core <b>exit()</b>.</p>
+<p class="Pp"><i>POE::Kernel's </i><b><i>run()</i></b><i> method was never
+    called</i></p>
+<p class="Pp">This warning is displayed from POE::Kernel's DESTROY method. It's
+    a side effect of calling <b>exit()</b> in a child process that was started
+    before <span class="Li">&quot;POE::Kernel-&gt;run()&quot;</span> could be
+    called. The child process receives a copy of POE::Kernel where <b>run()</b>
+    wasn't called, even if it was called later in the parent process.</p>
+<p class="Pp">The most direct solution is to call <b>POSIX::_exit()</b> rather
+    than <b>exit()</b>. This will bypass POE::Kernel's DESTROY, and the message
+    it emits.</p>
+<p class="Pp"><i>Running POE::Kernel in the Child</i></p>
+<p class="Pp">Calling <span class="Li">&quot;POE::Kernel-&gt;run()&quot;</span>
+    in the child process effectively resumes the copy of the parent process.
+    This is rarely (if ever) desired.</p>
+<p class="Pp">More commonly, an application wants to run an entirely new
+    POE::Kernel instance in the child process. This is supported by first
+    <b>stop()</b>ping the copied instance, starting one or more new sessions,
+    and calling <b>run()</b> again. For example:</p>
+<pre>Program =&gt; sub {
+  # Wipe the existing POE::Kernel clean.
+  $poe_kernel-&gt;stop();
+  # Start a new session, or more.
+  POE::Session-&gt;create(
+    ...
+  );
+  # Run the new sessions.
+  POE::Kernel-&gt;run();
+}</pre>
+<p class="Pp">Strange things are bound to happen if the program does not call
+    &quot;stop&quot; in POE::Kernel before &quot;run&quot; in POE::Kernel.
+    However this is vaguely supported in case it's the right thing to do at the
+    time.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp">POE::Wheel describes wheels in general.</p>
+<p class="Pp">The SEE ALSO section in POE contains a table of contents covering
+    the entire POE distribution.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CAVEATS_&amp;amp;_TODOS'><a class='permalink' href='#CAVEATS_&amp;amp;_TODOS'>CAVEATS   &amp; TODOS</a></h1>
+<p class="Pp">POE::Wheel::Run's constructor should emit proper events when it
+    fails. Instead, it just dies, carps or croaks. This isn't necessarily bad; a
+    program can trap the death in <b>new()</b> and move on.</p>
+<p class="Pp">Priority is a delta, not an absolute niceness value.</p>
+<p class="Pp">It might be nice to specify User by name rather than just UID.</p>
+<p class="Pp">It might be nice to specify Group by name rather than just
+  GID.</p>
+<p class="Pp">POE::Pipe::OneWay and Two::Way don't require the rest of POE. They
+    should be spun off into a separate distribution for everyone to enjoy.</p>
+<p class="Pp">If StdinFilter and StdoutFilter seem backwards, remember that it's
+    the filters for the child process. StdinFilter is the one that dictates what
+    the child receives on STDIN. StdoutFilter tells the parent how to parse the
+    child's STDOUT.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>AUTHORS   &amp; COPYRIGHTS</a></h1>
+<p class="Pp">Please see POE for more information about authors and
+    contributors.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>Version:</dt>
+        <dd>1.370-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#PUBLIC_METHODS">PUBLIC METHODS</a></li>
+        
+            <li><a href="#TIPS_AND_TRICKS">TIPS AND TRICKS</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#CAVEATS_&amp;amp;_TODOS">CAVEATS &amp; TODOS</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">AUTHORS &amp; COPYRIGHTS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/POE::Wheel::Run.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Wheel::Run.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>
+```
+
+```arabic
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp"><span class="Li">POE::Wheel::Run</span> - تشغيل أوامر خارجية والتفاعل معها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>    use POE::Wheel::Run;
+
+    POE::Session-&gt;create(
+        package_poop =&gt; &quot;main&quot;,
+        heap =&gt; { program =&gt; &quot;some_program&quot; },
+        code =&gt; sub {
+            my ($heap) = @_[HEAP];
+
+            # إنشاء العجلة.
+            $heap-&gt;{wheel} = POE::Wheel::Run-&gt;new(
+                program =&gt; $heap-&gt;{program},
+                # التقاط STDOUT و STDERR.
+                stdout_handler =&gt; sub {
+                    my ($h, $chunk) = @_;
+                    # معالجة المقطع.
+                },
+                stderr_handler =&gt; sub {
+                    my ($h, $chunk) = @_;
+                    # معالجة المقطع.
+                },
+                # نحتاج إلى إخبار POE::Wheel::Run صراحة بما يجب فعله عند
+                # خروج العملية الفرعية.
+                close_handler =&gt; sub {
+                    my ($h, $why) = @_;
+                    # لقد خرجت العملية الفرعية. $why يشرح السبب.
+                    # ستكون &quot;signal&quot; أو &quot;exited&quot; أو &quot;died&quot;.
+                },
+            );
+
+            # إرسال أمر إلى العملية الفرعية.
+            $heap-&gt;{wheel}-&gt;print(&quot;command\n&quot;);
+        },
+    );
+
+    # ... تشغيل نواة POE ...
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">POE::Wheel::Run هي عجلة POE تبدأ أمرًا خارجيًا في عملية فرعية
+    وتوفر واجهة للتواصل معها. يمكنها التقاط STDOUT و STDERR للعملية الفرعية ،
+    وإرسال الإدخال إلى STDIN الخاص بها.</p>
+<p class="Pp">كائن POE::Wheel::Run هو كائن POE::Wheel. يقوم بتشغيل أمر خارجي.
+    إنها العجلة الأكثر مرونة لتشغيل الأوامر الخارجية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_METHODS'><a class='permalink' href='#PUBLIC_METHODS'>الأساليب العامة</a></h1>
+<p class="Pp">راجع POE::Wheel للحصول على تفاصيل حول الأساليب التي ترثها POE::Wheel::Run.</p>
+<dl class="Bl-tag">
+<dt id="program=item"><b>program</b></dt>
+<dd>البرنامج المراد تشغيله. يمكن أن يكون هذا سلسلة نصية بسيطة (مثل <span class="Li">&quot;ls&quot;</span>)
+    أو مرجع مصفوفة (مثل <span class="Li">&quot;[ &#039;ls&#039;, &#039;-l&#039; ]&quot;</span>).</dd>
+<dt id="argv0=item"><b>argv0</b></dt>
+<dd>الحجة الأولى للبرنامج (مثل <span class="Li">$0</span> في Perl). الافتراضي هو
+    <span class="Li">program</span>.</dd>
+<dt id="args=item"><b>args</b></dt>
+<dd>مرجع مصفوفة للحجج التي سيتم تمريرها إلى البرنامج. الافتراضي هو
+    <span class="Li">[]</span>.</dd>
+<dt id="input_handler=item"><b>input_handler</b></dt>
+<dd>وظيفة استدعاء سيتم استدعاؤها عندما تتطلب العملية الفرعية إدخالًا. سيتم
+    تمرير الكائن العجلة إلى المعالج كوسيطة وحيدة. يجب أن يعيد المعالج البيانات
+    التي سيتم إرسالها إلى STDIN للعملية الفرعية. إذا أعاد المعالج <span class="Li">undef</span>،
+    فلن يتم إرسال أي إدخال.</dd>
+<dt id="output_handler=item"><b>output_handler</b></dt>
+<dd>وظيفة استدعاء سيتم استدعاؤها مع البيانات المقروءة من STDOUT للعملية الفرعية.
+    سيتم تمرير الكائن العجلة ومقطع البيانات كوسائط إلى المعالج.</dd>
+<dt id="error_handler=item"><b>error_handler</b></dt>
+<dd>وظيفة استدعاء سيتم استدعاؤها مع البيانات المقروءة من STDERR للعملية الفرعية.
+    سيتم تمرير الكائن العجلة ومقطع البيانات كوسائط إلى المعالج.</dd>
+<dt id="close_handler=item"><b>close_handler</b></dt>
+<dd>وظيفة استدعاء سيتم استدعاؤها عند خروج العملية الفرعية. سيتم تمرير الكائن
+    العجلة وسلسلة نصية توضح سبب خروج العملية الفرعية إلى المعالج. ستكون السلسلة
+    النصية واحدة من <span class="Li">&quot;signal&quot;</span> أو <span class="Li">&quot;exited&quot;</span>
+    أو <span class="Li">&quot;died&quot;</span>.</dd>
+<dt id="child_pid=item"><b>child_pid</b></dt>
+<dd>معرف عملية العملية الفرعية. هذه سمة للقراءة فقط.</dd>
+<dt id="print=item"><b>print</b></dt>
+<dd>يرسل البيانات إلى STDIN للعملية الفرعية. هذا اختصار لـ
+    <span class="Li">&quot;$_[0]-&gt;{_writer}-&gt;print(@_ )&quot;</span>.</dd>
+<dt id="child_error=item"><b>child_error</b></dt>
+<dd>الخطأ الذي تسبب في خروج العملية الفرعية. هذه صالحة فقط إذا خرجت العملية
+    الفرعية بـ <span class="Li">&quot;exited&quot;</span> أو <span class="Li">&quot;died&quot;</span>.
+    ستحتوي على حالة الخروج أو رقم الإشارة ، على التوالي.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TIPS_AND_TRICKS'><a class='permalink' href='#TIPS_AND_TRICKS'>نصائح وحيل</a></h1>
+<p class="Pp"><b>خروج العمليات الفرعية</b></p>
+<p class="Pp">عندما يتم إنشاء عملية فرعية بواسطة <span class="Li">fork()</span>،
+    يتم نسخ جميع واصفات الملفات المفتوحة في العملية الأم إلى العملية الفرعية.
+    عندما تخرج العملية الفرعية بشكل طبيعي، يتم تنفيذ أي كتل DESTROY و END هناك.
+    لاحقًا، عند خروج العملية الأم، قد يتم تشغيلها مرة أخرى.</p>
+<p class="Pp">يتخذ POE::Wheel::Run خطوات لتجنب تشغيل كتل DESTROY و END في
+    العملية الفرعية. يستخدم <b>POSIX::_exit()</b> لتجاوزها. إذا فشل ذلك، فقد
+    يقوم حتى بـ <b>kill()</b> نفسه.</p>
+<p class="Pp">إذا احتاج التطبيق إلى الخروج بشكل صريح، على سبيل المثال لإرجاع
+    رمز خطأ إلى العملية الأم، فيرجى استخدام <b>POSIX::_exit()</b> بدلاً من
+    وظيفة Perl الأساسية <b>exit()</b>.</p>
+<p class="Pp"><i>طريقة </i><b><i>run()</i></b><i> الخاصة بـ POE::Kernel
+    لم يتم استدعاؤها أبدًا</i></p>
+<p class="Pp">يتم عرض هذا التحذير من طريقة DESTROY الخاصة بـ POE::Kernel. إنه
+    تأثير جانبي لاستدعاء <b>exit()</b> في عملية فرعية تم إنشاؤها قبل استدعاء
+    <span class="Li">&quot;POE::Kernel-&gt;run()&quot;</span>. تتلقى العملية الفرعية
+    نسخة من POE::Kernel حيث لم يتم استدعاء <b>run()</b>، حتى لو تم استدعاؤها
+    لاحقًا في العملية الأم.</p>
+<p class="Pp">الحل الأكثر مباشرة هو استدعاء <b>POSIX::_exit()</b> بدلاً من
+    <b>exit()</b>. سيؤدي هذا إلى تجاوز DESTROY الخاصة بـ POE::Kernel، والرسالة
+    التي تصدرها.</p>
+<p class="Pp"><i>تشغيل POE::Kernel في العملية الفرعية</i></p>
+<p class="Pp">استدعاء <span class="Li">&quot;POE::Kernel-&gt;run()&quot;</span>
+    في العملية الفرعية يستأنف فعليًا نسخة العملية الأم. هذا نادرًا ما (إن وجد)
+    مرغوب فيه.</p>
+<p class="Pp">بشكل أكثر شيوعًا، يريد التطبيق تشغيل مثيل POE::Kernel جديد بالكامل
+    في العملية الفرعية. يدعم هذا عن طريق <b>stop()</b> أولاً للمثيل المنسوخ،
+    وبدء جلسة واحدة أو أكثر جديدة، واستدعاء <b>run()</b> مرة أخرى. على سبيل
+    المثال:</p>
+<pre>Program =&gt; sub {
+  # مسح نواة POE::Kernel الحالية.
+  $poe_kernel-&gt;stop();
+  # بدء جلسة جديدة، أو أكثر.
+  POE::Session-&gt;create(
+    ...
+  );
+  # تشغيل الجلسات الجديدة.
+  POE::Kernel-&gt;run();
+}</pre>
+<p class="Pp">من المؤكد حدوث أشياء غريبة إذا لم يستدع البرنامج &quot;stop&quot;
+    في POE::Kernel قبل &quot;run&quot; في POE::Kernel. ومع ذلك، يدعم هذا بشكل
+    غامض في حال كان هو الشيء الصحيح الذي يجب القيام به في ذلك الوقت.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يصف POE::Wheel العجلات بشكل عام.</p>
+<p class="Pp">يحتوي قسم SEE ALSO في POE على جدول محتويات يغطي توزيع POE
+    بأكمله.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CAVEATS_&amp;amp;_TODOS'><a class='permalink' href='#CAVEATS_&amp;amp;_TODOS'>محاذير ومهام</a></h1>
+<p class="Pp">يجب على مُنشئ POE::Wheel::Run إصدار الأحداث المناسبة عند الفشل.
+    بدلاً من ذلك، يموت أو يصرخ أو يئن. هذا ليس سيئًا بالضرورة؛ يمكن للبرنامج
+    احتواء الموت في <b>new()</b> والمتابعة.</p>
+<p class="Pp">الأولوية هي فرق، وليست قيمة لطافة مطلقة.</p>
+<p class="Pp">قد يكون من الجيد تحديد المستخدم بالاسم بدلاً من مجرد UID.</p>
+<p class="Pp">قد يكون من الجيد تحديد المجموعة بالاسم بدلاً من مجرد GID.</p>
+<p class="Pp">POE::Pipe::OneWay و Two::Way لا يتطلبان بقية POE. يجب فصلهما
+    إلى توزيع منفصل ليتمتع به الجميع.</p>
+<p class="Pp">إذا بدت StdinFilter و StdoutFilter معكوسة، فتذكر أنها مرشحات
+    للعملية الفرعية. StdinFilter هو الذي يحدد ما تستقبله العملية الفرعية على
+    STDIN. StdoutFilter يخبر العملية الأم بكيفية تحليل STDOUT للعملية الفرعية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">يرجى الرجوع إلى POE لمزيد من المعلومات حول المؤلفين والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقل" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#PUBLIC_METHODS">الأساليب العامة</a></li>
+        
+            <li><a href="#TIPS_AND_TRICKS">نصائح وحيل</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#CAVEATS_&amp;amp;_TODOS">محاذير ومهام</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Wheel::Run.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Wheel::Run.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

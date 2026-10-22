@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>libcurl-security(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">libcurl-security(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">libcurl-security(3)</td>
+    <td class="head-vol">Library Functions Manual</td>
+    <td class="head-rtitle">libcurl-security(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">libcurl-security - security considerations when using libcurl</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Security'><a class='permalink' href='#Security'>Security</a></h1>
+<p class="Pp">The libcurl project takes security seriously. The library is
+    written with caution and precautions are taken to mitigate many kinds of
+    risks encountered while operating with potentially malicious servers on the
+    Internet. It is a powerful library, however, which allows application
+    writers to make trade-offs between ease of writing and exposure to potential
+    risky operations. If used the right way, you can use libcurl to transfer
+    data pretty safely.</p>
+<p class="Pp">Many applications are used in closed networks where users and
+    servers can (possibly) be trusted, but many others are used on arbitrary
+    servers and are fed input from potentially untrusted users. Following is a
+    discussion about some risks in the ways in which applications commonly use
+    libcurl and potential mitigations of those risks. It is not comprehensive,
+    but shows classes of attacks that robust applications should consider. The
+    Common Weakness Enumeration project at <a href='https://cwe.mitre.org/'>https://cwe.mitre.org/</a> is a good
+    reference for many of these and similar types of weaknesses of which
+    application writers should be aware.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Command_Lines'><a class='permalink' href='#Command_Lines'>Command   Lines</a></h1>
+<p class="Pp">If you use a command line tool (such as curl) that uses libcurl,
+    and you give options to the tool on the command line those options can get
+    read by other users of your system when they use <i>ps</i> or other tools to
+    list currently running processes.</p>
+<p class="Pp">To avoid these problems, never feed sensitive things to programs
+    using command line options. Write them to a protected file and use the -K
+    option to avoid this.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='.netrc'><a class='permalink' href='#.netrc'>.netrc</a></h1>
+<p class="Pp">.netrc is a pretty handy file/feature that allows you to login
+    quickly and automatically to frequently visited sites. The file contains
+    passwords in clear text and is a real security risk. In some cases, your
+    .netrc is also stored in a home directory that is NFS mounted or used on
+    another network based file system, so the clear text password flies through
+    your network every time anyone reads that file.</p>
+<p class="Pp">For applications that enable .netrc use, a user who manage to set
+    the right URL might then be possible to pass on passwords.</p>
+<p class="Pp">To avoid these problems, do not use .netrc files and never store
+    passwords in plain text anywhere.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Clear_Text_Passwords'><a class='permalink' href='#Clear_Text_Passwords'>Clear   Text Passwords</a></h1>
+<p class="Pp">Many of the protocols libcurl supports send name and password
+    unencrypted as clear text (HTTP Basic authentication, FTP, TELNET etc). It
+    is easy for anyone on your network or a network nearby yours to just fire up
+    a network analyzer tool and eavesdrop on your passwords. Do not let the fact
+    that HTTP Basic uses base64 encoded passwords fool you. They may not look
+    readable at a first glance, but they are easily &quot;deciphered&quot; by
+    anyone within seconds.</p>
+<p class="Pp">To avoid this problem, use an authentication mechanism or other
+    protocol that does not let snoopers see your password: Digest, CRAM-MD5,
+    Kerberos, SPNEGO or NTLM authentication. Or even better: use authenticated
+    protocols that protect the entire connection and everything sent over
+  it.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Unauthenticated_Connections'><a class='permalink' href='#Unauthenticated_Connections'>Unauthenticated   Connections</a></h1>
+<p class="Pp">Protocols that do not have any form of cryptographic
+    authentication cannot with any certainty know that they communicate with the
+    right remote server.</p>
+<p class="Pp">If your application is using a fixed scheme or fixed hostname, it
+    is not safe as long as the connection is unauthenticated. There can be a
+    man-in-the-middle or in fact the whole server might have been replaced by an
+    evil actor.</p>
+<p class="Pp">Unauthenticated protocols are unsafe. The data that comes back to
+    curl may have been injected by an attacker. The data that curl sends might
+    be modified before it reaches the intended server. If it even reaches the
+    intended server at all.</p>
+<p class="Pp">Remedies:</p>
+<dl class="Bl-tag">
+  <dt id="Restrict"><a class="permalink" href="#Restrict">Restrict operations to
+    authenticated transfers</a></dt>
+  <dd>Use authenticated protocols protected with HTTPS or SSH.</dd>
+  <dt id="Make"><a class="permalink" href="#Make">Make sure the server's
+    certificate etc is verified</a></dt>
+  <dd>Never ever switch off certificate verification.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Certificates_and_Long-running_Connections'><a class='permalink' href='#Certificates_and_Long-running_Connections'>Certificates   and Long-running Connections</a></h1>
+<p class="Pp">Certificate validation of encrypted connections is performed
+    immediately after a connection is established. That connection could be used
+    for many subsequent transfers, even if the certificate used for validation
+    expires or is revoked, the local certificate bundle is changed in a way that
+    would have caused that certificate to fail validation, the server changes
+    its certificate to one that would have failed validation, or even if a
+    completely different server is brought up under the same hostname. This
+    could continue for many hours (or even years) after such a change occurs,
+    which may not be desired behavior for some applications.</p>
+<p class="Pp">Remedies:</p>
+<p class="Pp">Use the <a href='/man/CURLOPT_MAXLIFETIME_CONN.3.en'>CURLOPT_MAXLIFETIME_CONN(3)</a> option to limit the
+    amount of time that connections are used after they have been successfully
+    validated. Further transfers require a new connection with validation
+    performed again.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Redirects'><a class='permalink' href='#Redirects'>Redirects</a></h1>
+<p class="Pp">The <a href='/man/CURLOPT_FOLLOWLOCATION.3.en'>CURLOPT_FOLLOWLOCATION(3)</a> option automatically follows
+    HTTP redirects sent by a remote server. These redirects can refer to any
+    kind of URL, not just HTTP. libcurl restricts the protocols allowed to be
+    used in redirects for security reasons: only HTTP, HTTPS, FTP and FTPS are
+    enabled by default. Applications may opt to restrict that set further.</p>
+<p class="Pp">A redirect to a file: URL would cause the libcurl to read (or
+    write) arbitrary files from the local file system. If the application
+    returns the data back to the user (as would happen in some kinds of CGI
+    scripts), an attacker could leverage this to read otherwise forbidden data
+    (e.g. <b>file://localhost/etc/passwd</b>).</p>
+<p class="Pp">If authentication credentials are stored in the ~/.netrc file, or
+    Kerberos is in use, any other URL type (not just file:) that requires
+    authentication is also at risk. A redirect such as
+    <b>ftp://some-internal-server/private-file</b> would then return data even
+    when the server is password protected.</p>
+<p class="Pp">In the same way, if an unencrypted SSH private key has been
+    configured for the user running the libcurl application, SCP: or SFTP: URLs
+    could access password or private-key protected resources, e.g.
+    <b>sftp://user@some-internal-server/etc/passwd</b></p>
+<p class="Pp">The <a href='/man/CURLOPT_REDIR_PROTOCOLS_STR.3.en'>CURLOPT_REDIR_PROTOCOLS_STR(3)</a> and
+    <a href='/man/CURLOPT_NETRC.3.en'>CURLOPT_NETRC(3)</a> options can be used to mitigate against this kind of
+    attack.</p>
+<p class="Pp">A redirect can also specify a location available only on the
+    machine running libcurl, including servers hidden behind a firewall from the
+    attacker. E.g. <a href='http://127.0.0.1/'>http://127.0.0.1/</a> or
+    <a href='http://intranet/delete-stuff.cgi?delete=all'>http://intranet/delete-stuff.cgi?delete=all</a> or
+    <b>tftp://bootp-server/pc-config-data</b></p>
+<p class="Pp">Applications can mitigate against this by disabling
+    <a href='/man/CURLOPT_FOLLOWLOCATION.3.en'>CURLOPT_FOLLOWLOCATION(3)</a> and handling redirects itself, sanitizing
+    URLs as necessary. Alternately, an app could leave
+    <a href='/man/CURLOPT_FOLLOWLOCATION.3.en'>CURLOPT_FOLLOWLOCATION(3)</a> enabled but set
+    <a href='/man/CURLOPT_REDIR_PROTOCOLS_STR.3.en'>CURLOPT_REDIR_PROTOCOLS_STR(3)</a> and install a
+    <a href='/man/CURLOPT_OPENSOCKETFUNCTION.3.en'>CURLOPT_OPENSOCKETFUNCTION(3)</a> or <a href='/man/CURLOPT_PREREQFUNCTION.3.en'>CURLOPT_PREREQFUNCTION(3)</a>
+    callback function in which addresses are sanitized before use.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CRLF_in_Headers'><a class='permalink' href='#CRLF_in_Headers'>CRLF   in Headers</a></h1>
+<p class="Pp">For all options in libcurl which specify headers, including but
+    not limited to <a href='/man/CURLOPT_HTTPHEADER.3.en'>CURLOPT_HTTPHEADER(3)</a>, <a href='/man/CURLOPT_PROXYHEADER.3.en'>CURLOPT_PROXYHEADER(3)</a>,
+    <a href='/man/CURLOPT_COOKIE.3.en'>CURLOPT_COOKIE(3)</a>, <a href='/man/CURLOPT_USERAGENT.3.en'>CURLOPT_USERAGENT(3)</a>,
+    <a href='/man/CURLOPT_REFERER.3.en'>CURLOPT_REFERER(3)</a> and <a href='/man/CURLOPT_RANGE.3.en'>CURLOPT_RANGE(3)</a>, libcurl sends the
+    headers as-is and does not apply any</p>
+</div>
+</section>
+
+                
+            </article>
+            
+            <aside id="content-right">
+                
+<p>
+    <a href="https://gitlab.archlinux.org/archlinux/man-pages/blob/master/community/en/libcurl-security.3.en">
+        Edit this page on GitLab
+    </a>
+</p>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+<div class="manual-content">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">libcurl-security - libcurl security considerations</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Security'><a class='permalink' href='#Security'>Security</a></h1>
+<p class="Pp">This document lists known security issues and considerations when
+    using libcurl or the curl command-line tool.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Command_Lines'><a class='permalink' href='#Command_Lines'>Command Lines</a></h1>
+<p class="Pp">When you specify arguments on the command line, make sure they are
+    not parsable in unexpected ways by the shell or by libcurl itself.</p>
+<p class="Pp">Using options that take URLs, like <a href='/man/curl.1.en'>curl(1)</a>'s
+    <i>-L</i> or <i>--location</i>, may cause the command line options to be
+    sent to a different host than originally intended. Ensure that command line
+    options are safe and will not cause security issues when sent to any
+    server.</p>
+<p class="Pp">URLs passed on the command line are parsed by the command line
+    parser and then passed to libcurl. If you pass a URL that includes options
+    intended for one protocol (like HTTP) to another protocol (like FTP),
+    libcurl will often parse these options correctly and use them, but they might
+    be parsable in unexpected ways and lead to issues. For instance, providing
+    a URL like
+    <code>ftp://ftp.example.com/--user/password@host/file</code> could lead
+    to unintended authentication attempts.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='.netrc'><a class='permalink' href='#.netrc'>.netrc</a></h1>
+<p class="Pp">If the user running the application has a file named .netrc in
+    their home directory, libcurl might use it to find login credentials for
+    remote hosts. An attacker who can control the user's home directory might
+    place a malicious .netrc file there to trick libcurl into sending credentials
+    to a wrong host.</p>
+<p class="Pp">To prevent this, ensure that only trusted users can write to home
+    directories, or disable the use of .netrc by using
+    <a href='/man/CURLOPT_NETRC.3.en'>CURLOPT_NETRC(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Clear_Text_Passwords'><a class='permalink' href='#Clear_Text_Passwords'>Clear Text Passwords</a></h1>
+<p class="Pp">Many protocols that libcurl supports transfer passwords in clear
+    text. This includes basic FTP, POP3, IMAP and SMTP authentication. If you
+    use these protocols without TLS/SSL encryption, an attacker performing a
+    man-in-the-middle attack can capture the password.</p>
+<p class="Pp">Always use encrypted connections (e.g. FTPS, POP3S, IMAPS, SMTPS,
+    or use the STARTTLS command) when transferring passwords or other sensitive
+    data.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FTP_uses_two_connections'><a class='permalink' href='#FTP_uses_two_connections'>FTP uses two connections</a></h1>
+<p class="Pp">When performing an FTP transfer, two TCP connections are used: one
+    for setting up the transfer and one for the actual data.</p>
+<p class="Pp">FTP is not only unauthenticated, but the setting up of the second
+    transfer is also a weak spot. The second connection to use for data, is
+    either setup with the PORT/EPRT command that makes the server connect back
+    to the client on the given IP+PORT, or with PASV/EPSV that makes the server
+    setup a port to listen to and tells the client to connect to a given
+    IP+PORT.</p>
+<p class="Pp">Again, unauthenticated means that the connection might be meddled
+    with by a man-in-the-middle or that there is a malicious server pretending
+    to be the right one.</p>
+<p class="Pp">A malicious FTP server can respond to PASV commands with the
+    IP+PORT of a totally different machine. Perhaps even a third party host, and
+    when there are many clients trying to connect to that third party, it could
+    create a Distributed Denial-Of-Service attack out of it. If the client makes
+    an upload operation, it can make the client send the data to another site.
+    If the attacker can affect what data the client uploads, it can be made to
+    work as a HTTP request and then the client could be made to issue HTTP
+    requests to third party hosts.</p>
+<p class="Pp">An attacker that manages to control curl's command line options
+    can tell curl to send an FTP PORT command to ask the server to connect to a
+    third party host instead of back to curl.</p>
+<p class="Pp">The fact that FTP uses two connections makes it vulnerable in a
+    way that is hard to avoid.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Active_FTP_passes_on_the_local_IP_address'><a class='permalink' href='#Active_FTP_passes_on_the_local_IP_address'>Active FTP passes on the local IP address</a></h1>
+<p class="Pp">If you use curl/libcurl to do <i>active</i> FTP transfers, curl
+    passes on the address of your local IP to the remote server - even when for
+    example using a SOCKS or HTTP proxy in between curl and the target
+  server.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Denial_of_Service'><a class='permalink' href='#Denial_of_Service'>Denial of Service</a></h1>
+<p class="Pp">A malicious server could cause libcurl to effectively hang by
+    sending data slowly, or even no data at all but just keeping the TCP
+    connection open. This could effectively result in a denial-of-service
+    attack. The <a href='/man/CURLOPT_TIMEOUT.3.en'>CURLOPT_TIMEOUT(3)</a> and/or
+    <a href='/man/CURLOPT_LOW_SPEED_LIMIT.3.en'>CURLOPT_LOW_SPEED_LIMIT(3)</a> options can be used to mitigate against
+    this.</p>
+<p class="Pp">A malicious server could cause libcurl to download an infinite
+    amount of data, potentially causing system resources to be exhausted
+    resulting in a system or application crash. Setting the
+    <a href='/man/CURLOPT_MAXFILESIZE_LARGE.3.en'>CURLOPT_MAXFILESIZE_LARGE(3)</a> option is not sufficient to guard
+    against this. Instead, applications should monitor the amount of data
+    received within the write or progress callback and abort once the limit is
+    reached.</p>
+<p class="Pp">A malicious HTTP server could cause an infinite redirection loop,
+    causing a denial-of-service. This can be mitigated by using the
+    <a href='/man/CURLOPT_MAXREDIRS.3.en'>CURLOPT_MAXREDIRS(3)</a> option.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Arbitrary_Headers'><a class='permalink' href='#Arbitrary_Headers'>Arbitrary Headers</a></h1>
+<p class="Pp">User-supplied data must be sanitized when used in options like
+    <a href='/man/CURLOPT_USERAGENT.3.en'>CURLOPT_USERAGENT(3)</a>, <a href='/man/CURLOPT_HTTPHEADER.3.en'>CURLOPT_HTTPHEADER(3)</a>,
+    <a href='/man/CURLOPT_POSTFIELDS.3.en'>CURLOPT_POSTFIELDS(3)</a> and others that are used to generate structured
+    data. Characters like embedded carriage returns or ampersands could allow
+    the user to create additional headers or fields that could cause malicious
+    transactions.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Server-supplied_Names'><a class='permalink' href='#Server-supplied_Names'>Server-supplied Names</a></h1>
+<p class="Pp">A server can supply data which the application may, in some cases,
+    use as a filename. The curl command-line tool does this with
+    <i>--remote-header-name</i>, using the Content-disposition: header to
+    generate a filename. An application could also use
+    <a href='/man/CURLINFO_EFFECTIVE_URL.3.en'>CURLINFO_EFFECTIVE_URL(3)</a> to generate a filename from a
+    server-supplied redirect URL. Special care must be taken to sanitize such
+    names to avoid the possibility of a malicious server supplying one like
+    <b>&quot;/etc/passwd&quot;</b>, <b>&quot;autoexec.bat&quot;</b>,
+    <b>&quot;prn:&quot;</b> or even <b>&quot;.bashrc&quot;</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Server_Certificates'><a class='permalink' href='#Server_Certificates'>Server Certificates</a></h1>
+<p class="Pp">A secure application should never use the
+    <a href='/man/CURLOPT_SSL_VERIFYPEER.3.en'>CURLOPT_SSL_VERIFYPEER(3)</a> option to disable certificate validation.
+    There are numerous attacks that are enabled by applications that fail to
+    properly validate server TLS/SSL certificates, thus enabling a malicious
+    server to spoof a legitimate one. HTTPS without validated certificates is
+    potentially as insecure as a plain HTTP connection.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Showing_What_You_Do'><a class='permalink' href='#Showing_What_You_Do'>Showing What You Do</a></h1>
+<p class="Pp">Relatedly, be aware that in situations when you have problems with
+    libcurl and ask someone for help, everything you reveal in order to get best
+    possible help might also impose certain security related risks. Hostnames,
+    usernames, paths, operating system specifics, etc. (not to mention passwords
+    of course) may in fact be used by intruders to gain additional information
+    of a potential target.</p>
+<p class="Pp">Be sure to limit access to application logs if they could hold
+    private or security-related data. Besides the obvious candidates like
+    usernames and passwords, things like URLs, cookies or even filenames could
+    also hold sensitive data.</p>
+<p class="Pp">To avoid this problem, you must of course use your common sense.
+    Often, you can just edit out the sensitive data or just search/replace your
+    true information with faked data.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='setuid_applications_using_libcurl'><a class='permalink' href='#setuid_applications_using_libcurl'>setuid applications using libcurl</a></h1>
+<p class="Pp">libcurl-using applications that set the 'setuid' bit to run with
+    elevated or modified rights also implicitly give that extra power to libcurl
+    and this should only be done after careful considerations.</p>
+<p class="Pp">Giving setuid powers to the application means that libcurl can
+    save files using those new rights (if for example the <i>SSLKEYLOGFILE</i>
+    environment variable is set). Also: if the application wants these powers to
+    read or manage secrets that the user is otherwise not able to view (like
+    credentials for a login etc), it should be noted that libcurl still might
+    understand proxy environment variables that allow the user to redirect
+    libcurl operations to use a proxy controlled by the user.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='File_descriptors,_fork_and_NTLM'><a class='permalink' href='#File_descriptors,_fork_and_NTLM'>File descriptors, fork and NTLM</a></h1>
+<p class="Pp">An application that uses libcurl and invokes <i>fork()</i> gets
+    all file descriptors duplicated in the child process, including the ones
+    libcurl created.</p>
+<p class="Pp">libcurl itself uses <i>fork()</i> and <i>execl()</i> if told to
+    use the <b>CURLAUTH_NTLM_WB</b> authentication method which then invokes the
+    helper command in a child process with file descriptors duplicated. Make
+    sure that only the trusted and reliable helper program is invoked.</p>
+<p class="Pp">This feature was removed from curl in 8.8.0.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Secrets_in_memory'><a class='permalink' href='#Secrets_in_memory'>Secrets in memory</a></h1>
+<p class="Pp">When applications pass usernames, passwords or other sensitive
+    data to libcurl to be used for upcoming transfers, those secrets are kept
+    around as-is in memory. In many cases they are stored in the heap for as
+    long as the handle itself for which the options are set.</p>
+<p class="Pp">If an attacker can access the heap, like maybe by reading swap
+    space or via a core dump file, such data might be accessible.</p>
+<p class="Pp">Further, when eventually closing a handle and the secrets are no
+    longer needed, libcurl does not explicitly clear memory before freeing it,
+    so credentials may be left in freed data.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Saving_files'><a class='permalink' href='#Saving_files'>Saving files</a></h1>
+<p class="Pp">libcurl cannot protect against attacks where an attacker has write
+    access to the same directory where libcurl is directed to save files.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Cookies_2'><a class='permalink' href='#Cookies_2'>Cookies</a></h1>
+<p class="Pp">If libcurl is built with PSL (<b>Public Suffix List</b>) support,
+    it detects and discards cookies that are specified for such suffix domains
+    that should not be allowed to have cookies.</p>
+<p class="Pp">if libcurl is <i>not</i> built with PSL support, it has no ability
+    to stop super cookies.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Report_Security_Problems'><a class='permalink' href='#Report_Security_Problems'>Report Security Problems</a></h1>
+<p class="Pp">Should you detect or just suspect a security problem in libcurl or
+    curl, contact the project curl security team immediately. See
+    <a href='https://curl.se/dev/secprocess.html'>https://curl.se/dev/secprocess.html</a> for details.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp"><a href='/man/libcurl-thread.3.en'>libcurl-thread(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-13</td>
+    <td class="foot-os">libcurl</td>
+  </tr>
+</table>
+          <li><a href="#Unauthenticated_Connections">اتصالات غير مصادق عليها</a></li>
+        
+            <li><a href="#Certificates_and_Long-running_Connections">الشهادات والاتصالات طويلة الأمد</a></li>
+        
+            <li><a href="#Redirects">إعادة التوجيه</a></li>
+        
+            <li><a href="#CRLF_in_Headers">CRLF في الرؤوس</a></li>
+        
+            <li><a href="#Local_Resources">الموارد المحلية</a></li>
+        
+            <li><a href="#IPv4_Addresses">عناوين IPv4</a></li>
+        
+            <li><a href="#IPv6_Addresses">عناوين IPv6</a></li>
+        
+            <li><a href="#Uploads">عمليات التحميل</a></li>
+        
+            <li><a href="#Authentication">المصادقة</a></li>
+        
+            <li><a href="#Cookies">ملفات تعريف الارتباط</a></li>
+        
+            <li><a href="#Dangerous_SCP_URLs">عناوين SCP الخطرة</a></li>
+        
+            <li><a href="#file://">file://</a></li>
+        
+            <li><a href="#Warning:_file://_on_Windows">تحذير: file:// على Windows</a></li>
+        
+            <li><a href="#What_if_the_user_can_set_the_URL">ماذا لو تمكن المستخدم من تعيين عنوان URL؟</a></li>
+        
+            <li><a href="#RFC_3986_vs_WHATWG_URL">RFC 3986 مقابل WHATWG URL</a></li>
+        
+            <li><a href="#FTP_uses_two_connections">FTP يستخدم اتصاليين</a></li>
+        
+            <li><a href="#Active_FTP_passes_on_the_local_IP_address">FTP النشط يمرر عنوان IP المحلي</a></li>
+        
+            <li><a href="#Denial_of_Service">حرمان من الخدمة</a></li>
+        
+            <li><a href="#Arbitrary_Headers">رؤوس اعتباطية</a></li>
+        
+            <li><a href="#Server-supplied_Names">أسماء مزودة من الخادم</a></li>
+        
+            <li><a href="#Server_Certificates">شهادات الخادم</a></li>
+        
+            <li><a href="#Showing_What_You_Do">إظهار ما تفعله</a></li>
+        
+            <li><a href="#setuid_applications_using_libcurl">تطبيقات setuid التي تستخدم libcurl</a></li>
+        
+            <li><a href="#File_descriptors,_fork_and_NTLM">واصفات الملفات، fork و NTLM</a></li>
+        
+            <li><a href="#Secrets_in_memory">الأسرار في الذاكرة</a></li>
+        
+            <li><a href="#Saving_files">حفظ الملفات</a></li>
+        
+            <li><a href="#Cookies_2">ملفات تعريف الارتباط</a></li>
+        
+            <li><a href="#Report_Security_Problems">الإبلاغ عن مشاكل الأمان</a></li>
+        
+            <li><a href="#SEEALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/libcurl-security.3.en.txt">txt</a>, 
+        
+            <a href="/man/libcurl-security.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

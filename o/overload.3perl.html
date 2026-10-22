@@ -1,0 +1,493 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">overload.3perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+'':
+  referencing: '${} @{} %{} &{} *{}'
+  matching: '~~'
+  special: 'nomethod fallback ='
+'use overload':
+  '':
+    referencing: '${} @{} %{} &{} *{}'
+    matching: '~~'
+    special: 'nomethod fallback ='
+  'note': Most of the overloadable operators map one-to-one to these keys.
+    Exceptions, including additional overloadable operations not apparent from
+    this hash, are included in the notes which follow. This list is subject to
+    growth over time.
+  'warning': A warning is issued if an attempt is made to register an operator
+    not found above.
+  'details':
+    - 'operator': '"not"'
+      'description': 'The operator "not" is not a valid key for "use overload". However, if the operator "!" is overloaded then the same implementation will be used for "not" (since the two operators differ only in precedence).'
+    - 'operator': '"neg"'
+      'description': 'The key "neg" is used for unary minus to disambiguate it from binary "-".'
+    - 'operator': '"++", "--"'
+      'description': 'Assuming they are to behave analogously to Perl''s "++" and "--", overloaded implementations of these operators are required to mutate their operands.'
+      'note': 'No distinction is made between prefix and postfix forms of the increment and decrement operators: these differ only in the point at which Perl calls the associated subroutine when evaluating an expression.'
+    - 'operator': 'Assignments'
+      'examples':
+        - '+=  -=  *=  /=  %=  **=  <<=  >>=  x=  .='
+        - '&amp;=  |=  ^=  &amp;.=  |.=  ^.='
+      'description': 'Simple assignment is not overloadable (the "=" key is used for the "Copy Constructor"). Perl does have a way to make assignments to an object do whatever you want, but this involves using tie(), not overload - see "tie" in perlfunc and the "COOKBOOK" examples below.'
+      'note': 'The subroutine for the assignment variant of an operator is required only to return the result of the operation. It is permitted to change the value of its operand (this is safe because Perl calls the copy constructor first), but this is optional since Perl assigns the returned value to the left-hand operand anyway.'
+      'constraint': 'An object that overloads an assignment operator does so only in respect of assignments to that object. In other words, Perl never calls the corresponding methods with the third argument (the "swap" argument) set to TRUE. For example, the operation $a *= $b cannot lead to $b''s implementation of "*=" being called, even if $a is a scalar. (It can, however, generate a call to $b''s method for "*").'
+    - 'operator': 'Non-mutators with a mutator variant'
+      'examples':
+        - '+  -  *  /  %  **  <<  >>  x  .'
+        - '&amp;  |  ^  &amp;.  |.  ^.='
+      'description': 'As described above, Perl may call methods for operators like "+" and "&amp;" in the course of implementing missing operations like "++", "+=", and "&amp;=". While these methods may detect this usage by testing the definedness of the third argument, they should in all cases avoid changing their operands. This is because Perl does not call the copy constructor before invoking these methods.'
+    - 'operator': '"int"'
+      'description': 'Traditionally, the Perl function "int" rounds to 0 (see "int" in perlfunc), and so for floating-point-like types one should follow the same semantic.'
+    - 'operator': 'String, numeric, boolean, and regexp conversions'
+      'examples':
+        - '""  0+  bool'
+      'description': 'These conversions are invoked according to context as necessary. For example, the subroutine for ''""'' (stringify) may be used where the overloaded object is passed as an argument to "print", and that for "bool" where it is tested in the condition of a flow control statement (like "while") or the ternary "?:" operation.'
+      'note': 'Of course, in contexts like, for example, "$obj + 1", Perl will invoke $obj''s implementation of "+" rather than (in this example) converting $obj to a number using the numify method "0+" (an exception to this is when no method has been provided for "+" and "fallback" is set to TRUE).'
+      'return_value': 'The subroutines for ''""'', "0+", and "bool" can return any arbitrary Perl value. If the corresponding operation for this value is overloaded too, the operation will be called again with this value.'
+      'special_case': 'As a special case if the overload returns the object itself then it will be used directly. An overloaded conversion returning the object is probably a bug, because you''re likely to get something that looks like "YourPackage=HASH(0x8172b34)".'
+    - 'operator': 'qr'
+      'description': 'The subroutine for "qr" is used wherever the object is interpolated into or used as a regexp, including when it appears on the RHS of a "=~" or "!~" operator.'
+      'constraint': '"qr" must return a compiled regexp, or a ref to a compiled regexp (such as "qr//" returns), and any further overloading on the return value will be ignored.'
+    - 'operator': 'Iteration'
+      'description': 'If "<>" is overloaded then the same implementation is used for both the read-filehandle syntax "<$var>" and globbing syntax "<${var}>".'
+    - 'operator': 'File tests'
+      'description': 'The key "-X" is used to specify a subroutine to handle all the filetest operators ("-f", "-x", and so on: see "-X" in perlfunc for the full list); it is not possible to overload any filetest operator individually. To distinguish them, the letter following the - is passed as the second argument (that is, in the slot that for binary operators is used to pass the second operand).'
+      'note': 'Calling an overloaded filetest operator does not affect the stat value associated with the special filehandle "_". It still refers to the result of the last "stat", "lstat" or unoverloaded filetest.'
+      'version': 'This overload was introduced in Perl 5.12.'
+    - 'operator': 'Matching'
+      'description': 'The key "~~" allows you to override the smart matching logic used by the "~~" operator and the switch construct ("given"/"when"). See "Switch Statements" in perlsyn and feature.'
+      'constraint': 'Unusually, the overloaded implementation of the smart match operator does not get full control of the smart match behaviour. In particular, in the following code: package Foo; use overload "~~" => "match"; my $obj = Foo-&gt;new(); $obj ~~ [ 1,2,3 ]; the smart match does not invoke the method call like this: $obj-&gt;match([1,2,3],0); rather, the smart match distributive rule takes precedence, so $obj is smart matched against each array element in turn until a match is found, so you may see between one and three of these calls instead: $obj-&gt;match(1,0); $obj-&gt;match(2,0); $obj-&gt;match(3,0);'
+      'reference': 'Consult the match table in "Smartmatch Operator" in perlop for details of when overloading is invoked.'
+    - 'operator': 'Dereferencing'
+      'examples':
+        - '${}  @{}  %{}  &{}  *{}'
+      'description': 'If these operators are not explicitly overloaded then they work in the normal way, yielding the underlying scalar, array, or whatever stores the object data (or the appropriate error message if the dereference operator doesn''t match it). Defining a catch-all "nomethod" (see below) makes no difference to this as the catch-all function will not be called to implement a missing dereference operator.'
+      'constraint': 'If a dereference operator is overloaded then it must return a reference of the appropriate type (for example, the subroutine for key "${}" should return a reference to a scalar, not a scalar), or another object which overloads the operator: that is, the subroutine only determines what is dereferenced and the actual dereferencing is left to Perl. As a special case, if the subroutine returns the object itself then it will not be called again - avoiding infinite recursion.'
+    - 'operator': 'Special'
+      'examples':
+        - 'nomethod  fallback  ='
+      'reference': 'See "Special Keys for "use overload""'
+'Magic Autogeneration':
+  'description': 'If a method for an operation is not found then Perl tries to autogenerate a substitute implementation from the operations that have been defined.'
+  'note': 'The behaviour described in this section can be disabled by setting "fallback" to FALSE (see "fallback").'
+  'priority_explanation': 'In the following tables, numbers indicate priority. For example, the table below states that, if no implementation for "!" has been defined then Perl will implement it using "bool" (that is, by inverting the value returned by the method for "bool"); if boolean conversion is also unimplemented then Perl will use "0+" or, failing that, ""."'
+};
+    defined $key or die &quot;Out of band access&quot;;
+    $$self-&gt;[$key] = shift;
+}
+sub FETCH {
+    my $self = ${shift()};
+    my $key = $fields{shift()};
+    defined $key or die &quot;Out of band access&quot;;
+    $$self-&gt;[$key];
+}</pre>
+<p class="Pp">الآن يمكن الوصول إلى الكائن باستخدام كل من صيغة المصفوفة وصيغة الهاش:</p>
+<pre>my $bar = two_refs-&gt;new(3,4,5,6);
+$bar-&gt;[2] = 11;
+$bar-&gt;{two} == 11 or die 'bad hash fetch';</pre>
+<p class="Pp">لاحظ العديد من الميزات الهامة في هذا المثال. أولاً وقبل كل شيء، فإن النوع <i>الفعلي</i> لـ <span class="Li">$bar</span> هو مرجع عددي (scalar reference)، ونحن لا نقوم بتحميل (overload) تفكيك المراجع العددية. بالتالي يمكننا الحصول على محتويات <span class="Li">$bar</span> <i>الفعلية</i> غير المحملة بمجرد استخدام <span class="Li">$$bar</span> (وهو ما نفعله في الدوال التي تحمل تفكيك المراجع). وبالمثل، الكائن الذي تم إرجاعه بواسطة الدالة <b>TIEHASH()</b> هو مرجع عددي.</p>
+<p class="Pp">ثانياً، نقوم بإنشاء هاش مرتبط (tied hash) جديد في كل مرة يتم فيها استخدام صيغة الهاش. هذا يسمح لنا بعدم القلق بشأن احتمال وجود حلقة مراجع، مما قد يؤدي إلى تسرب في الذاكرة.</p>
+<p class="Pp">يمكن علاج هاتين المشكلتين. على سبيل المثال، إذا أردنا تحميل تفكيك الهاش على مرجع لكائن <i>تم تنفيذه</i> كهاش بنفسه، فإن المشكلة الوحيدة التي يجب التغلب عليها هي كيفية الوصول إلى هذا الهاش <i>الفعلي</i> (على عكس الهاش <i>الافتراضي</i> الذي يتم عرضه بواسطة عامل تفكيك المراجع المحمل).</p>
+<p class="Pp">إليك أحد روتينات الجلب الممكنة:</p>
+<pre>sub access_hash {
+    my ($self, $key) = (shift, shift);
+    my $class = ref $self;
+    bless $self, 'overload::dummy'; # Disable overloading of %{}
+    my $out = $self-&gt;{$key};
+    bless $self, $class;            # Restore overloading
+    $out;
+}</pre>
+<p class="Pp">لإزالة إنشاء الهاش المرتبط عند كل وصول، قد تحتاج إلى مستوى إضافي من التحويل غير المباشر الذي يسمح ببنية مراجع غير دائرية:</p>
+<pre>package two_refs1;
+use overload
+    '%{}' =&gt; sub { ${shift()}-&gt;[1] },
+    '@{}' =&gt; sub { ${shift()}-&gt;[0] };
+sub new {
+    my $p = shift;
+    my $a = [@_];
+    my %h;
+    tie %h, $p, $a;
+    bless \ [$a, \%h], $p;
+}
+sub gethash {
+    my %h;
+    my $self = shift;
+    tie %h, ref $self, $self;
+    \%h;
+}
+sub TIEHASH { my $p = shift; bless \ shift, $p }
+my %fields;
+my $i = 0;
+$fields{$_} = $i++ foreach qw{zero one two three};
+sub STORE {
+    my $a = ${shift()};
+    my $key = $fields{shift()};
+    defined $key or die &quot;Out of band access&quot;;
+    $a-&gt;[$key] = shift;
+}
+sub FETCH {
+    my $a = ${shift()};
+    my $key = $fields{shift()};
+    defined $key or die &quot;Out of band access&quot;;
+    $a-&gt;[$key];
+}</pre>
+<p class="Pp">الآن إذا تم تحميل <span class="Li">$baz</span> بهذه الطريقة، فإن <span class="Li">$baz</span> هو مرجع لمرجع للمصفوفة الوسيطة، والتي تحتفظ بمرجع للمصفوفة الفعلية، وهاش الوصول. الكائن الذي يتم ربطه (tieing object) لهاش الوصول هو مرجع لمرجع للمصفوفة الفعلية، لذلك:</p>
+<ul class="Bl-bullet">
+  <li>لا توجد حلقات مراجع.</li>
+  <li>كلا &quot;الكائنين&quot; المباركين (blessed) في الفئة <span class="Li">&quot;two_refs1&quot;</span> هما مراجع لمراجع لمصفوفة، وبالتالي مراجع لـ <i>عدد صحيح</i> (scalar). لذلك، فإن تعبير الوصول <span class="Li">&quot;$$foo-&gt;[$ind]&quot;</span> لا يتضمن أي عمليات محملة.</li>
+</ul>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Symbolic_Calculator'><a class='permalink' href='#Symbolic_Calculator'>حاسبة رمزية</a></h2>
+<p class="Pp">ضع هذا في <i>symbolic.pm</i> في دليل وحدات Perl الخاص بك:</p>
+<pre>package symbolic;           # Primitive symbolic calculator
+use overload nomethod =&gt; \&amp;wrap;
+sub new { shift; bless ['n', @_] }
+sub wrap {
+    my ($obj, $other, $inv, $meth) = @_;
+    ($obj, $other) = ($other, $obj) if $inv;
+    bless [$meth, $obj, $other];
+}</pre>
+<p class="Pp">هذه الوحدة غير عادية للغاية بالنسبة للوحدات المحملة: فهي لا توفر أي عوامل تشغيل محملة عادية، بدلاً من ذلك توفر تنفيذًا لـ <span class="Li">&quot;nomethod&quot;</span>. في هذا المثال، تقوم الدالة <span class="Li">&quot;nomethod&quot;</span> بإرجاع كائن يغلف العمليات التي تتم على الكائنات: <span class="Li">&quot;symbolic-&gt;new(3)&quot;</span> تحتوي على <span class="Li">&quot;['n', 3]&quot;</span>، <span class="Li">&quot;2 + symbolic-&gt;new(3)&quot;</span> تحتوي على <span class="Li">&quot;['+', 2, ['n', 3]]&quot;</span>.</p>
+<p class="Pp">إليك مثال على البرنامج النصي الذي &quot;يحسب&quot; جانب المثمن المحاط (circumscribed octagon) باستخدام الحزمة أعلاه:</p>
+<pre>require symbolic;
+my $iter = 1;                   # 2**($iter+2) = 8
+my $side = symbolic-&gt;new(1);
+my $cnt = $iter;
+while ($cnt--) {
+    $side = (sqrt(1 + $side**2) - 1)/$side;
+}
+print &quot;OK\n&quot;;</pre>
+<p class="Pp">قيمة <span class="Li">$side</span> هي:</p>
+<pre>['/', ['-', ['sqrt', ['+', 1, ['**', ['n', 1], 2]],
+                    undef], 1], ['n', 1]]</pre>
+<p class="Pp">لاحظ أنه بينما حصلنا على هذه القيمة باستخدام برنامج نصي صغير لطيف، لا توجد طريقة سهلة <i>لاستخدام</i> هذه القيمة. في الواقع، يمكن فحص هذه القيمة في مصحح الأخطاء (debugger) (انظر perldebug)، ولكن فقط إذا تم تعيين خيار <span class="Li">&quot;bareStringify&quot;</span> <span class="Li"><b>O</b></span>، وليس عبر الأمر <span class="Li">&quot;p&quot;</span>.</p>
+<p class="Pp">إذا حاول شخص ما طباعة هذه القيمة، فسيتم استدعاء عامل التشغيل المحمل <span class="Li">&quot;&quot;</span>، والذي سيستدعي عامل التشغيل <span class="Li">&quot;nomethod&quot;</span>. سيتم تحويل نتيجة هذا العامل إلى سلسلة مرة أخرى، ولكن هذه النتيجة هي مرة أخرى من النوع <span class="Li">&quot;symbolic&quot;</span>، مما سيؤدي إلى حلقة لا نهائية.</p>
+<p class="Pp">أضف دالة طباعة جميلة (pretty-printer) إلى الوحدة <i>symbolic.pm</i>:</p>
+<pre>sub pretty {
+    my ($meth, $a, $b) = @{+shift};
+    $a = 'u' unless defined $a;
+    $b = 'u' unless defined $b;
+    $a = $a-&gt;pretty if ref $a;
+    $b = $b-&gt;pretty if ref $b;
+    &quot;[$meth $a $b]&quot;;
+}</pre>
+<p class="Pp">الآن يمكن إنهاء البرنامج النصي بـ:</p>
+<pre>print &quot;side = &quot;, $side-&gt;pretty, &quot;\n&quot;;</pre>
+<p class="Pp">الدالة <span class="Li">&quot;pretty&quot;</span> تقوم بتحويل من كائن إلى سلسلة (object-to-string conversion)، لذا من الطبيعي تحميل عامل التشغيل <span class="Li">&quot;&quot;</span> باستخدام هذه الدالة. ومع ذلك، داخل مثل هذه الدالة، ليس من الضروري طباعة <i>مكونات</i> <span class="Li">$a</span> و <span class="Li">$b</span> للكائن بطريقة جميلة. في الدالة أعلاه، <span class="Li">&quot;[$meth $a $b]&quot;</span> هو ربط (catenation) لبعض السلاسل النصية والمكونات <span class="Li">$a</span> و <span class="Li">$b</span>. إذا كانت هذه المكونات تستخدم التحميل (overloading)، فإن عامل تشغيل الربط سيبحث عن عامل التشغيل المحمل <span class="Li">&quot;.&quot;</span>؛ إذا لم يكن موجودًا، فسيبحث عن عامل التشغيل المحمل <span class="Li">&quot;&quot;</span>. لذلك يكفي استخدام:</p>
+<pre>use overload nomethod =&gt; \&amp;wrap, '&quot;&quot;' =&gt; \&amp;str;
+sub str {
+    my ($meth, $a, $b) = @{+shift};
+    $a = 'u' unless defined $a;
+    $b = 'u' unless defined $b;
+    &quot;[$meth $a $b]&quot;;
+}</pre>
+<p class="Pp">الآن يمكن تغيير السطر الأخير من البرنامج النصي إلى:</p>
+<pre>print &quot;side = $side\n&quot;;</pre>
+<p class="Pp">والذي يخرج:</p>
+<pre>side = [/ [- [sqrt [+ 1 [** [n 1] 2]]] 1] [n 1]]</pre>
+<p class="Pp">ويمكنك فحص القيمة في مصحح الأخطاء باستخدام جميع الطرق الممكنة.</p>
+<p class="Pp">لا يزال هناك خطأ ما: ضع في اعتبارك متغير الحلقة <span class="Li">$cnt</span> في البرنامج النصي. كان رقمًا، وليس كائنًا. لا يمكننا جعل قيمة <span class="Li"> $cnt</span> من النوع <span class="Li">&quot;symbolic&quot;</span>، لأن الحلقة لن تنتهي.</p>
+<p class="Pp">في الواقع، لإنهاء الدورة، يجب أن يصبح <span class="Li">$cnt</span> خاطئًا (false). ومع ذلك، فإن عامل التشغيل <span class="Li">&quot;bool&quot;</span> للتحقق من الخطأ تم تحميله (هذه المرة عبر <span class="Li">&quot;&quot;</span> المحمل)، ويعيد سلسلة طويلة، وبالتالي فإن أي كائن من النوع <span class="Li">&quot;symbolic&quot;</span> يكون صحيحًا (true). للتغلب على هذا، نحتاج إلى طريقة لمقارنة كائن بالرقم 0. في الواقع، من الأسهل كتابة روتين تحويل رقمي.</p>
+<p class="Pp">هذا هو نص <i>symbolic.pm</i> مع إضافة مثل هذا الروتين (وتعديل طفيف لـ <b>str()</b>):</p>
+<pre>package symbolic;           # Primitive symbolic calculator
+use overload
+    nomethod =&gt; \&amp;wrap, '&quot;&quot;' =&gt; \&amp;str, '0+' =&gt; \&amp;num;
+sub new { shift; bless ['n', @_] }
+sub wrap {
+    my ($obj, $other, $inv, $meth) = @_;
+    ($obj, $other) = ($other, $obj) if $inv;
+    bless [$meth, $obj, $other];
+}
+sub str {
+    my ($meth, $a, $b) = @{+shift};
+    $a = 'u' unless defined $a;
+    if (defined $b) {
+        &quot;[$meth $a $b]&quot;;
+    } else {
+        &quot;[$meth $a]&quot;;
+    }
+}
+my %subr = (
+    n =&gt; sub {$_[0]},
+    sqrt =&gt; sub {sqrt $_[0]},
+    '-' =&gt; sub {shift() - shift()},
+    '+' =&gt; sub {shift() + shift()},
+    '/' =&gt; sub {shift() / shift()},
+    '*' =&gt; sub {shift() * shift()},
+    '**' =&gt; sub {shift() ** shift()},
+);
+sub num {
+    my ($meth, $a, $b) = @{+shift};
+    my $subr = $subr{$meth}
+    or die &quot;Do not know how to ($meth) in symbolic&quot;;
+    $a = $a-&gt;num if ref $a eq __PACKAGE__;
+    $b = $b-&gt;num if ref $b eq __PACKAGE__;
+    $subr-&gt;($a,$b);
+}</pre>
+<p class="Pp">كل العمل الخاص بالتحويل الرقمي يتم في <span class="Li">%subr</span> و <b>num()</b>. بالطبع، <span class="Li">%subr</span> ليست كاملة، فهي تحتوي فقط على العمليات المستخدمة في المثال أدناه. إليك سؤال إضافي: لماذا نحتاج إلى استدعاء تكراري صريح في <b>num()</b>؟ (الإجابة في نهاية هذا القسم.)</p>
+<p class="Pp">استخدم هذه الوحدة كالتالي:</p>
+<pre>require symbolic;
+my $iter = symbolic-&gt;new(2);        # 16-gon
+my $side = symbolic-&gt;new(1);
+my $cnt = $iter;
+while ($cnt) {
+    $cnt = $cnt - 1;                # Mutator '--' not implemented
+    $side = (sqrt(1 + $side**2) - 1)/$side;
+}
+printf &quot;%s=%f\n&quot;, $side, $side;
+printf &quot;pi=%f\n&quot;, $side*(2**($iter+2));</pre>
+<p class="Pp">يطبع (بدون الكثير من فواصل الأسطر):</p>
+<pre>[/ [- [sqrt [+ 1 [** [/ [- [sqrt [+ 1 [** [n 1] 2]]] 1]
+                        [n 1]] 2]]] 1]
+[/ [- [sqrt [+ 1 [** [n 1] 2]]] 1] [n 1]]]=0.198912
+pi=3.182598</pre>
+<p class="Pp">الوحدة أعلاه بدائية للغاية. لا تطبق دوال التعديل (mutator methods) (<span class="Li">&quot;++&quot;</span>، <span class="Li">&quot;-=&quot;</span> وما إلى ذلك)، ولا تقوم بالنسخ العميق (ليس مطلوبًا بدون دوال التعديل!)، وتطبق فقط تلك العمليات الحسابية المستخدمة في المثال.</p>
+<p class="Pp">لتطبيق معظم العمليات الحسابية أمر سهل؛ يجب فقط استخدام جداول العمليات، وتغيير الكود الذي يملأ <span class="Li">%subr</span> إلى:</p>
+<pre>my %subr = ( 'n' =&gt; sub {$_[0]} );
+foreach my $op (split &quot; &quot;, $overload::ops{with_assign}) {
+    $subr{$op} = $subr{&quot;$op=&quot;} = eval &quot;sub {shift() $op shift()}&quot;;
+}
+my @bins = qw(binary 3way_comparison num_comparison str_comparison);
+foreach my $op (split &quot; &quot;, &quot;@overload::ops{ @bins }&quot;) {
+    $subr{$op} = eval &quot;sub {shift() $op shift()}&quot;;
+}
+foreach my $op (split &quot; &quot;, &quot;@overload::ops{qw(unary func)}&quot;) {
+    print &quot;defining '$op'\n&quot;;
+    $subr{$op} = eval &quot;sub {$op shift()}&quot;;
+}</pre>
+<p class="Pp">نظرًا لأن الدوال الفرعية التي تنفذ عوامل تشغيل التعيين ليست مطالبة بتعديل معاملاتهم (انظر &quot;العمليات القابلة للتحميل&quot; أعلاه)، فنحن لا نحتاج إلى أي شيء خاص ت</p>
+<section class="Sh">
+<h1 class="Sh" id="To"><a class="permalink" href="#To">لـ</a></h1>
+<p class="Pp">لجعل <span class="Li">"&amp;plusmn;"</span> والأصدقاء يعملون، بالإضافة إلى إضافة هذه المعاملات إلى <span class="Li">%subr</span> وتحديد مُنشئ نسخ (مطلوب نظرًا لعدم وجود طريقة في Perl لمعرفة أن تنفيذ <span class="Li">"+="</span> لا يغير الوسيط - انظر &quot;مُنشئ النسخ&quot;).</p>
+<p class="Pp">لتنفيذ مُنشئ نسخ، أضف <span class="Li">"'=' &amp;=> \&amp;cpy"</span> إلى سطر <span class="Li">"use overload"</span>، وقم بترميز (يفترض هذا الترميز أن المُعدِّلات تغير الأشياء على مستوى واحد فقط، لذلك لا يلزم النسخ المتكرر):</p>
+<pre>sub cpy {
+    my $self = shift;
+    bless [@$self], ref $self;
+}</pre>
+<p class="Pp">لجعل <span class="Li">"++"</span> و <span class="Li">"--"</span> يعملان، نحتاج إلى تنفيذ مُعدِّلات فعلية، إما بشكل مباشر، أو في <span class="Li">"nomethod"</span>. نواصل القيام بالأشياء داخل <span class="Li">"nomethod"</span>، وبالتالي نضيف</p>
+<pre>if ($meth eq '++' or $meth eq '--') {
+    @$obj = ($meth, (bless [@$obj]), 1); # تجنب المرجع الدائري
+    return $obj;
+}</pre>
+<p class="Pp">بعد السطر الأول من <span class="Li">wrap()</span>. هذه ليست أكثر تنفيذ فعالية، قد يفكر المرء في</p>
+<pre>sub inc { $_[0] = bless ['++', shift, 1]; }</pre>
+<p class="Pp">بدلاً من ذلك.</p>
+<p class="Pp">كملاحظة أخيرة، لاحظ أنه يمكن ملء <span class="Li">%subr</span> بواسطة</p>
+<pre>my %subr = ( 'n' =&gt; sub {$_[0]} );
+foreach my $op (split &quot; &quot;, $overload::ops{with_assign}) {
+    $subr{$op} = $subr{&quot;$op=&quot;} = eval &quot;sub {shift() $op shift()}&quot;;
+}
+my @bins = qw(binary 3way_comparison num_comparison str_comparison);
+foreach my $op (split &quot; &quot;, &quot;@overload::ops{ @bins }&quot;) {
+    $subr{$op} = eval &quot;sub {shift() $op shift()}&quot;;
+}
+foreach my $op (split &quot; &quot;, &quot;@overload::ops{qw(unary func)}&quot;) {
+    $subr{$op} = eval &quot;sub {$op shift()}&quot;;
+}
+$subr{'++'} = $subr{'+'};
+$subr{'--'} = $subr{'-'};</pre>
+<p class="Pp">هذا يكمل تنفيذ آلة حاسبة رمزية بدائية في 50 سطرًا من كود Perl. نظرًا لأن القيم الرقمية للتعبيرات الفرعية ليست مخزنة مؤقتًا، فإن الآلة الحاسبة بطيئة جدًا.</p>
+<p class="Pp">هذا هو الجواب على التمرين: في حالة <span class="Li">str()</span>، لا نحتاج إلى تكرار صريح لأن معامل <span class="Li">"."</span> المُحمّل بشكل زائد سيعود إلى معامل مُحمّل بشكل زائد موجود <span class="Li">""</span>. المعاملات الحسابية المُحمّلة بشكل زائد *لا* تعود إلى التحويل الرقمي إذا لم يتم طلب <span class="Li">"fallback"</span> بشكل صريح. وبالتالي، بدون تكرار صريح، ستقوم <span class="Li">num()</span> بتحويل <span class="Li">"['+', $a, $b]"</span> إلى <span class="Li">"$a + $b"</span>، والتي ستعيد بناء وسيط <span class="Li">num()</span>.</p>
+<p class="Pp">إذا كنت تتساءل لماذا تختلف القيم الافتراضية للتحويل لـ <span class="Li">str()</span> و <span class="Li">num()</span>، لاحظ مدى سهولة كتابة الآلة الحاسبة الرمزية. هذه البساطة ترجع إلى اختيار مناسب للقيم الافتراضية. ملاحظة إضافية: نظرًا للتكرار الصريح، فإن <span class="Li">num()</span> أكثر هشاشة من <span class="Li">sym()</span>: نحتاج إلى التحقق صراحةً من نوع <span class="Li">$a</span> و <span class="Li">$b</span>. إذا كانت المكونات <span class="Li">$a</span> و <span class="Li">$b</span> من نوع ذي صلة، فقد يؤدي ذلك إلى مشاكل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">آلة حاسبة رمزية *حقًا*</h2>
+<p class="Pp">قد يتساءل المرء لماذا نسمي الآلة الحاسبة أعلاه رمزية. السبب هو أن الحساب الفعلي لقيمة التعبير مؤجل حتى *يتم استخدام* القيمة.</p>
+<p class="Pp">لرؤيتها أثناء العمل، أضف طريقة</p>
+<pre>sub STORE {
+    my $obj = shift;
+    $#$obj = 1;
+    @$obj-&gt;[0,1] = ('=', shift);
+}</pre>
+<p class="Pp">إلى الحزمة <span class="Li">"symbolic"</span>. بعد هذا التغيير، يمكنك القيام</p>
+<pre>my $a = symbolic-&gt;new(3);
+my $b = symbolic-&gt;new(4);
+my $c = sqrt($a**2 + $b**2);</pre>
+<p class="Pp">وتصبح القيمة الرقمية لـ <span class="Li">$c</span> هي 5. ومع ذلك، بعد استدعاء</p>
+<pre>$a-&gt;STORE(12);  $b-&gt;STORE(5);</pre>
+<p class="Pp">تصبح القيمة الرقمية لـ <span class="Li">$c</span> هي 13. لا يوجد شك الآن في أن الوحدة <span class="Li">symbolic</span> توفر آلة حاسبة *رمزية* بالفعل.</p>
+<p class="Pp">لإخفاء الحواف الخشنة تحت الغطاء، قم بتوفير واجهة <span class="Li">tie()</span> للحزمة <span class="Li">"symbolic"</span>. أضف طرق</p>
+<pre>sub TIESCALAR { my $pack = shift; $pack-&gt;new(@_) }
+sub FETCH { shift }
+sub nop {  }                # حول خطأ</pre>
+<p class="Pp">(الخطأ، تم إصلاحه في Perl 5.14، موصوف في &quot;BUGS&quot;). يمكن للمرء استخدام هذه الواجهة الجديدة مثل</p>
+<pre>tie $a, 'symbolic', 3;
+tie $b, 'symbolic', 4;
+$a-&gt;nop;  $b-&gt;nop;          # حول خطأ
+my $c = sqrt($a**2 + $b**2);</pre>
+<p class="Pp">الآن القيمة الرقمية لـ <span class="Li">$c</span> هي 5. بعد <span class="Li">"$a = 12; $b = 5"</span>، تصبح القيمة الرقمية لـ <span class="Li">$c</span> هي 13. لعزل مستخدم الوحدة، أضف طريقة</p>
+<pre>sub vars { my $p = shift; tie($_, $p), $_-&gt;nop foreach @_; }</pre>
+<p class="Pp">الآن</p>
+<pre>my ($a, $b);
+symbolic-&gt;vars($a, $b);
+my $c = sqrt($a**2 + $b**2);
+$a = 3; $b = 4;
+printf &quot;c5  %s=%f\n&quot;, $c, $c;
+$a = 12; $b = 5;
+printf &quot;c13  %s=%f\n&quot;, $c, $c;</pre>
+<p class="Pp">يُظهر أن القيمة الرقمية لـ <span class="Li">$c</span> تتبع التغييرات في قيم <span class="Li">$a</span> و <span class="Li">$b</span>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">إيليا زاخاريفيتش &lt;<i>ilya@math.mps.ohio-state.edu</i>&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يمكن استخدام الأمر <span class="Li">"overloading"</span> لتمكين أو تعطيل العمليات المُحمّلة بشكل زائد ضمن نطاق تشعب - انظر overloading.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DIAGNOSTICS"><a class='permalink' href='#DIAGNOSTICS'>التشخيصات</a></h1>
+<p class="Pp">عند تشغيل Perl مع المفتاح <b>-Do</b> أو ما يعادله، تثير التحميل الزائد رسائل تشخيصية.</p>
+<p class="Pp">باستخدام الأمر <span class="Li">"m"</span> من مصحح Perl (انظر perldebug) يمكن استنتاج العمليات التي يتم تحميلها بشكل زائد (وأي سلف يؤدي إلى هذا التحميل الزائد). على سبيل المثال، إذا تم تحميل <span class="Li">"eq"</span> بشكل زائد، فإن الطريقة <span class="Li">"(eq"</span> يتم عرضها بواسطة المصحح. الطريقة <span class="Li">"()"</span> تقابل مفتاح <span class="Li">"fallback"</span> (في الواقع، وجود هذه الطريقة يظهر أن هذه الحزمة لديها تحميل زائد ممكّن، وهي ما تستخدمه الدالة <span class="Li">"Overloaded"</span> من الوحدة <span class="Li">"overload"</span>).</p>
+<p class="Pp">قد تصدر الوحدة التحذيرات التالية:</p>
+<dl class="Bl-tag">
+  <dt id="Odd"><a class="permalink" href="#Odd">عدد فردي من الوسائط لـ overload::constant</a></dt>
+  <dd>(W) احتوى استدعاء overload::constant على عدد فردي من الوسائط. يجب أن تأتي الوسائط في أزواج.</dd>
+  <dt>"%s" ليس نوعًا قابلاً للتحميل الزائد</dt>
+  <dd>(W) حاولت تحميل ثابت لا تعرفه حزمة التحميل الزائد.</dd>
+  <dt>"%s" ليس مرجع رمز</dt>
+  <dd>(W) الوسيط الثاني (الرابع، السادس، ...) لـ overload::constant يحتاج إلى أن يكون مرجع رمز. إما روتين مجهول، أو مرجع لروتين.</dd>
+  <dt id="overload"><a class="permalink" href="#overload">وسيط overload '%s' غير صالح</a></dt>
+  <dd>(W) تم تمرير وسيط لـ <span class="Li">"use overload"</span> لم تتعرف عليه. هل أخطأت في كتابة عامل؟</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS_AND_PITFALLS"><a class='permalink' href='#BUGS_AND_PITFALLS'>الأخطاء والمزالق</a></h1>
+<ul class="Bl-bullet">
+  <li>مأزق عند كون fallback TRUE وتعود Perl إلى التنفيذ المضمن لعامل هو أن بعض العوامل لها دلالات متعددة، على سبيل المثال <span class="Li">"|"</span>:
+      <pre>use overload '0+' =&gt; sub { $_[0]-&gt;{n}; },
+    fallback =&gt; 1;
+my $x = bless { n =&gt; 4 }, &quot;main&quot;;
+my $y = bless { n =&gt; 8 }, &quot;main&quot;;
+print $x | $y, &quot;\n&quot;;
+</pre>
+      <p class="Pp">قد تتوقع أن يخرج هذا &quot;12&quot;. في الواقع، يطبع &quot;&lt;&quot;: نتيجة ASCII لمعاملة "|" كعامل سلسلة ثنائي البت - أي، نتيجة معاملة المعاملات كسلاسل &quot;4&quot; و &quot;8&quot; بدلاً من الأرقام. حقيقة أن التحويل الرقمي (<span class="Li">"0+"</span>) منفذ ولكن التحويل النصي (<span class="Li">""</span>) غير منفذ لا فرق له لأن الأخير تم إنشاؤه تلقائيًا من الأول.</p>
+      <p class="Pp">الطريقة الوحيدة لتغيير هذا هي توفير روتين خاص بك لـ <span class="Li">'|'</span>.</p>
+  </li>
+  <li>يزيد الإنشاء التلقائي للسحر من احتمالية إنشاء هياكل ذاتية الإشارة عن غير قصد. حاليًا، لن تحرر Perl الهياكل ذاتية الإشارة حتى يتم كسر الدورات بشكل صريح. على سبيل المثال،
+      <pre>use overload '+' =&gt; 'add';
+sub add { bless [ \$_[0], \$_[1] ] };
+</pre>
+      <p class="Pp">يطلب المشاكل، لأن</p>
+      <pre>$obj += $y;
+</pre>
+      <p class="Pp">سيصبح فعليًا</p>
+      <pre>$obj = add($obj, $y, undef);
+</pre>
+      <p class="Pp">مع نفس نتيجة</p>
+      <pre>$obj = [\$obj, \$foo];
+</pre>
+      <p class="Pp">حتى لو لم تكن هناك متغيرات تعيين *صريحة* للعوامل في البرنامج النصي، فقد يتم إنشاؤها بواسطة المحسن. على سبيل المثال،</p>
+      <pre>&quot;obj = $obj\n&quot;
+</pre>
+      <p class="Pp">قد يتم تحسينه إلى</p>
+      <pre>my $tmp = 'obj = ' . $obj;  $tmp .= &quot;\n&quot;;
+</pre>
+  </li>
+  <li>يتم ملء جدول الرموز بأسماء تبدو كضوضاء في سطر.</li>
+  <li>تم إصلاح هذا الخطأ في Perl 5.18، ولكن قد يظل يسبب لك مشاكل إذا كنت تستخدم إصدارات أقدم:
+      <p class="Pp">لأغراض الوراثة، تتصرف كل حزمة مُحمّلة بشكل زائد كما لو كان <span class="Li">"fallback"</span> موجودًا (ربما غير معرّف). قد يؤدي هذا إلى تأثيرات مثيرة للاهتمام إذا لم تكن هناك حزمة مُحمّلة بشكل زائد، ولكنها ترث من حزمتين مُحمّلتين بشكل زائد.</p>
+  </li>
+  <li>قبل Perl 5.14، كانت العلاقة بين التحميل الزائد و <b>tie()</b> معطلة. كان يتم تشغيل التحميل الزائد أو عدمه بناءً على الفئة *السابقة* للمتغير <b>tie()</b>.
+      <p class="Pp">حدث هذا لأن وجود التحميل الزائد تم فحصه مبكرًا جدًا، قبل محاولة الوصول إلى <b>tie()</b>. إذا لم تتغير فئة القيمة التي تم جلبها <b>FETCH()</b> من المتغير المرتبط، فإن الحل البديل البسيط للكود الذي سيتم تشغيله على إصدارات Perl الأقدم هو الوصول إلى القيمة (عبر <span class="Li">"() = $foo"</span> أو ما شابه) فورًا بعد الربط، بحيث بعد هذا الاستدعاء، تتطابق الفئة *السابقة* مع الفئة الحالية.</p>
+  </li>
+  <li>الكلمات المجردة غير مغطاة بثوابت السلسلة المُحمّلة بشكل زائد.</li>
+  <li>لا يمكن تحميل معامل النطاق <span class="Li">".."</span> بشكل زائد.</li>
+</ul>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+</section>
+</article>
+<aside>
+<aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#IMPLEMENTATION">التنفيذ</a></li>
+        
+            <li><a href="#COOKBOOK">دليل الطبخ</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#DIAGNOSTICS">التشخيصات</a></li>
+        
+            <li><a href="#BUGS_AND_PITFALLS">الأخطاء والمزالق</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/overload.3perl.en.txt">txt</a>, 
+        
+            <a href="/man/overload.3perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

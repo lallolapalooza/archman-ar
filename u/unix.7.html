@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>unix(7) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+        <link rel="alternate" href="/man/unix.7.fr" hreflang="fr">
+    
+        <link rel="alternate" href="/man/unix.7.pl" hreflang="pl">
+    
+        <link rel="alternate" href="/man/unix.7.ru" hreflang="ru">
+    
+        <link rel="alternate" href="/man/unix.7.zh_CN" hreflang="zh_CN">
+    
+        <link rel="alternate" href="/man/unix.7.zh_TW" hreflang="zh_TW">
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">unix(7)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">UNIX(7)</td>
+    <td class="head-vol">Miscellaneous Information Manual</td>
+    <td class="head-rtitle">UNIX(7)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">unix - sockets for local interprocess communication</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre><b>#include &lt;sys/socket.h&gt;</b>
+<b>#include &lt;sys/un.h&gt;</b></pre>
+<pre><i>unix_socket</i><b> = socket(AF_UNIX, type, 0);</b>
+<i>error</i><b> = socketpair(AF_UNIX, type, 0, int *</b><i>sv</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">The <b>AF_UNIX</b> (also known as <b>AF_LOCAL</b>) socket family
+    is used to communicate between processes on the same machine efficiently.
+    Traditionally, UNIX domain sockets can be either unnamed, or bound to a
+    filesystem pathname (marked as being of type socket). Linux also supports an
+    abstract namespace which is independent of the filesystem.</p>
+<p class="Pp">Valid socket types in the UNIX domain are: <b>SOCK_STREAM</b>, for
+    a stream-oriented socket; <b>SOCK_DGRAM</b>, for a datagram-oriented socket
+    that preserves message boundaries (as on most UNIX implementations, UNIX
+    domain datagram sockets are always reliable and don't reorder datagrams);
+    and (since Linux 2.6.4) <b>SOCK_SEQPACKET</b>, for a sequenced-packet socket
+    that is connection-oriented, preserves message boundaries, and delivers
+    messages in the order that they were sent.</p>
+<p class="Pp">UNIX domain sockets support passing file descriptors or process
+    credentials to other processes using ancillary data.</p>
+<section class="Ss">
+<h2 class="Ss" id='Address_format'><a class='permalink' href='#Address_format'>Address   format</a></h2>
+<p class="Pp">A UNIX domain socket address is represented in the following
+    structure:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>struct sockaddr_un {
+    sa_family_t sun_family;               /* AF_UNIX */
+    char        sun_path[108];            /* Pathname */
+};</pre>
+<p class="Pp">The <i>sun_family</i> field always contains <b>AF_UNIX</b>. On
+    Linux, <i>sun_path</i> is 108 bytes in size; see also BUGS, below.</p>
+<p class="Pp">Various system calls (for example, <a href='/man/bind.2.en'>bind(2)</a>,
+    <a href='/man/connect.2.en'>connect(2)</a>, and <a href='/man/sendto.2.en'>sendto(2)</a>) take a <i>sockaddr_un</i> argument
+    as input. Some other system calls (for example, <a href='/man/getsockname.2.en'>getsockname(2)</a>,
+    <a href='/man/getpeername.2.en'>getpeername(2)</a>, <a href='/man/recvfrom.2.en'>recvfrom(2)</a>, and <a href='/man/accept.2.en'>accept(2)</a>) return an
+    argument of this type.</p>
+<p class="Pp">Three types of address are distinguished in the <i>sockaddr_un</i>
+    structure:</p>
+<dl class="Bl-tag">
+  <dt id="pathname"><a class="permalink" href="#pathname">pathname</a></dt>
+  <dd>a UNIX domain socket can be bound to a null-terminated filesystem pathname
+      using <a href='/man/bind.2.en'>bind(2)</a>. When the address of a pathname socket is returned
+      (by one of the system calls noted above), its length is</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>
+    <br/>
+    <pre>offsetof(struct sockaddr_un, sun_path) + strlen(sun_path) + 1
+</pre>
+    <br/>
+  </dd>
+  <dt></dt>
+  <dd>and <i>sun_path</i> contains the null-terminated pathname. (On Linux, the
+      above <b>offsetof</b>() expression equates to the same value as
+      <i>sizeof(sa_family_t)</i>, but some other implementations include other
+      fields before <i>sun_path</i>, so the <b>offsetof</b>() expression more
+      portably describes the size of the address structure.)</dd>
+  <dt></dt>
+  <dd>For further details of pathname sockets, see below.</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt id="unnamed"><a class="permalink" href="#unnamed">unnamed</a></dt>
+  <dd>A stream socket that has not been bound to a pathname using <a href='/man/bind.2.en'>bind(2)</a>
+      has no name. Likewise, the two sockets created by <a href='/man/socketpair.2.en'>socketpair(2)</a> are
+      unnamed. When the address of an unnamed socket is returned, its length is
+      <i>sizeof(sa_family_t)</i>, and <i>sun_path</i> should not be
+    inspected.</dd>
+  <dt id="abstract"><a class="permalink" href="#abstract">abstract</a></dt>
+  <dd>an abstract socket address is distinguished (from a pathname socket) by
+      the fact that <i>sun_path[0]</i> is a null byte ('\0'). The socket's
+      address in this namespace is given by the additional bytes in
+      <i>sun_path</i> that are covered by the specified length of the address
+      structure. (Null bytes in the name have no special significance.) The name
+      has no connection with filesystem pathnames. When the address of an
+      abstract socket is returned, the returned <i>addrlen</i> is greater than
+      <i>sizeof(sa_family_t)</i> (i.e., greater than 2), and the name of the
+      socket is contained in the first <i>(addrlen - sizeof(sa_family_t))</i>
+      bytes of <i>sun_path</i>.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Pathname_sockets'><a class='permalink' href='#Pathname_sockets'>Pathname   sockets</a></h2>
+<p class="Pp">When binding a socket to a pathname, a few rules should be
+    observed for maximum portability and ease of coding:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>The pathname in <i>sun_path</i> should be null-terminated.</dd>
+  <dt>&#x2022;</dt>
+  <dd>The length of the pathname, including the terminating null byte, should
+      not exceed the size of <i>sun_path</i>.</dd>
+  <dt>&#x2022;</dt>
+  <dd>The <i>addrlen</i> argument that describes the enclosing
+      <i>sockaddr_un</i> structure should have a value of at least:</dd>
+  <dt></dt>
+  <dd>
+    <br/>
+    <pre>offsetof(struct sockaddr_un, sun_path)+strlen(addr.sun_path)+1
+</pre>
+    <br/>
+  </dd>
+  <dt></dt>
+  <dd>or, more simply, <i>addrlen</i> can be specified as <i>sizeof(struct
+      sockaddr_un)</i>.</dd>
+</dl>
+<p class="Pp">There is some variation in how implementations handle UNIX domain
+    socket addresses that do not follow the above rules. For example, some (but
+    not all) implementations append a null terminator if none is present in the
+    supplied <i>sun_path</i>.</p>
+<p class="Pp">When coding portable applications, keep in mind that some
+    implementations have <i>sun_path</i> as short as 92 bytes.</p>
+<p class="Pp">Various system calls (<a href='/man/accept.2.en'>accept(2)</a>, <a href='/man/recvfrom.2.en'>recvfrom(2)</a>,
+    <a href='/man/getsockname.2.en'>getsockname(2)</a>, <a href='/man/getpeername.2.en'>getpeername(2)</a>) return socket address
+    structures. When applied to UNIX domain sockets, the value-result
+    <i>addrlen</i> argument supplied to the call should be initialized as above.
+    Upon return, the argument is set to indicate the <i>actual</i> size of the
+    address structure. The caller should check the value returned in this
+    argument: if the output value exceeds the input value, then there is no
+    guarantee that a null terminator is present in <i>sun_path</i>. (See
+  BUGS.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Pathname_socket_ownership_and_permissions'><a class='permalink' href='#Pathname_socket_ownership_and_permissions'>Pathname   socket ownership and permissions</a></h2>
+<p class="Pp">In the Linux implementation, pathname sockets honor the
+    permissions of the directory they are in. Creation of a new socket fails if
+    the process does not have write and search (execute) permission on the
+    directory in which the socket is created.</p>
+<p class="Pp">On Linux, connecting to a stream socket object requires write
+    permission on that socket; sending a datagram to a datagram socket likewise
+    requires write permission on that socket. POSIX does not make any statement
+    about the effect of the permissions on a socket file, and on some systems
+    (e.g., older BSDs), the socket permissions are ignored. Portable programs
+    should not rely on this feature for security.</p>
+<p class="Pp">When creating a new socket, the owner and group of the socket file
+    are set according to the usual rules. The socket file has all permissions
+    enabled, other than those that are turned off by the process
+    <a href='/man/umask.2.en'>umask(2)</a>.</p>
+<p class="Pp">The owner, group, and permissions of a pathname socket can be
+    changed (using <a href='/man/chown.2.en'>chown(2)</a> and <a href='/man/chmod.2.en'>chmod(2)</a>).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Abstract_sockets'><a class='permalink' href='#Abstract_sockets'>Abstract   sockets</a></h2>
+<p class="Pp">Socket permissions have no meaning for abstract sockets: the
+    process <a href='/man/umask.2.en'>umask(2)</a> has no effect when binding an abstract socket, and
+    changing the ownership and permissions of the object (via <a href='/man/fchown.2.en'>fchown(2)</a>
+    and <a href='/man/fchmod.2.en'>fchmod(2)</a>) has no effect on the accessibility of the socket.</p>
+<p class="Pp">Abstract sockets automatically disappear when all open references
+    to the socket are closed.</p>
+<p class="Pp">The abstract socket namespace is a nonportable Linux
+  extension.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Socket_options'><a class='permalink' href='#Socket_options'>Socket   options</a></h2>
+<p class="Pp">For historical reasons, these socket options are specified with a
+    <b>SOL_SOCKET</b> type even though they a</p>
+</div>
+</section>
+
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+  "translation": {
+    "title": "unix(7) — صفحة الدليل لنظام Linux",
+    "sections": [
+      {
+        "heading": "الاسم",
+        "content": "unix - واجهة برمجة تطبيقات المقبس للمجال المحلي (UNIX domain sockets)"
+      },
+      {
+        "heading": "المكتبة",
+        "content": "مكتبة C القياسية (libc، -lc)"
+      },
+      {
+        "heading": "الصيغة",
+        "content": [
+          {
+            "type": "code",
+            "text": "socket(AF_UNIX, SOCK_STREAM, 0);\nsocket(AF_UNIX, SOCK_DGRAM, 0);\nsocket(AF_UNIX, SOCK_RAW, 0);\nbind(sockfd, addr, len);\nconnect(sockfd, addr, len);\naccept(sockfd, addr, &amp;len);\nsendmsg(sockfd, msg, flags);\nrecvmsg(sockfd, msg, flags);\nioctl(unix_socket, SIOCINQ, &amp;value);"
+          }
+        ]
+      },
+      {
+        "heading": "الوصف",
+        "subsections": [
+          {
+            "heading": "واجهة برمجة تطبيقات المقبس للمجال المحلي (UNIX domain sockets)",
+            "content": [
+              "مقابس المجال المحلي (المعروفة أيضًا بمقابس UNIX) هي نقاط نهاية لاتصال ثنائي الاتجاه بين العمليات التي تحدث على نفس النظام. تشبه مقابس المجال المحلي مقابس الإنترنت (مقبس IPv4 أو IPv6) ولكنها تستخدم نظام ملفات Unix كنظام عناوين. يتم تمثيل عنوان مقبس المجال المحلي كسلسلة اسم مسار في نظام الملفات.",
+              "يتم تعريف عائلة العناوين لـ UNIX domain sockets على أنها AF_UNIX (أو PF_UNIX).",
+              "توجد ثلاثة أنواع من المقابس المتاحة في مجال UNIX:",
+              {
+                "type": "list",
+                "items": [
+                  "SOCK_STREAM: يوفر تدفقًا منظمًا، موثوقًا، ثنائي الاتجاه، قائم على الاتصال. تشبه هذه المقابس مقابس TCP/IP.",
+                  "SOCK_DGRAM: يوفر اتصالات غير موثوقة، ثنائية الاتجاه، قائمة على الرسائل. تشبه هذه المقابس مقابس UDP/IP. عند استخدام مقابس SOCK_DGRAM، يتم إرفاق اسم المرسل (عنوان socket) تلقائيًا بالرسالة.",
+                  "SOCK_SEQPACKET: توفر تدفقًا منظمًا، موثوقًا، ثنائي الاتجاه، قائمًا على الرسائل. تشبه هذه المقابس مقابس SCTP."
+                ]
+              },
+              "يمكن إنشاء مقبس مجال UNIX باستخدام استدعاء النظام <a href='/man/socket.2.en'>socket(2)</a>:",
+              {
+                "type": "code",
+                "text": "int sockfd = socket(AF_UNIX, type, 0);\nwhere type is SOCK_STREAM, SOCK_DGRAM, or SOCK_SEQPACKET."
+              },
+              "يتم ربط المقابس بالأسماء أو المسارات في نظام الملفات. يمكن ربط مقبس بما يلي:",
+              {
+                "type": "list",
+                "items": [
+                  "اسم مسار في نظام الملفات: يتم إنشاء ملف باسم المسار المحدد. يجب أن يكون لدى العملية إذن الكتابة في الدليل الأصل. يتم استخدام هذا الملف كعنوان للمقبس. عندما يتم استدعاء <a href='/man/bind.2.en'>bind(2)</a>، يتم إنشاء كائن مقبس في نظام الملفات. يجب حذف هذا الملف بواسطة المتصل عندما لم يعد مطلوبًا (باستخدام <a href='/man/unlink.2.en'>unlink(2)</a>).",
+                  "اسم مسار مجرد (abstract namespace): إذا كان الحرف الأول من سلسلة اسم المسار هو البايت الصفري (\x00)، فلن يتم البحث عن الاسم في نظام الملفات. لا يتم إنشاء أي ملف في نظام الملفات. يعد هذا مفيدًا إذا كنت لا تريد أن يتمكن المستخدمون الآخرون من الوصول إلى المقبس. لاحظ أن أسماء المسارات المجردة خاصة بـ Linux وهي غير محمولة."
+                ]
+              },
+              "مثال على ربط مقبس باسم مسار:",
+              {
+                "type": "code",
+                "text": "struct sockaddr_un addr;\nint sockfd = socket(AF_UNIX, SOCK_STREAM, 0);\n...\nmemset(&amp;addr, 0, sizeof(addr));\naddr.sun_family = AF_UNIX;\nstrncpy(addr.sun_path, \"/tmp/mysocket\", sizeof(addr.sun_path) - 1);\n...\nbind(sockfd, (struct sockaddr *) &amp;addr, sizeof(addr));"
+              },
+              "مثال على ربط مقبس باسم مسار مجرد:",
+              {
+                "type": "code",
+                "text": "struct sockaddr_un addr;\nint sockfd = socket(AF_UNIX, SOCK_STREAM, 0);\n...\nmemset(&amp;addr, 0, sizeof(addr));\naddr.sun_family = AF_UNIX;\naddr.sun_path[0] = '\\0'; /* Name is abstract */\nstrncpy(addr.sun_path + 1, \"mysocket\", sizeof(addr.sun_path) - 2);\n...\nbind(sockfd, (struct sockaddr *) &amp;addr, sizeof(addr));"
+              },
+              "يمكن توصيل مقبس مجال UNIX بمقبس مجال UNIX آخر باستخدام <a href='/man/connect.2.en'>connect(2)</a>. على عكس مقابس الإنترنت، لا يمكن لمقابس المجال UNIX الاتصال عبر شبكة."
+            ]
+          },
+          {
+            "heading": "بيانات إضافية (Ancillary Data)",
+            "content": [
+              "يمكن استخدام مقابس المجال المحلي لإرسال بيانات إضافية بالإضافة إلى البيانات العادية. يعد هذا مفيدًا بشكل خاص لنقل واصفات الملفات (file descriptors) أو معلومات حول هوية العملية (credentials) بين العمليات.",
+              "تتم إدارة البيانات الإضافية باستخدام حقول <i>msg_control</i> و <i>msg_controllen</i> في البنية <i>msghdr</i> التي يتم تمريرها إلى <a href='/man/sendmsg.2.en'>sendmsg(2)</a> و <a href='/man/recvmsg.2.en'>recvmsg(2)</a>.",
+              "المعطيات الإضافية الرئيسية المدعومة هي:",
+              {
+                "type": "list",
+                "items": [
+                  "SCM_RIGHTS: لنقل واصفات الملفات. يتم تمرير قائمة بواصفات الملفات كـ SCM_RIGHTS. يجب أن يكون لدى العملية التي ترسل واصفات الملفات إذن الوصول إليها.",
+                  "SCM_CREDENTIALS: لنقل معلومات هوية العملية (UID، GID، PID).",
+                  "SCM_SECURITY: لنقل معلومات الأمان (مثل SELinux labels)."
+                ]
+              },
+              "ملاحظة هامة: عند إرسال بيانات إضافية عبر مقبس داتاجرام (SOCK_DGRAM)، يجب تضمين بايت واحد على الأقل من البيانات العادية. لا يمكن إرسال بيانات إضافية بمفردها عبر مقابس داتاجرام."
+            ]
+          },
+          {
+            "heading": "تدفق البيانات في مقابس التدفق (Stream Sockets)",
+            "content": [
+              "عند تلقي البيانات من مقبس تدفق، تشكل البيانات الإضافية حاجزًا للبيانات المستلمة. على سبيل المثال، إذا أرسل المرسل التسلسل التالي:",
+              {
+                "type": "list",
+                "items": [
+                  "(1) استدعاء <a href='/man/sendmsg.2.en'>sendmsg(2)</a> لأربعة بايتات، بدون بيانات إضافية.",
+                  "(2) استدعاء <a href='/man/sendmsg.2.en'>sendmsg(2)</a> لبايت واحد، مع بيانات إضافية.",
+                  "(3) استدعاء <a href='/man/sendmsg.2.en'>sendmsg(2)</a> لأربعة بايتات، بدون بيانات إضافية."
+                ]
+              },
+              "إذا قام المستلم بإجراء استدعاءات <a href='/man/recvmsg.2.en'>recvmsg(2)</a> بحجم مخزن مؤقت يبلغ 20 بايت لكل منها، فسيتلقى الاستدعاء الأول خمسة بايتات من البيانات (الأربعة من (1) والبايت الواحد من (2))، جنبًا إلى جنب مع البيانات الإضافية من (2). سيحصل الاستدعاء التالي على الأربعة بايتات المتبقية من (3)."
+            ]
+          },
+          {
+            "heading": "مقاطعة البيانات الإضافية",
+            "content": [
+              "إذا كان حجم المخزن المؤقت المخصص لاستقبال البيانات الإضافية صغيرًا جدًا، فسيتم اقتطاع البيانات الإضافية إلى عدد الرؤوس التي تناسب المخزن المؤقت المقدم (أو، في حالة قائمة واصفات الملفات SCM_RIGHTS، قد يتم اقتطاع قائمة واصفات الملفات).",
+              "إذا لم يتم توفير مخزن مؤقت للبيانات الإضافية الواردة (أي أن حقل <i>msg_control</i> في البنية <i>msghdr</i> المقدمة إلى <a href='/man/recvmsg.2.en'>recvmsg(2)</a> هو NULL)، فسيتم تجاهل البيانات الإضافية الواردة.",
+              "في كلتا الحالتين، سيتم تعيين العلامة <b>MSG_CTRUNC</b> في قيمة <i>msg.msg_flags</i> التي تم إرجاعها بواسطة <a href='/man/recvmsg.2.en'>recvmsg(2)</a>."
+            ]
+          }
+        ]
+      },
+      {
+        "heading": "Ioctls",
+        "content": [
+          "تُرجع استدعاءات <a href='/man/ioctl.2.en'>ioctl(2)</a> التالية معلومات في <i>value</i>. الصيغة الصحيحة هي:",
+          {
+            "type": "code",
+            "text": "int value;\nerror = ioctl(unix_socket, ioctl_type, &value);"
+          },
+          "يمكن أن يكون <i>ioctl_type</i>:",
+          {
+            "type": "list",
+            "items": [
+              {
+                "term": "SIOCINQ",
+                "description": "لمقابس SOCK_STREAM، يُرجع هذا الاستدعاء عدد البايتات غير المقروءة في مخزن الإرسال. يجب ألا يكون المقبس في حالة LISTEN، وإلا يتم إرجاع خطأ (EINVAL). تم تعريف SIOCINQ في &lt;linux/sockios.h&gt;. بدلاً من ذلك، يمكنك استخدام FIONREAD المرادف، المعرف في &lt;sys/ioctl.h&gt;. لمقابس SOCK_DGRAM، القيمة المرجعة هي نفسها لمقابس داتاجرام مجال الإنترنت؛ انظر <a href='/man/udp.7.en'>udp(7)</a>."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "heading": "الأخطاء",
+        "content": [
+          {
+            "term": "EADDRINUSE",
+            "description": "العنوان المحلي المحدد قيد الاستخدام بالفعل أو أن كائن مقبس نظام الملفات موجود بالفعل."
+          },
+          {
+            "term": "EBADF",
+            "description": "يمكن أن يحدث هذا الخطأ لـ <a href='/man/sendmsg.2.en'>sendmsg(2)</a> عند إرسال واصف ملف كبيانات إضافية عبر مقبس مجال UNIX (انظر وصف SCM_RIGHTS، أعلاه)، ويشير إلى أن رقم واصف الملف الذي يتم إرساله غير صالح (على سبيل المثال، إنه ليس واصف ملف مفتوح)."
+          },
+          {
+            "term": "ECONNREFUSED",
+            "description": "لم يكن العنوان البعيد المحدد بواسطة <a href='/man/connect.2.en'>connect(2)</a> مقبس استماع. يمكن أن يحدث هذا الخطأ أيضًا إذا كان مسار الهدف ليس مقبسًا."
+          },
+          {
+            "term": "ECONNRESET",
+            "description": "تم إغلاق المقبس البعيد بشكل غير متوقع."
+          },
+          {
+            "term": "EFAULT",
+            "description": "عنوان ذاكرة المستخدم لم يكن صالحًا."
+          },
+          {
+            "term": "EINVAL",
+            "description": "تم تمرير وسيط غير صالح. سبب شائع هو أن القيمة AF_UNIX لم يتم تحديدها في حقل sun_type للعناوين المقدمة، أو أن المقبس كان في حالة غير صالحة للعملية المطبقة."
+          },
+          {
+            "term": "EISCONN",
+            "description": "تم استدعاء <a href='/man/connect.2.en'>connect(2)</a> على مقبس متصل بالفعل أو تم تحديد عنوان هدف على مقبس متصل."
+          },
+          {
+            "term": "ENFILE",
+            "description": "تم الوصول إلى الحد الأقصى للنظام لعدد الملفات المفتوحة الإجمالي."
+          },
+          {
+            "term": "ENOENT",
+            "description": "المسار في العنوان البعيد المحدد لـ <a href='/man/connect.2.en'>connect(2)</a> لم يكن موجودًا."
+          },
+          {
+            "term": "ENOMEM",
+            "description": "نفاد الذاكرة."
+          },
+          {
+            "term": "ENOTCONN",
+            "description": "تحتاج عملية المقبس إلى عنوان هدف، ولكن المقبس غير متصل."
+          },
+          {
+            "term": "EOPNOTSUPP",
+            "description": "تم استدعاء عملية التدفق على مقبس غير موجه بالتدفق أو تم محاولة استخدام خيار البيانات خارج النطاق."
+          },
+          {
+            "term": "EPERM",
+            "description": "مررت المرسلة بيانات اعتماد غير صالحة في struct ucred."
+          },
+          {
+            "term": "EPIPE",
+            "description": "تم إغلاق المقبس البعيد على مقبس تدفق. إذا تم تمكينها، يتم إرسال SIGPIPE أيضًا. يمكن تجنب ذلك عن طريق تمرير العلامة MSG_NOSIGNAL إلى <a href='/man/send.2.en'>send(2)</a> أو <a href='/man/sendmsg.2.en'>sendmsg(2)</a>."
+          },
+          {
+            "term": "EPROTONOSUPPORT",
+            "description": "البروتوكول المقدم ليس AF_UNIX."
+          },
+          {
+            "term": "EPROTOTYPE",
+            "description": "نوع المقبس البعيد لا يتطابق مع نوع المقبس المحلي (SOCK_DGRAM مقابل SOCK_STREAM)."
+          },
+          {
+            "term": "ESOCKTNOSUPPORT",
+            "description": "نوع المقبس غير معروف."
+          },
+          {
+            "term": "ESRCH",
+            "description": "أثناء إرسال رسالة إضافية تحتوي على بيانات اعتماد (SCM_CREDENTIALS)، حدد المتصل معرف عملية (PID) لا يتطابق مع أي عملية موجودة."
+          },
+          {
+            "term": "ETOOMANYREFS",
+            "description": "يمكن أن يحدث هذا الخطأ لـ <a href='/man/sendmsg.2.en'>sendmsg(2)</a> عند إرسال واصف ملف كبيانات إضافية عبر مقبس مجال UNIX (انظر وصف SCM_RIGHTS، أعلاه). يحدث إذا تجاوز عدد واصفات الملفات \"قيد الطيران\" الحد الأقصى للمورد RLIMIT_NOFILE ولم يكن لدى المتصل القدرة CAP_SYS_RESOURCE. واصف الملف قيد الطيران هو واصف تم إرساله باستخدام <a href='/man/sendmsg.2.en'>sendmsg(2)</a> ولكنه لم يتم قبوله بعد في العملية المستلمة باستخدام <a href='/man/recvmsg.2.en'>recvmsg(2)</a>."
+          },
+          {
+            "term": "",
+            "description": "تم تشخيص هذا الخطأ منذ Linux 4.5 الرئيسي (وفي بعض إصدارات النواة السابقة حيث تم إعادة تطبيق الإصلاح). في إصدارات النواة السابقة، كان من الممكن وضع عدد غير محدود من واصفات الملفات قيد الطيران، عن طريق إرسال كل واصف ملف باستخدام <a href='/man/sendmsg.2.en'>sendmsg(2)</a> ثم إغلاق واصف الملف بحيث لا يتم حسابه مقابل حد المورد RLIMIT_NOFILE."
+          },
+          "يمكن إنشاء أخطاء أخرى بواسطة طبقة المقبس العامة أو بواسطة نظام الملفات أثناء إنشاء كائن مقبس نظام الملفات. انظر صفحات الدليل المناسبة لمزيد من المعلومات."
+        ]
+      },
+      {
+        "heading": "الإصدارات",
+        "content": [
+          "تم تقديم SCM_CREDENTIALS والمساحة المجردة مع Linux 2.2 ولا ينبغي استخدامها في البرامج المحمولة. (تدعم بعض الأنظمة المشتقة من BSD أيضًا تمرير بيانات الاعتماد، ولكن تفاصيل التنفيذ تختلف.)"
+        ]
+      },
+      {
+        "heading": "ملاحظات",
+        "content": [
+          "يقوم الربط بمقبس باسم ملف بإنشاء مقبس في نظام الملفات يجب على المتصل حذفه عندما لم يعد مطلوبًا (باستخدام <a href='/man/unlink.2.en'>unlink(2)</a>). تنطبق الدلالات المعتادة للإغلاق خلف UNIX؛ يمكن إلغاء ربط المقبس في أي وقت وسيتم إزالته نهائيًا من نظام الملفات عند إغلاق آخر مرجع له.",
+          "لتمرير واصفات الملفات أو بيانات الاعتماد عبر مقبس SOCK_STREAM، يجب عليك إرسال أو استقبال بايت واحد على الأقل من البيانات غير الإضافية في نفس استدعاء <a href='/man/sendmsg.2.en'>sendmsg(2)</a> أو <a href='/man/recvmsg.2.en'>recvmsg(2)</a>.",
+          "لا تدعم مقابس تدفق UNIX مفهوم البيانات خارج النطاق."
+        ]
+      },
+      {
+        "heading": "أخطاء",
+        "content": [
+          "عند ربط مقبس بعنوان، Linux هي واحدة من التطبيقات التي تلحق بـ null terminator إذا لم يتم توفيره في sun_path. في معظم الحالات، هذا لا يسبب مشكلة: عند استرداد عنوان المقبس، سيكون أطول ببايت واحد مما تم توفيره عند ربط المقبس. ومع ذلك، هناك حالة واحدة يمكن أن تؤدي إلى سلوك مربك: إذا تم توفير 108 بايتات غير null عند ربط مقبس، فإن إضافة null terminator تأخذ طول المسار إلى ما بعد sizeof(sun_path). نتيجة لذلك، عند استرداد عنوان المقبس (على سبيل المثال، عبر <a href='/man/accept.2.en'>accept(2)</a>)، إذا تم تحديد وسيط الإدخال addrlen لاستدعاء الاسترداد على أنه sizeof(struct sockaddr_un)، فلن تحتوي بنية العنوان التي تم إرجاعها على null terminator في sun_path.",
+          "بالإضافة إلى ذلك، لا تتطلب بعض التطبيقات null terminator عند ربط مقبس (يتم استخدام وسيط addrlen لتحديد طول sun_path) وعند استرداد عنوان المقبس في هذه التطبيقات، لا يوجد null terminator في sun_path.",
+          "يمكن للتطبيقات التي تسترد عناوين المقابس (بطريقة محمولة) التعامل مع إمكانية عدم وجود null terminator في sun_path عن طريق احترام حقيقة أن عدد البايتات الصالحة في المسار هو:",
+          {
+            "type": "code",
+            "text": "strnlen(addr.sun_path, addrlen - offsetof(sockaddr_un, sun_path))"
+          },
+          "بدلاً من ذلك، يمكن للتطبيق استرداد عنوان المقبس عن طريق تخصيص مخزن مؤقت بحجم sizeof(struct sockaddr_un) + 1 تم صفره قبل الاسترداد. يمكن لاستدعاء الاسترداد تحديد addrlen على أنه sizeof(struct sockaddr_un)، وسيضمن البايت الصفري الإضافي وجود null terminator للسلسلة التي تم إرجاعها في sun_path:",
+          {
+            "type": "code",
+            "text": "void *addrp;\naddrlen = sizeof(struct sockaddr_un);\naddrp = malloc(addrlen + 1);\nif (addrp == NULL)\n    /* Handle error */ ;\nmemset(addrp, 0, addrlen + 1);\nif (getsockname(sfd, (struct sockaddr *) addrp, &addrlen)) == -1)\n    /* handle error */ ;\nprintf(\"sun_path = %s\\n\", ((struct sockaddr_un *) addrp)-&gt;sun_path);"
+          },
+          "يمكن تجنب هذا النوع من الارتباك إذا تم ضمان أن التطبيقات التي تنشئ p"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POE::Wheel::SocketFactory(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Wheel__SocketFactory(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">POE::Wheel::SocketFactory(3)</td>
+    <td class="head-vol">توثيق مقدم من Perl</td>
+    <td class="head-rtitle">POE::Wheel::SocketFactory(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">POE::Wheel::SocketFactory - إنشاء مقابس غير مانعة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الاختصار</a></h1>
+<p class="Pp">انظر &quot;الاختصار&quot; في POE::Component::Server::TCP للحصول على نسخة أبسط من هذا البرنامج.</p>
+<pre>#!perl
+use warnings;
+use strict;
+use IO::Socket;
+use POE qw(Wheel::SocketFactory Wheel::ReadWrite);
+POE::Session-&gt;create(
+  inline_states =&gt; {
+    _start =&gt; sub {
+      # بدء تشغيل الخادم.
+      $_[HEAP]{server} = POE::Wheel::SocketFactory-&gt;new(
+        BindPort =&gt; 12345,
+        SuccessEvent =&gt; &quot;on_client_accept&quot;,
+        FailureEvent =&gt; &quot;on_server_error&quot;,
+      );
+    },
+    on_client_accept =&gt; sub {
+      # البدء في التفاعل مع العميل.
+      my $client_socket = $_[ARG0];
+      my $io_wheel = POE::Wheel::ReadWrite-&gt;new(
+        Handle =&gt; $client_socket,
+        InputEvent =&gt; &quot;on_client_input&quot;,
+        ErrorEvent =&gt; &quot;on_client_error&quot;,
+      );
+      $_[HEAP]{client}{ $io_wheel-&gt;ID() } = $io_wheel;
+    },
+    on_server_error =&gt; sub {
+      # إغلاق الخادم.
+      my ($operation, $errnum, $errstr) = @_[ARG0, ARG1, ARG2];
+      warn &quot;Server $operation error $errnum: $errstr\n&quot;;
+      delete $_[HEAP]{server};
+    },
+    on_client_input =&gt; sub {
+      # التعامل مع مدخلات العميل.
+      my ($input, $wheel_id) = @_[ARG0, ARG1];
+      $input =~ tr[a-zA-Z][n-za-mN-ZA-M]; # ASCII rot13
+      $_[HEAP]{client}{$wheel_id}-&gt;put($input);
+    },
+    on_client_error =&gt; sub {
+      # التعامل مع خطأ العميل، بما في ذلك قطع الاتصال.
+      my $wheel_id = $_[ARG3];
+      delete $_[HEAP]{client}{$wheel_id};
+    },
+  }
+);
+POE::Kernel-&gt;run();
+exit;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">POE::Wheel::SocketFactory ينشئ المقابس عند الحاجة. يمكنه إنشاء مقابس غير متصلة، ولكنه يتفوق بالفعل في عمل العميل/الخادم حيث أن إنشاء الاتصالات عادة ما يكون مانعًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_METHODS'><a class='permalink' href='#PUBLIC_METHODS'>الأساليب العامة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='new'><a class='permalink' href='#new'>جديد</a></h2>
+<p class="Pp"><b>new()</b> ينشئ كائن POE::Wheel::SocketFactory. بالنسبة للمقابس التي <b>listen()</b> للاتصالات و <b>accept()</b> الاتصالات، تقوم العجلة بإنشاء مقابس جديدة لكل عميل مقبول. تقوم مصانع المقابس للمقابس أحادية الاتجاه، مثل أزواج UDP أو العملاء المتصلين باستخدام <b>connect()</b>، بإصدار مقبس واحد فقط ويمكن تدميرها لاحقًا دون آثار سلبية.</p>
+<p class="Pp"><b>new()</b> يعيد دائمًا كائن POE::Wheel::SocketFactory حتى لو لم يكن من الممكن إنشاء المقبس. هذا يسمح بالاستعلام عن الكائن بعد أن يقوم بإرسال حدث <span class="Li">&quot;FailureEvent&quot;</span> إلى جلسته.</p>
+<p class="Pp"><b>new()</b> يقبل عددًا كبيرًا من المعلمات المسماة، كل منها ينظم جانبًا معينًا من إنشاء المقبس.</p>
+<p class="Pp"><i>إنشاء المقبس</i></p>
+<p class="Pp">يتم إنشاء المقبس باستخدام دالة Perl المضمنة <b>socket()</b>. تتحكم المعلمات <b>new()</b> التي تبدأ بـ <span class="Li">&quot;Socket&quot;</span> في كيفية استدعاء <b>socket()</b>.</p>
+<p class="Pp">نطاق المقبس</p>
+<p class="Pp"><span class="Li">&quot;SocketDomain&quot;</span> يوجه العجلة لإنشاء مقبس ضمن نطاق معين. النطاقات المدعومة هي <span class="Li">&quot;AF_UNIX&quot;</span>، <span class="Li">&quot;AF_INET&quot;</span>، <span class="Li">&quot;AF_INET6&quot;</span>، <span class="Li">&quot;PF_UNIX&quot;</span>، <span class="Li">&quot;PF_INET&quot;</span>، و <span class="Li">&quot;PF_INET6&quot;</span>. إذا لم يتم تحديده، سيتم إنشاء المقبس في النطاق <span class="Li">&quot;AF_INET&quot;</span>.</p>
+<p class="Pp">يحتوي POE::Wheel::SocketFactory على جدول بالنطاقات المدعومة والتعليمات اللازمة لإنشائها. يرجى إرسال الترقيعات لدعم نطاقات إضافية، إذا لزم الأمر.</p>
+<p class="Pp">ملاحظة: يتم توفير <span class="Li">&quot;AF_INET6&quot;</span> و <span class="Li">&quot;PF_INET6&quot;</span> بواسطة وحدة Socket المضمنة في Perl 5.8.0 أو أحدث. يجب ألا تحاول إصدارات Perl قبل 5.8.0 استخدام IPv6، إلا إذا ساهم شخص ما بعمل بديل.</p>
+<p class="Pp">يتطلب دعم IPv6 وحدة Socket تنفذ <b>getaddrinfo()</b> و <b>unpack_sockaddr_in6()</b>. قد تكون هناك وحدات أخرى تؤدي هذه الوظائف، ولكن معظمها تم إهماله مع ظهور دعم IPv6 مناسب في الوحدات الأساسية الداعمة.</p>
+<p class="Pp">نوع المقبس</p>
+<p class="Pp"><span class="Li">&quot;SocketType&quot;</span> يوفر استدعاء <b>socket()</b> بنوع مقبس محدد، والذي يمكن أن يكون <span class="Li">&quot;SOCK_STREAM&quot;</span> أو <span class="Li">&quot;SOCK_DGRAM&quot;</span>. <span class="Li">&quot;SOCK_STREAM&quot;</span> هو النوع الافتراضي إذا لم يتم تحديد <span class="Li">&quot;SocketType&quot;</span>.</p>
+<p class="Pp">بروتوكول المقبس</p>
+<p class="Pp"><span class="Li">&quot;SocketProtocol&quot;</span> يحدد نوع بروتوكول استدعاء <b>socket()</b>. يمكن تحديد البروتوكولات بالأرقام أو الأسماء. يتم تجاهل <span class="Li">&quot;SocketProtocol&quot;</span> لمقابس من نوع UNIX.</p>
+<p class="Pp">البروتوكول الافتراضي هو &quot;tcp&quot; لمقابس نطاق INET. لا يوجد قيمة افتراضية لنطاقات المقابس الأخرى.</p>
+<p class="Pp"><i>تكوين خيارات المقبس</i></p>
+<p class="Pp">يستخدم POE::Wheel::SocketFactory <b>ioctl()</b> و <b>fcntl()</b> و <b>setsockopt()</b> لتكوين خيارات المقبس بعد إنشائه. يتم تكوين جميع المقابس في وضع غير مانع، ويمكن إعادة استخدام المقابس الملزمة.</p>
+<p class="Pp">إعادة الاستخدام</p>
+<p class="Pp">عند تمكينها، تسمح المعلمة <span class="Li">&quot;Reuse&quot;</span> بإعادة استخدام منفذ تم ربطه بالفعل على الفور. تعتبر <span class="Li">&quot;Reuse&quot;</span> ممكّنة إذا كانت تحتوي على &quot;yes&quot; أو &quot;on&quot; أو قيمة رقمية صحيحة. جميع القيم الأخرى تعطل إعادة استخدام المنفذ، وتجاهل <span class="Li">&quot;Reuse&quot;</span> يفعل ذلك أيضًا.</p>
+<p class="Pp">لأغراض الأمان، لا يمكن إعادة استخدام منفذ بمجرد تحرير الخادم له. هذا يمنح العملاء وقتًا لإدراك أن المنفذ قد تم التخلي عنه بالفعل. خلاف ذلك، يمكن لخدمة ضارة الاستيلاء على المنفذ وتزييف الخدمة الشرعية.</p>
+<p class="Pp">كما أنه مزعج للغاية الانتظار دقيقة أو أكثر بين استدعاءات الخادم، خاصة أثناء التطوير.</p>
+<p class="Pp"><i>ربط المقبس بعنوان ومنفذ محددين</i></p>
+<p class="Pp">يمكن ربط المقبس اختياريًا بواجهة ومنفذ محددين. يمكن استخدام العنوان <span class="Li">&quot;INADDR_ANY&quot;</span> لربط منفذ معين عبر جميع الواجهات.</p>
+<p class="Pp">ترتبط المقابس باستخدام <b>bind()</b>. تتحكم معلمات <b>new()</b> التي تبدأ بـ <span class="Li">&quot;Bind&quot;</span> في كيفية استدعاء <b>bind()</b>.</p>
+<p class="Pp">BindAddress</p>
+<p class="Pp"><span class="Li">&quot;BindAddress&quot;</span> يحدد عنوانًا يتم ربط نقطة النهاية المحلية للمقبس به. سيتم استخدام <span class="Li">&quot;INADDR_ANY&quot;</span> إذا لم يتم تحديد <span class="Li">&quot;BindAddress&quot;</span>.</p>
+<p class="Pp"><span class="Li">&quot;BindAddress&quot;</span> يمكن أن يحتوي على سلسلة نصية وعنوان إنترنت (لمقابس INET). يجب أن تكون المعلمة النصية عنوانًا رقميًا أو اسم مضيف قابل للحل. ملاحظة: سيتم حل اسم المضيف باستدعاء مانع. إذا لم يكن هذا مرغوبًا، فاستخدم POE::Component::Client::DNS للحل بشكل غير مانع.</p>
+<p class="Pp">عند استخدامه لربط مقبس من نوع UNIX، يجب أن يحتوي <span class="Li">&quot;BindAddress&quot;</span> على مسار يصف اسم ملف المقبس. هذا ضروري لمقابس الخادم وعملاء datagram. <span class="Li">&quot;BindAddress&quot;</span> ليس له قيمة افتراضية لمقابس من نوع UNIX.</p>
+<p class="Pp">BindPort</p>
+<p class="Pp"><span class="Li">&quot;BindPort&quot;</span> ذو مغزى فقط لمقابس INET. يحتوي على منفذ على الواجهة <span class="Li">&quot;BindAddress&quot;</span> الذي سيتم ربط المقبس به. افتراضيًا، إذا لم يتم تحديده، فإن المنفذ هو 0، مما سيؤدي إلى قيام استدعاء <b>bind()</b> باختيار منفذ غير محدد وغير مرتبط.</p>
+<p class="Pp"><span class="Li">&quot;BindPort&quot;</span> يمكن أن يكون رقم منفذ أو اسمًا يمكن البحث فيه في قاعدة بيانات خدمات النظام (أو ما يعادلها).</p>
+<p class="Pp"><i>مقابس متصلة بشكل غير مانع</i></p>
+<p class="Pp">يمكن لمقابس الاتصال غير المانعة التفاعل مع نقاط النهاية البعيدة دون الحاجة إلى <b>listen()</b> أو <b>connect()</b> إلى عناوين بعيدة.</p>
+<p class="Pp">هذه الفئة من المقابس مكتملة بعد استدعاء <b>bind()</b>.</p>
+<p class="Pp"><i>توصيل المقبس بنقطة نهاية بعيدة</i></p>
+<p class="Pp">يمكن للمقبس إما انتظار وصول الاتصالات، أو بدء الاتصالات بنقطة نهاية بعيدة، أو أن يكون متصلاً بشكل غير مانع (كما هو الحال مع مقابس UDP).</p>
+<p class="Pp">سيبدأ POE::Wheel::SocketFactory اتصال عميل عندما يكون <b>new()</b> قادرًا على وصف نقطة نهاية بعيدة. في جميع الحالات الأخرى، سيقوم المقبس إما بالانتظار للاتصالات أو أن يكون متصلاً بناءً على نوع المقبس.</p>
+<p class="Pp">
+</div>
+</section>
+
+                
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+">تصف المعلمات التالية نقطة النهاية البعيدة للمقبس. وهي تحدد كيفية استدعاء POE::Wheel::SocketFactory لوظيفة Perl المضمنة <b>connect()</b>.</p>
+<p class="Pp">RemoteAddress</p>
+<p class="Pp"><span class="Li">&quot;RemoteAddress&quot;</span> يحدد العنوان البعيد الذي يجب أن يتصل به المقبس. إذا كان موجودًا، فسينشئ POE::Wheel::SocketFactory مقبس عميل يحاول الاتصال بـ <span class="Li">&quot;RemoteAddress&quot;</span>. بخلاف ذلك، إذا كان البروتوكول يقتضي ذلك، فسينشئ العجلة مقبس استماع ويحاول قبول الاتصالات.</p>
+<p class="Pp">كما هو الحال مع عنوان الربط، يمكن أن يكون <span class="Li">&quot;RemoteAddress&quot;</span> سلسلة نصية تحتوي على رباعي نقطي أو اسم مضيف قابل للحل. يمكن أن يكون أيضًا عنوان إنترنت مكدس، أو مسار مقبس UNIX. سيتم تجميعه، مع أو بدون <span class="Li">&quot;RemotePort&quot;</span> مصاحب، حسب الضرورة لمجال المقبس.</p>
+<p class="Pp">RemotePort</p>
+<p class="Pp"><span class="Li">&quot;RemotePort&quot;</span> هو المنفذ الذي يجب أن يتصل به المقبس. إنه مطلوب لمقابس عميل &quot;INET&quot;، حيث يجب أن تحتوي نقطة النهاية البعيدة على كل من العنوان والمنفذ.</p>
+<p class="Pp">يمكن أن يكون منفذ الوجهة رقميًا، أو يمكن أن يكون اسمًا رمزيًا موجودًا في /etc/services أو ما يعادله لنظام التشغيل الخاص بك.</p>
+<p class="Pp"><i>الاستماع للاتصالات</i></p>
+<p class="Pp">تعتبر مقابس التدفق التي ليس لها نقطة نهاية بعيدة مقابس خادم. سيقوم POE::Wheel::SocketFactory بـ <b>listen()</b> للاتصالات بهذه المقابس، و <b>accept()</b> للعملاء الجدد، ويرسل أحداث التطبيق بمقابس العملاء الجديدة.</p>
+<p class="Pp">تتحكم معلمات مُنشئ POE::Wheel::SocketFactory التي تبدأ بـ <span class="Li">&quot;Listen&quot;</span> في كيفية استدعاء وظيفة <b>listen()</b>.</p>
+<p class="Pp">ListenQueue</p>
+<p class="Pp"><span class="Li">&quot;ListenQueue&quot;</span> يحدد طول قائمة الانتظار لـ <b>listen()</b> الخاصة بالمقبس. الافتراضي هو <span class="Li">&quot;SOMAXCONN&quot;</span> إذا تم حذفه. سيتم قص قيم <span class="Li">&quot;ListenQueue&quot;</span> الأكبر من <span class="Li">&quot;SOMAXCONN&quot;</span> إلى <span class="Li">&quot;SOMAXCONN&quot;</span>. القيم الكبيرة بشكل مفرط لـ <span class="Li">&quot;ListenQueue&quot;</span> ليست بالضرورة محمولة، وقد تسبب أخطاء في بعض الحالات النادرة.</p>
+<p class="Pp"><i>إصدار الأحداث</i></p>
+<p class="Pp">يصدر POE::Wheel::SocketFactory عددًا صغيرًا من الأحداث اعتمادًا على ما يحدث أثناء إعداد المقبس أو أثناء الاستماع لاتصالات جديدة.</p>
+<p class="Pp">انظر &quot;PUBLIC EVENTS&quot; لمزيد من التفاصيل.</p>
+<p class="Pp">SuccessEvent</p>
+<p class="Pp"><span class="Li">&quot;SuccessEvent&quot;</span> يسمي الحدث الذي سيتم إصداره كلما نجح POE::Wheel::SocketFactory في إنشاء مقبس جديد.</p>
+<p class="Pp">بالنسبة للمقابس غير المتصلة، يحدث <span class="Li">&quot;SuccessEvent&quot;</span> بعد إنشاء المقبس مباشرة.</p>
+<p class="Pp">بالنسبة لاتصالات العميل، يتم تشغيل <span class="Li">&quot;SuccessEvent&quot;</span> عند إنشاء الاتصال بنجاح مع نقطة النهاية البعيدة.</p>
+<p class="Pp">تصدر مقابس الخادم <span class="Li">&quot;SuccessEvent&quot;</span> لكل عميل مقبول بنجاح.</p>
+<p class="Pp">FailureEvent</p>
+<p class="Pp"><span class="Li">&quot;FailureEvent&quot;</span> يسمي الحدث الذي سيصدره POE::Wheel::SocketFactory كلما حدث خطأ ما. إنه يمثل عادةً نوعًا من أخطاء استدعاء الوظيفة المضمنة. انظر &quot;PUBLIC EVENTS&quot; للتفاصيل، حيث يتم التعامل مع بعض الأخطاء داخليًا بواسطة هذه العجلة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='event'><a class='permalink' href='#event'>event</a></h2>
+<p class="Pp"><b>event()</b> يسمح للجلسة بتغيير الأحداث التي تصدرها العجلة دون تدمير العجلة وإعادة إنشائها. يقبل حدثًا واحدًا أو أكثر من الأحداث المدرجة في &quot;PUBLIC EVENTS&quot;. أسماء الأحداث غير المحددة تعطّل هذه الأحداث.</p>
+<p class="Pp">تم وصف <b>event()</b> بتفصيل أكبر في POE::Wheel.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='getsockname'><a class='permalink' href='#getsockname'>getsockname</a></h2>
+<p class="Pp"><b>getsockname()</b> يتصرف مثل الوظيفة المضمنة بنفس الاسم. يعيد معلومات نقطة النهاية المحلية للمقبس الاستماع المغلف بواسطة POE::Wheel::SocketFactory.</p>
+<p class="Pp"><b>getsockname()</b> يسمح للتطبيقات بتحديد العنوان والمنفذ الذي ربط POE::Wheel::SocketFactory به مقبس الاستماع الخاص به.</p>
+<p class="Pp">قد تستخدم تطبيقات الاختبار <b>getsockname()</b> للعثور على مقبس الخادم بعد ربط POE::Wheel::SocketFactory بمنفذ INADDR_ANY 0.</p>
+<p class="Pp">نظرًا لعدم وجود حدث يتم إصداره فورًا بعد إنشاء ناجح لمقبس استماع، يمكن للتطبيقات استخدام <b>getsockname()</b> للتحقق من ذلك.</p>
+<pre>use Socket 'unpack_sockaddr_in';
+my $listener = POE::Wheel::SocketFactory-&gt;new(
+    BindPort     =&gt; 123,
+    SuccessEvent =&gt; 'got_client',
+    FailureEvent =&gt; 'listener_failed',
+    Reuse        =&gt; 'on',
+);
+my ($port, $addr) = unpack_sockaddr_in($listener-&gt;getsockname);
+print &quot;Socket successfully bound\n&quot; if $port;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ID'><a class='permalink' href='#ID'>ID</a></h2>
+<p class="Pp"><b>ID()</b> يعيد المعرف الفريد للعجلة. سيتم تضمين المعرف أيضًا في كل حدث تنتجه العجلة. يمكن للتطبيقات مطابقة الأحداث مع الكائنات التي أنشأتها.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='pause_accept'><a class='permalink' href='#pause_accept'>pause_accept</a></h2>
+<p class="Pp">قد تحتاج التطبيقات أحيانًا إلى حظر الاتصالات الواردة. <b>pause_accept()</b> يوقف مراقب الحدث الذي يشغّل <b>accept()</b>. ستتراكم الاتصالات الواردة الجديدة في قائمة انتظار <b>listen()</b> الخاصة بالمقبس حتى تتجاوز القائمة الحد أو تستدعي التطبيقات <b>resume_accept()</b>.</p>
+<p class="Pp">يمكن أن يحد إيقاف <b>accept()</b> من كمية الحمل التي يولدها الخادم. إنه مفيد أيضًا في الخوادم السابقة التفرع عندما لا ينبغي للعملية الرئيسية قبول الاتصالات على الإطلاق.</p>
+<p class="Pp"><b>pause_accept()</b> و <b>resume_accept()</b> أسرع وأكثر موثوقية من تدمير كائن POE::Wheel::SocketFactory وإعادة إنشائه ديناميكيًا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='resume_accept'><a class='permalink' href='#resume_accept'>resume_accept</a></h2>
+<p class="Pp"><b>resume_accept()</b> يستأنف المراقب الذي يشغّل <b>accept()</b>. انظر &quot;pause_accept&quot; لمناقشة أكثر تفصيلاً.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_EVENTS'><a class='permalink' href='#PUBLIC_EVENTS'>PUBLIC EVENTS</a></h1>
+<p class="Pp">يصدر POE::Wheel::SocketFactory حدثين عامين.</p>
+<section class="Ss">
+<h2 class="Ss" id='SuccessEvent'><a class='permalink' href='#SuccessEvent'>SuccessEvent</a></h2>
+<p class="Pp">يسمي <span class="Li">&quot;SuccessEvent&quot;</span> حدثًا سيتم إرساله إلى الجلسة المنشئة كلما قام POE::Wheel::SocketFactory بإنشاء مقبس جديد. بالنسبة للمقابس غير المتصلة، يكون ذلك عند إنشاء المقبس. بالنسبة لمقابس العميل المتصلة، يكون ذلك بعد إنشاء الاتصال. وبالنسبة لمقابس الخادم، يتم تشغيل <span class="Li">&quot;SuccessEvent&quot;</span> بعد قبول كل عميل جديد.</p>
+<p class="Pp"><i>معلمات SuccessEvent الشائعة</i></p>
+<p class="Pp">في جميع الحالات، يحمل <span class="Li">$_[ARG0]</span> مقبض ملف المقبس الجديد، ويحتوي <span class="Li">$_[ARG3]</span> على معرف POE::Wheel::SocketFactory. تختلف المعلمات الأخرى اعتمادًا على مجال المقبس وما إذا كان يستمع أو يتصل. انظر أدناه للاختلافات.</p>
+<p class="Pp"><i>معلمات INET SuccessEvent</i></p>
+<p class="Pp">بالنسبة لمقابس INET، يحمل <span class="Li">$_[ARG1]</span> و <span class="Li">$_[ARG2]</span> عنوان المنفذ البعيد للمقبس، على التوالي. العنوان مكدس؛ انظر &quot;inet_ntop&quot; في Socket إذا كان هناك حاجة لعنوان يمكن قراءته بواسطة الإنسان.</p>
+<pre>sub handle_new_client {
+  my $accepted_socket = $_[ARG0];
+  my $peer_host = inet_ntop(
+    ((length($_[ARG1]) == 4) ? AF_INET : AF_INET6),
+    $_[ARG1]
+  );
+  print(
+    &quot;Wheel $_[ARG3] accepted a connection from &quot;,
+    &quot;$peer_host port $peer_port\n&quot;
+  );
+  spawn_connection_session($accepted_handle);
+}</pre>
+<p class="Pp"><i>معلمات UNIX Client SuccessEvent</i></p>
+<p class="Pp">بالنسبة لمقابس عميل UNIX، غالبًا ما يحمل <span class="Li">$_[ARG1]</span> (ولكن ليس دائمًا) عنوان الخادم. بعض الأنظمة لا يمكنها استرداد العنوان البعيد لمقبس UNIX. <span class="Li">$_[ARG2]</span> هو دائمًا غير محدد لمقابس عميل UNIX.</p>
+<p class="Pp"><i>معلمات UNIX Server SuccessEvent</i></p>
+<p class="Pp">وفقًا لـ <i>Perl Cookbook</i>، فإن العنوان البعيد الذي تعيده <b>accept()</b> على مقابس UNIX غير محدد، لذلك فإن <span class="Li">$_[ARG1]</span> و <span class="Li">$_[ARG2]</span> غير محددين أيضًا في هذه الحالة.</p>
+</section>
+<section class=" Ss">
+<h2 class="Ss" id='FailureEvent'><a class='permalink' href='#FailureEvent'>FailureEvent</a></h2>
+<p class="Pp"><span class="Li">&quot;FailureEvent&quot;</span> يسمي الحدث الذي سيتم إصداره عند حدوث خطأ في المقبس. يتعامل POE::Wheel::SocketFactory مع <span class="Li">&quot;EAGAIN&quot;</span> داخليًا، لذلك لا يعتبر خطأ.</p>
+<p class="Pp">تتضمن أحداث <span class="Li">&quot;FailureEvent&quot;</span> معلمات الخطأ القياسية:</p>
+<p class="Pp"><span class="Li">$_[ARG0]</span> يصف الجزء الذي فشل في إنشاء المقبس. غالبًا ما يحمل اسم وظيفة Perl مضمنة.</p>
+<p class="Pp"><span class="Li">$_[ARG1]</span> و <span class="Li">$_[ARG2]</span> يصفان كيفية فشل العملية. يحتويان على النسخ الرقمية والمنسقة كسلسلة نصية من <span class="Li">$!</span>، على التوالي. لا يمكن للتطبيق التحقق ببساطة من المتغير العام <span class="Li">$!</span> لأنه قد يتغير أثناء إرسال الأحداث.</p>
+<p class="Pp">أخيرًا، يحتوي <span class="Li">$_[ARG3]</span> على المعرف لمثيل POE::Wheel::SocketFactory الذي أنشأ الحدث. انظر &quot;ID&quot; و &quot;ID&quot; في POE::Wheel لاستخدامات معرفات العجلات.</p>
+<p class="Pp">مثال لمعالج FailureEvent:</p>
+<pre>sub handle_failure {
+  my ($operation, $errnum, $errstr, $wheel_id) = @_[ARG0..ARG3];
+  warn &quot;Wheel $wheel_id generated $operation error $errnum: $errstr\n&quot;;
+  delete $_[HEAP]{wheels}{$wheel_id}; # shut down that wheel
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp">يصف POE::Wheel العمليات الأساسية لجميع العجلات بعمق أكبر. تحتاج إلى معرفة هذا.</p>
+<p class="Pp">Socket::GetAddrInfo مطلوب لعمل IPv6. سيقوم POE::Wheel::SocketFactory بتحميله تلقائيًا إذا تم تثبيته. SocketDomain =&gt; AF_INET6 مطلوب لتشغيل سلوكيات IPv6. يتم تصدير AF_INET6 بواسطة الوحدة النمطية Socket على جميع إصدارات Perl 5 باستثناء الأقدم. إذا لم يوفر Socket الخاص بك AF_INET6، فحاول تثبيت Socket6 بدلاً من ذلك.</p>
+<p class="Pp">قسم SEE ALSO في POE يحتوي على جدول محتويات يغطي توزيع POE بأكمله.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<p class="Pp">كان يجب على العديد من (إن لم يكن كل) عبارات croak/carp/warn/die إطلاق <span class="Li">&quot;FailureEvent&quot;</span> بدلاً من ذلك.</p>
+<p class="Pp">تم اختبار SocketFactory فقط مع تدفقات UNIX ومقابس INET باستخدام بروتوكولات UDP و TCP. الآخرون</p>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>POE::Wheel::SocketFactory(3pm) — Arch Linux</title>
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/style.css">
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/theme-dark.css">
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/custom.css">
+        <link rel="icon" type="image/png" href="/favicon.png">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body>
+        
+        <main class="man-page">
+            <article>
+                
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<p class="Pp">Please report bugs to <code class="Nm">perl-poe@perl.org</code>.</p>
+<p class="Pp">The configuration should work after the module's internal configuration
+    tables are updated. Please send patches.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>AUTHORS   &amp; COPYRIGHTS</a></h1>
+<p class="Pp">Please see POE for more information about authors and
+    contributors.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>Version:</dt>
+        <dd>1.370-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#PUBLIC_METHODS">PUBLIC METHODS</a></li>
+        
+            <li><a href="#PUBLIC_EVENTS">PUBLIC EVENTS</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">AUTHORS &amp; COPYRIGHTS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/POE::Wheel::SocketFactory.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Wheel::SocketFactory.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>
+```
+
+```html
+<!DOCTYPE html>
+<html lang="ar">
+    <head>
+        <meta charset="utf-8">
+        <title>POE::Wheel::SocketFactory(3pm) — Arch Linux</title>
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/style.css">
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/theme-dark.css">
+        <link rel="stylesheet" type="text/css" href="https://man.archlinux.org/css/custom.css">
+        <link rel="icon" type="image/png" href="/favicon.png">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body>
+        
+        <main class="man-page">
+            <article>
+                
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">يرجى الإبلاغ عن الأخطاء إلى <code class="Nm">perl-poe@perl.org</code>.</p>
+<p class="Pp">يجب أن تعمل التهيئة بعد تحديث جداول التهيئة الداخلية للوحدة. يرجى إرسال التصحيحات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">يرجى الرجوع إلى POE لمزيد من المعلومات حول المؤلفين والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#PUBLIC_METHODS">الطرق العامة</a></li>
+        
+            <li><a href="#PUBLIC_EVENTS">الأحداث العامة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Wheel::SocketFactory.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Wheel::SocketFactory.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

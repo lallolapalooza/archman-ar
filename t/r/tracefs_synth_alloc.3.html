@@ -1,0 +1,670 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">tracefs_synth_alloc(3)</h1>
+<link rel="stylesheet" href="basic.css">
+document:
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "NAME"
+            anchor: "#NAME"
+            content: "NAME"
+        content:
+          -
+            paragraph:
+              -
+                text: "tracefs_synth_alloc - allocates and synthesizes event descriptor"
+tags:
+  -
+    tag: "Pp"
+    content:
+      -
+        text: "tracefs_synth_alloc() returns an allocated struct tracefs_synth descriptor on success or NULL on error."
+  -
+    tag: "Pp"
+    content:
+      -
+        text: "All other functions that return an integer returns zero on success or -1 on error."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "ERRORS"
+            anchor: "#ERRORS"
+            content: "ERRORS"
+        content:
+          -
+            paragraph:
+              -
+                text: "The following errors are for all the above calls:"
+          -
+            paragraph:
+              -
+                text: "EPERM Not run as root user when required."
+          -
+            paragraph:
+              -
+                text: "EINVAL Either a parameter is not valid (NULL when it should not be) or a field that is not compatible for calculations."
+          -
+            paragraph:
+              -
+                text: "ENODEV An event or one of its fields is not found."
+          -
+            paragraph:
+              -
+                text: "EBADE The fields of the start and end events are not compatible for either matching or comparing."
+          -
+            paragraph:
+              -
+                text: "ENOMEM not enough memory is available."
+          -
+            paragraph:
+              -
+                text: "And more errors may have happened from the system calls to the system."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "EXAMPLE"
+            anchor: "#EXAMPLE"
+            content: "EXAMPLE"
+        content:
+          -
+            block:
+              -
+                type: "Bd-indent"
+                content:
+                  -
+                    block:
+                      -
+                        type: "pre"
+                        content:
+                          -
+                            text: "#include &lt;stdlib.h&gt;\n#include &lt;tracefs.h&gt;\n#define start_event \"sched_waking\"\n#define start_field \"pid\"\n#define end_event \"sched_switch\"\n#define end_field \"next_pid\"\n#define match_name \"pid\"\nstatic struct tracefs_synth *synth;\nstatic void make_event(void)\n{\n        struct tep_handle *tep;\n        /* Load all events from the system */\n        tep = tracefs_local_events(NULL);\n        /* Initialize the synthetic event */\n        synth = tracefs_synth_alloc(tep, \"wakeup_lat\",\n                                    NULL, start_event,\n                                    NULL, end_event,\n                                    start_field, end_field,\n                                    match_name);\n        /* The tep is no longer needed */\n        tep_free(tep);\n        /* Save the \"prio\" field as \"prio\" from the start event */\n        tracefs_synth_add_start_field(synth, \"prio\", NULL);\n        /* Save the \"next_comm\" as \"comm\" from the end event */\n        tracefs_synth_add_end_field(synth, \"next_comm\", \"comm\");\n        /* Save the \"prev_prio\" as \"prev_prio\" from the end event */\n        tracefs_synth_add_end_field(synth, \"prev_prio\", NULL);\n        /*\n         * Take a microsecond time difference between end and start\n         * and record as \"delta\"\n         */\n        tracefs_synth_add_compare_field(synth, TRACEFS_TIMESTAMP_USECS,\n                                        TRACEFS_TIMESTAMP_USECS,\n                                        TRACEFS_SYNTH_DELTA_END, \"delta\");\n        /* Only record if start event \"prio\" is less than 100 */\n        tracefs_synth_append_start_filter(synth, TRACEFS_FILTER_COMPARE,\n                                          \"prio\", TRACEFS_COMPARE_LT, \"100\");\n        /*\n         * Only record if end event \"next_prio\" is less than 50\n         * or the previous task's prio was not greater than or equal to 100.\n         *   next_prio < 50 || !(prev_prio >= 100)\n         */\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_COMPARE,\n                                        \"next_prio\", TRACEFS_COMPARE_LT, \"50\");\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_OR, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_NOT, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_OPEN_PAREN, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_COMPARE,\n                                        \"prev_prio\", TRACEFS_COMPARE_GE, \"100\");\n        /*\n         * Note, the above only added: \"next_prio < 50 || !(prev_prio >= 100\"\n         * That's because, when the synth is executed, the remaining close parenthesis\n         * will be added. That is, the string will end up being:\n         * \"next_prio < 50 || !(prev_prio >= 100)\" when one of tracefs_sync_create()\n         * or tracefs_sync_echo_cmd() is run.\n         */\n}\n/* Display how to create the synthetic event */\nstatic void show_event(void)\n{\n        struct trace_seq s;\n        trace_seq_init(&amp;s);\n        tracefs_synth_echo_cmd(&amp;s, synth);\n        trace_seq_terminate(&amp;s);\n        trace_seq_do_printf(&amp;s);\n        trace_seq_destroy(&amp;s);\n}\nint main (int argc, char **argv)\n{\n        make_event();\n        if (argc &gt; 1) {\n                if (!strcmp(argv[1], \"create\")) {\n                        /* Create the synthetic event */\n                        tracefs_synth_create(synth);\n                } else if (!strcmp(argv[1], \"delete\")) {\n                        /* Delete the synthetic event */\n                        tracefs_synth_destroy(synth);\n                } else {\n                        printf(\"usage: %s [create|delete]\\n\", argv[0]);\n                        exit(-1);\n                }\n        } else\n                show_event();\n        tracefs_synth_free(synth);\n        return 0;\n}"
+tags:
+  -
+    tag: "Pp"
+    content:
+      -
+        text: "tracefs_synth_alloc() returns an allocated struct tracefs_synth descriptor on success or NULL on error."
+  -
+    tag: "Pp"
+    content:
+      -
+        text: "All other functions that return an integer returns zero on success or -1 on error."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "ERRORS"
+            anchor: "#ERRORS"
+            content: "ERRORS"
+        content:
+          -
+            paragraph:
+              -
+                text: "The following errors are for all the above calls:"
+          -
+            paragraph:
+              -
+                text: "EPERM Not run as root user when required."
+          -
+            paragraph:
+              -
+                text: "EINVAL Either a parameter is not valid (NULL when it should not be) or a field that is not compatible for calculations."
+          -
+            paragraph:
+              -
+                text: "ENODEV An event or one of its fields is not found."
+          -
+            paragraph:
+              -
+                text: "EBADE The fields of the start and end events are not compatible for either matching or comparing."
+          -
+            paragraph:
+              -
+                text: "ENOMEM not enough memory is available."
+          -
+            paragraph:
+              -
+                text: "And more errors may have happened from the system calls to the system."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "EXAMPLE"
+            anchor: "#EXAMPLE"
+            content: "EXAMPLE"
+        content:
+          -
+            block:
+              -
+                type: "Bd-indent"
+                content:
+                  -
+                    block:
+                      -
+                        type: "pre"
+                        content:
+                          -
+                            text: "#include &lt;stdlib.h&gt;\n#include &lt;tracefs.h&gt;\n#define start_event \"sched_waking\"\n#define start_field \"pid\"\n#define end_event \"sched_switch\"\n#define end_field \"next_pid\"\n#define match_name \"pid\"\nstatic struct tracefs_synth *synth;\nstatic void make_event(void)\n{\n        struct tep_handle *tep;\n        /* Load all events from the system */\n        tep = tracefs_local_events(NULL);\n        /* Initialize the synthetic event */\n        synth = tracefs_synth_alloc(tep, \"wakeup_lat\",\n                                    NULL, start_event,\n                                    NULL, end_event,\n                                    start_field, end_field,\n                                    match_name);\n        /* The tep is no longer needed */\n        tep_free(tep);\n        /* Save the \"prio\" field as \"prio\" from the start event */\n        tracefs_synth_add_start_field(synth, \"prio\", NULL);\n        /* Save the \"next_comm\" as \"comm\" from the end event */\n        tracefs_synth_add_end_field(synth, \"next_comm\", \"comm\");\n        /* Save the \"prev_prio\" as \"prev_prio\" from the end event */\n        tracefs_synth_add_end_field(synth, \"prev_prio\", NULL);\n        /*\n         * Take a microsecond time difference between end and start\n         * and record as \"delta\"\n         */\n        tracefs_synth_add_compare_field(synth, TRACEFS_TIMESTAMP_USECS,\n                                        TRACEFS_TIMESTAMP_USECS,\n                                        TRACEFS_SYNTH_DELTA_END, \"delta\");\n        /* Only record if start event \"prio\" is less than 100 */\n        tracefs_synth_append_start_filter(synth, TRACEFS_FILTER_COMPARE,\n                                          \"prio\", TRACEFS_COMPARE_LT, \"100\");\n        /*\n         * Only record if end event \"next_prio\" is less than 50\n         * or the previous task's prio was not greater than or equal to 100.\n         *   next_prio < 50 || !(prev_prio >= 100)\n         */\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_COMPARE,\n                                        \"next_prio\", TRACEFS_COMPARE_LT, \"50\");\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_OR, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_NOT, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_OPEN_PAREN, NULL, 0, NULL);\n        tracefs_synth_append_end_filter(synth, TRACEFS_FILTER_COMPARE,\n                                        \"prev_prio\", TRACEFS_COMPARE_GE, \"100\");\n        /*\n         * Note, the above only added: \"next_prio < 50 || !(prev_prio >= 100\"\n         * That's because, when the synth is executed, the remaining close parenthesis\n         * will be added. That is, the string will end up being:\n         * \"next_prio < 50 || !(prev_prio >= 100)\" when one of tracefs_sync_create()\n         * or tracefs_sync_echo_cmd() is run.\n         */\n}\n/* Display how to create the synthetic event */\nstatic void show_event(void)\n{\n        struct trace_seq s;\n        trace_seq_init(&amp;s);\n        tracefs_synth_echo_cmd(&amp;s, synth);\n        trace_seq_terminate(&amp;s);\n        trace_seq_do_printf(&amp;s);\n        trace_seq_destroy(&amp;s);\n}\nint main (int argc, char **argv)\n{\n        make_event();\n        if (argc &gt; 1) {\n                if (!strcmp(argv[1], \"create\")) {\n                        /* Create the synthetic event */\n                        tracefs_synth_create(synth);\n                } else if (!strcmp(argv[1], \"delete\")) {\n                        /* Delete the synthetic event */\n                        tracefs_synth_destroy(synth);\n                } else {\n                        printf(\"usage: %s [create|delete]\\n\", argv[0]);\n                        exit(-1);\n                }\n        } else\n                show_event();\n        tracefs_synth_free(synth);\n        return 0;\n}"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "FILES"
+            anchor: "#FILES"
+            content: "FILES"
+        content:
+          -
+            block:
+              -
+                type: "Bd-indent"
+                content:
+                  -
+                    block:
+                      -
+                        type: "pre"
+                        content:
+                          -
+                            text: "tracefs.h\n        Header file to include in order to have access to the library APIs.\n-ltracefs\n        Linker switch to add when building a program that uses the library."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "SEE_ALSO"
+            anchor: "#SEE_ALSO"
+            content: "SEE ALSO"
+        content:
+          -
+            paragraph:
+              -
+                text: "tracefs_synth_create(3), tracefs_synth_destroy(3), tracfes_synth_echo_cmd(3), libtracefs(3), libtraceevent(3), trace-cmd(1), tracefs_hist_alloc(3), tracefs_hist_alloc_2d(3), tracefs_hist_alloc_nd(3), tracefs_hist_free(3), tracefs_hist_add_key(3), tracefs_hist_add_value(3), tracefs_hist_add_name(3), tracefs_hist_start(3), tracefs_hist_destory(3), tracefs_hist_add_sort_key(3), tracefs_hist_sort_key_direction(3), tracefs_synth_create(3), tracefs_synth_destroy(3), tracefs_synth_complete(3), tracefs_synth_trace(3), tracefs_synth_snapshot(3), tracefs_synth_save(3), tracefs_synth_echo_cmd(3), tracefs_synth_get_start_hist(3), tracefs_synth_get_name(3), tracefs_synth_raw_fmt(3), tracefs_synth_show_event(3), tracefs_synth_show_start_hist(3), tracefs_synth_show_end_hist(3), tracefs_synth_get_event(3),"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "AUTHOR"
+            anchor: "#AUTHOR"
+            content: "AUTHOR"
+        content:
+          -
+            block:
+              -
+                type: "Bd-indent"
+                content:
+                  -
+                    block:
+                      -
+                        type: "pre"
+                        content:
+                          -
+                            text: "Steven Rostedt <rostedt@goodmis.org[1]>\nTzvetomir Stoyanov <tz.stoyanov@gmail.com[2]>\nsameeruddin shaik <sameeruddin.shaik8@gmail.com[3]>"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "REPORTING_BUGS"
+            anchor: "#REPORTING_BUGS"
+            content: "REPORTING BUGS"
+        content:
+          -
+            paragraph:
+              -
+                text: "Report bugs to <linux-trace-devel@vger.kernel.org[4]>"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "LICENSE"
+            anchor: "#LICENSE"
+            content: "LICENSE"
+        content:
+          -
+            paragraph:
+              -
+                text: "libtracefs is Free Software licensed under the GNU LGPL 2.1"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "RESOURCES"
+            anchor: "#RESOURCES"
+            content: "RESOURCES"
+        content:
+          -
+            paragraph:
+              -
+                link:
+                  target: "https://git.kernel.org/pub/scm/libs/libtrace/libtracefs.git/"
+                  text: "https://git.kernel.org/pub/scm/libs/libtrace/libtracefs.git/"
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "COPYING"
+            anchor: "#COPYING"
+            content: "COPYING"
+        content:
+          -
+            paragraph:
+              -
+                text: "Copyright (C) 2020 VMware, Inc. Free use of this software is granted under the terms of the GNU Public License (GPL)."
+  -
+    section:
+      -
+        header:
+          -
+            type: "Sh"
+            id: "NOTES"
+            anchor: "#NOTES"
+            content: "NOTES"
+        content:
+          -
+            block:
+              -
+                type: "Bl-tag"
+                content:
+                  -
+                    tag: "1."
+                    content:
+                      -
+                        text: "rostedt@goodmis.org"
+                  -
+                    block:
+                      -
+                        type: "Bd-indent"
+                        content:
+                          -
+                            text: "mailto:rostedt@goodmis.org"
+                  -
+                    tag: "2."
+                    content:
+                      -
+                        text: "tz.stoyanov@gmail.com"
+                  -
+                    block:
+                      -
+                        type: "Bd-indent"
+                        content:
+                          -
+                            text: "mailto:tz.stoyanov@gmail.com"
+                  -
+                    tag: "3."
+                    content:
+                      -
+                        text: "sameeruddin.shaik8@gmail.com"
+                  -
+                    block:
+                      -
+                        type: "Bd-indent"
+                        content:
+                          -
+                            text: "mailto:sameeruddin.shaik8@gmail.com"
+                  -
+                    tag: "4."
+                    content:
+                      -
+                        text: "linux-trace-devel@vger.kernel.org"
+                  -
+                    block:
+                      -
+                        type: "Bd-indent"
+                        content:
+                          -
+                            text: "mailto:linux-trace-devel@vger.kernel.org"
+document:
+  -
+    block:
+      -
+        type: "table"
+        class: "foot"
+        content:
+          -
+            block:
+              -
+                type: "tr"
+                content:
+                  -
+                    block:
+                      -
+                        type: "td"
+                        class: "foot-date"
+                        content:
+                          -
+                            text: "08/24/2025"
+                  -
+                    block:
+                      -
+                        type: "td"
+                        class: "foot-os"
+                        content:
+                          -
+                            text: "libtracefs 1.8.2"
+  -
+    block:
+      -
+        type: "section"
+        content:
+          -
+            block:
+              -
+                type: "article"
+                content:
+                  -
+                    aside:
+                      -
+                        id: "sidebar"
+                        content:
+                          -
+                            block:
+                              -
+                                type: "section"
+                                content:
+                                  -
+                                    block:
+                                      -
+                                        type: "form"
+                                        class: "search direct-search"
+                                        attributes:
+                                          role: "search"
+                                        content:
+                                          -
+                                            block:
+                                              -
+                                                type: "input"
+                                                attributes:
+                                                  type: "search"
+                                                  placeholder: "Search manual page"
+                                                  name: "q"
+                                                  value: ""
+                                          -
+                                            block:
+                                              -
+                                                type: "input"
+                                                attributes:
+                                                  type: "submit"
+                                                  name: "go"
+                                                  value: "Go"
+                          -
+                            block:
+                              -
+                                type: "section"
+                                class: "package-info"
+                                content:
+                                  -
+                                    paragraph:
+                                      -
+                                        text: "Package information:"
+                                  -
+                                    block:
+                                      -
+                                        type: "dl"
+                                        content:
+                                          -
+                                            block:
+                                              -
+                                                type: "dt"
+                                                content:
+                                                  -
+                                                    text: "Package name:"
+                                              -
+                                                block:
+                                                  -
+                                                    type: "dd"
+                                                    content:
+                                                      -
+                                                        link:
+                                                          target: "https://www.archlinux.org/packages/extra/x86_64/libtracefs/"
+                                                          text: "extra/libtracefs"
+                                          -
+                                            block:
+                                              -
+                                                type: "dt"
+                                                content:
+                                                  -
+                                                    text: "Version:"
+                                              -
+                                                block:
+                                                  -
+                                                    type: "dd"
+                                                    content:
+                                                      -
+                                                        text: "1.8.2-2"
+                                          -
+                                            block:
+                                              -
+                                                type: "dt"
+                                                content:
+                                                  -
+                                                    text: "Upstream:"
+                                              -
+                                                block:
+                                                  -
+                                                    type: "dd"
+                                                    content:
+                                                      -
+                                                        link:
+                                                          target: "https://git.kernel.org/pub/scm/libs/libtrace/libtracefs.git/about/"
+                                                          text: "https://git.kernel.org/pub/scm/libs/libtrace/libtracefs.git/about/"
+                                          -
+                                            block:
+                                              -
+                                                type: "dt"
+                                                content:
+                                                  -
+                                                    text: "Licenses:"
+                                              -
+                                                block:
+                                                  -
+                                                    type: "dd"
+                                                    content:
+                                                      -
+                                                        text: "GPL-2.0-only, LGPL-2.1-only"
+                                          -
+                                            block:
+                                              -
+                                                type: "dt"
+                                                content:
+                                                  -
+                                                    text: "Manuals:"
+                                              -
+                                                block:
+                                                  -
+                                                    type: "dd"
+                                                    content:
+                                                      -
+                                                        link:
+                                                          target: "/listing/extra/libtracefs/"
+                                                          text: "/listing/extra/libtracefs/"
+                          -
+                            block:
+                              -
+                                type: "details"
+                                content:
+                                  -
+                                    block:
+                                      -
+                                        type: "summary"
+                                        content:
+                                          -
+                                            text: "Table of contents"
+                                  -
+                                    block:
+                                      -
+                                        type: "nav"
+                                        class: "toc"
+                                        content:
+                                          -
+                                            block:
+                                              -
+                                                type: "ul"
+                                                content:
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#NAME"
+                                                              text: "NAME"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#SYNOPSIS"
+                                                              text: "SYNOPSIS"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#DESCRIPTION"
+                                                              text: "DESCRIPTION"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#RETURN_VALUE"
+                                                              text: "RETURN VALUE"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#ERRORS"
+                                                              text: "ERRORS"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#EXAMPLE"
+                                                              text: "EXAMPLE"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#FILES"
+                                                              text: "FILES"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#SEE_ALSO"
+                                                              text: "SEE ALSO"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#AUTHOR"
+                                                              text: "AUTHOR"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#REPORTING_BUGS"
+                                                              text: "REPORTING BUGS"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#LICENSE"
+                                                              text: "LICENSE"
+                                                  -
+                                                    block:
+                                                      -
+                                                        type: "li"
+                                                        content:
+                                                          -
+                                                            link:
+                                                              target: "#RESOURCES"
+                                                              text: "RESOURCES"
+  <li><a href="#COPYING">نسخ</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/tracefs_synth_alloc.3.en.txt">txt</a>, 
+        
+            <a href="/man/tracefs_synth_alloc.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+               محدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

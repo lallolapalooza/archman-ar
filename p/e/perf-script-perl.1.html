@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perf-script-perl(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perf-script-perl(1)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERF-SCRIPT-PERL(1)</td>
+    <td class="head-vol">دليل perf</td>
+    <td class="head-rtitle">PERF-SCRIPT-PERL(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">perf-script-perl - معالجة بيانات التتبع باستخدام نص Perl</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre><i>perf script</i> [-s [Perl]:script[.pl] ]</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يُستخدم خيار نص perf script هذا لمعالجة بيانات perf script باستخدام مترجم Perl المدمج في perf. يقرأ ويعالج ملف الإدخال ويعرض نتائج تحليل التتبع المنفذة في نص Perl المحدد، إن وجد.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STARTER_SCRIPTS'><a class='permalink' href='#STARTER_SCRIPTS'>نصوص البداية</a></h1>
+<p class="Pp">يمكنك تجنب قراءة بقية هذا المستند عن طريق تشغيل <i>perf script -g perl</i> في نفس الدليل الذي يوجد فيه ملف تتبع perf.data. سيؤدي ذلك إلى إنشاء نص بداية يحتوي على معالج لكل نوع حدث في ملف التتبع؛ يقوم ببساطة بطباعة كل حقل متاح لكل حدث في ملف التتبع.</p>
+<p class="Pp">يمكنك أيضًا إلقاء نظرة على النصوص الموجودة في ~/libexec/perf-core/scripts/perl للحصول على أمثلة نموذجية توضح كيفية القيام بأشياء أساسية مثل تجميع بيانات الأحداث، وطباعة النتائج، وما إلى ذلك. أيضًا، يحاول النص check-perf-script.pl، على الرغم من أنه غير مثير للاهتمام بالنسبة لنتائجه، ممارسة جميع ميزات البرمجة النصية الرئيسية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EVENT_HANDLERS'><a class='permalink' href='#EVENT_HANDLERS'>معالجات الأحداث</a></h1>
+<p class="Pp">عند استدعاء perf script باستخدام نص تتبع، يتم استدعاء <i>دالة معالج</i> معرفة من قبل المستخدم لكل حدث في التتبع. إذا لم تكن هناك دالة معالج محددة لنوع حدث معين، يتم تجاهل الحدث (أو تمريره إلى دالة <i>trace_unhandled</i>، انظر أدناه) ويتم معالجة الحدث التالي.</p>
+<p class="Pp">يتم تمرير معظم قيم حقول الحدث كمعلمات لدالة المعالج؛ بعض الحقول الأقل شيوعًا ليست كذلك - تلك متاحة كمكالمات مرة أخرى إلى تنفيذ perf (انظر أدناه).</p>
+<p class="Pp">كمثال، يمكن استخدام أمر perf record التالي لتسجيل جميع أحداث sched_wakeup في النظام:</p>
+<div class="Bd-indent">
+<pre># perf record -a -e sched:sched_wakeup</pre>
+</div>
+<p class="Pp">يجب تسجيل التتبعات المقصودة للمعالجة باستخدام نص برمجي مع الخيار المذكور أعلاه: -a لتمكين جمع النظام بأكمله.</p>
+<p class="Pp">يحدد ملف التنسيق لحدث sched_wakeup الحقول التالية (انظر /sys/kernel/tracing/events/sched/sched_wakeup/format):</p>
+<div class="Bd-indent">
+<pre>.ft C
+ format:
+        field:unsigned short common_type;
+        field:unsigned char common_flags;
+        field:unsigned char common_preempt_count;
+        field:int common_pid;
+        field:char comm[TASK_COMM_LEN];
+        field:pid_t pid;
+        field:int prio;
+        field:int success;
+        field:int target_cpu;
+.ft</pre>
+</div>
+<p class="Pp">سيتم تعريف دالة المعالج لهذا الحدث على النحو التالي:</p>
+<div class="Bd-indent">
+<pre>.ft C
+sub sched::sched_wakeup
+{
+   my ($event_name, $context, $common_cpu, $common_secs,
+       $common_nsecs, $common_pid, $common_comm,
+       $comm, $pid, $prio, $success, $target_cpu) = @_;
+}
+.ft</pre>
+</div>
+<p class="Pp">تأخذ دالة المعالج الشكل subsystem::event_name.</p>
+<p class="Pp">تتضمن وسيطات $common_* في قائمة وسيطات المعالج مجموعة الوسيطات التي تم تمريرها إلى جميع معالجات الأحداث؛ بعض الحقول تتوافق مع حقول common_* في ملف التنسيق، ولكن بعضها تم تصنيعه، وبعض حقول common_* ليست شائعة بما يكفي ليتم تمريرها إلى كل حدث كوسيطات ولكنها متاحة كوظائف مكتبية.</p>
+<p class="Pp">فيما يلي وصف موجز لكل من وسيطات الأحداث الثابتة:</p>
+<div class="Bd-indent">
+<pre>$event_name                اسم الحدث كنص
+$context                   'بسكويت' غير شفاف يستخدم في المكالمات الراجعة إلى perf
+$common_cpu                وحدة المعالجة المركزية التي حدث عليها الحدث
+$common_secs               جزء الثواني من وقت طابع الحدث
+$common_nsecs              جزء النانو ثانية من وقت طابع الحدث
+$common_pid                معرف العملية للمهمة الحالية
+$common_comm               اسم العملية الحالية</pre>
+</div>
+<p class="Pp">جميع الحقول المتبقية في ملف تنسيق الحدث لها نظائر كوسيطات لدالة المعالج بنفس الاسم، كما هو موضح في المثال أعلاه.</p>
+<p class="Pp">يوفر ما سبق الأساسيات اللازمة للوصول المباشر إلى كل حقل من كل حدث في التتبع، مما يغطي 90٪ مما تحتاج إلى معرفته لكتابة نص تتبع مفيد. تغطي الأقسام أدناه الباقي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SCRIPT_LAYOUT'><a class='permalink' href='#SCRIPT_LAYOUT'>تخطيط النص</a></h1>
+<p class="Pp">يجب أن يبدأ كل نص Perl script perf بإنشاء مسار بحث لوحدة Perl واستخدام عدد قليل من وحدات الدعم ('use' - انظر أوصاف الوحدات أدناه):</p>
+<div class="Bd-indent">
+<pre>.ft C
+ use lib &quot;$ENV{'PERF_EXEC_PATH'}/scripts/perl/Perf-Trace-Util/lib&quot;;
+ use lib &quot;./Perf-Trace-Util/lib&quot;;
+ use Perf::Trace::Core;
+ use Perf::Trace::Context;
+ use Perf::Trace::Util;
+.ft</pre>
+</div>
+<p class="Pp">يمكن أن يحتوي بقية النص على دوال معالجة ودوال دعم بأي ترتيب.</p>
+<p class="Pp">بخلاف دوال معالجة الأحداث التي تمت مناقشتها أعلاه، يمكن لكل نص برمجي تنفيذ مجموعة من الدوال الاختيارية:</p>
+<p class="Pp"><b>trace_begin</b>، إذا تم تعريفه، يتم استدعاؤه قبل معالجة أي حدث ويعطي النصوص فرصة للقيام بمهام الإعداد:</p>
+<div class="Bd-indent">
+<pre>.ft C
+ sub trace_begin
+ {
+ }
+.ft</pre>
+</div>
+<p class="Pp"><b>trace_end</b>، إذا تم تعريفه، يتم استدعاؤه بعد معالجة جميع الأحداث ويعطي النصوص فرصة للقيام بمهام نهاية النص، مثل عرض النتائج:</p>
+<div class="Bd-indent">
+<pre>.ft C
+sub trace_end
+{
+}
+.ft</pre>
+</div>
+<p class="Pp"><b>trace_unhandled</b>، إذا تم تعريفه، يتم استدعاؤه بعد ذلك لأي حدث لا يحتوي على معالج محدد بشكل صريح له. يتم تمرير مجموعة الوسيطات الشائعة القياسية إليه:</p>
+<div class="Bd-indent">
+<pre>.ft C
+sub trace_unhandled
+{
+    my ($event_name, $context, $common_cpu, $common_secs,
+        $common_nsecs, $common_pid, $common_comm) = @_;
+}
+.ft</pre>
+</div>
+<p class="Pp">تقدم الأقسام التالية أوصافًا لكل وحدة Perl النصية المدمجة في perf ووظائفها المرتبطة بها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AVAILABLE_MODULES_AND_FUNCTIONS'><a class='permalink' href='#AVAILABLE_MODULES_AND_FUNCTIONS'>الوحدات والوظائف المتاحة</a></h1>
+<p class="Pp">تصف الأقسام التالية الوظائف والمتغيرات المتاحة عبر وحدات Perl المختلفة Perf::Trace::*. لاستخدام الوظائف والمتغيرات من وحدة معينة، أضف السطر المقابل <i>use Perf::Trace::XXX</i> إلى نص perf script الخاص بك.</p>
+<section class="Ss">
+<h2 class="Ss" id='Perf::Trace::Core_Module'><a class='permalink' href='#Perf::Trace::Core_Module'>وحدة Perf::Trace::Core</a></h2>
+<p class="Pp">توفر هذه الوظائف بعض الوظائف الأساسية للنصوص البرمجية للمستخدم.</p>
+<p class="Pp">توفر الوظائف <b>flag_str</b> و <b>symbol_str</b> سلاسل نصية سهلة القراءة للحقول الرمزية والحقول الرمزية. تتوافق هذه مع السلاسل والقيم التي تم تحليلها من حقول <i>print fmt</i> في ملفات تنسيق الحدث:</p>
+<div class="Bd-indent">
+<pre>flag_str($event_name, $field_name, $field_value) - تُرجع التمثيل النصي المقابل لـ $field_value للحقل الرمزي $field_name للحدث $event_name
+symbol_str($event_name, $field_name, $field_value) - تُرجع التمثيل النصي المقابل لـ $field_value للحقل الرمزي $field_name للحدث $event_name</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Perf::Trace::Context_Module'><a class='permalink' href='#Perf::Trace::Context_Module'>وحدة Perf::Trace::Context</a></h2>
+<p class="Pp">بعض حقول <i>common</i> في ملف تنسيق الحدث ليست شائعة جدًا، ولكن يجب جعلها في متناول النصوص البرمجية للمستخدم مع ذلك.</p>
+<p class="Pp">تحدد Perf::Trace::Context مجموعة من الوظائف التي يمكن استخدامها للوصول إلى هذه البيانات في سياق الحدث الحالي. تتوقع كل من هذه الوظائف متغير $context، وهو نفس متغير $context الذي تم تمريره إلى كل معالج حدث كوسيط ثانٍ.</p>
+<div class="Bd-indent">
+<pre>common_pc($context) - تُرجع عدد common_preempt للحدث الحالي
+common_flags($context) - تُرجع common_flags للحدث الحالي
+common_lock_depth($context) - تُرجع common_lock_depth للحدث الحالي</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Perf::Trace::Util_Module'><a class='permalink' href='#Perf::Trace::Util_Module'>وحدة Perf::Trace::Util</a></h2>
+<p class="Pp">وظائف أدوات مساعدة مختلفة للاستخدام مع perf script:</p>
+<div class="Bd-indent">
+<pre>nsecs($secs, $nsecs) - تُرجع إجمالي النانو ثانية بالنظر إلى زوج الثواني/النانو ثانية
+nsecs_secs($nsecs) - تُرجع جزء الثواني الكامل بالنظر إلى النانو ثانية
+nsecs_nsecs($nsecs) - تُرجع الباقي من النانو ثانية بالنظر إلى النانو ثانية
+nsecs_str($nsecs) - تُرجع سلسلة نصية قابلة للطباعة بالشكل secs.nsecs
+avg($total, $n) - تُرجع المتوسط بالنظر إلى مجموع وعدد إجمالي للقيم</pre>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/perf-script.1.en'>perf-scr

@@ -1,0 +1,236 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Type__Tiny__Manual__UsingWithMoo(3pm)</h1>
+<link rel="stylesheet" href="basic.css">
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef[
+    Tuple[ PositiveInt, NonEmptyStr, Optional[NonEmptyStr] ]
+  ],
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">العنصر الثالث سيتم التحقق منه إذا كان موجودًا، ولكن سيتم التسامح معه إذا كان غائبًا.</p>
+<p class="Pp">أو يمكننا ببساطة السماح للـ tuples بتضمين قائمة عشوائية من السلاسل النصية بعد السنة واسم السباق:</p>
+<pre>use Types::Standard qw( ArrayRef Tuple Str Slurpy );
+use Types::Common::Numeric qw( PositiveInt );
+use Types::Common::String qw( NonEmptyStr );
+
+has wins =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef[
+    Tuple[ PositiveInt, NonEmptyStr, Slurpy[ ArrayRef[Str] ] ]
+  ],
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">سيقوم النوع <b>Slurpy[ ArrayRef[Str] ]</b> "بشفط" جميع العناصر المتبقية في الـ tuple إلى arrayref والتحقق منه مقابل <b>ArrayRef[Str]</b>.</p>
+<p class="Pp">من الممكن حتى القيام بذلك:</p>
+<pre>use Types::Standard qw( ArrayRef Tuple Any Slurpy );
+use Types::Common::Numeric qw( PositiveInt );
+use Types::Common::String qw( NonEmptyStr );
+
+has wins =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef[
+    Tuple[ PositiveInt, NonEmptyStr, Slurpy[Any] ]
+  ],
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">مع قيد النوع هذا، سيتم شفط أي عناصر بعد العنصرين الأولين إلى arrayref ولن نتحقق من هذا الـ arrayref على الإطلاق. (في الواقع، تنفيذ نوع <b>Tuple</b> ذكي بما يكفي لعدم إزعاج إنشاء الـ arrayref المؤقت للتحقق.)</p>
+<p class="Pp"><b>Dict</b> هو المكافئ لـ <b>Tuple</b> للتحقق من قيم الـ hashrefs.</p>
+<pre>use Types::Standard qw( ArrayRef Dict Optional );
+use Types::Common::Numeric qw( PositiveInt );
+use Types::Common::String qw( NonEmptyStr );
+
+has wins =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef[
+    Dict[
+      year    =&gt; PositiveInt,
+      race    =&gt; NonEmptyStr,
+      jockey  =&gt; Optional[NonEmptyStr],
+    ],
+  ],
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">مثال على استخدامه:</p>
+<pre>my $br = Horse-&gt;new(
+  name    =&gt; &quot;Bold Ruler&quot;,
+  wins    =&gt; [
+    { year =&gt; 1956, race =&gt; &quot;Futurity Stakes&quot;, jockey =&gt; &quot;Eddie&quot; },
+    { year =&gt; 1956, race =&gt; &quot;Juvenile Stakes&quot; },
+  ],
+);</pre>
+<p class="Pp">يعمل النوع <b>Slurpy</b> مع <b>Dict</b> أيضًا:</p>
+<pre>Dict[
+  year    =&gt; PositiveInt,
+  race    =&gt; NonEmptyStr,
+  jockey  =&gt; Optional[NonEmptyStr],
+  ()      =&gt; Slurpy[ HashRef[Str] ],  # تسمح بقيم Str أخرى
+]</pre>
+<p class="Pp">و <span class="Li">&quot;Slurpy[Any]&quot;</span> يعني ما تتوقعه على الأرجح:</p>
+<pre>Dict[
+  year    =&gt; PositiveInt,
+  race    =&gt; NonEmptyStr,
+  jockey  =&gt; Optional[NonEmptyStr],
+  ()      =&gt; Slurpy[Any], # تسمح للـ hashref باحتواء أي شيء آخر على الإطلاق
+]</pre>
+<p class="Pp">بالعودة إلى مثالنا الأول، هناك فرصة لتحسين قيد <b>ArrayRef</b> الخاص بنا:</p>
+<pre>package Horse {
+  use Moo;
+  use Types::Standard qw( Str Num ArrayRef );
+  use namespace::autoclean;
+
+  has name       =&gt; ( is =&gt; 'ro', isa =&gt; Str );
+  has gender     =&gt; ( is =&gt; 'ro', isa =&gt; Str );
+  has age        =&gt; ( is =&gt; 'rw', isa =&gt; Num );
+  has children   =&gt; (
+    is      =&gt; 'ro',
+    isa     =&gt; ArrayRef[ InstanceOf[&quot;Horse&quot;] ],
+    default =&gt; sub { return [] },
+  );
+}</pre>
+<p class="Pp">قيد النوع <b>InstanceOf[&quot;Horse&quot;]</b> يتحقق من أن القيمة هي كائن مقدس في فئة Horse. لذا يجب أن يكون أطفال الحصان arrayref من كائنات Horse أخرى.</p>
+<p class="Pp">داخليًا، يتحقق فقط من <span class="Li">&quot;$_-&gt;isa(&quot;Horse&quot;)&quot;</span> على كل عنصر في الـ arrayref.</p>
+<p class="Pp">من المفيد أحيانًا بدلاً من ذلك التحقق من <span class="Li">&quot;$_-&gt;DOES($role)&quot;</span> أو <span class="Li">&quot;$_-&gt;can($method)&quot;</span> على كائن. على سبيل المثال:</p>
+<pre>package MyAPI::Client {
+  use Moo;
+  use Types::Standard qw( HasMethods );
+
+  has ua =&gt; (is =&gt; 'ro', isa =&gt; HasMethods[&quot;get&quot;, &quot;post&quot;] );
+}</pre>
+<p class="Pp">تسمح أنواع <b>ConsumerOf</b> و <b>HasMethods</b> القابلة للمعلمات بالتحقق بسهولة من الأدوار والطرق للكائنات.</p>
+<p class="Pp">يسمح النوع القابل للمعلمات <b>Enum</b> بقبول مجموعة محدودة أكثر من قيم السلاسل النصية. على سبيل المثال:</p>
+<pre>use Types::Standard qw( Enum );
+has gender =&gt; ( is =&gt; 'ro', isa =&gt; Enum[&quot;m&quot;,&quot;f&quot;] );</pre>
+<p class="Pp">أو إذا كنت تريد مزيدًا من المرونة، يمكنك استخدام <b>StrMatch</b> الذي يسمح لك باختبار السلاسل النصية مقابل تعبير عادي:</p>
+<pre>use Types::Standard qw( StrMatch );
+has gender =&gt; ( is =&gt; 'ro', isa =&gt; StrMatch[qr/^[MF]/i] );</pre>
+<p class="Pp">أو <b>StrLength</b> للتحقق من الحد الأقصى والأدنى لطول السلسلة النصية:</p>
+<pre>use Types::Common::String qw( StrLength );
+has name =&gt; ( is =&gt; 'ro', isa =&gt; StrLength[3, 100] );</pre>
+<p class="Pp">يمكن حذف الحد الأقصى.</p>
+<p class="Pp">وبالمثل، يمكن التعبير عن القيم القصوى والدنيا لنوع رقمي باستخدام <b>IntRange</b> و <b>NumRange</b>:</p>
+<pre>use Types::Common::Numeric qw( IntRange );
+# القيم التي تزيد عن 200 قد تكون خطأ في الإدخال
+has age =&gt; ( is =&gt; 'ro', isa =&gt; IntRange[0, 200] );</pre>
+<p class="Pp">تعد قيود الأنواع القابلة للمعلمات واحدة من أقوى ميزات Type::Tiny، مما يسمح بدمج مجموعة صغيرة من القيود بطرق مفيدة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Type_Coercions'><a class='permalink' href='#Type_Coercions'>تحويلات الأنواع (Type Coercions)</a></h2>
+<p class="Pp">غالبًا ما تكون الممارسة الجيدة هي أن تكون ليبراليًا فيما تقبله.</p>
+<pre>package Horse {
+  use Moo;
+  use Types::Standard qw( Str Num ArrayRef Bool );
+  use namespace::autoclean;
+
+  ...;  # name, gender, age, children, wins
+  has is_alive =&gt; ( is =&gt; 'rw', isa =&gt; Bool, coerce =&gt; 1 );
+}</pre>
+<p class="Pp">الخيار <span class="Li">&quot;coerce&quot;</span> يشير إلى أنه إذا تم تقديم قيمة <i>لا</i> تمر بقيد النوع <b>Bool</b>، فيجب تحويلها (تحويلها) إلى شيء يمر.</p>
+<p class="Pp">تعريف <b>Bool</b> يقول أنه لتحويل قيمة غير منطقية إلى قيمة منطقية، ما عليك سوى القيام بـ <span class="Li">&quot;!! $non_bool&quot;</span>. لذا، كل ما يلي سيشير إلى أن الخيول على قيد الحياة:</p>
+<pre>Horse-&gt;new(is_alive =&gt; 42)
+Horse-&gt;new(is_alive =&gt; [])
+Horse-&gt;new(is_alive =&gt; &quot;false&quot;) # في Perl، السلسلة النصية &quot;false&quot; صحيحة!</pre>
+<p class="Pp"><b>Bool</b> هو قيد النوع الوحيد في Types::Standard الذي لديه تحويل معرف له. الأنواع <b>NumericCode</b>، <b>UpperCaseStr</b>، <b>LowerCaseStr</b>، <b>UpperCaseSimpleStr</b>، و <b>LowerCaseSimpleStr</b> من Types::Common::String لديها أيضًا تحويلات معرفة.</p>
+<p class="Pp">القيود المضمنة الأخرى لا تعرف أي تحويلات لأنه سيكون من الصعب الاتفاق على ما يعنيه التحويل من، على سبيل المثال، <b>HashRef</b> إلى <b>ArrayRef</b>. هل نحتفظ بالمفاتيح؟ القيم؟ كلاهما؟</p>
+<p class="Pp">ولكن من السهل جدًا إضافة تحويلاتك الخاصة!</p>
+<pre>use Types::Standard qw( ArrayRef HashRef Str );
+has things =&gt; (
+  is     =&gt; 'rw',
+  isa    =&gt; ArrayRef-&gt;plus_coercions(
+    HashRef,     sub { [ values %$_ ] },
+    Str,         sub { [ split /;/, $_ ] },
+  ),
+  coerce =&gt; 1,
+);</pre>
+<p class="Pp">(لا تنسى أبدًا <span class="Li">&quot;coerce =&gt; 1&quot;</span>!)</p>
+<p class="Pp">إذا تم تقديم hashref، فسيتم استخدام القيم، وإذا تم تقديم سلسلة نصية، فسيتم تقسيمها على الفاصلة المنقوطة. بالطبع، إذا تم تقديم arrayref، فإنه يمر بالفعل بقيد النوع، لذا لا يلزم إجراء أي تحويل.</p>
+<p class="Pp">يجب أن تكون التحويلات أزواجًا من "أنواع من" ورموز لتحويل القيمة. يمكن أن يكون الرمز عبارة عن coderef (كما هو موضح أعلاه) أو مجرد سلسلة من رمز Perl (كما هو موضح أدناه). يمكن تحسين السلاسل النصية من رمز Perl عادةً بشكل أفضل بواسطة داخليات Type::Tiny، لذا فهي مفضلة بشكل عام. بفضل عامل التشغيل <span class="Li">&quot;q{...}&quot;</span> في Perl، يمكن أن تبدو نظيفة وجميلة مثل الـ coderefs.</p>
+<pre>use Types::Standard qw( ArrayRef HashRef Str );
+has things =&gt; (
+  is     =&gt; 'rw',
+  isa    =&gt; ArrayRef-&gt;plus_coercions(
+    HashRef,     q{ [ values %$_ ] },
+    Str,         q{ [ split /;/, $_ ] },
+  ),
+  coerce =&gt; 1,
+);</pre>
+<p class="Pp">يتم تطبيق التحويلات بعمق تلقائيًا، لذا فإن ما يلي سيفعل ما تتوقعه.</p>
+<pre>has inputs =&gt; (
+  is     =&gt; 'ro',
+  isa    =&gt; ArrayRef-&gt;of(Bool),
+  coerce =&gt; 1
+);</pre>
+<p class="Pp">أنا، بالطبع، أفترض أنك تتوقع شيئًا مثل:</p>
+<pre>my $coerced = [ map { !!$_ } @$orig ];</pre>
+<p class="Pp">إذا كنت تفترض ذلك، تهانينا! نحن على نفس الموجة.</p>
+<p class="Pp">وبالطبع لا يزال بإمكانك إضافة المزيد من التحويلات إلى التحويلات الموروثة...</p>
+<pre>has inputs =&gt; (
+  is     =&gt; 'ro',
+  isa    =&gt; ArrayRef-&gt;of(Bool)-&gt;plus_coercions(Str, sub {...}),
+  coerce =&gt; 1
+);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Type_Defaults'><a class='permalink' href='#Type_Defaults'>الافتراضات للأنواع (Type Defaults)</a></h2>
+<p class="Pp">شمل مثال سابق:</p>
+<pre>has children =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef,
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">إنه في الواقع شائع جدًا أنك سترغب في أن يرجع سمة arrayref افتراضيًا إلى أن يكون arrayref فارغًا، وسمة رقمية أن ترجع افتراضيًا إلى الصفر، وما إلى ذلك. يوفر Type::Tiny طريقة لذلك:</p>
+<pre>has children =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef,
+  default =&gt; ArrayRef-&gt;type_default,
+);</pre>
+<p class="Pp">العديد من الأنواع في Types::Standard لديها افتراضات أنواع معقولة معرفة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Method_Parameters'><a class='permalink' href='#Method_Parameters'>معلمات الأساليب (Method Parameters)</a></h2>
+<p class="Pp">حتى الآن ركزنا فقط على تعريف سمات الكائنات، ولكن قيود الأنواع مفيدة أيضًا للتحقق من معلمات الأساليب.</p>
+<p class="Pp">دعنا نتذكر السمة الخاصة بنا لتتبع انتصارات سباق الحصان:</p>
+<pre>use Types::Standard qw( ArrayRef Tuple Optional );
+use Types::Common::Numeric qw( PositiveInt );
+use Types::Common::String qw( NonEmptyStr );
+
+has wins =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef[
+    Tuple[ PositiveInt, NonEmptyStr, Optional[NonEmptyStr] ]
+  ],
+  default =&gt; sub { return [] },
+);</pre>
+<p class="Pp">نظرًا لأننا لا نثق في الكود الخارجي لدفع إدخالات جديدة إلى هذه المصفوفة، دعنا نحدد طريقة في فئتنا للقيام بذلك.</p>
+<pre>package Horse {
+  ...;
+
+  sub add_win ( $self, $year, $race, $jockey ) {
+    my $win = [
+      $year,
+      $race,
+      $jockey ? $jockey : (),
+    ];
+    push $self-&gt;wins-&gt;@*, $win;
+    return $self;
+  }
+}</pre>
+<p class="Pp">هذا يعمل بشكل جيد، لكننا لم نتحقق فعليًا من قيم <span class="Li">$year</span> و <span class="Li">$race</span> و <span class="Li">$jockey</span>. لنستخدم Type::Params للقيام بذلك:</p>
+<pre>package Horse {
+  use Types::Common::Numeric qw( PositiveInt );
+  use Types::Common::String qw( NonEmptyStr );
+  use Type::Params qw( signature_for );
+  use constant { true =&gt; !!1, false =&gt; !!0 };
+  ...;
+
+  signature_for add_win =&gt; (
+    method     =&gt; true,    # إنها طريقة، لذا لديها $self
+    positional =&gt; [
+      PositiveInt,
+      NonEmptyStr,
+      NonEmptyStr, { optional =&gt; tru
+[
+  {
+    "path": "Type-Tiny-Manual-UsingWithMoo.3pm.json",
+    "content": "{\n  \"header\": {\n    \"name\": \"Type::Tiny::Manual::UsingWithMoo\",\n    \"section\": \"3pm\",\n    \"date\": \"2025-11-02\",\n    \"os\": \"perl v5.42.0\"\n  },\n  \"body\": [\n    {\n      \"type\": \"name\",\n      \"title\": \"Type::Tiny::Manual::UsingWithMoo - Using Type::Tiny with Moo\",\n      \"text\": \"Using Type::Tiny with Moo\\n\"\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"MANUAL\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"section\",\n          \"title\": \"Arguments\",\n          \"level\": \"SS\",\n          \"content\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"Type constraints can be used for method parameters, as well as attributes. This is done by using the \\\"signature_for\\\" function from Type::Params.\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"Here is a simple example:\\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"package Horse {\",\n                \"  use Moo;\",\n                \"  use Types::Common::Numeric qw( PositiveInt );\",\n                \"  use Types::Common::String qw( NonEmptyStr );\",\n                \"  use Type::Params qw( signature_for );\",\n                \"  use constant { true => !!1, false => !!0 };\",\n                \"\",\n                \"  has name => (\",\n                \"    is => 'rw',\n                \"    isa => NonEmptyStr,\n                \"  );\",\n                \"  has gender => (\",\n                \"    is => 'rw',\n                \"    isa => Str,\n                \"  );\",\n                \"  has age => (\",\n                \"    is => 'rw',\n                \"    isa => PositiveInt,\n                \"  );\",\n                \"  has children => (\n                \"    is => 'rw',\n                \"    isa => ArrayRef[NonEmptyStr],\n                \"    default => sub { [] },\n                \"  );\n                \"  has wins => (\n                \"    is => 'rw',\n                \"    isa => ArrayRef[ArrayRef],\n                \"    default => sub { [] },\n                \"  );\n                \"\",\n                \"  signature_for add_win => (\n                \"    method     => true,\n                \"    positional => [\n                \"      PositiveInt,\n                \"      NonEmptyStr,\n                \"      NonEmptyStr,\n                \"    ],\n                \"  );\n                \"\",\n                \"  sub add_win ( $self, $year, $race, $jockey ) {\n                \"    my $win = [\n                \"      $year,\n                \"      $race,\n                \"      $jockey ? $jockey : (),\n                \"    ];\n                \"    push $self->wins->@*, $win;\n                \"    return $self;\n                \"  }\n                \"}\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"The \\\"add_win\\\" method will be wrapped with code that checks incoming arguments, throwing an exception if they fail to meet requirements. It will also perform coercions if types have them (and you don't even need to remember \\\"coerce => 1\\\"; it's automatic) and can even add in defaults:\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"signature_for add_win => (\",\n                \"  method     => true,\n                \"  positional => [\n                \"    PositiveInt,\n                \"    NonEmptyStr,\n                \"    NonEmptyStr, { default => sub { \\\"Eddie\\\" } },\n                \"  ],\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"The generalized syntax for positional parameters in \\\"signature_for\\\" is:\\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"signature_for $method_name => (\",\n                \"  %general_options,\n                \"  positional => [\n                \"    TypeForFirstParam,  %options_for_first_param,\n                \"    TypeForSecondParam, %options_for_second_param,\n                \"    ...,\n                \"  ],\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"As a shortcut for the \\\"{ optional => true }\\\" option, you can just use **Optional** like in **Tuple**. \"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"signature_for add_win => (\",\n                \"  method     => true,\n                \"  positional => [\n                \"    PositiveInt,\n                \"    NonEmptyStr,\n                \"    Optional[NonEmptyStr],\n                \"  ],\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"You can also use 0 (or \\\"builtin::false\\\" if your Perl is new enough) and 1 (or \\\"builtin::true\\\") as shortcuts for **Optional[Any]** and **Any**. The following checks that the first parameter is a positive integer, the second parameter is required (but doesn't care what value it is) and a third parameter is allowed but not required. \"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"signature_for thingy => ( positional => [ PositiveInt, 1, 0 ] );\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"It is possible to accept a variable number of values using **Slurpy**:\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"package Horse {\",\n                \"  use Types::Common::Numeric qw( PositiveInt );\",\n                \"  use Types::Common::String qw( NonEmptyStr );\",\n                \"  use Types::Standard qw( ArrayRef Slurpy );\",\n                \"  use Type::Params qw( signature_for );\",\n                \"  use constant { true => !!1, false => !!0 };\",\n                \"  ...;\",\n                \"\",\n                \"  signature_for add_wins_for_year => (\",\n                \"    method     => true,\n                \"    positional => [\n                \"      PositiveInt,\n                \"      Slurpy[ ArrayRef[NonEmptyStr] ],\",\n                \"    ],\n                \"  );\",\n                \"\",\n                \"  sub add_wins_for_year ( $self, $year, $races ) {\n                \"    for my $race ( $races->@* ) {\n                \"      push $self->wins->@*, [ $year, $race ];\n                \"    }\n                \"    return $self;\n                \"  }\n                \"}\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"It would be called like this:\\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"$bold_ruler->add_wins_for_year(\",\n                \"  1956,\",\n                \"  \\\"Futurity Stakes\\\",\",\n                \"  \\\"Juvenile Stakes\\\",\",\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"The additional parameters are slurped into an arrayref and checked against **ArrayRef[NonEmptyStr]**. Note that with a slurpy arrayref like this, the method receives the values as an arrayref even though they were passed as a list.\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"Optional parameters are only allowed after required parameters, and **Slurpy** parameters are only allowed at the end. (And there can only be a at most one **Slurpy** parameter!)\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"For methods that accept more than one or two parameters, it is often a good idea to provide them as a hash. For example:\\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"$horse->add_win(\",\n                \"  year    => 1956,\n                \"  race    => \\\"Futurity Stakes\\\",\",\n                \"  jockey  => \\\"Eddie\\\",\",\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"This can make your code more readable.\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"To accept named parameters, use the \\\"named\\\" option instead of \\\"positional\\\".\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"package Horse {\",\n                \"  use Types::Common::Numeric qw( PositiveInt );\",\n                \"  use Types::Common::String qw( NonEmptyStr );\",\n                \"  use Type::Params qw( signature_for );\",\n                \"  use constant { true => !!1, false => !!0 };\",\n                \"  ...;\",\n                \"\",\n                \"  signature_for add_win => (\",\n                \"    method     => true,\n                \"    named      => [\n                \"      year    => PositiveInt,\n                \"      race    => NonEmptyStr,\n                \"      jockey  => NonEmptyStr, { optional => true },\",\n                \"    ],\n                \"  );\",\n                \"\",\n                \"  sub add_win ( $self, $arg ) {\n                \"    my $win = [\n                \"      $arg->year,\n                \"      $arg->race,\n                \"      $arg->has_jockey ? $arg->jockey : (),\n                \"    ];\n                \"    push $self->wins->@*, $win;\n                \"    return $self;\n                \"  }\n                \"}\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"The \\\"named\\\" option will bundle all of your named arguments into an object $arg. It allows your method to be called with a list of name-value pairs or a hashref:\\n\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"$horse->add_win(\",\n                \"  year    => 1956,\n                \"  race    => \\\"Futurity Stakes\\\",\",\n                \"  jockey  => \\\"Eddie\\\",\",\n                \");\",\n                \"\",\n                \"$horse->add_win( {\",\n                \"  year    => 1956,\n                \"  race    => \\\"Juvenile Stakes\\\",\",\n                \"} );\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"It is also possible for your check to *accept* named parameters but *receive* a positional list of parameters, using \\\"named_to_list\\\".\"\n            },\n            {\n              \"type\": \"code\",\n              \"program\": \"perl\",\n              \"code\": [\n                \"package Horse {\",\n                \"  use Types::Common::Numeric qw( PositiveInt );\",\n                \"  use Types::Common::String qw( NonEmptyStr );\",\n                \"  use Type::Params qw( signature_for );\",\n                \"  use constant { true => !!1, false => !!0 };\",\n                \"  ...;\",\n                \"\",\n                \"  signature_for add_win => (\",\n                \"    method     => true,\n                \"    named      => [\n                \"      year    => PositiveInt,\n                \"      race    => NonEmptyStr,\n                \"      jockey  => NonEmptyStr, { optional => true },\",\n                \"    ],\n                \"    named_to_list => true,\n                \"  );\",\n                \"\",\n                \"  sub add_win ( $self, $year, $race, $jockey ) {\n                \"    my $win = [\n                \"      $year,\n                \"      $race,\n                \"      $jockey ? $jockey : (),\n                \"    ];\n                \"    push $self->wins->@*, $win;\n                \"    return $self;\n                \"  }\n                \"}\",\n                \"\",\n                \"...;\",\n                \"\",\n                \"$horse->add_win(\",\n                \"  year    => 1956,\n                \"  race    => \\\"Futurity Stakes\\\",\",\n                \"  jockey  => \\\"Eddie\\\",\",\n                \");\"\n              ]\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"Optional and Slurpy named parameters are supported as you'd expect.\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"For more information on Type::Params, and third-party alternatives, see Type::Tiny::Manual::Params.\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"NEXT STEPS\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Congratulations! I know this was probably a lot to take in, but you've covered all of the essentials.\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"You can now set type constraints and coercions for attributes and method parameters in Moo! You are familiar with a lot of the most important and useful type constraints and understand parameterization and how it can be used to build more specific type constraints.\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"(And I'll let you in on a secret. Using Type::Tiny with Moose or Mouse instead of Moo is exactly the same. You can just replace \\\"use Moo\\\" with \\\"use Moose\\\" in any of these examples and they should work fine!)\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Here's your next step:\\n\"\n        },\n        {\n          \"type\": \"list\",\n          \"level\": \"Bl-tag\",\n          \"items\": [\n            {\n              \"type\": \"list_item\",\n              \"term\": \"\\u2022\",\n              \"text\": \"Type::Tiny::Manual::UsingWithMoo2\\n  \\n        Advanced use of Type::Tiny with Moo, including unions and intersections, \\\"stringifies_to\\\", \\\"numifies_to\\\", \\\"with_attribute_values\\\", and \\\"where\\\".\"\n            }\n          ]\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"NOTES\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"On very old versions of Moo \\\"coerce => 1\\\" is not supported. Instead you will need to provide a coderef or object overloading \\\"&lsqb;{}&rsqb;rsqb;\\\" to coerce. Type::Tiny can provide you with an overloaded object.\"\n        },\n        {\n          \"type\": \"code\",\n          \"program\": \"perl\",\n          \"code\": [\n            \"package Horse {\",\n            \"  use Moo;\",\n            \"  use Types::Standard qw( Str Num ArrayRef Bool );\",\n            \"  use namespace::autoclean;\",\n            \"\",\n            \"  ...;  # name, gender, age, children, wins\",\n            \"  has is_alive => (\",\n            \"    is      => 'rw',\n            \"    isa     => Bool,\n            \"    coerce  => Bool->coercion,  # overloaded object\",\n            \"  );\n            \"}\"\n          ]\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"If you have a very old version of Moo, please upgrade to at least Moo 1.006000 which was the version that added support for \\\"coerce => 1\\\".\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"AUTHOR\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Toby Inkster &lt;tobyink@cpan.org&gt;.\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"COPYRIGHT AND LICENCE\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"This software is copyright (c) 2013-2014, 2017-2025 by Toby Inkster.\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"This is free software; you can redistribute it and/or modify it under the same terms as the Perl 5 programming language system itself.\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"title\": \"DISCLAIMER OF WARRANTIES\",\n      \"level\": \"Sh\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"THIS PACKAGE IS PROVIDED \\\"AS IS\\\" AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.\"\n        }\n      ]\n    }\n  ],\n  \"footer\": {\n    \"date\": \"2025-11-02\",\n    \"os\": \"perl v5.42.0\"\n  }\n}\n"
+  }
+]

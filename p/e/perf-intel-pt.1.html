@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perf-intel-pt(1) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perf-intel-pt(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perf/">perf</a></p>
+<p class="lic">التراخيص: GPL-2.0-only</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERF-INTEL-PT(1)</td>
+    <td class="head-vol">perf Manual</td>
+    <td class="head-rtitle">PERF-INTEL-PT(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">perf-intel-pt - Support for Intel Processor Trace within perf
+    tools</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre><i>perf record</i> -e intel_pt//</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">Intel Processor Trace (Intel PT) is an extension of Intel
+    Architecture that collects information about software execution such as
+    control flow, execution modes and timings and formats it into highly
+    compressed binary packets. Technical details are documented in the Intel 64
+    and IA-32 Architectures Software Developer Manuals, Chapter 36 Intel
+    Processor Trace.</p>
+<p class="Pp">Intel PT is first supported in Intel Core M and 5th generation
+    Intel Core processors that are based on the Intel micro-architecture code
+    name Broadwell.</p>
+<p class="Pp">Trace data is collected by <i>perf record</i> and stored within
+    the perf.data file. See below for options to <i>perf record</i>.</p>
+<p class="Pp">Trace data must be <i>decoded</i> which involves walking the
+    object code and matching the trace data packets. For example a TNT packet
+    only tells whether a conditional branch was taken or not taken, so to make
+    use of that packet the decoder must know precisely which instruction was
+    being executed.</p>
+<p class="Pp">Decoding is done on-the-fly. The decoder outputs samples in the
+    same format as samples output by perf hardware events, for example as though
+    the &quot;instructions&quot; or &quot;branches&quot; events had been
+    recorded. Presently 3 tools support this: <i>perf script</i>, <i>perf
+    report</i> and <i>perf inject</i>. See below for more information on using
+    those tools.</p>
+<p class="Pp">The main distinguishing feature of Intel PT is that the decoder
+    can determine the exact flow of software execution. Intel PT can be used to
+    understand why and how did software get to a certain point, or behave a
+    certain way. The software does not have to be recompiled, so Intel PT works
+    with debug or release builds, however the executed images are needed - which
+    makes use in JIT-compiled environments, or with self-modified code, a
+    challenge. Also symbols need to be provided to make sense of addresses.</p>
+<p class="Pp">A limitation of Intel PT is that it produces huge amounts of trace
+    data (hundreds of megabytes per second per core) which takes a long time to
+    decode, for example two or three orders of magnitude longer than it took to
+    collect. Another limitation is the performance impact of tracing, something
+    that will vary depending on the use-case and architecture.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUICKSTART'><a class='permalink' href='#QUICKSTART'>QUICKSTART</a></h1>
+<p class="Pp">It is important to start small. That is because it is easy to
+    capture vastly more data than can possibly be processed.</p>
+<p class="Pp">The simplest thing to do with Intel PT is userspace profiling of
+    small programs. Data is captured with <i>perf record</i> e.g. to trace
+    <i>ls</i> userspace-only:</p>
+<div class="Bd-indent">
+<pre>perf record -e intel_pt//u ls</pre>
+</div>
+<p class="Pp">And profiled with <i>perf report</i> e.g.</p>
+<div class="Bd-indent">
+<pre>perf report</pre>
+</div>
+<p class="Pp">To also trace kernel space presents a problem, namely kernel
+    self-modifying code. A fairly good kernel image is available in /proc/kcore
+    but to get an accurate image a copy of /proc/kcore needs to be made under
+    the same conditions as the data capture. <i>perf record</i> can make a copy
+    of /proc/kcore if the option --kcore is used, but access to /proc/kcore is
+    restricted e.g.</p>
+<div class="Bd-indent">
+<pre>sudo perf record -o pt_ls --kcore -e intel_pt// -- ls</pre>
+</div>
+<p class="Pp">which will create a directory named <i>pt_ls</i> and put the
+    perf.data file (named simply <i>data</i>) and copies of /proc/kcore,
+    /proc/kallsyms and /proc/modules into it. The other tools understand the
+    directory format, so to use <i>perf report</i> becomes:</p>
+<div class="Bd-indent">
+<pre>sudo perf report -i pt_ls</pre>
+</div>
+<p class="Pp">Because samples are synthesized after-the-fact, the sampling
+    period can be selected for reporting. e.g. sample every microsecond</p>
+<div class="Bd-indent">
+<pre>sudo perf report pt_ls --itrace=i1usge</pre>
+</div>
+<p class="Pp">See the sections below for more information about the --itrace
+    option.</p>
+<p class="Pp">Beware the smaller the period, the more samples that are produced,
+    and the longer it takes to process them.</p>
+<p class="Pp">Also note that the coarseness of Intel PT timing information will
+    start to distort the statistical value of the sampling as the sampling
+    period becomes smaller.</p>
+<p class="Pp">To represent software control flow, &quot;branches&quot; samples
+    are produced. By default a branch sample is synthesized for every single
+    branch. To get an idea what data is available you can use the <i>perf
+    script</i> tool with all itrace sampling options, which will list all the
+    samples.</p>
+<div class="Bd-indent">
+<pre>perf record -e intel_pt//u ls
+perf script --itrace=iybxwpe</pre>
+</div>
+<p class="Pp">An interesting field that is not printed by default is
+    <i>flags</i> which can be displayed as follows:</p>
+<div class="Bd-indent">
+<pre>perf script --itrace=iybxwpe -F+flags</pre>
+</div>
+<p class="Pp">The flags are &quot;bcrosyiABExghDt&quot; which stand for branch,
+    call, return, conditional, system, asynchronous, interrupt, transaction
+    abort, trace begin, trace end, in transaction, VM-entry, VM-exit, interrupt
+    disabled, and interrupt disable toggle respectively.</p>
+<p class="Pp">perf script also supports higher level ways to dump instruction
+    traces:</p>
+<div class="Bd-indent">
+<pre>perf script --insn-trace=disasm</pre>
+</div>
+<p class="Pp">or to use the xed disassembler, which requires installing the xed
+    tool (see XED below):</p>
+<div class="Bd-indent">
+<pre>perf script --insn-trace --xed</pre>
+</div>
+<p class="Pp">Dumping all instructions in a long trace can be fairly slow. It is
+    usually better to start with higher level decoding, like</p>
+<div class="Bd-indent">
+<pre>perf script --call-trace</pre>
+</div>
+<p class="Pp">or</p>
+<div class="Bd-indent">
+<pre>perf script --call-ret-trace</pre>
+</div>
+<p class="Pp">and then select a time range of interest. The time range can then
+    be examined in detail with</p>
+<div class="Bd-indent">
+<pre>perf script --time starttime,stoptime --insn-trace=disasm</pre>
+</div>
+<p class="Pp">While examining the trace it&#x2019;s also useful to filter on
+    specific CPUs using the -C option</p>
+<div class="Bd-indent">
+<pre>perf script --time starttime,stoptime --insn-trace=disasm -C 1</pre>
+</div>
+<p class="Pp">Dump all instructions in time range on CPU 1.</p>
+<p class="Pp">Another interesting field that is not printed by default is
+    <i>ipc</i> which can be displayed as follows:</p>
+<div class="Bd-indent">
+<pre>perf script --itrace=be -F+ipc</pre>
+</div>
+<p class="Pp">There are two ways that instructions-per-cycle (IPC) can be
+    calculated depending on the recording.</p>
+<p class="Pp">If the <i>cyc</i> config term (see config terms section below) was
+    used, then IPC and cycle events are calculated using the cycle count from
+    CYC packets, otherwise MTC packets are used - refer to the <i>mtc</i> config
+    term. When MTC is used, however, the values are less accurate because the
+    timing is less accurate.</p>
+<p class="Pp">Because Intel PT does not update the cycle count on every branch
+    or instruction, the values will often be zero. When there are values, they
+    will be the number of instructions and number of cycles since the last
+    update, and thus represent the average IPC cycle count since the last IPC
+    for that event type. Note IPC for &quot;branches&quot; events is calculated
+    separately from IPC for &quot;instructions&quot; events.</p>
+<p class="Pp">Even with the <i>cyc</i> config term, it is possible to produce
+    IPC information for every change of timestamp, but at the expense of
+    accuracy. That is selected by specifying the itrace <i>A</i> option. Due to
+    the granularity of timestamps, the actual number of cycles increases even
+    though the cycles reported does not. The number of instructions is known,
+    but if IPC is reported, cycles can be too low and so IPC is too high. Note
+    that inaccuracy decreases as the period of sampling increases i.e. if the
+    number of cycles is too low by a small amount, that becomes less significant
+    if the number of cycles is large. It may also be useful to use the <i>A</i>
+    option in conjunction with dlfilter-show-cycles.so to provide higher
+    granularity cycle information.</p>
+<p class="Pp">Also note that the IPC instruction count may or may not include
+    the current instruction. If the cycle count is associated with an
+    asynchronous branch (e.g. page fault or interrupt), then the instruction
+    count does not include the current instruction, otherwise it does. That is
+    consistent with whether or not that instruction has retired when the cycle
+    count is updated.</p>
+<p class="Pp">Another note, in the case of &quot;branches&quot; events,
+    non-taken branches are not presently sampled, so IPC values for them do not
+    appear e.g. a CYC packet with a TNT packet that starts with a non-taken
+    branch. To see every possible IPC value, &quot;instructions&quot; events can
+    be used e.g. --itrace=i0ns</p>
+<p class="Pp">While it is possible to create scripts to analyze the data, an</p>
+</div>
+</section>
+
+                
+</section>
+            </article>
+            
+            <aside id="content-right">
+            
+            <div id="sidebar">
+                
+                
+            </div>
+            
+            </aside>
+        </main>
+        <footer>
+        </footer>
+    </body>
+</html>
+    يتوفر نهج بديل لتصدير البيانات إلى قاعدة بيانات sqlite أو postgresql. ارجع إلى البرنامج النصي export-to-sqlite.py أو export-to-postgresql.py لمزيد من التفاصيل، وإلى البرنامج النصي exported-sql-viewer.py كمثال على استخدام قاعدة البيانات.</p>
+<p class="Pp">يوجد أيضًا البرنامج النصي intel-pt-events.py الذي يوفر مثالًا لكيفية فك حزم البيانات الأولية لأحداث الطاقة و PTWRITE. يعرض البرنامج النصي أيضًا الفروع، ويدعم وضعين إضافيين يتم تحديدهما بواسطة الخيار:</p>
+<div class="Bd-indent">&#x2022؛ --insn-trace - تتبع التعليمات</div>
+<div class="Bd-indent">&#x2022؛ --src-trace - تتبع المصدر</div>
+<p class="Pp">يحتوي البرنامج النصي intel-pt-events.py أيضًا على خيارات:</p>
+<div class="Bd-indent">&#x2022؛ --all-switch-events - عرض جميع أحداث التبديل، وليس فقط آخر الأحداث المتتالية.</div>
+<div class="Bd-indent">&#x2022؛ --interleave [&lt;n&gt؛] - تداخل مخرجات العينات لنفس الطابع الزمني بحيث لا يتم عرض أكثر من n عينة لوحدة معالجة مركزية واحدة متتالية. القيمة الافتراضية لـ *n* هي 4. لاحظ أن هذا يؤثر فقط على ترتيب المخرجات، وفقط عندما يكون الطابع الزمني هو نفسه.</div>
+<p class="Pp">كما ذكرنا أعلاه، من السهل التقاط الكثير من البيانات. إحدى الطرق للحد من البيانات الملتقطة هي استخدام وضع *snapshot* الذي يتم شرحه بشكل أكبر أدناه. ارجع إلى *خيار snapshot الجديد* و *أوضاع تشغيل Intel PT* أدناه.</p>
+<p class="Pp">هناك مشكلة أخرى ستتم مواجهتها وهي أخطاء فك التشفير. يمكن أن تنجم عن عدم القدرة على الوصول إلى الصورة المنفذة، أو التعليمات البرمجية المعدلة ذاتيًا أو التي تم إنشاؤها بواسطة JIT، أو عدم القدرة على مطابقة المعلومات الجانبية (مثل تبديل السياق وخرائط الذاكرة mmaps) مما يؤدي إلى عدم معرفة أداة فك التشفير بالتعليمات البرمجية التي تم تنفيذها.</p>
+<p class="Pp">هناك أيضًا مشكلة عدم قدرة `perf` على نسخ البيانات بالسرعة الكافية، مما يؤدي إلى فقدان البيانات بسبب امتلاء المخزن المؤقت. انظر *التعامل مع المخزن المؤقت* أدناه لمزيد من التفاصيل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PERF_RECORD'><a class='permalink' href='#PERF_RECORD'>PERF   RECORD</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='new_event'><a class='permalink' href='#new_event'>حدث   جديد</a></h2>
+<p class="Pp">يقوم برنامج تشغيل Intel PT في النواة بإنشاء PMU جديد لـ Intel PT. يتم تحديد أحداث PMU عن طريق توفير اسم PMU متبوعًا بـ "config" مفصولًا بشرطات مائلة. تم إجراء تحسين للسماح بـ "config" افتراضي، على سبيل المثال الخيار</p>
+<div class="Bd-indent">
+<pre>-e intel_pt//</pre>
+</div>
+<p class="Pp">سيستخدم قيمة config افتراضية. حاليًا، هذا هو نفس</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/tsc,noretcomp=0/</pre>
+</div>
+<p class="Pp">وهو نفس</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/tsc=1,noretcomp=0/</pre>
+</div>
+<p class="Pp">لاحظ أن هناك مصطلحات config أخرى - انظر قسم مصطلحات config أدناه.</p>
+<p class="Pp">يتم سرد مصطلحات config في /sys/devices/intel_pt/format. وهي حقول بت داخل عضو config في `struct perf_event_attr` الذي يتم تمريره إلى النواة بواسطة استدعاء النظام `perf_event_open`. تتوافق مع حقول البت في MSR IA32_RTIT_CTL. إليك قائمة بها وتعريفاتها:</p>
+<div class="Bd-indent">
+<pre>$ grep -H . /sys/bus/event_source/devices/intel_pt/format/*
+/sys/bus/event_source/devices/intel_pt/format/cyc:config:1
+/sys/bus/event_source/devices/intel_pt/format/cyc_thresh:config:19-22
+/sys/bus/event_source/devices/intel_pt/format/mtc:config:9
+/sys/bus/event_source/devices/intel_pt/format/mtc_period:config:14-17
+/sys/bus/event_source/devices/intel_pt/format/noretcomp:config:11
+/sys/bus/event_source/devices/intel_pt/format/psb_period:config:24-27
+/sys/bus/event_source/devices/intel_pt/format/tsc:config:10</pre>
+</div>
+<p class="Pp">لاحظ أنه يجب تجاوز config الافتراضي لكل مصطلح، أي</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/noretcomp=0/</pre>
+</div>
+<p class="Pp">هو نفس</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/tsc=1,noretcomp=0/</pre>
+</div>
+<p class="Pp">لذلك، لتعطيل حزم TSC استخدم:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/tsc=0/</pre>
+</div>
+<p class="Pp">من الممكن أيضًا تحديد قيمة config بشكل صريح:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/config=0x400/</pre>
+</div>
+<p class="Pp">لاحظ أنه، كما هو الحال مع جميع الأحداث، يتم لاحقة الحد بتعديلات الحدث:</p>
+<div class="Bd-indent">
+<pre>u       للمستخدم (userspace)
+k       للنواة (kernel)
+h       للمشرف (hypervisor)
+G       للضيف (guest)
+H       للمضيف (host)
+p       دقيق ip</pre>
+</div>
+<p class="Pp">الرموز *h* و *G* و *H* مخصصة للمحاكاة الافتراضية والتي لا يستخدمها Intel PT. الرمز *p* غير ذي صلة بـ Intel PT أيضًا. لذلك، الخيارات *u* و *k* فقط هي ذات مغزى لـ Intel PT.</p>
+<p class="Pp">يتم عرض `perf_event_attr` إذا تم استخدام الخيار `-vv`، على سبيل المثال</p>
+<div class="Bd-indent">
+<pre>------------------------------------------------------------
+perf_event_attr:
+type                             6
+size                             112
+config                           0x400
+{ sample_period, sample_freq }   1
+sample_type                      IP|TID|TIME|CPU|IDENTIFIER
+read_format                      ID
+disabled                         1
+inherit                          1
+exclude_kernel                   1
+exclude_hv                       1
+enable_on_exec                   1
+sample_id_all                    1
+------------------------------------------------------------
+sys_perf_event_open: pid 31104  cpu 0  group_fd -1  flags 0x8
+sys_perf_event_open: pid 31104  cpu 1  group_fd -1  flags 0x8
+sys_perf_event_open: pid 31104  cpu 2  group_fd -1  flags 0x8
+sys_perf_event_open: pid 31104  cpu 3  group_fd -1  flags 0x8
+------------------------------------------------------------</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='config_terms'><a class='permalink' href='#config_terms'>مصطلحات   config</a></h2>
+<p class="Pp">مصطلحات config هي معلمات محددة مع خيار الحد `-e intel_pt//`، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/cyc/</pre>
+</div>
+<p class="Pp">والذي يحدد وضع الدقة الزمنية. يمكن أن يحتوي كل مصطلح config على قيمة افتراضية هي 1، لذا فإن ما سبق هو نفس:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/cyc=1/</pre>
+</div>
+<p class="Pp">يتم تعيين بعض المصطلحات افتراضيًا، لذا يجب تعيينها إلى 0 لإيقاف تشغيلها. على سبيل المثال، لتعطيل تتبع الفروع:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/branch=0/</pre>
+</div>
+<p class="Pp">يتم فصل مصطلحات config المتعددة بفواصل، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt/cyc,mtc_period=9/</pre>
+</div>
+<p class="Pp">هناك أيضًا مصطلحات config شائعة، انظر وثائق <a href='/man/perf-record.1.en'>perf-record(1)</a>.</p>
+<p class="Pp">يتم وصف مصطلحات Intel PT config أدناه.</p>
+<p class="Pp"><b>tsc</b></p>
+<div class="Bd-indent">مدعوم دائمًا. ينتج حزم طوابع زمنية TSC لتوفير معلومات التوقيت. في بعض الحالات، يكون من الممكن فك التشفير بدون معلومات التوقيت، على سبيل المثال سياق لكل خيط لا يتداخل مع خرائط الذاكرة القابلة للتنفيذ.
+<p class="Pp">يحدد config الافتراضي tsc (أي tsc=1).</p>
+</div>
+<p class="Pp"><b>noretcomp</b></p>
+<div class="Bd-indent">مدعوم دائمًا. يعطل "ضغط العودة" بحيث يتم إنتاج حزمة TIP عند عودة دالة. يسبب إنتاج المزيد من الحزم ولكنه قد يجعل فك التشفير أكثر موثوقية.
+<p class="Pp">لا يحدد config الافتراضي noretcomp (أي noretcomp=0).</p>
+</div>
+<p class="Pp"><b>psb_period</b></p>
+<div class="Bd-indent">يسمح بتحديد تردد حزم PSB.
+<p class="Pp">حزمة PSB هي حزمة مزامنة توفر نقطة بداية لفك التشفير أو الاسترداد من الأخطاء.</p>
+<p class="Pp">يتم الإشارة إلى دعم psb_period بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/psb_cyc</pre>
+</div>
+<p class="Pp">والذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+<p class="Pp">القيم الصالحة معطاة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/psb_periods</pre>
+</div>
+<p class="Pp">والذي يحتوي على قيمة سداسية عشرية، تمثل بتاتها القيم الصالحة، على سبيل المثال، تعيين البت 2 يعني أن القيمة 2 صالحة.</p>
+<p class="Pp">يتم تحويل قيمة psb_period إلى العدد التقريبي للبايتات المتتبعة بين حزم PSB كالتالي:</p>
+<div class="Bd-indent">
+<pre>2 ^ (value + 11)</pre>
+</div>
+<p class="Pp">على سبيل المثال، القيمة 3 تعني 16 كيلوبايت بين PSBs</p>
+<p class="Pp">إذا تم إدخال قيمة غير صالحة، فستعطي رسالة الخطأ قائمة بالقيم الصالحة، على سبيل المثال</p>
+<div class="Bd-indent">
+<pre>$ perf record -e intel_pt/psb_period=15/u uname
+Invalid psb_period for intel_pt. Valid values are: 0-5</pre>
+</div>
+<p class="Pp">إذا تم تحديد حزم MTC، فإن config الافتراضي يحدد قيمة 3 (أي psb_period=3) أو أقرب قيمة أقل مدعومة (0 مدعوم دائمًا). بخلاف ذلك، القيمة الافتراضية هي 0.</p>
+<p class="Pp">إذا كان من المتوقع أن يكون فك التشفير موثوقًا به وكان المخزن المؤقت كبيرًا، فيمكن استخدام فترة PSB كبيرة.</p>
+<p class="Pp">نظرًا لأنه يتم إنتاج حزمة TSC مع PSB، يمكن لفترة PSB أيضًا التأثير على دقة معلومات التوقيت في غياب MTC أو CYC.</p>
+</div>
+<p class="Pp"><b>mtc</b></p>
+<div class="Bd-indent">ينتج حزم توقيت MTC.
+<p class="Pp">توفر حزم MTC معلومات توقيت أدق من حزم TSC. تسجل حزم MTC الوقت باستخدام ساعة الكريستال العتادية (CTC) التي ترتبط بحزم TSC باستخدام حزمة TMA.</p>
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/mtc</pre>
+</div>
+<p class="Pp">والذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+<p class="Pp">يمكن أيضًا تحديد تردد حزم MTC - انظر mtc_period أدناه.</p>
+</div>
+<p class="Pp"><b>mtc_period</b></p>
+<div class="Bd-indent">يحدد مدى تكرار إنتاج حزم MTC - انظر mtc أعلاه لمعرفة كيفية تحديد ما إذا كانت حزم MTC مدعومة.
+<p class="Pp">القيم الصالحة معطاة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/mtc_periods</pre>
+</div>
+<p class="Pp">والذي يحتوي على قيمة سداسية عشرية، تمثل بتاتها القيم الصالحة، على سبيل المثال، تعيين البت 2 يعني أن القيمة 2 صالحة.</p>
+<p class="Pp">يتم تحويل قيمة mtc_period إلى تردد MTC كالتالي:</p>
+<div class="Bd-indent">
+<pre>CTC-frequency / (2 ^ value)</pre>
+</div>
+<p class="Pp">على سبيل المثال، القيمة 3 تعني ثُمن تردد CTC</p>
+<p class="Pp">حيث CTC هي ساعة الكريستال العتادية، والتي يمكن ربط ترددها بـ TSC عبر القيم المقدمة في cpuid leaf 0x15.</p>
+<p class="Pp">إذا تم إدخال قيمة غير صالحة، فستعطي رسالة الخطأ قائمة بالقيم الصالحة، على سبيل المثال</p>
+<div class="Bd-indent">
+<pre>$ perf record -e intel_pt/mtc_period=15/u uname
+Invalid mtc_period for intel_pt. Valid values are: 0,3,6,9</pre>
+</div>
+<p class="Pp">القيمة الافتراضية هي 3 أو أقرب قيمة أقل مدعومة (0 مدعوم دائمًا).</p>
+</div>
+<p class="Pp"><b>cyc</b></p>
+<div class="Bd-indent">ينتج حزم توقيت CYC.
+<p class="Pp">توفر حزم CYC معلومات توقيت أدق من حزم MTC و TSC. تحتوي حزمة CYC على عدد دورات وحدة المعالجة المركزية منذ آخر حزمة CYC. على عكس حزم MTC و TSC، يتم إرسال حزم CYC فقط عند إرسال حزمة أخرى.</p>
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/psb_cyc</pre>
+</div>
+<p class="Pp">والذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+<p class="Pp">يمكن تقليل عدد حزم CYC المنتجة عن طريق تحديد عتبة - انظر cyc_thresh أدناه.</p>
+</div>
+<p class="Pp"><b>cyc_thresh</b></p>
+<div class="Bd-indent">يحدد مدى تكرار إنتاج حزم CYC - انظر cyc أعلاه لمعرفة كيفية تحديد
+</div>
+إذا تم دعم حزم CYC.
+<p class="Pp">القيم الصالحة لـ cyc_thresh مُعطاة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/cycle_thresholds</pre>
+</div>
+<p class="Pp">التي تحتوي على قيمة سداسية عشرية، تمثل بتاتها القيم الصالحة، على سبيل المثال، بت 2 مضبوط يعني أن القيمة 2 صالحة.</p>
+<p class="Pp">تمثل قيمة cyc_thresh الحد الأدنى لعدد دورات وحدة المعالجة المركزية التي يجب أن تمر قبل إرسال حزمة CYC. عدد دورات وحدة المعالجة المركزية هو:</p>
+<div class="Bd-indent">
+<pre>2 ^ (value - 1)</pre>
+</div>
+<p class="Pp">على سبيل المثال، القيمة 4 تعني أنه يجب أن تمر 8 دورات لوحدة المعالجة المركزية قبل إرسال حزمة CYC. ملاحظة: لا تزال حزمة CYC تُرسل فقط عند إرسال حزمة أخرى، وليس في كل 8 دورات لوحدة المعالجة المركزية، على سبيل المثال.</p>
+<p class="Pp">إذا تم إدخال قيمة غير صالحة، فإن رسالة الخطأ ستعرض قائمة بالقيم الصالحة، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>$ perf record -e intel_pt/cyc,cyc_thresh=15/u uname
+Invalid cyc_thresh for intel_pt. Valid values are: 0-12</pre>
+</div>
+<p class="Pp">لا يتم طلب حزم CYC افتراضيًا.</p>
+</div>
+<p class="Pp"><b>pt</b></p>
+<div class="Bd-indent">يحدد تمرير (pass-through) الذي يمكّن مصطلح التكوين *branch*.
+<p class="Pp">يحدد التكوين الافتراضي *pt* إذا كان متاحًا، لذلك لن يحتاج المستخدم أبدًا إلى تحديد هذا المصطلح.</p>
+</div>
+<p class="Pp"><b>branch</b></p>
+<div class="Bd-indent">يمكّن تتبع الفروع. يتم تمكين تتبع الفروع افتراضيًا، لذا لتعطيل تتبع الفروع استخدم *branch=0*.
+<p class="Pp">يحدد التكوين الافتراضي *branch* إذا كان متاحًا.</p>
+</div>
+<p class="Pp"><b>ptw</b></p>
+<div class="Bd-indent">يمكّن حزم PTWRITE التي يتم إنتاجها عند تنفيذ تعليمة ptwrite.
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/ptwrite</pre>
+</div>
+<p class="Pp">الذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+<p class="Pp">كبديل، راجع "PTWRITE المحاكى" أدناه.</p>
+</div>
+<p class="Pp"><b>fup_on_ptw</b></p>
+<div class="Bd-indent">يمكّن حزمة FUP لتتبع حزمة PTWRITE. توفر حزمة FUP عنوان تعليمة ptwrite. في غياب fup_on_ptw، سيستخدم المُفكك عنوان الفرع السابق إذا كان تتبع الفروع ممكّنًا، وإلا فسيكون العنوان صفرًا. لاحظ أن fup_on_ptw سيعمل حتى عند تعطيل تتبع الفروع.</div>
+<p class="Pp"><b>pwr_evt</b></p>
+<div class="Bd-indent">يمكّن أحداث الطاقة. توفر أحداث الطاقة معلومات حول التغييرات في حالة C لوحدة المعالجة المركزية.
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/power_event_trace</pre>
+</div>
+<p class="Pp">الذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+</div>
+<p class="Pp"><b>event</b></p>
+<div class="Bd-indent">يمكّن تتبع الأحداث. توفر الأحداث معلومات حول الأحداث غير المتزامنة.
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/event_trace</pre>
+</div>
+<p class="Pp">الذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+</div>
+<p class="Pp"><b>notnt</b></p>
+<div class="Bd-indent">يعطّل حزم TNT. بدون حزم TNT، لا يمكن اجتياز الكود القابل للتنفيذ لإعادة بناء تدفق التحكم، ومع ذلك، لا تزال حزم FUP و TIP و TIP.PGE و TIP.PGD تشير إلى تدفق التحكم غير المتزامن، و (إذا تم تعطيل ضغط الإرجاع - انظر noretcomp) عبارات الإرجاع. تتمثل ميزة إلغاء حزم TNT في تقليل حجم التتبع والعبء المترتب على التتبع.
+<p class="Pp">يتم الإشارة إلى دعم هذه الميزة بواسطة:</p>
+<div class="Bd-indent">
+<pre>/sys/bus/event_source/devices/intel_pt/caps/tnt_disable</pre>
+</div>
+<p class="Pp">الذي يحتوي على "1" إذا كانت الميزة مدعومة و "0" بخلاف ذلك.</p>
+</div>
+<p class="Pp"><b>aux-action=start-paused</b></p>
+<div class="Bd-indent">بدء التتبع متوقف مؤقتًا، راجع قسم إيقاف مؤقت أو استئناف التتبع</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='config_terms_on_other_events'><a class='permalink' href='#config_terms_on_other_events'>مصطلحات التكوين على الأحداث الأخرى</a></h2>
+<p class="Pp">تعمل بعض ميزات Intel PT مع أحداث أخرى، مثل أخذ عينات منطقة AUX و PEBS-via-PT. في هذه الحالات، يمكن أن تحتوي الأحداث الأخرى على مصطلحات تكوين أدناه:</p>
+<p class="Pp"><b>aux-sample-size</b></p>
+<div class="Bd-indent">يُستخدم لضبط حجم عينة منطقة AUX، راجع قسم خيار أخذ عينات منطقة AUX</div>
+<p class="Pp"><b>aux-output</b></p>
+<div class="Bd-indent">يُستخدم لتحديد PEBS-via-PT، راجع قسم PEBS عبر Intel PT</div>
+<p class="Pp"><b>aux-action</b></p>
+<div class="Bd-indent">يُستخدم لإيقاف مؤقت أو استئناف التتبع، راجع قسم إيقاف مؤقت أو استئناف التتبع</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='AUX_area_sampling_option'><a class='permalink' href='#AUX_area_sampling_option'>خيار أخذ عينات منطقة AUX</a></h2>
+<p class="Pp">لتحديد "أخذ العينات" في Intel PT، يمكن استخدام خيار أخذ عينات منطقة AUX:</p>
+<div class="Bd-indent">
+<pre>--aux-sample</pre>
+</div>
+<p class="Pp">اختياريًا، يمكن أن يتبعه حجم العينة بالبايت، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>--aux-sample=8192</pre>
+</div>
+<p class="Pp">بالإضافة إلى ذلك، يجب تحديد حدث Intel PT لأخذ العينات، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>-e intel_pt//u</pre>
+</div>
+<p class="Pp">سيتم إنشاء عينات على أحداث أخرى تحتوي على بيانات Intel PT، على سبيل المثال، سيؤدي ما يلي إلى إنشاء عينات Intel PT على حدث فقدان الفروع، لاحظ أنه يجب تجميع الأحداث باستخدام {}:</p>
+<div class="Bd-indent">
+<pre>perf record --aux-sample -e '{intel_pt//u,branch-misses:u}'</pre>
+</div>
+<p class="Pp">بديل لـ *--aux-sample* هو إضافة مصطلح التكوين *aux-sample-size* إلى الأحداث. في هذه الحالة، يكون التجميع ضمنيًا، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>perf record -e intel_pt//u -e branch-misses/aux-sample-size=8192/u</pre>
+</div>
+<p class="Pp">هو نفس:</p>
+<div class="Bd-indent">
+<pre>perf record -e '{intel_pt//u,branch-misses/aux-sample-size=8192/u}'</pre>
+</div>
+<p class="Pp">ولكن يسمح أيضًا باستخدام مرشح عنوان، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>perf record -e intel_pt//u --filter 'filter * @/bin/ls' -e branch-misses/aux-sample-size=8192/u -- ls</pre>
+</div>
+<p class="Pp">من المهم اختيار حجم عينة كبير بما يكفي لاحتواء حزمة PSB واحدة على الأقل. إذا لم يكن الأمر كذلك، فسيتم عرض تحذير:</p>
+<div class="Bd-indent">
+<pre>Intel PT sample size (%zu) may be too small for PSB period (%zu)</pre>
+</div>
+<p class="Pp">الحساب المستخدم لذلك هو: إذا كانت sample_size ≤ psb_period + 256، فسيتم عرض التحذير. عند استخدام أخذ العينات، يكون psb_period افتراضيًا 0 (2KiB).</p>
+<p class="Pp">حجم العينة الافتراضي هو 4KiB.</p>
+<p class="Pp">يتم تمرير حجم العينة في aux_sample_size في الهيكل perf_event_attr. يتم تحديد حجم العينة بواسطة الحد الأقصى لحجم الحدث وهو 64KiB. من الصعب معرفة مدى حجم الحدث بدون إرفاق عينة التتبع، ولكن الأداة تتحقق من أن حجم العينة ليس أكبر من 60KiB.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='new_snapshot_option'><a class='permalink' href='#new_snapshot_option'>خيار اللقطة الجديد</a></h2>
+<p class="Pp">يكمن الاختلاف بين التتبع الكامل واللقطة من منظور النواة في أننا في التتبع الكامل لا نعيد كتابة بيانات التتبع التي لم يجمعها المستخدم بعد (وأشار إلى ذلك عن طريق تقدم aux_tail)، بينما في وضع اللقطة نسمح للتتبع بالتشغيل وإعادة كتابة البيانات القديمة في المخزن المؤقت بحيث متى حدث شيء مثير للاهتمام، يمكننا إيقافه والتقاط لقطة لما كان يحدث حول تلك اللحظة المثيرة للاهتمام.</p>
+<p class="Pp">لتحديد وضع اللقطة، تمت إضافة خيار جديد:</p>
+<div class="Bd-indent">
+<pre>-S</pre>
+</div>
+<p class="Pp">اختياريًا، يمكن أن يتبعه حجم اللقطة، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>-S0x100000</pre>
+</div>
+<p class="Pp">حجم اللقطة الافتراضي هو حجم mmap لمنطقة AUX. إذا لم يتم تحديد حجم mmap لمنطقة AUX أو حجم اللقطة، فسيتم افتراضيًا 4MiB للمستخدمين المتميزين (أو إذا كان /proc/sys/kernel/perf_event_paranoid &lt; 0)، 128KiB للمستخدمين غير المتميزين. إذا لم يحدد المستخدم غير المتميز صفحات mmap، فسيتم تقليل صفحات mmap كما هو موضح في قسم خيار حجم mmap لمنطقة AUX الجديد أدناه.</p>
+<p class="Pp">يتم عرض حجم اللقطة إذا تم استخدام الخيار -vv، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>Intel PT snapshot size: %zu</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='new_auxtrace_mmap_size_option'><a class='permalink' href='#new_auxtrace_mmap_size_option'>خيار حجم mmap لمنطقة AUX الجديد</a></h2>
+<p class="Pp">يتم تحديد حجم مخزن Intel PT المؤقت بإضافة إلى الخيار -m، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>-m,16</pre>
+</div>
+<p class="Pp">يحدد حجم المخزن المؤقت 16 صفحة أي 64KiB.</p>
+<p class="Pp">لاحظ أن الوظائف الحالية لـ -m لم تتغير. يتم تحديد حجم mmap لمنطقة AUX بواسطة الإضافة الاختيارية لفاصلة والقيمة.</p>
+<p class="Pp">يبلغ حجم mmap الافتراضي لمنطقة AUX لـ Intel PT 4MiB/حجم الصفحة للمستخدمين المتميزين (أو إذا كان /proc/sys/kernel/perf_event_paranoid &lt; 0)، 128KiB للمستخدمين غير المتميزين. إذا لم يحدد المستخدم غير المتميز صفحات mmap، فسيتم تقليل صفحات mmap من الافتراضي 512KiB/حجم الصفحة إلى 256KiB/حجم الصفحة، وإلا فمن المحتمل أن يحصل المستخدم على خطأ لأنه يتجاوز حد mlock الخاص به (أقصى ذاكرة مقفلة كما هو موضح في /proc/self/limits). لاحظ أن perf لا يحسب أول 512KiB (فعليًا /proc/sys/kernel/perf_event_mlock_kb ناقص صفحة واحدة) لكل وحدة معالجة مركزية ضد حد mlock، لذا يُسمح للمستخدم غير المتميز بـ 512KiB لكل وحدة معالجة مركزية بالإضافة إلى حد mlock الخاص به (الذي يبلغ افتراضيًا 64KiB ولكنه لا يُضرب في عدد وحدات المعالجة المركزية).</p>
+<p class="Pp">في وضع التتبع الكامل، يُسمح بقوى الرقم 2 لحجم المخزن المؤقت، مع حد أدنى للحجم صفحتان. في وضع اللقطة أو وضع أخذ العينات، يكون الأمر نفسه ولكن الحد الأدنى للحجم صفحة واحدة.</p>
+<p class="Pp">يتم عرض حجم mmap وحجم mmap لمنطقة AUX إذا تم استخدام الخيار -vv، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>mmap length 528384
+auxtrace mmap length 4198400</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Intel_PT_modes_of_operation'><a class='permalink' href='#Intel_PT_modes_of_operation'>أوضاع تشغيل Intel PT</a></h2>
+<p class="Pp">يمكن استخدام Intel PT في 3 أوضاع: وضع التتبع الكامل، وضع أخذ العينات، وضع اللقطة.</p>
+<p class="Pp">وضع التتبع الكامل يتتبع بشكل مستمر، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>perf record -e intel_pt//u uname</pre>
+</div>
+<p class="Pp">وضع أخذ العينات يرفق عينة Intel PT بأحداث أخرى، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>perf record --aux-sample -e intel_pt//u -e branch-misses:u</pre>
+</div>
+<p class="Pp">وضع اللقطة يلتقط البيانات المتاحة عند إرسال إشارة أو إصدار أمر تحكم "لقطة". على سبيل المثال، باستخدام إشارة:</p>
+<div class="Bd-indent">
+<pre>perf record -v -e intel_pt//u -S ./loopy 1000000000 &amp;
+[1] 11435
+kill -USR2 11435
+Recording AUX area tracing snapshot</pre>
+</div>
+<p class="Pp">لاحظ أن الإشارة المرسلة هي SIGUSR2. لاحظ أن "Recording AUX area tracing snapshot" يتم عرضه بسبب استخدام الخيار -v.</p>
+<p class="Pp">ميزة استخدام أمر التحكم "snapshot" هي أن الوصول يتم التحكم فيه عن طريق الوصول إلى FIFO، على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>$ mkfifo perf.control
+$ mkfifo perf.ack
+$ cat perf.ack &amp;
+[1] 15235
+$ sudo ~/bin/perf record --control fifo:perf.control,perf.ack -S -e intel_pt//u -- sleep 60 &amp;
+[2] 15243
+$ ps -e | grep perf
+15244 pts/1    00:00:00 </pre>
+</div>
+</section>er dlfilter-show-cycles.so</pre>
+</div>
+<p class="Pp">لرؤية قائمة بـ dlfilters:</p>
+<div class="Bd-indent">
+<pre>perf script -v --list-dlfilters</pre>
+</div>
+<p class="Pp">انظر أيضًا <a href='/man/perf-dlfilters.1.en'>perf-dlfilters(1)</a></p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='dump_option'><a class='permalink' href='#dump_option'>خيار dump</a></h2>
+<p class="Pp">يحتوي perf script على خيار (-D) لـ "إفراغ" الأحداث، أي عرض البيانات الثنائية.</p>
+<p class="Pp">عند استخدام -D، يتم عرض حزم Intel PT. لا يهتم محلل الحزم بحزم PSB، بل يقوم فقط بفك ترميز البايتات - لذا قد لا تكون الحزم التي يراها محلل الحزم الفعلي متطابقة في الأماكن التي تكون فيها البيانات تالفة. أحد الأمثلة على ذلك هو عندما يكون مقاطع التبديل المخزن مؤقتًا بطيئًا جدًا، وتم ملء المخزن المؤقت بالكامل. في هذه الحالة، قد تكون الحزمة الأخيرة في المخزن المؤقت مقطوعة ويتبعها فورًا PSB مع استمرار التتبع في المخزن المؤقت التالي.</p>
+<p class="Pp">لتعطيل عرض حزم Intel PT، ادمج الخيار -D مع --no-itrace.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PERF_REPORT'><a class='permalink' href='#PERF_REPORT'>PERF   REPORT</a></h1>
+<p class="Pp">بشكل افتراضي، سيقوم perf report بفك ترميز بيانات التتبع الموجودة في ملف perf.data. يمكن التحكم في ذلك بشكل أكبر من خلال الخيار الجديد --itrace بالضبط كما في perf script، مع استثناء أن الافتراضي هو --itrace=igxe.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PERF_INJECT'><a class='permalink' href='#PERF_INJECT'>PERF   INJECT</a></h1>
+<p class="Pp">يقبل perf inject أيضًا خيار --itrace، وفي هذه الحالة تتم إزالة بيانات التتبع واستبدالها بالأحداث المصنعة. مثال:</p>
+<div class="Bd-indent">
+<pre>perf inject --itrace -i perf.data -o perf.data.new</pre>
+</div>
+<p class="Pp">فيما يلي مثال على استخدام Intel PT مع autofdo. يتطلب autofdo (<a href='https://github.com/google/autofdo'>https://github.com/google/autofdo</a>) وإصدار gcc 5. مثال فقاعة الفرز من برنامج تعليم AutoFDO (<a href='https://gcc.gnu.org/wiki/AutoFDO/Tutorial'>https://gcc.gnu.org/wiki/AutoFDO/Tutorial</a>) المعدل ليأخذ عدد العناصر كمعامل.</p>
+<div class="Bd-indent">
+<pre>$ gcc-5 -O3 sort.c -o sort_optimized
+$ ./sort_optimized 30000
+Bubble sorting array of 30000 elements
+2254 ms</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ cat ~/.perfconfig
+[intel-pt]
+        mispred-all = on</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ perf record -e intel_pt//u ./sort 3000
+Bubble sorting array of 3000 elements
+58 ms
+[ perf record: Woken up 2 times to write data ]
+[ perf record: Captured and wrote 3.939 MB perf.data ]
+$ perf inject -i perf.data -o inj --itrace=i100usle --strip
+$ ./create_gcov --binary=./sort --profile=inj --gcov=sort.gcov -gcov_version=1
+$ gcc-5 -O3 -fauto-profile=sort.gcov sort.c -o sort_autofdo
+$ ./sort_autofdo 30000
+Bubble sorting array of 30000 elements
+2155 ms</pre>
+</div>
+<p class="Pp">لاحظ أنه لا يوجد حاليًا أي ميزة لاستخدام Intel PT بدلاً من LBR، ولكن قد يتغير ذلك في المستقبل إذا تم الاستفادة بشكل أكبر من البيانات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PEBS_VIA_INTEL_PT'><a class='permalink' href='#PEBS_VIA_INTEL_PT'>PEBS   VIA INTEL PT</a></h1>
+<p class="Pp">بعض الأجهزة تحتوي على ميزة إعادة توجيه سجلات PEBS إلى تتبع Intel PT. يتم تحديد التسجيل باستخدام مصطلح تكوين المخرج المساعد، مثال:</p>
+<div class="Bd-indent">
+<pre>perf record -c 10000 -e '{intel_pt/branch=0/,cycles/aux-output/ppp}' uname</pre>
+</div>
+<p class="Pp">في الأصل، كان البرنامج يدعم فقط إعادة توجيه حدث PEBS واحد على الأكثر لأنه لم يكن قادرًا على التمييز بين حدث وآخر. للتغلب على ذلك، تضيف النواة الحديثة وأدوات perf دعمًا لحدث النطاق الجانبي PERF_RECORD_AUX_OUTPUT_HW_ID. للتحقق من وجود هذا الحدث في تتبع PEBS-via-PT:</p>
+<div class="Bd-indent">
+<pre>perf script -D --no-itrace | grep PERF_RECORD_AUX_OUTPUT_HW_ID</pre>
+</div>
+<p class="Pp">لعرض أحداث PEBS من تتبع Intel PT، استخدم خيار itrace <i>o</i>، مثال:</p>
+<div class="Bd-indent">
+<pre>perf script --itrace=oe</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='XED'><a class='permalink' href='#XED'>XED</a></h1>
+<p class="Pp">بالنسبة لـ --xed، هناك حاجة إلى أداة xed. إليك كيفية تثبيتها:</p>
+<div class="Bd-indent">
+<pre>$ git clone https://github.com/intelxed/mbuild.git mbuild
+$ git clone https://github.com/intelxed/xed
+$ cd xed
+$ ./mfile.py --share
+$ ./mfile.py examples
+$ sudo ./mfile.py --prefix=/usr/local install
+$ sudo ldconfig
+$ sudo cp obj/examples/xed /usr/local/bin</pre>
+</div>
+<p class="Pp">اختبار xed الأساسي:</p>
+<div class="Bd-indent">
+<pre>$ xed | head -3
+ERROR: required argument(s) were missing
+Copyright (C) 2017, Intel Corporation. All rights reserved.
+XED version: [v10.0-328-g7d62c8c49b7b]
+$</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TRACING_VIRTUAL_MACHINES_(KERNEL_ONLY)'><a class='permalink' href='#TRACING_VIRTUAL_MACHINES_(KERNEL_ONLY)'>تتبع الآلات الافتراضية (النواة فقط)</a></h1>
+<p class="Pp">حاليًا، يتم دعم تتبع النواة باستخدام فك الترميز "الخالد" (أي لا توجد طوابع زمنية TSC) أو ارتباط وقت VM. ارتباط وقت VM هو خطوة إضافية باستخدام <i>perf inject</i> ويتطلب إزاحة VMX TSC ثابتة وعدم وجود قياس VMX لـ TSC.</p>
+<p class="Pp">قيود وملاحظات أخرى</p>
+<div class="Bd-indent">
+<pre>قد تقمع ضوابط VMX الحزم اللازمة لفك الترميز مما يؤدي إلى أخطاء في فك الترميز
+قد تمنع ضوابط VMX مقاطعة NMI الخاصة بـ perf للمضيف مما قد يؤدي إلى فقدان بيانات التتبع
+الكود الذاتي التعديل للنواة الضيف (مثل تسميات القفز أو eBPF المترجم JIT) سيؤدي إلى أخطاء في فك الترميز
+معلومات خيط الضيف غير معروفة
+وحدة معالجة الرسومات الافتراضية (VCPU) غير معروفة ولكن قد يكون من الممكن استنتاجها من خيط المضيف
+لا تدعم سلاسل الاستدعاء</pre>
+</div>
+<p class="Pp">مثال باستخدام فك الترميز "الخالد"</p>
+<p class="Pp">بدء VM</p>
+<div class="Bd-indent">
+<pre>$ sudo virsh start kubuntu20.04
+Domain kubuntu20.04 started</pre>
+</div>
+<p class="Pp">تركيب نظام ملفات الضيف. لاحظ أن sshfs يحتاج إلى -o direct_io لتمكين قراءة ملفات proc. يلزم الوصول إلى الجذر لقراءة /proc/kcore.</p>
+<div class="Bd-indent">
+<pre>$ mkdir vm0
+$ sshfs -o direct_io root@vm0:/ vm0</pre>
+</div>
+<p class="Pp">نسخ ملفات الضيف /proc/kallsyms و /proc/modules و /proc/kcore</p>
+<div class="Bd-indent">
+<pre>$ perf buildid-cache -v --kcore vm0/proc/kcore
+kcore added to build-id cache directory /home/user/.debug/[kernel.kcore]/9600f316a53a0f54278885e8d9710538ec5f6a08/2021021807494306
+$ KALLSYMS=/home/user/.debug/[kernel.kcore]/9600f316a53a0f54278885e8d9710538ec5f6a08/2021021807494306/kallsyms</pre>
+</div>
+<p class="Pp">البحث عن عملية VM</p>
+<div class="Bd-indent">
+<pre>$ ps -eLl | grep 'KVM\|PID'
+F S   UID     PID    PPID     LWP  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD
+3 S 64055    1430       1    1440  1  80   0 - 1921718 -    ?        00:02:47 CPU 0/KVM
+3 S 64055    1430       1    1441  1  80   0 - 1921718 -    ?        00:02:41 CPU 1/KVM
+3 S 64055    1430       1    1442  1  80   0 - 1921718 -    ?        00:02:38 CPU 2/KVM
+3 S 64055    1430       1    1443  2  80   0 - 1921718 -    ?        00:03:18 CPU 3/KVM</pre>
+</div>
+<p class="Pp">ابدأ تسجيل perf مفتوح النهاية، مع تتبع عملية VM، قم بتنفيذ شيء ما على VM، ثم اضغط Ctrl-C للإيقاف. لا يتم دعم TSC ويجب تحديد tsc=0. هذا يعني أن mtc عديم الفائدة، لذا أضف mtc=0. ومع ذلك، لا يزال من الممكن تحديد IPC، لذا يمكن إضافة cyc=1. يتم دعم فك ترميز النواة فقط، لذا يجب تحديد <i>k</i>. يتتبع Intel PT كلاً من المضيف والضيف، لذا يجب تحديد --guest و --host. بدون طوابع زمنية، يجب تحديد --per-thread لتمييز الخيوط.</p>
+<div class="Bd-indent">
+<pre>$ sudo perf kvm --guest --host --guestkallsyms $KALLSYMS record --kcore -e intel_pt/tsc=0,mtc=0,cyc=1/k -p 1430 --per-thread
+^C
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 5.829 MB ]</pre>
+</div>
+<p class="Pp">يمكن استخدام perf script لتوفير تتبع التعليمات</p>
+<div class="Bd-indent">
+<pre>$ perf script --guestkallsyms $KALLSYMS --insn-trace=disasm -F+ipc | grep -C10 vmresume | head -21
+      CPU 0/KVM  1440  ffffffff82133cdd __vmx_vcpu_run+0x3d ([kernel.kallsyms])                movq  0x48(%rax), %r9
+      CPU 0/KVM  1440  ffffffff82133ce1 __vmx_vcpu_run+0x41 ([kernel.kallsyms])                movq  0x50(%rax), %r10
+      CPU 0/KVM  1440  ffffffff82133ce5 __vmx_vcpu_run+0x45 ([kernel.kallsyms])                movq  0x58(%rax), %r11
+      CPU 0/KVM  1440  ffffffff82133ce9 __vmx_vcpu_run+0x49 ([kernel.kallsyms])                movq  0x60(%rax), %r12
+      CPU 0/KVM  1440  ffffffff82133ced __vmx_vcpu_run+0x4d ([kernel.kallsyms])                movq  0x68(%rax), %r13
+      CPU 0/KVM  1440  ffffffff82133cf1 __vmx_vcpu_run+0x51 ([kernel.kallsyms])                movq  0x70(%rax), %r14
+      CPU 0/KVM  1440  ffffffff82133cf5 __vmx_vcpu_run+0x55 ([kernel.kallsyms])                movq  0x78(%rax), %r15
+      CPU 0/KVM  1440  ffffffff82133cf9 __vmx_vcpu_run+0x59 ([kernel.kallsyms])                movq  (%rax), %rax
+      CPU 0/KVM  1440  ffffffff82133cfc __vmx_vcpu_run+0x5c ([kernel.kallsyms])                callq  0xffffffff82133c40
+      CPU 0/KVM  1440  ffffffff82133c40 vmx_vmenter+0x0 ([kernel.kallsyms])            jz 0xffffffff82133c46
+      CPU 0/KVM  1440  ffffffff82133c42 vmx_vmenter+0x2 ([kernel.kallsyms])            vmresume         IPC: 0.11 (50/445)
+          :1440  1440  ffffffffbb678b06 native_write_msr+0x6 ([guest.kernel.kallsyms])                 nopl  %eax, (%rax,%rax,1)
+          :1440  1440  ffffffffbb678b0b native_write_msr+0xb ([guest.kernel.kallsyms])             retq     IPC: 0.04 (2/41)
+          :1440  1440  ffffffffbb666646 lapic_next_deadline+0x26 ([guest.kernel.kallsyms])             data16 nop
+          :1440  1440  ffffffffbb666648 lapic_next_deadline+0x28 ([guest.kernel.kallsyms])             xor %eax, %eax
+          :1440  1440  ffffffffbb66664a lapic_next_deadline+0x2a ([guest.kernel.kallsyms])             popq  %rbp
+          :1440  1440  ffffffffbb66664b lapic_next_deadline+0x2b ([guest.kernel.kallsyms])             retq     IPC: 0.16 (4/25)
+          :1440  1440  ffffffffbb74607f clockevents_program_event+0x8f ([guest.kernel.kallsyms])               test %eax, %eax
+          :1440  1440  ffffffffbb746081 clockevents_program_event+0x91 ([guest.kernel.kallsyms])               jz 0xffffffffbb74603c    IPC: 0.06 (2/30)
+          :1440  1440  ffffffffbb74603c clockevents_program_event+0x4c ([guest.kernel.kallsyms])               popq  %rbx
+          :1440  1440  ffffffffbb74603d clockevents_program_event+0x4d ([guest.kernel.kallsyms])               popq  %r12</pre>
+</div>
+<p class="Pp">مثال باستخدام ارتباط وقت VM</p>
+<p class="Pp">بدء VM</p>
+<div class="Bd-indent">
+<pre>$ sudo virsh start kubuntu20.04
+Domain kubuntu20.04 started</pre>
+</div>
+<p class="Pp">تركيب نظام ملفات الضيف. لاحظ أن sshfs يحتاج إلى -o direct_io لتمكين قراءة ملفات proc. يلزم الوصول إلى الجذر لقراءة /proc/kcore.</p>
+<div class="Bd-indent">
+<pre>$ mkdir -p vm0
+$ sshfs -o direct_io root@vm0:/ vm0</pre>
+</div>
+<p class="Pp">نسخ ملفات الضيف /proc/kallsyms و /proc/modules و /proc/kcore</p>
+<div class="Bd-indent">
+<pre>$ perf buildid-cache -v --kcore vm0/proc/kcore
+same kcore found in /home/user/.debug/[kernel.kcore]/cc9c55a98c5e4ec0aeda69302554aabed5cd6491/2021021312450777
+$ KALLSYMS=/home/user/.debug/\[kernel.kcore\]/cc9c55a98c5e4ec0aeda69302554aabed5cd6491/2021021312450777/kallsyms</pre>
+</div>
+<p class="Pp">البحث عن عملية VM</p>
+<div class="Bd-indent">
+<pre>$ ps -eLl | grep 'KVM\|PID'
+F S   UID     PID    PPID     LWP  C PRI  NI ADDR SZ WCHAN  TTY          TIME CMD
+3 S 64055   16998       1   17005 13  80   0 - 1818189 -    ?        00:00:16 CPU 0/KVM
+3 S 64055   16998       1   </pre>
+</div>
+<section class="Sh">
+<h1 class="Sh" id='TRACING_KVM_GUESTS'><a class='permalink' href='#TRACING_KVM_GUESTS'>TRACING KVM GUESTS</a></h1>
+<p class="Pp">There are 3 main ways of tracing KVM guests:</p>
+<dl class="Bl-tag">
+  <dt><b>1.</b></dt>
+  <dd>Trace only the VM.</dd>
+  <dt><b>2.</b></dt>
+  <dd>Trace the VM and its host, i.e. the KVM process.</dd>
+  <dt><b>3.</b></dt>
+  <dd>Trace the VM and its host, and inject guest events into the host
+      trace.</dd>
+</dl>
+<p class="Pp">In order to trace a VM, the VM must be started with the
+    <i>qemu</i> trace enabled.</p>
+<p class="Pp">With the example below, the VM has 4 virtual CPUs.</p>
+<pre>  CPU 0/KVM 17006  0   17007  4  80   0 - 1818189 -    ?        00:00:05 CPU 1/KVM
+  CPU 1/KVM 16998  1   17007  3  80   0 - 1818189 -    ?        00:00:04 CPU 2/KVM
+  CPU 2/KVM 16998  1   17008  4  80   0 - 1818189 -    ?        00:00:05 CPU 3/KVM</pre>
+<p class="Pp">Start an open-ended perf record, tracing the VM process, do
+    something on the VM, and then ctrl-C to stop. IPC can be determined, hence
+    cyc=1 can be added. Only kernel decoding is supported, so <i>k</i> must be
+    specified. Intel PT traces both the host and the guest so --guest and --host
+    need to be specified.</p>
+<div class="Bd-indent">
+<pre>$ sudo perf kvm --guest --host --guestkallsyms record --kcore -e intel_pt/cyc=1/k -p 16998
+^C[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 9.041 MB perf.data.kvm ]</pre>
+</div>
+<p class="Pp">Now <i>perf inject</i> can be used to determine the VMX TCS
+    Offset. Note, Intel PT TSC packets are only 7-bytes, so the TSC Offset might
+    differ from the actual value in the 8th byte. That will have no effect i.e.
+    the resulting timestamps will be correct anyway.</p>
+<div class="Bd-indent">
+<pre>$ perf inject -i perf.data.kvm --vm-time-correlation=dry-run
+ERROR: Unknown TSC Offset for VMCS 0x1bff6a
+VMCS: 0x1bff6a  TSC Offset 0xffffe42722c64c41
+ERROR: Unknown TSC Offset for VMCS 0x1cbc08
+VMCS: 0x1cbc08  TSC Offset 0xffffe42722c64c41
+ERROR: Unknown TSC Offset for VMCS 0x1c3ce8
+VMCS: 0x1c3ce8  TSC Offset 0xffffe42722c64c41
+ERROR: Unknown TSC Offset for VMCS 0x1cbce9
+VMCS: 0x1cbce9  TSC Offset 0xffffe42722c64c41</pre>
+</div>
+<p class="Pp">Each virtual CPU has a different Virtual Machine Control Structure
+    (VMCS) shown above with the calculated TSC Offset. For an unchanging TSC
+    Offset they should all be the same for the same virtual machine.</p>
+<p class="Pp">Now that the TSC Offset is known, it can be provided to <i>perf
+    inject</i></p>
+<div class="Bd-indent">
+<pre>$ perf inject -i perf.data.kvm --vm-time-correlation=&quot;dry-run 0xffffe42722c64c41&quot;</pre>
+</div>
+<p class="Pp">Note the options for <i>perf inject</i> --vm-time-correlation
+  are:</p>
+<div class="Bd-indent">
+<pre>[ dry-run ] [ &lt;TSC Offset&gt; [ : &lt;VMCS&gt; [ , &lt;VMCS&gt; ]... ]  ]...</pre>
+</div>
+<p class="Pp">So it is possible to specify different TSC Offsets for different
+    VMCS. The option &quot;dry-run&quot; will cause the file to be processed but
+    without updating it. Note it is also possible to get a intel_pt.log file by
+    adding option --itrace=d</p>
+<p class="Pp">There were no errors so, do it for real</p>
+<div class="Bd-indent">
+<pre>$ perf inject -i perf.data.kvm --vm-time-correlation=0xffffe42722c64c41 --force</pre>
+</div>
+<p class="Pp"><i>perf script</i> can be used to see if there are any decoder
+    errors</p>
+<div class="Bd-indent">
+<pre>$ perf script -i perf.data.kvm --guestkallsyms $KALLSYMS --itrace=e-o</pre>
+</div>
+<p class="Pp">There were none.</p>
+<p class="Pp"><i>perf script</i> can be used to provide an instruction trace
+    showing timestamps</p>
+<div class="Bd-indent">
+<pre>$ perf script -i perf.data.kvm --guestkallsyms $KALLSYMS --insn-trace=disasm -F+ipc | grep -C10 vmresume | head -21
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133cdd __vmx_vcpu_run+0x3d ([kernel.kallsyms])                 movq  0x48(%rax), %r9
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133ce1 __vmx_vcpu_run+0x41 ([kernel.kallsyms])                 movq  0x50(%rax), %r10
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133ce5 __vmx_vcpu_run+0x45 ([kernel.kallsyms])                 movq  0x58(%rax), %r11
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133ce9 __vmx_vcpu_run+0x49 ([kernel.kallsyms])                 movq  0x60(%rax), %r12
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133ced __vmx_vcpu_run+0x4d ([kernel.kallsyms])                 movq  0x68(%rax), %r13
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133cf1 __vmx_vcpu_run+0x51 ([kernel.kallsyms])                 movq  0x70(%rax), %r14
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133cf5 __vmx_vcpu_run+0x55 ([kernel.kallsyms])                 movq  0x78(%rax), %r15
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133cf9 __vmx_vcpu_run+0x59 ([kernel.kallsyms])                 movq  (%rax), %rax
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133cfc __vmx_vcpu_run+0x5c ([kernel.kallsyms])                 callq  0xffffffff82133c40
+      CPU 1/KVM 17006 [001] 11500.262865593:  ffffffff82133c40 vmx_vmenter+0x0 ([kernel.kallsyms])             jz 0xffffffff82133c46
+      CPU 1/KVM 17006 [001] 11500.262866075:  ffffffff82133c42 vmx_vmenter+0x2 ([kernel.kallsyms])             vmresume         IPC: 0.05 (40/769)
+         :17006 17006 [001] 11500.262869216:  ffffffff82200cb0 asm_sysvec_apic_timer_interrupt+0x0 ([guest.kernel.kallsyms])           clac
+         :17006 17006 [001] 11500.262869216:  ffffffff82200cb3 asm_sysvec_apic_timer_interrupt+0x3 ([guest.kernel.kallsyms])           pushq  $0xffffffffffffffff
+         :17006 17006 [001] 11500.262869216:  ffffffff82200cb5 asm_sysvec_apic_timer_interrupt+0x5 ([guest.kernel.kallsyms])           callq  0xffffffff82201160
+         :17006 17006 [001] 11500.262869216:  ffffffff82201160 error_entry+0x0 ([guest.kernel.kallsyms])               cld
+         :17006 17006 [001] 11500.262869216:  ffffffff82201161 error_entry+0x1 ([guest.kernel.kallsyms])               pushq  %rsi
+         :17006 17006 [001] 11500.262869216:  ffffffff82201162 error_entry+0x2 ([guest.kernel.kallsyms])               movq  0x8(%rsp), %rsi
+         :17006 17006 [001] 11500.262869216:  ffffffff82201167 error_entry+0x7 ([guest.kernel.kallsyms])               movq  %rdi, 0x8(%rsp)
+         :17006 17006 [001] 11500.262869216:  ffffffff8220116c error_entry+0xc ([guest.kernel.kallsyms])               pushq  %rdx
+         :17006 17006 [001] 11500.262869216:  ffffffff8220116d error_entry+0xd ([guest.kernel.kallsyms])               pushq  %rcx
+         :17006 17006 [001] 11500.262869216:  ffffffff8220116e error_entry+0xe ([guest.kernel.kallsyms])               pushq  %rax</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TRACING_VIRTUAL_MACHINES_(INCLUDING_USER_SPACE)'><a class='permalink' href='#TRACING_VIRTUAL_MACHINES_(INCLUDING_USER_SPACE)'>TRACING VIRTUAL MACHINES (INCLUDING USER SPACE)</a></h1>
+<p class="Pp">It is possible to use perf record to record sideband events within
+    a virtual machine, so that an Intel PT trace on the host can be decoded.
+    Sideband events from the guest perf.data file can be injected into the host
+    perf.data file using perf inject.</p>
+<p class="Pp">Here is an example of the steps needed:</p>
+<p class="Pp">On the guest machine:</p>
+<p class="Pp">Check that no-kvmclock kernel command line option was used to
+    boot:</p>
+<p class="Pp">Note, this is essential to enable time correlation between host
+    and guest machines.</p>
+<div class="Bd-indent">
+<pre>$ cat /proc/cmdline
+BOOT_IMAGE=/boot/vmlinuz-5.10.0-16-amd64 root=UUID=cb49c910-e573-47e0-bce7-79e293df8e1d ro no-kvmclock</pre>
+</div>
+<p class="Pp">There is no BPF support at present so, if possible, disable JIT
+    compiling:</p>
+<div class="Bd-indent">
+<pre>$ echo 0 | sudo tee /proc/sys/net/core/bpf_jit_enable
+0</pre>
+</div>
+<p class="Pp">Start perf record to collect sideband events:</p>
+<div class="Bd-indent">
+<pre>$ sudo perf record -o guest-sideband-testing-guest-perf.data --sample-identifier --buildid-all --switch-events --kcore -a -e dummy</pre>
+</div>
+<p class="Pp">On the host machine:</p>
+<p class="Pp">Start perf record to collect Intel PT trace:</p>
+<p class="Pp">Note, the host trace will get very big, very fast, so the steps
+    from starting to stopping the host trace really need to be done so that they
+    happen in the shortest time possible.</p>
+<div class="Bd-indent">
+<pre>$ sudo perf record -o guest-sideband-testing-host-perf.data -m,64M --kcore -a -e intel_pt/cyc/</pre>
+</div>
+<p class="Pp">On the guest machine:</p>
+<p class="Pp">Run a small test case, just <i>uname</i> in this example:</p>
+<div class="Bd-indent">
+<pre>$ uname
+Linux</pre>
+</div>
+<p class="Pp">On the host machine:</p>
+<p class="Pp">Stop the Intel PT trace:</p>
+<div class="Bd-indent">
+<pre>^C
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 76.122 MB guest-sideband-testing-host-perf.data ]</pre>
+</div>
+<p class="Pp">On the guest machine:</p>
+<p class="Pp">Stop the Intel PT trace:</p>
+<div class="Bd-indent">
+<pre>^C
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 1.247 MB guest-sideband-testing-guest-perf.data ]</pre>
+</div>
+<p class="Pp">And then copy guest-sideband-testing-guest-perf.data to the host
+    (not shown here).</p>
+<p class="Pp">On the host machine:</p>
+<p class="Pp">With the 2 perf.data recordings, and with their ownership changed
+    to the user.</p>
+<p class="Pp">Identify the TSC Offset:</p>
+<div class="Bd-indent">
+<pre>$ perf inject -i guest-sideband-testing-host-perf.data --vm-time-correlation=dry-run
+VMCS: 0x103fc6  TSC Offset 0xfffffa6ae070cb20
+VMCS: 0x103ff2  TSC Offset 0xfffffa6ae070cb20
+VMCS: 0x10fdaa  TSC Offset 0xfffffa6ae070cb20
+VMCS: 0x24d57c  TSC Offset 0xfffffa6ae070cb20</pre>
+</div>
+<p class="Pp">Correct Intel PT TSC timestamps for the guest machine:</p>
+<div class="Bd-indent">
+<pre>$ perf inject -i guest-sideband-testing-host-perf.data --vm-time-correlation=0xfffffa6ae070cb20 --force</pre>
+</div>
+<p class="Pp">Identify the guest machine PID:</p>
+<div class="Bd-indent">
+<pre>$ perf script -i guest-sideband-testing-host-perf.data --no-itrace --show-task-events | grep KVM
+      CPU 0/KVM     0 [000]     0.000000: PERF_RECORD_COMM: CPU 0/KVM:13376/13381
+      CPU 1/KVM     0 [000]     0.000000: PERF_RECORD_COMM: CPU 1/KVM:13376/13382
+      CPU 2/KVM     0 [000]     0.000000: PERF_RECORD_COMM: CPU 2/KVM:13376/13383
+      CPU 3/KVM     0 [000]     0.000000: PERF_RECORD_COMM: CPU 3/KVM:13376/13384</pre>
+</div>
+<p class="Pp">Note, the QEMU option -name debug-threads=on is needed so that
+    thread names can be used to determine which thread is running which VCPU as
+    above. libvirt seems to use this by default.</p>
+<p class="Pp">Create a guestmount, assuming the guest machine is
+    <i>vm_to_test</i>:</p>
+<div class="Bd-indent">
+<pre>$ mkdir -p ~/guestmount/13376
+$ sshfs -o direct_io vm_to_test:/ ~/guestmount/13376</pre>
+</div>
+<p class="Pp">Inject the guest perf.data file into the host perf.data file:</p>
+<p class="Pp">Note, due to the guestmount option, guest object files and debug
+    files will be copied into the build ID cache from the guest machine, with
+    the notable exception of VDSO. If needed, VDSO can be copied manually in a
+    fashion similar to that used by the perf-archive script.</p>
+<div class="Bd-indent">
+<pre>$ perf inject -i guest-sideband-testing-host-perf.data -o inj --guestmount ~/guestmount --guest-data=guest-sideband-testing-guest-perf.data,13376,0xfffffa6ae070cb20</pre>
+</div>
+<p class="Pp">Show an excerpt from the result. In this case the CPU and time
+    range have been to chosen to show interaction between guest and host when
+    <i>uname</i> is starting to run on the guest machine:</p>
+<p class="Pp">Notes:</p>
+<div class="Bd-indent">&#x2022;the CPU displayed, [002] in this case, is always
+  the host CPU</div>
+<div class="Bd-indent">&#x2022;events happening in the virtual machine start
+  with VM:13376 VCPU:003, which shows the hypervisor PID 13376 and the VCPU
+  number</div>
+<div class="Bd-indent">&#x2022;only calls and errors are displayed i.e.
+  --itrace=ce</div>
+<div class="Bd-indent">&#x2022;branches entering and exiting the virtual machine
+  are split, and show as 2 branches to/from &quot;0 [unknown] ([unknown])&quot;
+<div class="Bd-indent">
+<pre>$ perf script -i inj --itrace=ce -F+machine_pid,+vcpu,+addr,+pid,+tid,-period --ns --time 7919.408803365,7919.408804631 -C 2
+      CPU 3/KVM 13376/13384 [002]  7919.408803365:      branches:  ffffffffc0f8ebe0 vmx_vcpu_enter_exit+0xc0 ([k</pre>
+</div>
+</section>
+ernel.kallsyms]) => ffffffffc0f8edc0 __vmx_vcpu_run+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803365:      branches:  ffffffffc0f8edd5 __vmx_vcpu_run+0x15 ([kernel.kallsyms]) => ffffffffc0f8eca0 vmx_update_host_rsp+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803365:      branches:  ffffffffc0f8ee1b __vmx_vcpu_run+0x5b ([kernel.kallsyms]) => ffffffffc0f8ed60 vmx_vmenter+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803461:      branches:  ffffffffc0f8ed62 vmx_vmenter+0x2 ([kernel.kallsyms]) =>                0 [unknown] ([unknown])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408803461:      branches:                 0 [unknown] ([unknown]) =>     7f851c9b5a5c init_cacheinfo+0x3ac (/usr/lib/x86_64-linux-gnu/libc-2.31.so)
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408803567:      branches:      7f851c9b5a5a init_cacheinfo+0x3aa (/usr/lib/x86_64-linux-gnu/libc-2.31.so) =>                0 [unknown] ([unknown])
+      CPU 3/KVM 13376/13384 [002]  7919.408803567:      branches:                 0 [unknown] ([unknown]) => ffffffffc0f8ed80 vmx_vmexit+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803596:      branches:  ffffffffc0f6619a vmx_vcpu_run+0x26a ([kernel.kallsyms]) => ffffffffb2255c60 x86_virt_spec_ctrl+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803801:      branches:  ffffffffc0f66445 vmx_vcpu_run+0x515 ([kernel.kallsyms]) => ffffffffb2290b30 native_write_msr+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803850:      branches:  ffffffffc0f661f8 vmx_vcpu_run+0x2c8 ([kernel.kallsyms]) => ffffffffc1092300 kvm_load_host_xsave_state+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803850:      branches:  ffffffffc1092327 kvm_load_host_xsave_state+0x27 ([kernel.kallsyms]) => ffffffffc1092220 kvm_load_host_xsave_state.part.0+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803862:      branches:  ffffffffc0f662cf vmx_vcpu_run+0x39f ([kernel.kallsyms]) => ffffffffc0f63f90 vmx_recover_nmi_blocking+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803862:      branches:  ffffffffc0f662e9 vmx_vcpu_run+0x3b9 ([kernel.kallsyms]) => ffffffffc0f619a0 __vmx_complete_interrupts+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803872:      branches:  ffffffffc109cfb2 vcpu_enter_guest+0x752 ([kernel.kallsyms]) => ffffffffc0f5f570 vmx_handle_exit_irqoff+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803881:      branches:  ffffffffc109d028 vcpu_enter_guest+0x7c8 ([kernel.kallsyms]) => ffffffffb234f900 __srcu_read_lock+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803897:      branches:  ffffffffc109d06f vcpu_enter_guest+0x80f ([kernel.kallsyms]) => ffffffffc0f72e30 vmx_handle_exit+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803897:      branches:  ffffffffc0f72e3d vmx_handle_exit+0xd ([kernel.kallsyms]) => ffffffffc0f727c0 __vmx_handle_exit+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803897:      branches:  ffffffffc0f72b15 __vmx_handle_exit+0x355 ([kernel.kallsyms]) => ffffffffc0f60ae0 vmx_flush_pml_buffer+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803903:      branches:  ffffffffc0f72994 __vmx_handle_exit+0x1d4 ([kernel.kallsyms]) => ffffffffc10b7090 kvm_emulate_cpuid+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803903:      branches:  ffffffffc10b70f1 kvm_emulate_cpuid+0x61 ([kernel.kallsyms]) => ffffffffc10b6e10 kvm_cpuid+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803941:      branches:  ffffffffc10b7125 kvm_emulate_cpuid+0x95 ([kernel.kallsyms]) => ffffffffc1093110 kvm_skip_emulated_instruction+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803941:      branches:  ffffffffc109311f kvm_skip_emulated_instruction+0xf ([kernel.kallsyms]) => ffffffffc0f5e180 vmx_get_rflags+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803951:      branches:  ffffffffc109312a kvm_skip_emulated_instruction+0x1a ([kernel.kallsyms]) => ffffffffc0f5fd30 vmx_skip_emulated_instruction+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803951:      branches:  ffffffffc0f5fd79 vmx_skip_emulated_instruction+0x49 ([kernel.kallsyms]) => ffffffffc0f5fb50 skip_emulated_instruction+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803956:      branches:  ffffffffc0f5fc68 skip_emulated_instruction+0x118 ([kernel.kallsyms]) => ffffffffc0f6a940 vmx_cache_reg+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803964:      branches:  ffffffffc0f5fc11 skip_emulated_instruction+0xc1 ([kernel.kallsyms]) => ffffffffc0f5f9e0 vmx_set_interrupt_shadow+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803980:      branches:  ffffffffc109f8b1 vcpu_run+0x71 ([kernel.kallsyms]) => ffffffffc10ad2f0 kvm_cpu_has_pending_timer+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803980:      branches:  ffffffffc10ad2fb kvm_cpu_has_pending_timer+0xb ([kernel.kallsyms]) => ffffffffc10b0490 apic_has_pending_timer+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803991:      branches:  ffffffffc109f899 vcpu_run+0x59 ([kernel.kallsyms]) => ffffffffc109c860 vcpu_enter_guest+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803993:      branches:  ffffffffc109cd4c vcpu_enter_guest+0x4ec ([kernel.kallsyms]) => ffffffffc0f69140 vmx_prepare_switch_to_guest+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803996:      branches:  ffffffffc109cd7d vcpu_enter_guest+0x51d ([kernel.kallsyms]) => ffffffffb234f930 __srcu_read_unlock+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803996:      branches:  ffffffffc109cd9c vcpu_enter_guest+0x53c ([kernel.kallsyms]) => ffffffffc0f609b0 vmx_sync_pir_to_irr+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408803996:      branches:  ffffffffc0f60a6d vmx_sync_pir_to_irr+0xbd ([kernel.kallsyms]) => ffffffffc10adc20 kvm_lapic_find_highest_irr+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804010:      branches:  ffffffffc0f60abd vmx_sync_pir_to_irr+0x10d ([kernel.kallsyms]) => ffffffffc0f60820 vmx_set_rvi+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804019:      branches:  ffffffffc109ceca vcpu_enter_guest+0x66a ([kernel.kallsyms]) => ffffffffb2249840 fpregs_assert_state_consistent+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804021:      branches:  ffffffffc109cf10 vcpu_enter_guest+0x6b0 ([kernel.kallsyms]) => ffffffffc0f65f30 vmx_vcpu_run+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804024:      branches:  ffffffffc0f6603b vmx_vcpu_run+0x10b ([kernel.kallsyms]) => ffffffffb229bed0 __get_current_cr3_fast+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804024:      branches:  ffffffffc0f66055 vmx_vcpu_run+0x125 ([kernel.kallsyms]) => ffffffffb2253050 cr4_read_shadow+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804030:      branches:  ffffffffc0f6608d vmx_vcpu_run+0x15d ([kernel.kallsyms]) => ffffffffc10921e0 kvm_load_guest_xsave_state+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804030:      branches:  ffffffffc1092207 kvm_load_guest_xsave_state+0x27 ([kernel.kallsyms]) => ffffffffc1092110 kvm_load_guest_xsave_state.part.0+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804032:      branches:  ffffffffc0f660c6 vmx_vcpu_run+0x196 ([kernel.kallsyms]) => ffffffffb22061a0 perf_guest_get_msrs+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804032:      branches:  ffffffffb22061a9 perf_guest_get_msrs+0x9 ([kernel.kallsyms]) => ffffffffb220cda0 intel_guest_get_msrs+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804039:      branches:  ffffffffc0f66109 vmx_vcpu_run+0x1d9 ([kernel.kallsyms]) => ffffffffc0f652c0 clear_atomic_switch_msr+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804040:      branches:  ffffffffc0f66119 vmx_vcpu_run+0x1e9 ([kernel.kallsyms]) => ffffffffc0f73f60 intel_pmu_lbr_is_enabled+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804042:      branches:  ffffffffc0f73f81 intel_pmu_lbr_is_enabled+0x21 ([kernel.kallsyms]) => ffffffffc10b68e0 kvm_find_cpuid_entry+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804045:      branches:  ffffffffc0f66454 vmx_vcpu_run+0x524 ([kernel.kallsyms]) => ffffffffc0f61ff0 vmx_update_hv_timer+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804057:      branches:  ffffffffc0f66142 vmx_vcpu_run+0x212 ([kernel.kallsyms]) => ffffffffc10af100 kvm_wait_lapic_expire+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804057:      branches:  ffffffffc0f66156 vmx_vcpu_run+0x226 ([kernel.kallsyms]) => ffffffffb2255c60 x86_virt_spec_ctrl+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804057:      branches:  ffffffffc0f66161 vmx_vcpu_run+0x231 ([kernel.kallsyms]) => ffffffffc0f8eb20 vmx_vcpu_enter_exit+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804057:      branches:  ffffffffc0f8eb44 vmx_vcpu_enter_exit+0x24 ([kernel.kallsyms]) => ffffffffb2353e10 rcu_note_context_switch+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804057:      branches:  ffffffffb2353e1c rcu_note_context_switch+0xc ([kernel.kallsyms]) => ffffffffb2353db0 rcu_qs+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804066:      branches:  ffffffffc0f8ebe0 vmx_vcpu_enter_exit+0xc0 ([kernel.kallsyms]) => ffffffffc0f8edc0 __vmx_vcpu_run+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804066:      branches:  ffffffffc0f8edd5 __vmx_vcpu_run+0x15 ([kernel.kallsyms]) => ffffffffc0f8eca0 vmx_update_host_rsp+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804066:      branches:  ffffffffc0f8ee1b __vmx_vcpu_run+0x5b ([kernel.kallsyms]) => ffffffffc0f8ed60 vmx_vmenter+0x0 ([kernel.kallsyms])
+      CPU 3/KVM 13376/13384 [002]  7919.408804162:      branches:  ffffffffc0f8ed62 vmx_vmenter+0x2 ([kernel.kallsyms]) =>                0 [unknown] ([unknown])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804162:      branches:                 0 [unknown] ([unknown]) =>     7f851c9b5a5c init_cacheinfo+0x3ac (/usr/lib/x86_64-linux-gnu/libc-2.31.so)
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804273:      branches:      7f851cb7c0e4 _dl_init+0x74 (/usr/lib/x86_64-linux-gnu/ld-2.31.so) =>     7f851cb7bf50 call_init.part.0+0x0 (/usr/lib/x86_64-linux-gnu/ld-2.31.so)
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804526:      branches:      55e0c00136f0 _start+0x0 (/usr/bin/uname) => ffffffff83200ac0 asm_exc_page_fault+0x0 ([kernel.kallsyms])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804526:      branches:  ffffffff83200ac3 asm_exc_page_fault+0x3 ([kernel.kallsyms]) => ffffffff83201290 error_entry+0x0 ([kernel.kallsyms])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804534:      branches:  ffffffff832012fa error_entry+0x6a ([kernel.kallsyms]) => ffffffff830b59a0 sync_regs+0x0 ([kernel.kallsyms])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804631:      branches:  ffffffff83200ad9 asm_exc_page_fault+0x19 ([kernel.kallsyms]) => ffffffff830b8210 exc_page_fault+0x0 ([kernel.kallsyms])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804631:      branches:  ffffffff830b82a4 exc_page_fault+0x94 ([kernel.kallsyms]) => ffffffff830b80e0 __kvm_handle_async_pf+0x0 ([kernel.kallsyms])
+VM:13376 VCPU:003            uname  3404/3404  [002]  7919.408804631:      branches:  ffffffff830b80ed __kvm_handle_async_pf+0xd ([kernel.kallsyms]) => ffffffff830b80c0 kvm_read_and_reset_apf_flags+0x0
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>perf-events(5)</title>
+<meta name="generator" content="roffit 2023.12.20">
+<style type="text/css">
+pre { /*line-height: 1.2em;*/
+	font-family: "Inconsolata", "Menlo", "Consolas", monospace;
+	font-size: 1em;
+	/*margin: 1em 0;*/
+	white-space: pre-wrap; /* Preserve spaces and wrap long lines */
+	overflow-x: auto; /* Add scrollbar if line is too long */
+	/*max-width: 90%;*/ /* Limit width to prevent excessive horizontal scrolling */
+}
+.indent { /*for indenting code blocks*/
+	margin-left: 2em;
+}
+h1 { /*for main sections*/
+	font-size: 1.5em;
+	margin-top: 1em;
+	margin-bottom: 0.5em;
+	border-bottom: 1px solid #000;
+}
+h2 { /*for subsections*/
+	font-size: 1.2em;
+	margin-top: 1em;
+	margin-bottom: 0.5em;
+}
+h3 { /*for subsubsections*/
+	font-size: 1.0em;
+	margin-top: 1em;
+	margin-bottom: 0.5em;
+}
+body { /* general styling */
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	line-height: 1.6;
+	color: #333;
+	margin: 20px;
+	background-color: #f8f8f8;
+}
+a { /* for links */
+	color: #0066cc;
+	text-decoration: none;
+}
+a:hover { /* for link hover */
+	text-decoration: underline;
+}
+.permalink { /* for permalink icon */
+	color: #aaa;
+	font-size: 0.8em;
+	margin-left: 0.3em;
+	vertical-align: middle;
+}
+.FOOT { /* for foot notes */
+	text-align: center;
+	font-size: 0.8em;
+	margin-top: 2em;
+	color: #777;
+}
+.FOOT-date { /* for foot date */
+	margin-right: 1em;
+}
+.FOOT-os { /* for foot os */
+	margin-left: 1em;
+}
+</style>
+</head>
+<body>
+
+<section class="Sh">
+<h1 class="Sh" id='PERF_EMULATE_PTWRITE'><a class="permalink" href='#PERF_EMULATE_PTWRITE'>PERF_EMULATE_PTWRITE</a></h1>
+<p class="Pp">This is a helper function to emulate the PTW instruction, which is
+    used by Intel PT to write data into the trace buffer.</p>
+<p class="Pp">The function uses the PTWRITE_MAGIC string to check whether the
+    function is called via the native PTWRITE instruction (e.g., using the
+    &lt;kaddr&gt;:<key>ptwrite</key> event) or if it's called via the emulation
+    code.</p>
+<p class="Pp">PTWRITE_MAGIC is defined as:</p>
+<div class="Bd-indent">
+<pre>#define PERF_EMULATE_PTWRITE_8_BITS        &quot;1: shl %rax\n&quot;     \
+                &quot;   jc 1f\n&quot;</pre>
+</div>
+<div class="Bd-indent">
+<pre>/* Undefined instruction */
+#define PERF_EMULATE_PTWRITE_UD2        &quot;.byte 0x0f, 0x0b\n&quot;</pre>
+</div>
+<div class="Bd-indent">
+<pre>#define PERF_EMULATE_PTWRITE_MAGIC        PERF_EMULATE_PTWRITE_UD2 &quot;.ascii \&quot;perf,ptwrite  \&quot;\n&quot;</pre>
+</div>
+<div class="Bd-indent">
+<pre>void perf_emulate_ptwrite(uint64_t x __attribute__ ((__unused__)))
+{
+         /* Assumes SysV ABI : x passed in rdi */
+        __asm__ volatile (
+                &quot;jmp 1f\n&quot;
+                PERF_EMULATE_PTWRITE_MAGIC
+                &quot;1: mov %rdi, %rax\n&quot;
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                PERF_EMULATE_PTWRITE_8_BITS
+                &quot;1: ret\n&quot;
+        );
+}</pre>
+</div>
+<p class="Pp">For example, a test program with the function above:</p>
+<div class="Bd-indent">
+<pre>#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdlib.h&gt;</pre>
+</div>
+<div class="Bd-indent">
+<pre>#include &quot;perf_emulate_ptwrite.h&quot;</pre>
+</div>
+<div class="Bd-indent">
+<pre>int main(int argc, char *argv[])
+{
+        uint64_t x = 0;</pre>
+</div>
+<div class="Bd-indent">
+<pre>        if (argc &gt; 1)
+                x = strtoull(argv[1], NULL, 0);
+        perf_emulate_ptwrite(x);
+        return 0;
+}</pre>
+</div>
+<p class="Pp">Can be compiled and traced:</p>
+<div class="Bd-indent">
+<pre>$ gcc -Wall -Wextra -O3 -g -o eg_ptw eg_ptw.c
+$ perf record -e intel_pt//u ./eg_ptw 0x1234567890abcdef
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.017 MB perf.data ]
+$ perf script --itrace=ew
+          eg_ptw 19875 [007]  8061.235912:     ptwrite:  IP: 0 payload: 0x1234567890abcdef      55701249a196 perf_emulate_ptwrite+0x16 (/home/user/eg_ptw)
+$</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PIPE_MODE'><a class="permalink" href='#PIPE_MODE'>PIPE MODE</a></h1>
+<p class="Pp">Pipe mode is a problem for Intel PT and possibly other auxtrace users.
+    It&#x2019;s not recommended to use a pipe as data output with Intel PT
+    because of the following reason.</p>
+<p class="Pp">Essentially the auxtrace buffers do not behave like the regular
+    perf event buffers. That is because the head and tail are updated by
+    software, but in the auxtrace case the data is written by hardware. So the
+    head and tail do not get updated as data is written.</p>
+<p class="Pp">In the Intel PT case, the head and tail are updated only when the
+    trace is disabled by software, for example: - full-trace, system wide : when
+    buffer passes watermark - full-trace, not system-wide : when buffer passes
+    watermark or context switches - snapshot mode : as above but also when a
+    snapshot is made - sample mode : as above but also when a sample is made</p>
+<p class="Pp">That means finished-round ordering doesn&#x2019;t work. An
+    auxtrace buffer can turn up that has data that extends back in time,
+    possibly to the very beginning of tracing.</p>
+<p class="Pp">For a perf.data file, that problem is solved by going through the
+    trace and queuing up the auxtrace buffers in advance.</p>
+<p class="Pp">For pipe mode, the order of events and timestamps can presumably
+    be messed up.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PAUSE_OR_RESUME_TRACING'><a class="permalink" href='#PAUSE_OR_RESUME_TRACING'>PAUSE OR RESUME TRACING</a></h1>
+<p class="Pp">With newer Kernels, it is possible to use other selected events to
+    pause or resume Intel PT tracing. This is configured by using the
+    &quot;aux-action&quot; config term:</p>
+<p class="Pp">&quot;aux-action=pause&quot; is used with events that are to pause
+    Intel PT tracing.</p>
+<p class="Pp">&quot;aux-action=resume&quot; is used with events that are to
+    resume Intel PT tracing.</p>
+<p class="Pp">&quot;aux-action=start-paused&quot; is used with the Intel PT
+    event to start in a paused state.</p>
+<p class="Pp">For example, to trace only the uname system call (sys_newuname)
+    when running the command line utility uname:</p>
+<div class="Bd-indent">
+<pre>$ perf record --kcore -e intel_pt/aux-action=start-paused/k,syscalls:sys_enter_newuname/aux-action=resume/,syscalls:sys_exit_newuname/aux-action=pause/ uname
+Linux
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.043 MB perf.data ]
+$ perf script --call-trace
+uname   30805 [000] 24001.058782799: name: 0x7ffc9c1865b0
+uname   30805 [000] 24001.058784424:  psb offs: 0
+uname   30805 [000] 24001.058784424:  cbr: 39 freq: 3904 MHz (139%)
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])        debug_smp_processor_id
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])        __x64_sys_newuname
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])            down_read
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])                __cond_resched
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])                preempt_count_add
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])                    in_lock_functions
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])                preempt_count_sub
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])            up_read
+uname   30805 [000] 24001.058784629: ([kernel.kallsyms])                preempt_count_add
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])                    in_lock_functions
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])                preempt_count_sub
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])            _copy_to_user
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])        syscall_exit_to_user_mode
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])            syscall_exit_work
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])                perf_syscall_exit
+uname   30805 [000] 24001.058784838: ([kernel.kallsyms])                    debug_smp_processor_id
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                    perf_trace_buf_alloc
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                        perf_swevent_get_recursion_context
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                            debug_smp_processor_id
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                        debug_smp_processor_id
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                    perf_tp_event
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                        perf_trace_buf_update
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                            tracing_gen_ctx_irq_test
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                        perf_swevent_event
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                            __perf_event_account_interrupt
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                                __this_cpu_preempt_check
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                            perf_event_output_forward
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                                perf_event_aux_pause
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                                    ring_buffer_get
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                                        __rcu_read_lock
+uname   30805 [000] 24001.058785046: ([kernel.kallsyms])                                        __rcu_read_unlock
+uname   30805 [000] 24001.058785254: ([kernel.kallsyms])                                    pt_event_stop
+uname   30805 [000] 24001.058785254: ([kernel.kallsyms])                                        debug_smp_processor_id
+uname   30805 [000] 24001.058785254: ([kernel.kallsyms])                                        debug_smp_processor_id
+uname   30805 [000] 24001.058785254: ([kernel.kallsyms])                                        native_write_msr
+uname   30805 [000] 24001.058785463: ([kernel.kallsyms])                                        native_write_msr
+uname   30805 [000] 24001.058785639: 0x0</pre>
+</div>
+<p class="Pp">The example above uses tracepoints, but any kind of sampled event
+    can be used.</p>
+<p class="Pp">For example:</p>
+<div class="Bd-indent">
+<pre>Tracing between arch_cpu_idle_enter() and arch_cpu_idle_exit() using breakpoint events:</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ sudo cat /proc/kallsyms | sort | grep ' arch_cpu_idle_enter\| arch_cpu_idle_exit'
+ffffffffb605bf60 T arch_cpu_idle_enter
+ffffffffb614d8a0 W arch_cpu_idle_exit
+$ sudo perf record --kcore -a -e intel_pt/aux-action=start-paused/k -e mem:0xffffffffb605bf60:x/aux-action=resume/ -e mem:0xffffffffb614d8a0:x/aux-action=pause/ -- sleep 1
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 1.387 MB perf.data ]</pre>
+</div>
+<div class="Bd-indent">
+<pre>Tracing __alloc_pages() using kprobes:</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ sudo perf probe --add '__alloc_pages order'
+Added new event:  probe:__alloc_pages  (on __alloc_pages with order)
+$ sudo perf probe --add __alloc_pages%return
+Added new event:  probe:__alloc_pages__return (on __alloc_pages%return)
+$ sudo perf record --kcore -aR -e intel_pt/aux-action=start-paused/k -e probe:__alloc_pages/aux-action=resume/ -e probe:__alloc_pages__return/aux-action=pause/ -- sleep 1
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 1.490 MB perf.data ]</pre>
+</div>
+<div class="Bd-indent">
+<pre>Tracing starting at main() using a uprobe event:</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ sudo perf probe -x /usr/bin/uname main
+Added new event:  probe_uname:main     (on main in /usr/bin/uname)
+$ sudo perf record -e intel_pt/-aux-action=start-paused/u -e probe_uname:main/aux-action=resume/ -- uname
+Linux
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.031 MB perf.data ]</pre>
+</div>
+<div class="Bd-indent">
+<pre>Tracing occasionally using cycles events with different periods:</pre>
+</div>
+<div class="Bd-indent">
+<pre>$ perf record --kcore -a -m,64M -e intel_pt/aux-action=start-paused/k -e cycles/aux-action=pause,period=1000000/Pk -e cycles/aux-action=resume,period=10500000/Pk -- firefox
+[ perf record: Woken up 19 times to write data ]
+[ perf record: Captured and wrote 16.561 MB perf.data ]</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class="permalink" href='#EXAMPLE'>EXAMPLE</a></h1>
+<p class="Pp">Examples can be found on perf wiki page &quot;Perf tools support
+    for Intel&#x00AE; Processor Trace&quot;:</p>
+<p class="Pp"><a href="https://perf.wiki.kernel.org/index.php/Perf_tools_support_for_Intel%C2%AE_Processor_Trace">https://perf.wiki.kernel.org/index.php/Perf_tools_support_for_Intel%C2%AE_Processor_Trace</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class="permalink" href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp"><a href="/man/perf-record.1.en">perf-record(1)</a>, <a href="/man/perf-script.1.en">perf-script(1)</a>,
+    <a href="/man/perf-report.1.en">perf-report(1)</a>, <a href="/man/perf-inject.1.en">perf-inject(1)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-12-18</td>
+    <td class="foot-os">perf</td>
+  </tr>
+</table>
+</body>
+</html>
+    </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقل" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perf/">extra/perf</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>6.17-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.kernel.org">https://www.kernel.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-only</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perf/">/listing/extra/perf/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#QUICKSTART">البدء السريع</a></li>
+        
+            <li><a href="#PERF_RECORD">PERF RECORD</a></li>
+        
+            <li><a href="#PERF_SCRIPT">PERF SCRIPT</a></li>
+        
+            <li><a href="#PERF_REPORT">PERF REPORT</a></li>
+        
+            <li><a href="#PERF_INJECT">PERF INJECT</a></li>
+        
+            <li><a href="#PEBS_VIA_INTEL_PT">PEBS عبر INTEL PT</a></li>
+        
+            <li><a href="#XED">XED</a></li>
+        
+            <li><a href="#TRACING_VIRTUAL_MACHINES_(KERNEL_ONLY)">تتبع الآلات الافتراضية (النواة فقط)</a></li>
+        
+            <li><a href="#TRACING_VIRTUAL_MACHINES_(INCLUDING_USER_SPACE)">تتبع الآلات الافتراضية (بما في ذلك مساحة المستخدم)</a></li>
+        
+            <li><a href="#TRACING_VIRTUAL_MACHINES_-_GUEST_CODE">تتبع الآلات الافتراضية - كود الضيف</a></li>
+        
+            <li><a href="#EVENT_TRACE">تتبع الأحداث</a></li>
+        
+            <li><a href="#TNT_DISABLE">TNT تعطيل</a></li>
+        
+            <li><a href="#EMULATED_PTWRITE">PTWRITE محاكى</a></li>
+        
+            <li><a href="#PIPE_MODE">وضع الأنبوب</a></li>
+        
+            <li><a href="#PAUSE_OR_RESUME_TRACING">إيقاف مؤقت أو استئناف التتبع</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perf-intel-pt.1.en.txt">txt</a>, 
+        
+            <a href="/man/perf-intel-pt.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيص خاص بها
+               محدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

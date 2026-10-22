@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval(3pm) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Perl__Critic__Policy__ErrorHandling__RequireCheckingReturnValueOfEval(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-perl-critic/">perl-perl-critic</a></p>
+<p class="lic">التراخيص: PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval(3pm)</td>
+    <td class="head-vol">User Contributed Perl Documentation</td>
+    <td class="head-rtitle">Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval(3pm)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval
+    - لا يمكنك الاعتماد على قيمة "$@" / "$EVAL_ERROR" لتحديد ما إذا كان "eval" قد فشل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AFFILIATION'><a class='permalink' href='#AFFILIATION'>الانتماء</a></h1>
+<p class="Pp">هذه السياسة جزء من التوزيع الأساسي لـ Perl::Critic.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">الاصطلاح الشائع في بيرل للتعامل مع الأخطاء المحتملة هو استخدام
+    <span class="Li">"eval"</span> متبوعًا بفحص
+    <span class="Li">$@</span>/<span class="Li">$EVAL_ERROR</span>:</p>
+<pre>eval {
+    ...
+};
+if ($EVAL_ERROR) {
+    ...
+}</pre>
+<p class="Pp">هناك مشكلة في هذا: يمكن أن تتغير قيمة
+    <span class="Li">$EVAL_ERROR</span> بين نهاية
+    <span class="Li">"eval"</span> وعبارة
+    <span class="Li">"if"</span>. المشكلة هي مدمرات الكائنات (object destructors):</p>
+<pre>package Foo;
+...
+sub DESTROY {
+    ...
+    eval { ... };
+    ...
+}
+package main;
+eval {
+    my $foo = Foo-&gt;new();
+    ...
+};
+if ($EVAL_ERROR) {
+    ...
+}</pre>
+<p class="Pp">بافتراض عدم وجود مراجع أخرى لـ
+    <span class="Li">$foo</span> تم إنشاؤها، عند الخروج من كتلة
+    <span class="Li">"eval"</span> في
+    <span class="Li">"main"</span>، سيتم استدعاء
+    <span class="Li">Foo::DESTROY()</span>، بغض النظر عما إذا كان
+    <span class="Li">"eval"</span> قد انتهى بشكل طبيعي أم لا. إذا فشل
+    <span class="Li">"eval"</span> في
+    <span class="Li">"main"</span>، ولكن نجح
+    <span class="Li">"eval"</span> في
+    <span class="Li">Foo::DESTROY()</span>، فسيكون
+    <span class="Li">$EVAL_ERROR</span> فارغًا بحلول الوقت الذي يتم فيه تنفيذ
+    <span class="Li">"if"</span>. تنشأ مشكلات إضافية إذا اعتمدت على المحتويات الدقيقة لـ
+    <span class="Li">$EVAL_ERROR</span> وفشل كلا الـ
+    <span class="Li">"eval"</span>، لأن رسائل كلا الأمرين سيتم دمجها.</p>
+<p class="Pp">حتى لو لم يكن هناك
+    <span class="Li">"eval"</span> مباشرة في رمز الطريقة
+    <span class="Li">DESTROY()</span>، فقد تستدعي رمزًا يستخدم
+    <span class="Li">"eval"</span> أو يؤثر بطريقة أخرى على
+    <span class="Li">$EVAL_ERROR</span>.</p>
+<p class="Pp">الحل هو التأكد من أن
+    <span class="Li">"eval"</span>، عند الخروج الطبيعي، يعيد قيمة حقيقية (true) واختبار تلك القيمة:</p>
+<pre># المنشئات ليست مشكلة.
+my $object = eval { Class-&gt;new() };
+# لتغطية إمكانية أن تعيد عملية قيمة زائفة (false) بشكل صحيح، اختتم الكتلة بـ "1":
+if ( eval { something(); 1 } ) {
+    ...
+}
+eval {
+    ...
+    1;
+}
+    or do {
+        # معالجة الأخطاء هنا
+    };</pre>
+<p class="Pp">لسوء الحظ، لا يمكنك استخدام الدالة
+    <span class="Li">"defined"</span> لاختبار النتيجة؛
+    <span class="Li">"eval"</span> يعيد سلسلة فارغة عند الفشل.</p>
+<p class="Pp">تمت كتابة وحدات مختلفة لأخذ بعض الألم من العزل الصحيح وفحص
+    <span class="Li">$@</span>/<span class="Li">$EVAL_ERROR</span>. على سبيل المثال:</p>
+<pre>use Try::Tiny;
+try {
+    ...
+} catch {
+    # معالجة الأخطاء هنا؛
+    # الاستثناء في $_/$ARG، وليس $@/$EVAL_ERROR.
+};  # لاحظ الفاصلة المنقوطة.</pre>
+<p class="Pp">"لكننا لا نستخدم <b>DESTROY()</b> في أي مكان في كودنا!" كما تقول. قد يكون هذا هو الحال، ولكن هل لدى أي من الوحدات الخارجية التي تستخدمها؟ ماذا عن أي وحدات قد تستخدمها في المستقبل أو إصدارات محدثة من الوحدات التي تستخدمها بالفعل؟</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CONFIGURATION'><a class='permalink' href='#CONFIGURATION'>التكوين</a></h1>
+<p class="Pp">هذه السياسة غير قابلة للتكوين باستثناء الخيارات القياسية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">للحصول على طريقة لطيفة وسهلة وغير سحرية للتعامل مع الاستثناءات بشكل صحيح، راجع Try::Tiny.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Elliot Shank
+    <span class="Li">"&lt;perl@galumph.com&gt;"</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright (c) 2008-2023 Elliot Shank.</p>
+<p class="Pp">هذا البرنامج برنامج مجاني؛ يمكنك إعادة توزيعه و / أو تعديله
+    تحت نفس شروط Perl نفسها. يمكن العثور على النص الكامل لهذا الترخيص في ملف
+    LICENSE المضمن مع هذه الوحدة.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-14</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-perl-critic/">extra/perl-perl-critic</a></dd>
+        <dt>Version:</dt>
+        <dd>1.156-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://metacpan.org/release/Perl-Critic">https://metacpan.org/release/Perl-Critic</a></dd>
+        <dt>Licenses:</dt>
+        <dd>PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-perl-critic/">/listing/extra/perl-perl-critic/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#AFFILIATION">الانتماء</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CONFIGURATION">التكوين</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Perl::Critic::Policy::ErrorHandling::RequireCheckingReturnValueOfEval.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,270 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Perl__Critic__DEVELOPER(3pm)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='PROGRAMMING_POLICIES'><a class='permalink' href='#PROGRAMMING_POLICIES'>برمجة السياسات</a></h1>
+<p class="Pp">إذا كنت ترغب في كتابة سياستك الخاصة بك، فسوف تحتاج إلى إنشاء فئة فرعية من
+    <span class="Li">Perl::Critic::Policy</span>. يجب أن تحتوي هذه الفئة على الأقل على
+    التابع <span class="Li">supported_parameters()</span> (الذي يمكن أن يكون فارغًا)
+    والتابع <span class="Li">violates()</span>. التابع <span class="Li">violates()</span>
+    هو المكان الذي تقوم فيه بفحص شجرة تحليل اللغة (PPI) للكود المصدر الخاص بك.</p>
+<section class="Ss">
+<h2 class="Ss" id='Parameter_Validation'><a class='permalink' href='#Parameter_Validation'>التحقق من صحة المعلمات</a></h2>
+<p class="Pp">إذا كانت سياستك تتطلب معلمات، فستحتاج إلى تنفيذ التابع
+    <span class="Li">supported_parameters()</span>. يقوم هذا التابع بإرجاع قائمة
+    من الـ Hashes التي تصف كل معلمة. يقوم Perl::Critic تلقائيًا بالتحقق من صحة
+    قيم المعلمات التي يوفرها المستخدم بناءً على مواصفاتك، وإبلاغ المستخدم بأي
+    أخطاء.</p>
+<p class="Pp">فيما يلي مثال بسيط لسياسة تتطلب معلمة سلسلة نصية:</p>
+<pre>package Perl::Critic::Policy::Example::RequireSomething;
+use strict;
+use warnings;
+our @ISA = qw(Perl::Critic::Policy);
+sub supported_parameters {
+    return (
+        {
+            name        =&gt; 'something',
+            description =&gt; 'The string that must be present in the file.',
+            behavior    =&gt; 'string',
+        },
+    );
+}
+sub violates {
+    my ($self, $document, $strings) = @_;
+    my $parameter_value = $self-&gt;get_parameter_value('something');
+    return if not defined $parameter_value;
+    return if $document-&gt;serialized =~ /\Q$parameter_value\E/;
+    return 'The file does not contain the required string: "' . $parameter_value . '"';
+}
+1;
+</pre>
+<p class="Pp">في المثال أعلاه، يتم استخدام <span class="Li">get_parameter_value()</span>
+    لاسترداد قيمة المعلمة 'something'. إذا لم يتم تعريف المعلمة، فلن تقوم
+    السياسة بفحص الانتهاكات.</p>
+<p class="Pp">يقوم Perl::Critic تلقائيًا بالتحقق من صحة أنواع القيم. على سبيل المثال،
+    إذا حاولت تعريف معلمة بسلوك 'integer' ولكن قدم المستخدم قيمة غير رقمية،
+    فسيتم رمي استثناء.</p>
+<p class="Pp">يمكنك أيضًا توفير محلل مخصص لمعالجة قيم المعلمات بشكل أكثر تعقيدًا.
+    يجب أن يأخذ محلل الكود المخصص وسيطتين: الوسيط الذي يتم تحليله، والقيمة
+    المقدمة. يجب أن يعيد محلل الكود المخصص القيمة المعالجة أو رمي استثناء إذا
+    فشل التحقق من الصحة.</p>
+<p class="Pp">مثال على محلل مخصص لاسم ملف:</p>
+<pre>use Path::Tiny;
+use Perl::Critic::Exception::Configuration::Option::Policy::ParameterValue
+    qw{ throw_policy_value };
+sub _parse_file_name {
+    my ($self, $parameter, $config_string) = @_;
+    my @thingies;
+    if ($config_string) {
+        if (not -r $config_string) {
+            throw_policy_value
+                policy         =&gt; $self-&gt;get_short_name(),
+                option_name    =&gt; $parameter-&gt;get_name(),
+                option_value   =&gt; $config_string,
+                message_suffix =&gt; 'is not readable.';
+        }
+        @thingies = path($config_string)-&gt;slurp;
+    }
+    $self-&gt;{_thingies} = \@thingies;
+    return;
+}</pre>
+<p class="Pp">لاحظ أنه إذا كانت قيمة المعلمة غير صالحة، فسيتم رمي مثيل من
+    <span class="Li">Perl::Critic::Exception::Configuration::Option::ParameterValue</span>.
+    يسمح هذا لـ <span class="Li">&quot;Perl::Critic&quot;</span> بتضمين هذه المشكلة
+    مع أي مشاكل أخرى تم العثور عليها في تكوين المستخدم في رسالة خطأ واحدة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Using_Both_supported_parameters()_and_initialize_if_enabled()'><a class='permalink' href='#Using_Both_supported_parameters()_and_initialize_if_enabled()'>استخدام كل من supported_parameters() و initialize_if_enabled()</a></h2>
+<p class="Pp">هناك حالات تحتاج فيها السياسة إلى تهيئة إضافية تتجاوز التكوين أو حيث تعتمد
+    طريقة عملها على مزيج من معلمات متعددة. في مثل هذه الحالات، ستحتاج إلى إنشاء
+    تنفيذ لـ <span class="Li">initialize_if_enabled()</span>. إذا كنت ترغب في
+    الاستفادة من معالجة المعلمات المقدمة من داخل تنفيذ
+    <span class="Li">initialize_if_enabled()</span>، لاحظ أن المعلومات من
+    <span class="Li">supported_parameters()</span> قد تم استخدامها بالفعل، مع
+    التحقق من صحة قيم المعلمات التي يوفرها المستخدم ووضعها في السياسة بحلول الوقت
+    الذي تم فيه استدعاء
+    <span class="Li">initialize_if_enabled()</span>. من المحتمل أنك لن تحتاج إلى
+    الإشارة إلى محتويات الوسيط <span class="Li">$config</span>؛ فقط اسحب المعلومات
+    التي تحتاجها من <span class="Li">$self</span>. في الواقع، أي قيمة لقيم المعلمات
+    ستكون قد اختفت.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Summary_of_permitted_hash_keys_in_supported_parameters().'><a class='permalink' href='#Summary_of_permitted_hash_keys_in_supported_parameters().'>ملخص لمفاتيح الـ Hash المسموح بها في supported_parameters().</a></h2>
+<p class="Pp"><i>جميع الأنواع</i></p>
+<dl class="Bl-tag">
+  <dt>- &quot;name&quot; (إلزامي)</dt>
+  <dd></dd>
+  <dt>- &quot;description&quot; (اختياري)</dt>
+  <dd></dd>
+  <dt>- &quot;behavior&quot; (اختياري)</dt>
+  <dd>حاليا، أحد:</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&quot;boolean&quot;</dt>
+  <dd></dd>
+  <dt>&quot;enumeration&quot;</dt>
+  <dd></dd>
+  <dt>&quot;integer&quot;</dt>
+  <dd></dd>
+  <dt>&quot;string&quot;</dt>
+  <dd></dd>
+  <dt>&quot;string list&quot;</dt>
+  <dd></dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt>- &quot;default_string&quot; (اختياري)</dt>
+  <dd>تمثيل سلسلة نصية للقيمة الافتراضية للمعلمة.</dd>
+  <dt>- &quot;parser&quot; (اختياري)</dt>
+  <dd>مرجع للكود لمحلل مخصص للمعلمة.</dd>
+</dl>
+<p class="Pp"><i>التعدادات</i></p>
+<dl class="Bl-tag">
+  <dt>- &quot;enumeration_values&quot; (إلزامي)</dt>
+  <dd>مرجع إلزامي لمصفوفة من السلاسل النصية.</dd>
+  <dt>- &quot;enumeration_allow_multiple_values&quot; (اختياري)</dt>
+  <dd>قيمة منطقية تشير إلى ما إذا كان المستخدم مقيدًا بقيمة واحدة أم لا.</dd>
+</dl>
+<p class="Pp"><i>الأعداد الصحيحة</i></p>
+<dl class="Bl-tag">
+  <dt>- &quot;integer_minimum&quot; (اختياري)</dt>
+  <dd>الحد الأدنى للقيمة المسموح بها، شاملة.</dd>
+  <dt>- &quot;integer_maximum&quot; (اختياري)</dt>
+  <dd>الحد الأقصى للقيمة المسموح بها، شاملة.</dd>
+</dl>
+<p class="Pp"><i>قوائم السلاسل النصية</i></p>
+<dl class="Bl-tag">
+  <dt>- &quot;list_always_present_values&quot; (اختياري)</dt>
+  <dd>مرجع لمصفوفة من القيم التي يجب أن تكون موجودة دائمًا في قيمة المعلمة.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ADDITIONAL_FEATURES'><a class='permalink' href='#ADDITIONAL_FEATURES'>ميزات إضافية</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='default_maximum_violations_per_document()'><a class='permalink' href='#default_maximum_violations_per_document()'>default_maximum_violations_per_document()</a></h2>
+<p class="Pp">بعض المشاكل التي تكتشفها السياسة يمكن أن تكون متوطنة في ملف معين؛ إذا كان
+    هناك انتهاك واحد، فمن المحتمل أن يكون هناك العديد. مثال جيد على ذلك هو
+    Perl::Critic::Policy::TestingAndDebugging::RequireUseStrict؛ إذا كان هناك سطر
+    واحد قبل <span class="Li">&quot;use strict&quot;</span>، فهناك احتمال كبير بأن
+    الملف بأكمله يفتقد <span class="Li">&quot;use strict&quot;</span>. في مثل هذه
+    الحالات، لا فائدة كبيرة للمستخدم من الإبلاغ عن كل انتهاك. إذا كانت لديك سياسة
+    من هذا القبيل، فيجب عليك تجاوز التابع
+    <b>default_maximum_violations_per_document()</b> لتوفير حد. يمكن للمستخدم
+    تجاوز هذه القيمة بقيمة
+    &quot;maximum_violations_per_document&quot; في
+    <i>.perlcriticrc</i> الخاص به.</p>
+<p class="Pp">انظر الكود المصدري لـ
+    Perl::Critic::Policy::ValuesAndExpressions::ProhibitMagicNumbers و
+    Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings للحصول على
+    أمثلة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='is_safe()'><a class='permalink' href='#is_safe()'>is_safe()</a></h2>
+<p class="Pp">معظم سياسات Perl::Critic هي * ثابتة * بحتة. بمعنى آخر، لا تقوم أبدًا
+    بتجميع أو تنفيذ أي من الكود المصدري الذي تقوم بتحليله. ومع ذلك، من الممكن
+    كتابة سياسات * ديناميكية * تقوم بتجميع أو تنفيذ الكود، مما قد يؤدي إلى
+    عمليات غير آمنة (انظر Perl::Critic::Dynamic كمثال). لذلك، يتم استخدام التابع
+    <span class="Li">is_safe()</span> للإشارة إلى ما إذا كانت السياسة جديرة بالثقة
+    ولن تسبب مشاكل. افتراضيًا، يعيد <span class="Li">is_safe()</span> القيمة
+    true. ولكن إذا كنت تكتب سياسة ستقوم بتجميع أو تنفيذ أي من الكود المصدري الذي
+    تقوم بتحليله، فيجب عليك تجاوز التابع
+    <span class="Li">is_safe()</span> لإعادة القيمة false.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DISTRIBUTING_YOUR_POLICIES'><a class='permalink' href='#DISTRIBUTING_YOUR_POLICIES'>توزيع سياساتك</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Create_a_Distribution'><a class='permalink' href='#Create_a_Distribution'>إنشاء توزيع</a></h2>
+<p class="Pp">تحتاج إلى ابتكار اسم لمجموعتك من السياسات. عادة ما يتم تسمية مجموعات
+    السياسات الإضافية
+    <span class="Li">&quot;Perl::Critic::</span><span class="Li"><i>something</i></span><span class="Li">&quot;</span>،
+    على سبيل المثال Perl::Critic::More.</p>
+<p class="Pp">الوحدة التي تمثل التوزيع لن تحتوي في الواقع على أي وظائف؛ إنها مجرد
+    وثائق واسم للمستخدمين لاستخدامه عند التثبيت عبر CPAN/CPANPLUS. الجزء المهم
+    هو أن هذا سيتضمن قائمة بالسياسات المضمنة، مع وصف لكل منها.</p>
+<p class="Pp">تنفيذ نموذجي سيبدو كالتالي:</p>
+<pre>package Perl::Critic::Example;
+use strict;
+use warnings;
+our $VERSION = '1.000000';
+1; # Magic true value required at end of module
+__END__
+=head1 NAME
+Perl::Critic::Example - Policies for Perl::Critic that act as an example.
+=head1 AFFILIATION
+This module has no functionality, but instead contains documentation
+for this distribution and acts as a means of pulling other modules
+into a bundle.  All of the Policy modules contained herein will have
+an &quot;AFFILIATION&quot; section announcing their participation in this
+grouping.
+=head1 SYNOPSIS
+Some L&lt;Perl::Critic|Perl::Critic&gt; policies that will help you keep your
+code nice and compliant.
+=head1 DESCRIPTION
+The included policies are:
+=over
+=item L&lt;Perl::Critic::Policy::Documentation::Example|Perl::Critic::Policy::Documentation::Example&gt;
+Complains about some example documentation issues.  [Default severity: 3]
+=item L&lt;Perl::Critic::Policy::Variables::Example|Perl::Critic::Policy::Variables::Example&gt;
+All modules must have at least one variable.  [Default severity: 3]
+=back
+=head1 CONFIGURATION AND ENVIRONMENT
+All policies included are in the &quot;example&quot; theme.  See the
+L&lt;Perl::Critic|Perl::Critic&gt; documentation for how to make use of this.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Themes'><a class='permalink' href='#Themes'>المواضيع</a></h2>
+<p class="Pp">يمكن للمستخدمين اختيار السياسات التي يريدون تمكينها باستخدام المواضيع.
+    يجب عليك تنفيذ
+    <span class="Li">default_themes()</span> حتى يتمكن المستخدمون من الاستفادة من
+    ذلك. على وجه الخصوص، يجب عليك استخدام موضوع يحمل اسم التوزيع الخاص بك في
+    جميع سياساتك؛ يجب أن يتطابق هذا مع القيمة المدرجة في قسم
+    <span class="Li">&quot;CONFIGURATION AND ENVIRONMENT&quot;</span> في POD كما هو
+    موضح أعلاه.</p>
+<pre>default_themes { return qw&lt; example math &gt; }</pre>
+<p class="Pp">إذا كنت تبحث عن أفكار حول المواضيع التي يجب استخدامها، فانظر إلى
+    ناتج <span class="Li">&quot;perlcritic
+  --list-themes&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Documentation'><a class='permalink' href='#Documentation'>الوثائق</a></h2>
+<p class="Pp"><i>AFFILIATION</i></p>
+<p class="Pp">نظرًا لأنه يجب أن تذهب جميع السياسات في مكان ما تحت مساحة الاسم
+    <span class="Li">&quot;Perl::Critic::Policy::&quot;</span>، فليس من الواضح دائمًا
+    من أي توزيع جاءت السياسة عند تصفح وثائقها. لهذا السبب، يجب عليك تضمين قسم
+    <span class="Li">&quot;AFFILIATION&quot;</span> في POD لجميع سياساتك الذي يذكر
+    من أين تأتي السياسة. على سبيل المثال:</p>
+<pre>=head1 AFFILIATION
+This policy is part of L&lt;Perl::Critic::Example|Perl::Critic::Example&gt;.</pre>
+<p class="Pp"><i>CONFIGURATION</i></p>
+<p class="Pp">للتوضيح ما يمكن فعله بسياسة ما، يجب عليك دائمًا تضمين قسم
+    <span class="Li">&quot;CONFIGURATION&quot;</span> في POD الخاص بك، حتى لو كان
+    ذلك فقط للقول:</p>
+<pre>=head1 CONFIGURATION
+This Policy is not configurable except for the standard options.</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TESTING_YOUR_POLICY'><a class='permalink' href='#TESTING_YOUR_POLICY'>اختبار سياستك</a></h1>
+<p class="Pp">يحتوي توزيع Perl::Critic أيضًا على إطار عمل لاختبار سياستك. انظر
+    Perl::Critic::TestUtils للحصول على التفاصيل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HINT'><a class='permalink' href='#HINT'>تلميح</a></h1>
+<p class="Pp">عندما تحاول معرفة ما ستقدمه لك PPI لمقطع من الكود، يوجد برنامج
+    <i>tools/ppidump</i> في توزيع Perl::Critic سيساعدك. على سبيل المثال، عند
+    تطوير مثال RequireBlockGrep أعلاه، قد ترغب في تجربة</p>
+<pre>tools/ppidump '@matches = grep /pattern/, @list;'</pre>
+<p class="Pp">و</p>
+<pre>tools/ppidump '@matches = grep { /pattern/ } @list;'</pre>
+<p class="Pp">لرؤية الاختلافات بين الحالتين.</p>
+<p class="Pp">بدلاً من ذلك، انظر إلى وثائق
+    <span class="Li">&quot;ppi_dumper&quot;</span> في
+    <a href='http://search.cpan.org/dist/App-PPI-Dumper/script/ppi_dumper'>http://search.cpan.org/dist/App-PPI-Dumper/script/ppi_dumper</a> ووثائق
+    <span class="Li">&quot;PPI::Tester&quot;</span> في
+    <a href='http://search.cpan.org/dist/PPI-Tester/lib/PPI/Tester.pm'>http://search.cpan.org/dist/PPI-Tester/lib/PPI/Tester.pm</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSION'><a class='permalink' href='#VERSION'>الإصدار</a></h1>

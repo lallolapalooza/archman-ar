@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>curl_ws_start_frame(3) — صفحات دليل آرتش</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">curl_ws_start_frame(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/curl/">curl</a></p>
+<p class="lic">التراخيص: MIT</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">curl_ws_start_frame(3)</td>
+    <td class="head-vol">دليل دوال المكتبة</td>
+    <td class="head-rtitle">curl_ws_start_frame(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">curl_ws_start_frame - بدء إطار WebSocket جديد</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الخلاصة</a></h1>
+<pre>#include &lt;curl/curl.h&gt;
+CURLcode curl_ws_start_frame(CURL *curl,
+                             unsigned int flags,
+                             curl_off_t frame_len);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تضيف رأس إطار WebSocket للعلامات والطول المعطاة إلى مخزن إرسال
+    المعاملة لبيانات WebSocket المشفرة. مخصص للاستخدام في دالة رد اتصال
+    <a href='/man/CURLOPT_READFUNCTION.3.en'>CURLOPT_READFUNCTION(3)</a>.</p>
+<p class="Pp">عند استخدام
+    <a href='/man/CURLOPT_READFUNCTION.3.en'>CURLOPT_READFUNCTION(3)</a> في معاملة WebSocket، يتم إرسال أي بيانات
+    تعيدها هذه الدالة كإطار <i>CURLWS_BINARY</i> مع كون الطول هو كمية البيانات
+    المقروءة.</p>
+<p class="Pp">لإرسال أطر أكبر أو أطر من نوع مختلف، قم باستدعاء
+    <code>curl_ws_start_frame()</code> من داخل دالة القراءة ثم أعد البيانات
+    التابعة للإطار.</p>
+<p class="Pp">تفشل الدالة إذا لم يتم بعد قراءة إطار سابق بالكامل. كما تفشل في
+    وضع <i>CURLWS_RAW_MODE</i>.</p>
+<p class="Pp">عادةً ما تعالج دالة القراءة في libcurl قيمة إرجاع 0 كإشارة لنهاية
+    الملف وتوقف أي قراءات أخرى. هذا سيمنع إرسال أطر WebSocket بطول 0.</p>
+<p class="Pp">إذا قامت دالة القراءة باستدعاء
+    <code>curl_ws_start_frame()</code> ومع ذلك، فإن قيمة الإرجاع 0 <i>لا</i>
+    تُعامل كنهاية للملف ويستدعي libcurl دالة القراءة مرة أخرى.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FLAGS'><a class='permalink' href='#FLAGS'>علامات</a></h1>
+<p class="Pp">تدعم جميع العلامات الموثقة في <a href='/man/curl_ws_meta.3.en'>curl_ws_meta(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PROTOCOLS'><a class='permalink' href='#PROTOCOLS'>بروتوكولات</a></h1>
+<p class="Pp">تؤثر هذه الوظيفة على ws فقط</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<pre>#include &lt;string.h&gt; /* for strlen */
+struct read_ctx {
+  CURL *easy;
+  char *message;
+  size_t msg_len;
+  size_t nsent;
+};
+static size_t readcb(char *buf, size_t nitems, size_t buflen, void *p)
+{
+  struct read_ctx *ctx = p;
+  size_t len = nitems * buflen;
+  size_t left = ctx-&gt;msg_len - ctx-&gt;nsent;
+  CURLcode result;
+  if(!ctx-&gt;nsent) {
+    /* Want to send TEXT frame. */
+    result = curl_ws_start_frame(ctx-&gt;easy, CURLWS_TEXT,
+                                 (curl_off_t)ctx-&gt;msg_len);
+    if(result) {
+      fprintf(stderr, &quot;error starting frame: %d\n&quot;, result);
+      return CURL_READFUNC_ABORT;
+    }
+  }
+  if(left) {
+    if(left &lt; len)
+      len = left;
+    memcpy(buf, ctx-&gt;message + ctx-&gt;nsent, len);
+    ctx-&gt;nsent += len;
+    return len;
+  }
+  return 0;
+}
+int main(void)
+{
+  CURL *easy;
+  struct read_ctx rctx;
+  CURLcode res;
+  easy = curl_easy_init();
+  if(!easy)
+    return 1;
+  curl_easy_setopt(easy, CURLOPT_URL, &quot;wss://example.com&quot;);
+  curl_easy_setopt(easy, CURLOPT_READFUNCTION, readcb);
+  /* tell curl that we want to send the payload */
+  memset(&amp;rctx, 0, sizeof(rctx));
+  rctx.easy = easy;
+  rctx.message = &quot;Hello, friend!&quot;;
+  rctx.msg_len = strlen(rctx.message);
+  curl_easy_setopt(easy, CURLOPT_READDATA, &amp;rctx);
+  curl_easy_setopt(easy, CURLOPT_UPLOAD, 1L);
+  /* Perform the request, res gets the return code */
+  res = curl_easy_perform(easy);
+  /* Check for errors */
+  if(res != CURLE_OK)
+    fprintf(stderr, &quot;curl_easy_perform() failed: %s\n&quot;,
+            curl_easy_strerror(res));
+  /* always cleanup */
+  curl_easy_cleanup(easy);
+  return 0;
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AVAILABILITY'><a class='permalink' href='#AVAILABILITY'>التوفر</a></h1>
+<p class="Pp">تمت الإضافة في curl 8.16.0</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">تعيد هذه الدالة رمز CURLcode يشير إلى النجاح أو الخطأ.</p>
+<p class="Pp"><b>CURLE_OK</b> (0) يعني أن كل شيء كان على ما يرام، أي قيمة غير
+    صفر تعني حدوث خطأ، انظر
+    <a href='/man/libcurl-errors.3.en'>libcurl-errors(3)</a>. إذا تم تعيين
+    <a href='/man/CURLOPT_ERRORBUFFER.3.en'>CURLOPT_ERRORBUFFER(3)</a> باستخدام
+    <a href='/man/curl_easy_setopt.3.en'>curl_easy_setopt(3)</a>، فقد يتم تخزين رسالة خطأ في مخزن
+    الخطأ عند إرجاع قيمة غير صفر.</p>
+<p class="Pp">بدلاً من الحظر، تعيد الدالة <b>CURLE_AGAIN</b>. السلوك الصحيح
+    بعد ذلك هو الانتظار حتى يقوم المقبس بالإشارة إلى إمكانية القراءة قبل استدعاء
+    هذه الدالة مرة أخرى.</p>
+<p class="Pp">أي قيمة غير صفر أخرى تشير إلى خطأ. انظر صفحة الدليل
+    <a href='/man/libcurl-errors.3.en'>libcurl-errors(3)</a> للحصول على القائمة الكاملة مع
+    الأوصاف.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/curl_easy_getinfo.3.en'>curl_easy_getinfo(3)</a>,
+    <a href='/man/curl_easy_perform.3.en'>curl_easy_perform(3)</a>,
+    <a href='/man/curl_easy_setopt.3.en'>curl_easy_setopt(3)</a>,
+    <a href='/man/curl_ws_recv.3.en'>curl_ws_recv(3)</a>,
+    <a href='/man/libcurl-ws.3.en'>libcurl-ws(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-13</td>
+    <td class="foot-os">libcurl</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/curl/">core/curl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>8.17.0-2</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://curl.se/">https://curl.se/</a></dd>
+        <dt>الرخص:</dt>
+        <dd>MIT</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/core/curl/">/listing/core/curl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الخلاصة</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#FLAGS">علامات</a></li>
+        
+            <li><a href="#PROTOCOLS">بروتوكولات</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#AVAILABILITY">التوفر</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/curl_ws_start_frame.3.en.txt">txt</a>, 
+        
+            <a href="/man/curl_ws_start_frame.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة آرتش لينكس المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

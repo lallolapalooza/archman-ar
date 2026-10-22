@@ -1,0 +1,570 @@
+- section:
+    title: Named and Numbered Characters
+    content: |
+      r. It is customary but not
+          required to use leading zeros to pad the number to 4 digits. Thus
+          "\N{U+0041}" means
+          "LATIN CAPITAL LETTER A", and you will
+          rarely see it written without the two leading zeros.
+          "\N{U+0041}" means "A" even on
+          EBCDIC machines (where the ordinal value of "A" is not 0x41).</p>
+      <p class="Pp">Blanks may freely be inserted adjacent to but within the braces
+          enclosing the name or code point. So
+          "\N{&#x00A0;U+0041&#x00A0;}" is perfectly
+          legal.</p>
+      <p class="Pp">It is even possible to give your own names to characters and
+          character sequences by using the charnames module. These custom names are
+          lexically scoped, and so a given code point may have different names in
+          different scopes. The name used is what is in effect at the time the
+          "\N{}" is expanded. For patterns in
+          double-quotish context, that means at the time the pattern is parsed. But
+          for patterns that are delimited by single quotes, the expansion is deferred
+          until pattern compilation time, which may very well have a different
+          "charnames" translator in effect.</p>
+      <p class="Pp">(There is an expanded internal form that you may see in debug
+          output: "\N{U+"<span class="Li"><i>code
+              point</i></span>"."<span class="Li"><i>code
+              point</i></span>"..."}". The
+          "..." means any number of these <i>code
+              point</i>s separated by dots. This represents the sequence formed by the
+          characters. This is an internal form only, subject to change, and you should
+          not try to use it yourself.)</p>
+      <p class="Pp">Mnemonic: <i>N</i>amed character.</p>
+      <p class="Pp">Note that a character or character sequence expressed as a named
+          or numbered character is considered a character without special meaning by
+          the regex engine, and will match "as is".</p>
+      <p class="Pp">Example</p>
+      <pre>$str =~ /\N{THAI CHARACTER SO SO}/;  # Matches the Thai SO SO character
+use charnames 'Cyrillic';            # Loads Cyrillic names.
+$str =~ /\N{ZHE}\N{KA}/;             # Match "ZHE" followed by "KA".</pre>
+- section:
+    title: Octal escapes
+    content: |
+      There are two forms of octal escapes. Each is used to specify a
+          character by its code point specified in base 8.</p>
+      <p class="Pp">One form, available starting in Perl 5.14 looks like
+          "\o{...}", where the dots represent one or
+          more octal digits. It can be used for any Unicode character.</p>
+      <p class="Pp">It was introduced to avoid the potential problems with the other
+          form, available in all Perls. That form consists of a backslash followed by
+          three octal digits. One problem with this form is that it can look exactly
+          like an old-style backreference (see "Disambiguation rules between
+          old-style octal escapes and backreferences" below.) You can avoid this
+          by making the first of the three digits always a zero, but that makes \077
+          the largest code point specifiable.</p>
+      <p class="Pp">In some contexts, a backslash followed by two or even one octal
+          digits may be interpreted as an octal escape, sometimes with a warning, and
+          because of some bugs, sometimes with surprising results. Also, if you are
+          creating a regex out of smaller snippets concatenated together, and you use
+          fewer than three digits, the beginning of one snippet may be interpreted as
+          adding digits to the ending of the snippet before it. See "Absolute
+          referencing" for more discussion and examples of the snippet
+        problem.</p>
+      <p class="Pp">Note that a character expressed as an octal escape is considered a
+          character without special meaning by the regex engine, and will match
+          "as is".</p>
+      <p class="Pp">To summarize, the "\o{}" form is
+          always safe to use, and the other form is safe to use for code points
+          through \077 when you use exactly three digits to specify them.</p>
+      <p class="Pp">Mnemonic: <i>0</i>ctal or <i>o</i>ctal.</p>
+      <p class="Pp">Examples (assuming an ASCII platform)</p>
+      <pre>$str = "Perl";
+$str =~ /\o{120}/;  # Match, "\120" is "P".
+$str =~ /\120/;     # Same.
+$str =~ /\o{120}+/; # Match, "\120" is "P",
+                    # it's repeated at least once.
+$str =~ /\120+/;    # Same.
+$str =~ /P\053/;    # No match, "\053" is "+" and taken literally.
+/\o{23073}/         # Black foreground, white background smiling face.
+/\o{4801234567}/    # Raises a warning, and yields chr(4).
+/\o{ 400}/          # LATIN CAPITAL LETTER A WITH MACRON
+/\o{ 400 }/         # Same. These show blanks are allowed adjacent to
+                    # the braces</pre>
+- section:
+    title: Disambiguation rules between old-style octal escapes and backreferences
+    content: |
+      Octal escapes of the "\000" form
+          outside of bracketed character classes potentially clash with old-style
+          backreferences (see "Absolute referencing" below). They both
+          consist of a backslash followed by numbers. So Perl has to use heuristics to
+          determine whether it is a backreference or an octal escape. Perl uses the
+          following rules to disambiguate:
+      <dl class="Bl-tag">
+        <dt>1.</dt>
+        <dd>If the backslash is followed by a single digit, it's a backreference.</dd>
+        <dt>2.</dt>
+        <dd>If the first digit following the backslash is a 0, it's an octal
+            escape.</dd>
+        <dt>3.</dt>
+        <dd>If the number following the backslash is N (in decimal), and Perl already
+            has seen N capture groups, Perl considers this a backreference. Otherwise,
+            it considers it an octal escape. If N has more than three digits, Perl
+            takes only the first three for the octal escape; the rest are matched as
+            is.
+              <pre>my $pat  = "(" x 999;
+         $pat .= "a";
+         $pat .= ")" x 999;
+      /^($pat)\1000$/;   #  Matches 'aa'; there are 1000 capture groups.
+      /^$pat\1000$/;     #  Matches 'a@0'; there are 999 capture groups
+                         #  and \1000 is seen as \100 (a '@') and a '0'.
+      </pre>
+        </dd>
+      </dl>
+      <p class="Pp">You can force a backreference interpretation always by using the
+          "\g{...}" form. You can the force an octal
+          interpretation always by using the
+          "\o{...}" form, or for numbers up through
+          \077 (= 63 decimal), by using three digits, beginning with a
+          "0".</p>
+- section:
+    title: Hexadecimal escapes
+    content: |
+      Like octal escapes, there are two forms of hexadecimal escapes,
+          but both start with the sequence "\x".
+          This is followed by either exactly two hexadecimal digits forming a number,
+          or a hexadecimal number of arbitrary length surrounded by curly braces. The
+          hexadecimal number is the code point of the character you want to
+        express.</p>
+      <p class="Pp">Note that a character expressed as one of these escapes is
+          considered a character without special meaning by the regex engine, and will
+          match "as is".</p>
+      <p class="Pp">Mnemonic: he<i>x</i>adecimal.</p>
+      <p class="Pp">Examples (assuming an ASCII platform)</p>
+      <pre>$str = "Perl";
+$str =~ /\x50/;    # Match, "\x50" is "P".
+$str =~ /\x50+/;   # Match, "\x50" is "P", it is repeated at least once
+$str =~ /P\x2B/;   # No match, "\x2B" is "+" and taken literally.
+/\x{2603}\x{2602}/ # Snowman with an umbrella.
+                   # The Unicode character 2603 is a snowman,
+                   # the Unicode character 2602 is an umbrella.
+/\x{263B}/         # Black smiling face.
+/\x{263b}/         # Same, the hex digits A - F are case insensitive.
+/\x{ 263b }/       # Same, showing optional blanks adjacent to the
+                   # braces</pre>
+- section:
+    title: Modifiers
+    content: |
+      A number of backslash sequences have to do with changing the
+          character, or characters following them.
+          "\l" will lowercase the character
+          following it, while "\u" will uppercase
+          (or, more accurately, titlecase) the character following it. They provide
+          functionality similar to the functions
+          "lcfirst" and
+          "ucfirst".</p>
+      <p class="Pp">To uppercase or lowercase several characters, one might want to
+          use "\L" or
+          "\U", which will lowercase/uppercase all
+          characters following them, until either the end of the pattern or the next
+          occurrence of "\E", whichever comes first.
+          They provide functionality similar to what the functions
+          "lc" and
+          "uc" provide.</p>
+      <p class="Pp">"\Q" is used to quote or escape
+          (disable) pattern metacharacters, up to the next
+          "\E" or the end of the pattern.
+          "\Q" adds a backslash to any character
+          that could have special meaning to Perl. In the ASCII range, it quotes every
+          character that isn't a letter, digit, or underscore. See
+          "quotemeta" in perlfunc for details on what gets quoted for
+          non-ASCII code points. Using this ensures that any character between
+          "\Q" and
+          "\E" will be matched literally, not
+          interpreted as a metacharacter by the regex engine.</p>
+      <p class="Pp">"\F" can be used to casefold all
+          characters following, up to the next "\E"
+          or the end of the pattern. It provides the functionality similar to the
+          "fc" function.</p>
+      <p class="Pp">Mnemonic: <i>L</i>owercase, <i>U</i>ppercase, <i>F</i>old-case,
+          <i>Q</i>uotemeta, <i>E</i>nd.</p>
+      <p class="Pp">Examples</p>
+      <pre>$sid     = "sid";
+$greg    = "GrEg";
+$miranda = "(Miranda)";
+$str     =~ /\u$sid/;        # Matches 'Sid'
+$str     =~ /\L$greg/;       # Matches 'greg'
+$str     =~ /\Q$miranda\E/;  # Matches '(Miranda)', as if the pattern
+                             #   had been written as /\(Miranda\)/</pre>
+- section:
+    title: Character classes
+    content: |
+      Perl regular expressions have a large range of character classes.
+          Some of the character classes are written as a backslash sequence. We will
+          briefly discuss those here; full details of character classes can be found
+          in perlrecharclass.</p>
+      <p class="Pp">"\w" is a character class that
+          matches any single <i>word</i> character (letters, digits, Unicode marks,
+          and connector punctuation (like the underscore)).
+          "\d" is a character class that matches any
+          decimal digit, while the character class
+          "\s" matches any whitespace character. New
+          in perl 5.10.0 are the classes "\h" and
+          "\v" which match horizontal and vertical
+          whitespace characters.</p>
+      <p class="Pp">The exact set of characters matched by
+          "\d",
+          "\s", and
+          "\w"
+<span> يعتمد على العديد من التوجيهات
+    ومعدلات التعبير العادي. من الممكن تقييد المطابقة إلى
+    نطاق ASCII باستخدام معدل التعبير العادي <span class="Li">&quot;/a&quot;</span>. انظر perlrecharclass.</span></p>
+<p class="Pp">الأشكال الكبيرة (<span class="Li">&quot;\W&quot;</span>،
+    <span class="Li">&quot;\D&quot;</span>،
+    <span class="Li">&quot;\S&quot;</span>،
+    <span class="Li">&quot;\H&quot;</span>، و
+    <span class="Li">&quot;\V&quot;</span>) هي فئات أحرف تطابق، على التوالي، أي حرف ليس حرف كلمة، أو رقم، أو مسافة بيضاء، أو مسافة بيضاء أفقية، أو مسافة بيضاء عمودية.</p>
+<p class="Pp">اختصارات: <i>w</i>ord (كلمة)، <i>d</i>igit (رقم)، <i>s</i>pace (مسافة)،
+    <i>h</i>orizontal (أفقي)، <i>v</i>ertical (عمودي).</p>
+<p class="Pp"><i>فئات يونيكود</i></p>
+<p class="Pp"><span class="Li">&quot;\pP&quot;</span> (حيث
+    <span class="Li">&quot;P&quot;</span> هو حرف واحد) و
+    <span class="Li">&quot;\p{Property}&quot;</span> تُستخدم لمطابقة حرف يتوافق مع خاصية يونيكود المعطاة؛ تشمل الخصائص أشياء مثل "letter" (حرف)، أو "thai character" (حرف تايلاندي). جعل الحرف الأول كبيرًا في التسلسل <span class="Li">&quot;\PP&quot;</span> و
+    <span class="Li">&quot;\P{Property}&quot;</span> يجعل التسلسل يطابق حرفًا لا يتوافق مع خاصية يونيكود المعطاة. لمزيد من التفاصيل، انظر "Backslash sequences" في perlrecharclass و "Unicode
+    Character Properties" في perlunicode.</p>
+<p class="Pp">اختصار: <i>p</i>roperty (خاصية).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Referencing'><a class='permalink' href='#Referencing'>الاستدعاء</a></h2>
+<p class="Pp">إذا تم استخدام أقواس التقاط في تعبير عادي، يمكننا الإشارة إلى الجزء من السلسلة المصدر الذي تمت مطابقته، ومطابقة نفس الشيء بالضبط. هناك ثلاث طرق للإشارة إلى هذا
+    <i>الاستدعاء العكسي</i>: مطلق، نسبي، وبالاسم.</p>
+<p class="Pp"><i>الاستدعاء المطلق</i></p>
+<p class="Pp">إما
+    <span class="Li">&quot;\g</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>
+    (بدءًا من Perl 5.10.0)، أو
+    <span class="Li">&quot;\</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>
+    (النمط القديم) حيث <i>N</i> هو رقم عشري موجب (غير موقّع) بأي طول هو مرجع مطلق لمجموعة التقاط.</p>
+<p class="Pp"><i>N</i> تشير إلى المجموعة رقم <i>N</i> من الأقواس، لذا
+    <span class="Li">&quot;\g</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>
+    تشير إلى أي شيء تمت مطابقته بواسطة تلك المجموعة من الأقواس. وبالتالي
+    <span class="Li">&quot;\g1&quot;</span> تشير إلى مجموعة الالتقاط الأولى في التعبير العادي.</p>
+<p class="Pp">يمكن كتابة النموذج
+    <span class="Li">&quot;\g</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>
+    بشكل مكافئ كـ
+    <span class="Li">&quot;\g{</span><span class="Li"><i>N</i></span><span class="Li">}&quot;</span>
+    مما يتجنب الغموض عند بناء تعبير عادي عن طريق ربط سلاسل أقصر. بخلاف ذلك، إذا كان لديك تعبير عادي
+    <span class="Li">&quot;qr/$x$y/&quot;</span>، و<span class="Li">$x</span>
+    يحتوي على
+    <span class="Li">&quot;\g1&quot;</span>، و<span class="Li">$y</span>
+    يحتوي على
+    <span class="Li">&quot;37&quot;</span>، ستحصل على
+    <span class="Li">&quot;/\g137/&quot;</span> وهو على الأرجح ليس ما قصدته.</p>
+<p class="Pp">في نموذج
+    <span class="Li">&quot;\</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>، لا يجب أن يبدأ <i>N</i> بـ "0"، ويجب أن يكون هناك على الأقل <i>N</i> مجموعة التقاط، وإلا يعتبر <i>N</i> تهريبًا ثمانيًا (ولكن شيء مثل
+    <span class="Li">&quot;\18&quot;</span> هو نفس الشيء مثل
+    <span class="Li">&quot;\0018&quot;</span>؛ أي، التهريب الثماني
+    <span class="Li">&quot;\001&quot;</span> متبوعًا برقم حرفي
+    <span class="Li">&quot;8&quot;</span>).</p>
+<p class="Pp">اختصار: <i>g</i>roup (مجموعة).</p>
+<p class="Pp">أمثلة</p>
+<pre>/(\w+) \g1/;    # يبحث عن كلمة مكررة، (على سبيل المثال "cat cat").
+/(\w+) \1/;     # نفس الشيء؛ مكتوب بالنمط القديم.
+/(\w+) \g{1}/;  # نفس الشيء، باستخدام الصيغة الآمنة بالأقواس المعقوفة
+/(\w+) \g{ 1 }/;# نفس الشيء، يوضح المسافات الاختيارية المجاورة للأقواس المعقوفة
+/(.)(.)\g2\g1/; # يطابق قلابًا رباعي الأحرف (على سبيل المثال "ABBA").</pre>
+<p class="Pp"><i>الاستدعاء النسبي</i></p>
+<p class="Pp"><span class="Li">&quot;\g-</span><span class="Li"><i>N</i></span><span class="Li">&quot;</span>
+    (بدءًا من Perl 5.10.0) يُستخدم للعنونة النسبية. (يمكن كتابته كـ
+    <span class="Li">&quot;\g{-</span><span class="Li"><i>N</i></span><span class="Li">}&quot;</span>.)
+    يشير إلى المجموعة رقم <i>N</i> قبل
+    <span class="Li">&quot;\g{-</span><span class="Li"><i>N</i></span><span class="Li">}&quot;</span>.</p>
+<p class="Pp">الميزة الكبيرة لهذا النموذج هي أنه يسهل كتابة أنماط مع استدعاءات يمكن تضمينها في أنماط أكبر، حتى لو كان النمط الأكبر يحتوي أيضًا على مجموعات التقاط.</p>
+<p class="Pp">أمثلة</p>
+<pre>/(A)        # المجموعة 1
+ (          # المجموعة 2
+   (B)      # المجموعة 3
+   \g{-1}   # يشير إلى المجموعة 3 (B)
+   \g{-3}   # يشير إلى المجموعة 1 (A)
+   \g{ -3 } # نفس الشيء، يوضح المسافات الاختيارية المجاورة للأقواس المعقوفة
+ )
+/x;         # يطابق "ABBA".
+my $qr = qr /(.)(.)\g{-2}\g{-1}/;  # يطابق 'abab'، 'cdcd'، إلخ.
+/$qr$qr/                           # يطابق 'ababcdcd'.</pre>
+<p class="Pp"><i>الاستدعاء المسمى</i></p>
+<p class="Pp"><span class="Li">&quot;\g{</span><span class="Li"><i>name</i></span><span class="Li">}&quot;</span>
+    (بدءًا من Perl 5.10.0) يمكن استخدامه للاستدعاء العكسي لمجموعة التقاط مسماة، مما يلغي تمامًا الحاجة إلى التفكير في مواضع مخزن الالتقاط.</p>
+<p class="Pp">للتوافق مع تعبيرات .Net العادية،
+    <span class="Li">&quot;\g{name}&quot;</span> يمكن كتابتها أيضًا كـ
+    <span class="Li">&quot;\k{name}&quot;</span>،
+    <span class="Li">&quot;\k&lt;name&gt;&quot;</span> أو
+    <span class="Li">&quot;\k'name'&quot;</span>.</p>
+<p class="Pp">لتجنب أي غموض، لا يجب أن يبدأ <i>name</i> برقم ولا يحتوي على شرطة.</p>
+<p class="Pp">أمثلة</p>
+<pre>/(?&lt;word&gt;\w+) \g{word}/   # يبحث عن كلمة مكررة، (على سبيل المثال "cat cat")
+/(?&lt;word&gt;\w+) \k{word}/   # نفس الشيء.
+/(?&lt;word&gt;\w+) \g{ word }/ # نفس الشيء، يوضح المسافات الاختيارية المجاورة
+                          # للأقواس المعقوفة
+/(?&lt;word&gt;\w+) \k{ word }/ # نفس الشيء.
+/(?&lt;word&gt;\w+) \k&lt;word&gt;/   # نفس الشيء. لا توجد أقواس معقوفة، لذا لا توجد مسافات
+                          # مسموح بها
+/(?&lt;letter1&gt;.)(?&lt;letter2&gt;.)\g{letter2}\g{letter1}/
+                          # يطابق قلابًا رباعي الأحرف (على سبيل المثال
+                          # "ABBA")</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Assertions'><a class='permalink' href='#Assertions'>التأكيدات</a></h2>
+<p class="Pp">التأكيدات هي شروط يجب أن تكون صحيحة؛ فهي لا تطابق أجزاء من السلسلة الفرعية فعليًا. هناك ستة تأكيدات مكتوبة كسلاسل مائلة للخلف.</p>
+<dl class="Bl-tag">
+  <dt id="A"><a class="permalink" href="#A">\A</a></dt>
+  <dd><span class="Li">&quot;\A&quot;</span> تطابق فقط في بداية السلسلة. إذا لم يتم استخدام المعدل
+      <span class="Li">&quot;/m&quot;</span>، فإن <span class="Li">&quot;/\A/&quot;</span> يعادل
+      <span class="Li">&quot;/^/&quot;</span>. ومع ذلك، إذا تم استخدام المعدل
+      <span class="Li">&quot;/m&quot;</span>، فإن <span class="Li">&quot;/^/&quot;</span> يطابق فواصل الأسطر الداخلية، ولكن معنى
+      <span class="Li">&quot;/\A/&quot;</span> لا يتغير بسبب المعدل
+      <span class="Li">&quot;/m&quot;</span>.
+      <span class="Li">&quot;\A&quot;</span> تطابق في بداية السلسلة
+      بغض النظر عما إذا كان المعدل
+      <span class="Li">&quot;/m&quot;</span> مستخدمًا.</dd>
+  <dt id="z,"><a class="permalink" href="#z,">\z, \Z</a></dt>
+  <dd><span class="Li">&quot;\z&quot;</span> و
+      <span class="Li">&quot;\Z&quot;</span> تطابقان في نهاية السلسلة. إذا لم يتم استخدام المعدل
+      <span class="Li">&quot;/m&quot;</span>، فإن
+      <span class="Li">&quot;/\Z/&quot;</span> يعادل
+      <span class="Li">&quot;/$/&quot;</span>؛ أي، تطابق في نهاية السلسلة، أو قبل سطر جديد في نهاية السلسلة. إذا تم استخدام المعدل
+      <span class="Li">&quot;/m&quot;</span>، فإن <span class="Li">&quot;/$/&quot;</span> يطابق فواصل الأسطر الداخلية، ولكن
+      معنى <span class="Li">&quot;/\Z/&quot;</span> لا يتغير بسبب المعدل
+      <span class="Li">&quot;/m&quot;</span>.
+      <span class="Li">&quot;\Z&quot;</span> تطابق في نهاية السلسلة
+      (أو قبل سطر جديد نهائي) بغض النظر عما إذا كان المعدل
+      <span class="Li">&quot;/m&quot;</span> مستخدمًا.
+    <p class="Pp"><span class="Li">&quot;\z&quot;</span> هو مثل
+        <span class="Li">&quot;\Z&quot;</span>، إلا أنه لا يطابق قبل سطر جديد نهائي.
+        <span class="Li">&quot;\z&quot;</span> يطابق في نهاية السلسلة فقط، بغض النظر عن المعدلات المستخدمة، وليس فقط قبل سطر جديد. إنها طريقة لربط المطابقة بنهاية السلسلة الحقيقية في جميع الظروف.</p>
+  </dd>
+  <dt id="G"><a class="permalink" href="#G">\G</a></dt>
+  <dd><span class="Li">&quot;\G&quot;</span> يُستخدم عادةً فقط بالاشتراك مع المعدل
+      <span class="Li">&quot;/g&quot;</span>. إذا تم استخدام المعدل
+      <span class="Li">&quot;/g&quot;</span> وتمت المطابقة في سياق كمي، يتذكر Perl مكان انتهاء المطابقة الأخيرة في السلسلة المصدر، وفي المرة التالية، ستبدأ المطابقة من حيث انتهت في المرة السابقة.
+    <p class="Pp"><span class="Li">&quot;\G&quot;</span> تطابق النقطة التي انتهت فيها المطابقة السابقة على تلك السلسلة، أو بداية تلك السلسلة
+        إذا لم تكن هناك مطابقة سابقة.</p>
+    <p class="Pp">اختصار: <i>G</i>lobal (عام).</p>
+  </dd>
+  <dt id="b__,"><a class="permalink" href="#b__,">\b{}, \b, \B{}, \B</a></dt>
+  <dd><span class="Li">&quot;\b{...}&quot;</span>، متاح بدءًا من v5.22،
+      يطابق حدًا (بين حرفين، أو قبل الحرف الأول من السلسلة، أو بعد الحرف الأخير من السلسلة) بناءً على قواعد يونيكود لنوع الحد المحدد داخل الأقواس المعقوفة. يتم إعطاء أنواع الحدود بفقرات قليلة أدناه.
+      <span class="Li">&quot;\B{...}&quot;</span> يطابق في أي مكان بين
+      الأحرف حيث لا يتطابق <span class="Li">&quot;\b{...}&quot;</span> من نفس النوع.
+    <p class="Pp"><span class="Li">&quot;\b&quot;</span> عندما لا يتبعه مباشرة
+        <span class="Li">&quot;{&quot;</span> متاح في جميع إصدارات Perl. يطابق في أي مكان بين حرف كلمة (شيء يطابقه
+        <span class="Li">&quot;\w&quot;</span>) وحرف غير كلمة
+        (<span class="Li">&quot;\W&quot;</span>)؛
+        <span class="Li">&quot;\B&quot;</span> عندما لا يتبعه مباشرة
+        <span class="Li">&quot;{&quot;</span> يطابق في أي مكان بين
+        الأحرف حيث لا يطابق <span class="Li">&quot;\b&quot;</span>.
+        للحصول على مطابقة أفضل للكلمات في نصوص اللغات الطبيعية، انظر
+        &quot;\b{wb}&quot; أدناه.</p>
+    <p class="Pp"><span class="Li">&quot;\b&quot;</span> و
+        <span class="Li">&quot;\B&quot;</span> يفترضان وجود حرف غير كلمة
+        قبل بداية السلسلة المصدر وبعد نهايتها؛
+        لذا سيطابق <span class="Li">&quot;\b&quot;</span> في البداية
+        (أو النهاية) من السلسلة المصدر إذا بدأت السلسلة المصدر (أو انتهت) بحرف كلمة. بخلاف ذلك، سيطابق
+        <span class="Li">&quot;\B&quot;</span>.</p>
+    <p class="Pp">لا تستخدم شيئًا مثل
+        <span class="Li">&quot;\b=h</a>
+</dd>
+</dl>
+</section>
+{
+  "file_structure": [
+    {
+      "type": "paragraph",
+      "content": "ead\\d\\b\"</span> and expect it to match\n        the beginning of a line. It can't, because for there to be a boundary\n        before the non-word \"=\" , there must be a word character\n        immediately previous. All plain <span class=\"Li\">\"\\b\"</span>\n        and <span class=\"Li\">\"\\B\"</span> boundary determinations look\n        for word characters alone, not for non-word characters nor for string\n        ends. It may help to understand how\n        <span class=\"Li\">\"\\b\"</span> and\n        <span class=\"Li\">\"\\B\"</span> work by equating them as:"
+    },
+    {
+      "type": "preformatted",
+      "content": "\\b  really means    (?:(?&lt;=\\w)(?=\\w)|(?&lt;!\\w)(?=\\w))\n\\B  really means    (?:(?&lt;=\\w)(?=\\w)|(?&lt;!\\w)(?=\\w))"
+    },
+    {
+      "type": "paragraph",
+      "content": "In contrast, <span class=\"Li\">\"\\b{...}\"</span> and\n        <span class=\"Li\">\"\\B{...}\"</span> may or may not match at the\n        beginning and end of the line, depending on the boundary type. These\n        implement the Unicode default boundaries, specified in\n        <a href='https://www.unicode.org/reports/tr14/'>https://www.unicode.org/reports/tr14/</a> and\n        <a href='https://www.unicode.org/reports/tr29/'>https://www.unicode.org/reports/tr29/</a>. The boundary types\n      are:"
+    },
+    {
+      "type": "definition_list",
+      "items": [
+        {
+          "term": "\"\\b{gcb}\" or \"\\b{g}\"",
+          "definition": "This matches a Unicode \"Grapheme Cluster Boundary\". (Actually\n      Perl always uses the improved \"extended\"\n      grapheme\n      cluster\"). These are explained below under\n      <span class=\"Li\">\"\\X\"</span>. In fact,\n      <span class=\"Li\">\"\\X\"</span> is another way to get the same\n      functionality. It is equivalent to\n      <span class=\"Li\">\"/.+?\\b{gcb}/\"</span>. Use whichever is most\n      convenient for your situation."
+        },
+        {
+          "term": "\"\\b{lb}\"",
+          "definition": "This matches according to the default Unicode Line Breaking Algorithm\n      (<a href='https://www.unicode.org/reports/tr14/'>https://www.unicode.org/reports/tr14/</a>), as customized in that\n      document (Example 7 of revision 35\n      <a href='https://www.unicode.org/reports/tr14/tr14-35.html#Example7'>https://www.unicode.org/reports/tr14/tr14-35.html#Example7</a>) for\n      better handling of numeric expressions.\n    <p class=\"Pp\">This is suitable for many purposes, but the Unicode::LineBreak\n        module is available on CPAN that provides many more features, including\n        customization.</p>\n  "
+        },
+        {
+          "term": "\"\\b{sb}\"",
+          "definition": "This matches a Unicode \"Sentence Boundary\". This is an aid to\n      parsing natural language sentences. It gives good, but imperfect results.\n      For example, it thinks that \"Mr. Smith\" is two sentences. More\n      details are at <a href='https://www.unicode.org/reports/tr29/'>https://www.unicode.org/reports/tr29/</a>. Note also\n      that it thinks that anything matching \"\\R\" (except form feed and\n      vertical tab) is a sentence boundary.\n      <span class=\"Li\">\"\\b{sb}\"</span> works with text designed for\n      word-processors which wrap lines automatically for display, but hard-coded\n      line boundaries are considered to be essentially the ends of text blocks\n      (paragraphs really), and hence the ends of sentences.\n      <span class=\"Li\">\"\\b{sb}\"</span> doesn't do well with text\n      containing embedded newlines, like the source text of the document you are\n      reading. Such text needs to be preprocessed to get rid of the line\n      separators before looking for sentence boundaries. Some people view this\n      as a bug in the Unicode standard, and this behavior is quite subject to\n      change in future Perl versions."
+        },
+        {
+          "term": "\"\\b{wb}\"",
+          "definition": "This matches a Unicode \"Word Boundary\", but tailored to Perl\n      expectations. This gives better (though not perfect) results for natural\n      language processing than plain <span class=\"Li\">\"\\b\"</span>\n      (without braces) does. For example, it understands that apostrophes can be\n      in the middle of words and that parentheses aren't (see the examples\n      below). More details are at <a href='https://www.unicode.org/reports/tr29/'>https://www.unicode.org/reports/tr29/</a>.\n    <p class=\"Pp\">The current Unicode definition of a Word Boundary matches\n        between every white space character. Perl tailors this, starting in\n        version 5.24, to generally not break up spans of white space, just as\n        plain <span class=\"Li\">\"\\b\"</span> has always functioned. This\n        allows <span class=\"Li\">\"\\b{wb}\"</span> to be a drop-in\n        replacement for <span class=\"Li\">\"\\b\"</span>, but with\n        generally better results for natural language processing. (The exception\n        to this tailoring is when a span of white space is immediately followed\n        by something like U+0303, COMBINING TILDE. If the final space character\n        in the span is a horizontal white space, it is broken out so that it\n        attaches instead to the combining character. To be precise, if a span of\n        white space that ends in a horizontal space has the character\n        immediately following it have any of the Word Boundary property values\n        \"Extend\", \"Format\" or \"ZWJ\", the boundary\n        between the final horizontal space character and the rest of the span\n        matches <span class=\"Li\">\"\\b{wb}\"</span>. In all other cases\n        the boundary between two white space characters matches\n        <span class=\"Li\">\"\\B{wb}\"</span>.)</p>\n  "
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": "It is important to realize when you use these Unicode boundaries,\n    that you are taking a risk that a future version of Perl which contains a\n    later version of the Unicode Standard will not work precisely the same way\n    as it did when your code was written. These rules are not considered stable\n    and have been somewhat more subject to change than the rest of the Standard.\n    Unicode reserves the right to change them at will, and Perl reserves the\n    right to update its implementation to Unicode's new rules. In the past, some\n    changes have been because new characters have been added to the Standard\n    which have different characteristics than all previous characters, so new\n    rules are formulated for handling them. These should not cause any backward\n    compatibility issues. But some changes have changed the treatment of\n    existing characters because the Unicode Technical Committee has decided that\n    the change is warranted for whatever reason. This could be to fix a bug, or\n    because they think better results are obtained with the new rule."
+    },
+    {
+      "type": "paragraph",
+      "content": "It is also important to realize that these are default boundary\n    definitions, and that implementations may wish to tailor the results for\n    particular purposes and locales. For example, some languages, such as\n    Japanese and Thai, require dictionary lookup to accurately determine word\n    boundaries."
+    },
+    {
+      "type": "paragraph",
+      "content": "Mnemonic: <i>b</i>oundary."
+    },
+    {
+      "type": "heading",
+      "level": "p",
+      "content": "Examples"
+    },
+    {
+      "type": "preformatted",
+      "content": " \"cat\"   =~ /\\Acat/;     # Match.\n \"cat\"   =~ /cat\\Z/;     # Match.\n \"cat\\n\" =~ /cat\\Z/;     # Match.\n \"cat\\n\" =~ /cat\\z/;     # No match.\n \"cat\"   =~ /\\bcat\\b/;   # Matches.\n \"cats\"  =~ /\\bcat\\b/;   # No match.\n \"cat\"   =~ /\\bcat\\B/;   # No match.\n \"cats\"  =~ /\\bcat\\B/;   # Match.\n while (\"cat dog\" =~ /(\\w+)/g) {\n     print $1;           # Prints 'catdog'\n }\n while (\"cat dog\" =~ /\\G(\\w+)/g) {\n     print $1;           # Prints 'cat'\n }\n my $s = \"He said, \\\"Is pi 3.14? (I'm not sure).\\\"\"\n print join(\"|\", $s =~ m/ ( .+? \\b     ) /xg), \"\\n\";\n print join(\"|\", $s =~ m/ ( .+? \\b{wb} ) /xg), \"\\n\";\nprints\nHe| |said|, &quot;|Is| |pi| |3|.|14|? (|I|'|m| |not| |sure\nHe| |said|,| |&quot;|Is| |pi| |3.14|?| |(|I'm| |not| |sure|)|.|&quot;"
+    }
+  ]
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>perlrebackslash - perlrebackslash(1perl) - Arch Linux</title>
+    <link rel="stylesheet" href="/css/reset.css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/arch.css">
+    <link rel="stylesheet" href="/css/man.css">
+<link rel="stylesheet" href="basic.css">
+</head>
+<body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlrebackslash.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+    
+    <main class="container page-container">
+        <section class="main-content">
+            <article>
+<section class="man-page">
+<div class="man-page-header">
+    <h1>perlrebackslash - Perl regular expressions</h1>
+    <div class="header-line">
+        <div class="left">
+            <span>perl v5.42.0</span>
+            <span>perlrebackslash(1perl)</span>
+        </div>
+        <div class="right">
+            <span>2025-07-13</span>
+            <span>perl v5.42.0</span>
+        </div>
+    </div>
+</div>
+<div class="man-page-body">
+    
+<dl class="description-list">
+    
+    <dt class="description-dt">
+    <span class="name"><code>\X</code></span>
+    <span class="section"></span>
+    </dt>
+    <dd class="description-dd">
+        <p class="Pp">It matches a "Unicode grapheme cluster". This is a sequence of one or more
+            Unicode code points that are treated by Unicode as a single user-perceived
+            character. For example, an accented character like <code>e</code>
+            followed by a combining acute accent (<code>\x{301}</code>) forms a
+            grapheme cluster. Specifically, the character <code>e</code> (U+0065)
+            followed by COMBINING ACUTE ACCENT (U+0301) would be represented as
+            <code>P\x{307}</code>. This would be composed using a G followed by a Unicode &quot;COMBINING UPWARDS
+            ARROW BELOW&quot;, and would be displayed by Unicode-aware software as
+            if it were a single character.</p>
+        <p class="Pp">The match is greedy and non-backtracking, so that the cluster
+            is never broken up into smaller components.</p>
+        <p class="Pp">See also <span class="Li">&quot;\b{gcb}&quot;</span>.</p>
+        <p class="Pp">Mnemonic: e<i>X</i>tended Unicode character.</p>
+    </dd>
+</dl>
+<p class="Pp">Examples</p>
+<pre>$str =~ s/foo\Kbar/baz/g; # Change any 'bar' following a 'foo' to 'baz'
+$str =~ s/(.)\K\g1//g;    # Delete duplicated characters.
+&quot;\n&quot;   =~ /^\R$/;         # Match, \n   is a generic newline.
+&quot;\r&quot;   =~ /^\R$/;         # Match, \r   is a generic newline.
+&quot;\r\n&quot; =~ /^\R$/;         # Match, \r\n is a generic newline.
+&quot;P\x{307}&quot; =~ /^\X$/     # \X matches a P with a dot above.</pre>
+</section>
+</div>
+<table class="foot">
+    <tr>
+        <td class="foot-date">2025-07-13</td>
+        <td class="foot-os">perl v5.42.0</td>
+    </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>Version:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/perlrebackslash.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlrebackslash.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

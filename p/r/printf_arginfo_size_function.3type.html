@@ -1,0 +1,314 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">printf_arginfo_size_function.3type</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='STANDARDS'><a class='permalink' href='#STANDARDS'>المعايير</a></h1>
+<p class="Pp">GNU.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp"><a href='/man/register_printf_function.3.en'>register_printf_function(3)</a> هي دالة قديمة مشابهة لـ
+    <b>register_printf_specifier</b>()، وهي الآن مهملة. لا يمكن لهذه الدالة التعامل مع أنواع بيانات معرفة من قبل المستخدم.</p>
+<p class="Pp"><b>register_printf_specifier</b>() تحل محل
+    <a href='/man/register_printf_function.3.en'>register_printf_function(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">يقوم برنامج المثال التالي بتسجيل محددات 'b' و 'B' لطباعة الأعداد الصحيحة بتنسيق ثنائي، مما يعكس قواعد محددات التحويل غير الموقعة الأخرى مثل 'x' و 'u'. يمكن استخدام هذا للطباعة بالثنائي قبل C23.</p>
+<pre>/* هذا الكود في الملك العام */
+#include &lt;err.h&gt;
+#include &lt;limits.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/param.h&gt;
+#include &lt;printf.h&gt;
+#define GROUP_SEP  '\'
+struct Printf_Pad {
+    char    ch;
+    size_t  len;
+};
+static int b_printf(FILE *stream, const struct printf_info *info,
+                    const void *const args[]);
+static int b_arginf_sz(const struct printf_info *info,
+                    size_t n, int argtypes[n], int size[n]);
+static uintmax_t b_value(const struct printf_info *info,
+                    const void *arg);
+static size_t b_bin_repr(char bin[UINTMAX_WIDTH],
+                    const struct printf_info *info, const void *arg);
+static size_t b_bin_len(const struct printf_info *info,
+                    ptrdiff_t min_len);
+static size_t b_pad_len(const struct printf_info *info,
+                    ptrdiff_t bin_len);
+static ssize_t b_print_prefix(FILE *stream,
+                    const struct printf_info *info);
+static ssize_t b_pad_zeros(FILE *stream, const struct printf_info *info,
+                    ptrdiff_t min_len);
+static ssize_t b_print_number(FILE *stream,
+                    const struct printf_info *info,
+                    const char bin[UINTMAX_WIDTH],
+                    size_t min_len, size_t bin_len);
+static char pad_ch(const struct printf_info *info);
+static ssize_t pad_spaces(FILE *stream, size_t pad_len);
+int
+main(void)
+{
+    if (register_printf_specifier('b', b_printf, b_arginf_sz) == -1)
+        err(EXIT_FAILURE, &quot;register_printf_specifier('b', ...)&quot;);
+    if (register_printf_specifier('B', b_printf, b_arginf_sz) == -1)
+        err(EXIT_FAILURE, &quot;register_printf_specifier('B', ...)&quot;);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%llb;\n&quot;, 0x5Ellu);
+    printf(&quot;%lB;\n&quot;, 0x5Elu);
+    printf(&quot;%b;\n&quot;, 0x5Eu);
+    printf(&quot;%hB;\n&quot;, 0x5Eu);
+    printf(&quot;%hhb;\n&quot;, 0x5Eu);
+    printf(&quot;%jb;\n&quot;, (uintmax_t)0x5E);
+    printf(&quot;%zb;\n&quot;, (size_t)0x5E);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#b;\n&quot;, 0x5Eu);
+    printf(&quot;%#B;\n&quot;, 0x5Eu);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%10b;\n&quot;, 0x5Eu);
+    printf(&quot;%010b;\n&quot;, 0x5Eu);
+    printf(&quot;%.10b;\n&quot;, 0x5Eu);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%-10B;\n&quot;, 0x5Eu);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%'B;\n&quot;, 0x5Eu);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#16.12b;\n&quot;, 0xAB);
+    printf(&quot;%-#'20.12b;\n&quot;, 0xAB);
+    printf(&quot;%#'020B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#020B;\n&quot;, 0xAB);
+    printf(&quot;%'020B;\n&quot;, 0xAB);
+    printf(&quot;%020B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#021B;\n&quot;, 0xAB);
+    printf(&quot;%'021B;\n&quot;, 0xAB);
+    printf(&quot;%021B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#022B;\n&quot;, 0xAB);
+    printf(&quot;%'022B;\n&quot;, 0xAB);
+    printf(&quot;%022B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%#023B;\n&quot;, 0xAB);
+    printf(&quot;%'023B;\n&quot;, 0xAB);
+    printf(&quot;%023B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%-#'19.11b;\n&quot;, 0xAB);
+    printf(&quot;%#'019B;\n&quot;, 0xAB);
+    printf(&quot;%#019B;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    printf(&quot;%'019B;\n&quot;, 0xAB);
+    printf(&quot;%019B;\n&quot;, 0xAB);
+    printf(&quot;%#016b;\n&quot;, 0xAB);
+    printf(&quot;....----....----....----....----\n&quot;);
+    return 0;
+}
+static int
+b_printf(FILE *stream, const struct printf_info *info,
+         const void *const args[])
+{
+    char               bin[UINTMAX_WIDTH];
+    size_t             min_len, bin_len;
+    ssize_t            len, tmp;
+    struct Printf_Pad  pad = {0};
+    len = 0;
+    min_len = b_bin_repr(bin, info, args[0]);
+    bin_len = b_bin_len(info, min_len);
+    pad.ch = pad_ch(info);
+    if (pad.ch == ' ')
+        pad.len = b_pad_len(info, bin_len);
+    /* الحشو بـ ' ' (محاذاة لليمين) */
+    if ((pad.ch == ' ') &amp;&amp; !info-&gt;left) {
+        tmp = pad_spaces(stream, pad.len);
+        if (tmp == EOF)
+            return EOF;
+        len += tmp;
+    }
+    /* بادئة "0b"/"0B" */
+    if (info-&gt;alt) {
+        tmp = b_print_prefix(stream, info);
+        if (tmp == EOF)
+            return EOF;
+        len += tmp;
+    }
+    /* الحشو بـ '0' */
+    if (pad.ch == '0') {
+        tmp = b_pad_zeros(stream, info, min_len);
+        if (tmp == EOF)
+            return EOF;
+        len += tmp;
+    }
+    /* طباعة الرقم (بما في ذلك الأصفار البادئة لملء الدقة) */
+    tmp = b_print_number(stream, info, bin, min_len, bin_len);
+    if (tmp == EOF)
+        return EOF;
+    len += tmp;
+    /* الحشو بـ ' ' (محاذاة لليسار) */
+    if (info-&gt;left) {
+        tmp = pad_spaces(stream, pad.len);
+        if (tmp == EOF)
+            return EOF;
+        len += tmp;
+    }
+    return len;
+}
+static int
+b_arginf_sz(const struct printf_info *info, size_t n, int argtypes[n],
+            [[maybe_unused]] int size[n])
+{
+    if (n &lt; 1)
+        return -1;
+    if (info-&gt;is_long_double)
+        argtypes[0] = PA_INT | PA_FLAG_LONG_LONG;
+    else if (info-&gt;is_long)
+        argtypes[0] = PA_INT | PA_FLAG_LONG;
+    else
+        argtypes[0] = PA_INT;
+    return 1;
+}
+static uintmax_t
+b_value(const struct printf_info *info, const void *arg)
+{
+    if (info-&gt;is_long_double)
+        return *(const unsigned long long *)arg;
+    if (info-&gt;is_long)
+        return *(const unsigned long *)arg;
+    /* يتم ترقية short و char إلى int */
+    return *(const unsigned int *)arg;
+}
+static size_t
+b_bin_repr(char bin[UINTMAX_WIDTH],
+           const struct printf_info *info, const void *arg)
+{
+    size_t     min_len;
+    uintmax_t  val;
+    val = b_value(info, arg);
+    bin[0] = '0';
+    for (min_len = 0; val; min_len++) {
+        bin[min_len] = '0' + (val % 2);
+        val &gt;&gt;= 1;
+    }
+    return MAX(min_len, 1);
+}
+static size_t
+b_bin_len(const struct printf_info *info, ptrdiff_t min_len)
+{
+    return MAX(info-&gt;prec, min_len);
+}
+static size_t
+b_pad_len(const struct printf_info *info, ptrdiff_t bin_len)
+{
+    ptrdiff_t  pad_len;
+    pad_len = info-&gt;width - bin_len;
+    if (info-&gt;alt)
+        pad_len -= 2;
+    if (info-&gt;group)
+        pad_len -= (bin_len - 1) / 4;
+    return MAX(pad_len, 0);
+}
+static ssize_t
+b_print_prefix(FILE *stream, const struct printf_info *info)
+{
+    ssize_t len;
+    len = 0;
+    if (fputc('0', stream) == EOF)
+        return EOF;
+    len++;
+    if (fputc(info-&gt;spec, stream) == EOF)
+        return EOF;
+    len++;
+    return len;
+}
+static ssize_t
+b_pad_zeros(FILE *stream, const struct printf_info *info,
+            ptrdiff_t min_len)
+{
+    ssize_t    len;
+    ptrdiff_t  tmp;
+    len = 0;
+    tmp = info-&gt;width - (info-&gt;alt * 2);
+    if (info-&gt;group)
+        tmp -= tmp / 5 - !(tmp % 5);
+    for (ptrdiff_t i = tmp - 1; i &gt; min_len - 1; i--) {
+        if (fputc('0', stream) == EOF)
+            return EOF;
+        len++;
+        if (!info-&gt;group || (i % 4))
+            continue;
+        if (fputc(GROUP_SEP, stream) == EOF)
+            return EOF;
+        len++;
+    }
+    return len;
+}
+static ssize_t
+b_print_number(FILE *stream, const struct printf_info *info,
+               const char bin[UINTMAX_WIDTH],
+               size_t min_len, size_t bin_len)
+{
+    ssize_t  len;
+    len = 0;
+    /* طباعة الأصفار البادئة لملء الدقة */
+    for (size_t i = bin_len - 1; i &gt; min_len - 1; i--) {
+        if (fputc('0', stream) == EOF)
+            return EOF;
+        len++;
+        if (!info-&gt;group || (i % 4))
+            continue;
+        if (fputc(GROUP_SEP, stream) == EOF)
+            return EOF;
+        len++;
+    }
+    /* طباعة الرقم */
+    for (size_t i = min_len - 1; i &lt; min_len; i--) {
+        if (fputc(bin[i], stream) == EOF)
+            return EOF;
+        len++;
+        if (!info-&gt;group || (i % 4) || !i)
+            continue;
+        if (fputc(GROUP_SEP, stream) == EOF)
+            return EOF;
+        len++;
+    }
+    return len;
+}
+static char
+pad_ch(const struct printf_info *info)
+{
+    if ((info-&gt;prec != -1) || (info-&gt;pad == ' ') || info-&gt;left)
+        return ' ';
+    return '0';
+}
+static ssize_t
+pad_spaces(FILE *stream, size_t pad_len)
+{
+    ssize_t  len;
+    len = 0;
+    for (size_t i = pad_len - 1; i &lt; pad_len; i--) {
+        if (fputc(' ', stream) == EOF)
+            return EOF;
+        len++;
+    }
+    return len;
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp"><a href='/man/asprintf.3.en'>asprintf(3)</a>, <a href='/man/printf.3.en'>printf(3)</a>, <a href='/man/wprintf.3.en'>wprintf(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-05-17</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
+
+</section>

@@ -1,0 +1,458 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">gesvxx(3)</h1>
+<link rel="stylesheet" href="basic.css">
+<meta charset="UTF-8">
+<title>dgesvxx - LAPACK 3.10.0 Manual</title>
+<meta name="generator" content="manpage converted by https://github.com/karelzak/manpage-conversion">
+<section class="Sh">
+<h1 class="Sh" id='NAME'>NAME</h1>
+<p class="Nd">dgesvxx - DGESVXX computes the solution to system of linear equations A * X = B for GE matrices</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'>SYNOPSIS</h1>
+<pre>
+subroutine dgesvxx(character fact, character trans, integer n, integer nrhs, double precision, dimension( lda, * ) a, integer lda, double precision, dimension( ldaf, * ) af, integer ldaf, integer, dimension( * ) ipiv, character equed, double precision, dimension( * ) r, double precision, dimension( * ) c, double precision, dimension( ldb, * ) b, integer ldb, double precision, dimension( ldx , * ) x, integer ldx, double precision rcond, double precision rpvgrw, double precision, dimension( * ) berr, integer n_err_bnds, double precision, dimension( nrhs, * ) err_bnds_norm, double precision, dimension( nrhs, * ) err_bnds_comp, integer nparams, double precision, dimension( * ) params, double precision, dimension( * ) work, integer, dimension( * ) iwork, integer info)
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PURPOSE'>PURPOSE</h1>
+<pre>
+DGESVXX uses the LU factorization to compute the solution to a
+double precision system of linear equations  A * X = B,  where A is an
+N-by-N matrix and X and B are N-by-NRHS matrices.
+
+If requested, both normwise and maximum componentwise error bounds
+are returned. DGESVXX will return a solution with a tiny
+guaranteed error (O(eps) where eps is the working machine
+precision) unless the matrix is very ill-conditioned, in which
+case a warning is returned. Relevant condition numbers also are
+calculated and returned.
+
+DGESVXX accepts user-provided factorizations and equilibration
+factors; see the definitions of the FACT and EQUED options.
+Solving with refinement and using a factorization from a previous
+DGESVXX call will also produce a solution with either O(eps)
+errors or warnings, but we cannot make that claim for general
+user-provided factorizations and equilibration factors if they
+differ from what DGESVXX would itself produce.
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'>DESCRIPTION</h1>
+<pre>
+The following steps are performed:
+
+1. If FACT = 'E', double precision scaling factors are computed to equilibrate
+the system:
+
+  TRANS = 'N':  diag(R)*A*diag(C)     *inv(diag(C))*X = diag(R)*B
+  TRANS = 'T': (diag(R)*A*diag(C))**T *inv(diag(R))*X = diag(C)*B
+  TRANS = 'C': (diag(R)*A*diag(C))**H *inv(diag(R))*X = diag(C)*B
+
+Whether or not the system will be equilibrated depends on the
+scaling of the matrix A, but if equilibration is used, A is
+overwritten by diag(R)*A*diag(C) and B by diag(R)*B (if TRANS='N')
+or diag(C)*B (if TRANS = 'T' or 'C').
+
+2. If FACT = 'N' or 'E', the LU decomposition is used to factor
+the matrix A (after equilibration if FACT = 'E') as
+
+  A = P * L * U,
+
+where P is a permutation matrix, L is a unit lower triangular
+matrix, and U is upper triangular.
+
+3. If some U(i,i)=0, so that U is exactly singular, then the
+routine returns with INFO = i. Otherwise, the factored form of A
+is used to estimate the condition number of the matrix A (see
+argument RCOND). If the reciprocal of the condition number is less
+than machine precision, the routine still goes on to solve for X
+and compute error bounds as described below.
+
+4. The system of equations is solved for X using the factored form
+of A.
+
+5. By default (unless PARAMS(LA_LINRX_ITREF_I) is set to zero),
+the routine will use iterative refinement to try to get a small
+error and error bounds.  Refinement calculates the residual to at
+least twice the working precision.
+
+6. If equilibration was used, the matrix X is premultiplied by
+diag(C) (if TRANS = 'N') or diag(R) (if TRANS = 'T' or 'C') so
+that it solves the original system before equilibration.
+
+Some optional parameters are bundled in the PARAMS array.  These
+settings determine how refinement is performed, but often the
+defaults are acceptable.  If the defaults are acceptable, users
+can pass NPARAMS = 0 which prevents the source code from accessing
+the PARAMS argument.
+</pre>
+<section class="Ss">
+<h2 class="Ss" id='PARAMS'>PARAMS</h2>
+<pre>
+!&gt;          PARAMS is REAL array, dimension NPARAMS
+!&gt;     Specifies algorithm parameters.  If an entry is &lt; 0.0, then
+!&gt;     that entry will be filled with default value used for that
+!&gt;     parameter.  Only positions up to NPARAMS are accessed; defaults
+!&gt;     are used for higher-numbered parameters.
+!&gt;
+!&gt;       PARAMS(LA_LINRX_ITREF_I = 1) : Whether to perform iterative
+!&gt;            refinement or not.
+!&gt;         Default: 1.0
+!&gt;            = 0.0:  No refinement is performed, and no error bounds are
+!&gt;                    computed.
+!&gt;            = 1.0:  Use the double-precision refinement algorithm,
+!&gt;                    possibly with doubled-single computations if the
+!&gt;                    compilation environment does not support DOUBLE
+!&gt;                    PRECISION.
+!&gt;              (other values are reserved for future use)
+!&gt;
+!&gt;       PARAMS(LA_LINRX_ITHRESH_I = 2) : Maximum number of residual
+!&gt;            computations allowed for refinement.
+!&gt;         Default: 10
+!&gt;         Aggressive: Set to 100 to permit convergence using approximate
+!&gt;                     factorizations or factorizations other than LU. If
+!&gt;                     the factorization uses a technique other than
+!&gt;                     Gaussian elimination, the guarantees in
+!&gt;                     err_bnds_norm and err_bnds_comp may no longer be
+!&gt;                     trustworthy.
+!&gt;
+!&gt;       PARAMS(LA_LINRX_CWISE_I = 3) : Flag determining if the code
+!&gt;            will attempt to find a solution with small componentwise
+!&gt;            relative error in the double-precision algorithm.  Positive
+!&gt;            is true, 0.0 is false.
+!&gt;         Default: 1.0 (attempt componentwise convergence)
+!&gt; </pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='WORK'>WORK</h2>
+<pre>
+!&gt;          WORK is COMPLEX array, dimension (2*N)
+</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='RWORK'>RWORK</h2>
+<pre>
+!&gt;          RWORK is REAL array, dimension (2*N)
+</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='INFO'>INFO</h2>
+<pre>
+!&gt;          INFO is INTEGER
+!&gt;       = 0:  Successful exit. The solution to every right-hand side is
+!&gt;         guaranteed.
+!&gt;       &lt; 0:  If INFO = -i, the i-th argument had an illegal value
+!&gt;       &gt; 0 and &lt;= N:  U(INFO,INFO) is exactly zero.  The factorization
+!&gt;         has been completed, but the factor U is exactly singular, so
+!&gt;         the solution and error bounds could not be computed. RCOND = 0
+!&gt;         is returned.
+!&gt;       = N+J: The solution corresponding to the Jth right-hand side is
+!&gt;         not guaranteed. The solutions corresponding to other right-
+!&gt;         hand sides K with K &gt; J may not be guaranteed as well, but
+!&gt;         only the first such right-hand side is reported. If a small
+!&gt;         componentwise error is not requested (PARAMS(3) = 0.0) then
+!&gt;         the Jth right-hand side is the first with a normwise error
+!&gt;         bound that is not guaranteed (the smallest J such
+!&gt;         that ERR_BNDS_NORM(J,1) = 0.0). By default (PARAMS(3) = 1.0)
+!&gt;         the Jth right-hand side is the first with either a normwise or
+!&gt;         componentwise error bound that is not guaranteed (the smallest
+!&gt;         J such that either ERR_BNDS_NORM(J,1) = 0.0 or
+!&gt;         ERR_BNDS_COMP(J,1) = 0.0). See the definition of
+!&gt;         ERR_BNDS_NORM(:,1) and ERR_BNDS_COMP(:,1). To get information
+!&gt;         about all of the right-hand sides check ERR_BNDS_NORM or
+!&gt;         ERR_BNDS_COMP.
+</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'>AUTHOR</h1>
+<div class="Bd-indent">
+<p class="Pp">Univ. of Tennessee</p>
+<p class="Pp">Univ. of California Berkeley</p>
+<p class="Pp">Univ. of Colorado Denver</p>
+<p class="Pp">NAG Ltd.</p>
+</div>
+<p class="Pp">Definition at line 538 of file cgesvxx.f.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SUBROUTINE_DGESVXX_(CHARACTER_FACT,_CHARACTER_TRANS,_INTEGER_N,_INTEGER_NRHS,_DOUBLE_PRECISION,_DIMENSION(_LDA,_*_)_A,_INTEGER_LDA,_DOUBLE_PRECISION,_DIMENSION(_LDAF,_*_)_AF,_INTEGER_LDAF,_INTEGER,_DIMENSION(_*_)_IPIV,_CHARACTER_EQUED,_DOUBLE_PRECISION,_DIMENSION(_*_)_R,_DOUBLE_PRECISION,_DIMENSION(_*_)_C,_DOUBLE_PRECISION,_DIMENSION(_LDB,_*_)_B,_INTEGER_LDB,_DOUBLE_PRECISION,_DIMENSION(_LDX_,_*_)_X,_INTEGER_LDX,_DOUBLE_PRECISION_RCOND,_DOUBLE_PRECISION_RPVGRW,_DOUBLE_PRECISION,_DIMENSION(_*_)_BERR,_INTEGER_N_ERR_BNDS,_DOUBLE_PRECISION,_DIMENSION(_NRHS,_*_)_ERR_BNDS_NORM,_DOUBLE_PRECISION,_DIMENSION(_NRHS,_*_)_ERR_BNDS_COMP,_INTEGER_NPARAMS,_DOUBLE_PRECISION,_DIMENSION(_*_)_PARAMS,_DOUBLE_PRECISION,_DIMENSION(_*_)_WORK,_INTEGER,_DIMENSION(_*_)_IWORK,_INTEGER_INFO)'>subroutine dgesvxx (character fact, character trans, integer n, integer nrhs, double precision, dimension( lda, * ) a, integer lda, double precision, dimension( ldaf, * ) af, integer ldaf, integer, dimension( * ) ipiv, character equed, double precision, dimension( * ) r, double precision, dimension( * ) c, double precision, dimension( ldb, * ) b, integer ldb, double precision, dimension( ldx , * ) x, integer ldx, double precision rcond, double precision rpvgrw, double precision, dimension( * ) berr, integer n_err_bnds, double precision, dimension( nrhs, * ) err_bnds_norm, double precision, dimension( nrhs, * ) err_bnds_comp, integer nparams, double precision, dimension( * ) params, double precision, dimension( * ) work, integer, dimension( * ) iwork, integer info)</h1>
+<p class="Pp"><b> DGESVXX computes the solution to system of linear equations A
+    * X = B for GE matrices</b></p>
+<p class="Pp"><b>Purpose:</b></p>
+<div class="Bd-indent">
+<pre>!&gt;
+!&gt;    DGESVXX uses the LU factorization to compute the solution to a
+!&gt;    double precision system of linear equations  A * X = B,  where A is an
+!&gt;    N-by-N matrix and X and B are N-by-NRHS matrices.
+!&gt;
+!&gt;    If requested, both normwise and maximum componentwise error bounds
+!&gt;    are returned. DGESVXX will return a solution with a tiny
+!&gt;    guaranteed error (O(eps) where eps is the working machine
+!&gt;    precision) unless the matrix is very ill-conditioned, in which
+!&gt;    case a warning is returned. Relevant condition numbers also are
+!&gt;    calculated and returned.
+!&gt;
+!&gt;    DGESVXX accepts user-provided factorizations and equilibration
+!&gt;    factors; see the definitions of the FACT and EQUED options.
+!&gt;    Solving with refinement and using a factorization from a previous
+!&gt;    DGESVXX call will also produce a solution with either O(eps)
+!&gt;    errors or warnings, but we cannot make that claim for general
+!&gt;    user-provided factorizations and equilibration factors if they
+!&gt;    differ from what DGESVXX would itself produce.
+!&gt; </pre>
+</div>
+<p class="Pp"><b>Description:</b></p>
+<div class="Bd-indent">
+<pre>!&gt;
+!&gt;    The following steps are performed:
+!&gt;
+!&gt;    1. If FACT = 'E', double precision scaling factors are computed to equilibrate
+!&gt;    the system:
+!&gt;
+!&gt;      TRANS = 'N':  diag(R)*A*diag(C)     *inv(diag(C))*X = diag(R)*B
+!&gt;      TRANS = 'T': (diag(R)*A*diag(C))**T *inv(diag(R))*X = diag(C)*B
+!&gt;      TRANS = 'C': (diag(R)*A*diag(C))**H *inv(diag(R))*X = diag(C)*B
+!&gt;
+!&gt;    Whether or not the system will be equilibrated depends on the
+!&gt;    scaling of the matrix A, but if equilibration is used, A is
+!&gt;    overwritten by diag(R)*A*diag(C) and B by diag(R)*B (if TRANS='N')
+!&gt;    or diag(C)*B (if TRANS = 'T' or 'C').
+!&gt;
+!&gt;    2. If FACT = 'N' or 'E', the LU decomposition is used to factor
+!&gt;    the matrix A (after equilibration if FACT = 'E') as
+!&gt;
+!&gt;      A = P * L * U,
+!&gt;
+!&gt;    where P is a permutation matrix, L is a unit lower triangular
+!&gt;    matrix, and U is upper triangular.
+!&gt;
+!&gt;    3. If some U(i,i)=0, so that U is exactly singular, then the
+!&gt;    routine returns with INFO = i. Otherwise, the factored form of A
+!&gt;    is used to estimate the condition number of the matrix A (see
+!&gt;    argument RCOND). If the reciprocal of the condition number is less
+!&gt;    than machine precision, the routine still goes on to solve for X
+!&gt;    and compute error bounds as described below.
+!&gt;
+!&gt;    4. The system of equations is solved for X using the factored form
+!!&gt;    of A.
+!&gt;
+!&gt;    5. By default (unless PARAMS(LA_LINRX_ITREF_I) is set to zero),
+!&gt;    the routine will use iterative refinement to try to get a small
+!&gt;    error and error bounds.  Refinement calculates the residual to at
+!&gt;    least twice the working precision.
+!&gt;
+!&gt;    6. If equilibration was used, the matrix X is premultiplied by
+!&gt;    diag(C) (if TRANS = 'N') or diag(R) (if TRANS = 'T' or 'C') so
+!&gt;    that it solves the original system before equilibration.
+!&gt; </pre>
+<pre>!&gt;     Some optional parameters are bundled in the PARAMS array.  These
+!&gt;     settings determine how refinement is performed, but often the
+!&gt;     defaults are acceptable.  If the defaults are acceptable, users
+!&gt;     can pass NPARAMS = 0 which prevents the source code from accessing
+!&gt;     the PARAMS argument.
+!&gt; </pre>
+</div>
+<p class="Pp"><b>Parameters</b></p>
+<div class="Bd-indent"><i>FACT</i>
+<pre>!&gt;          FACT is CHARACTER*1
+!&gt;     Specifies whether or not the factored form of the matrix A is
+!&gt;     supplied on entry, and if not, whether the matrix A should be
+!&gt;     equilibrated before it is factored.
+!&gt;       = 'F':  On entry, AF and IPIV contain the factored form of A.
+!&gt;               If EQUED is not 'N', the matrix A has been
+!&gt;               equilibrated with scaling factors given by R and C.
+!&gt;               A, AF, and IPIV are not modified.
+!&gt;       = 'N':  The matrix A will be copied to AF and factored.
+!&gt;       = 'E':  The matrix A will be equilibrated if necessary, then
+!&gt;               copied to AF and factored.
+!&gt; </pre>
+<p class="Pp"><i>TRANS</i></p>
+<pre>!&gt;          TRANS is CHARACTER*1
+!&gt;     Specifies the form of the system of equations:
+!&gt;       = 'N':  A * X = B     (No transpose)
+!&gt;       = 'T':  A**T * X = B  (Transpose)
+!&gt;       = 'C':  A**H * X = B  (Conjugate Transpose = Transpose)
+!&gt; </pre>
+<p class="Pp"><i>N</i></p>
+<pre>!&gt;          N is INTEGER
+!&gt;     The number of linear equations, i.e., the order of the
+!&gt;     matrix A.  N &gt;= 0.
+!&gt; </pre>
+<p class="Pp"><i>NRHS</i></p>
+<pre>!&gt;          NRHS is INTEGER
+!&gt;     The number of right hand sides, i.e., the number of columns
+!&gt;     of the matrices B and X.  NRHS &gt;= 0.
+!&gt; </pre>
+<p class="Pp"><i>A</i></p>
+<pre>!&gt;          A is DOUBLE PRECISION array, dimension (LDA,N)
+!&gt;     On entry, the N-by-N matrix A.  If FACT = 'F' and EQUED is
+!&gt;     not 'N', then A must have been equilibrated by the scaling
+!&gt;     factors in R and/or C.  A is not modified if FACT = 'F' or
+!&gt;     'N', or if FACT = 'E' and EQUED = 'N' on exit.
+!&gt;
+!&gt;     On exit, if EQUED .ne. 'N', A is scaled as follows:
+!&gt;     EQUED = 'R':  A := diag(R) * A
+!&gt;     EQUED = 'C':  A := A * diag(C)
+!&gt;     EQUED = 'B':  A := diag(R) * A * diag(C).
+!&gt; </pre>
+<p class="Pp"><i>LDA</i></p>
+<pre>!&gt;          LDA is INTEGER
+!&gt;     The leading dimension of the array A.  LDA &gt;= max(1, N).
+!&gt; </pre>
+<p class="Pp"><i>AF</i></p>
+<pre>!&gt;          AF is DOUBLE PRECISION array, dimension (LDAF,N)
+!&gt;     On entry, if FACT = 'F', AF contains the factored form of the
+!&gt;     matrix A. AF is an output argument, and is not modified if
+!&gt;     FACT = 'F'.
+!&gt;
+!&gt;     On exit, if FACT = 'N' or 'E', AF is the LU factorization of
+!&gt;     A, as returned by DGETRF.
+!&gt; </pre>
+<p class="Pp"><i>LDAF</i></p>
+<pre>!&gt;          LDAF is INTEGER
+!&gt;     The leading dimension of the array AF. LDAF &gt;= max(1, N).
+!&gt; </pre>
+<p class="Pp"><i>IPIV</i></p>
+<pre>!&gt;          IPIV is INTEGER array, dimension (N)
+!&gt;     On entry, if FACT = 'F', the pivot indices of the factorization
+!&gt;     A = P*L*U. IPIV is an output argument, and is not modified if
+!&gt;     FACT = 'F'.
+!&gt;
+!&gt;     On exit, if FACT = 'N' or 'E', IPIV contains the pivot indices
+!&gt;     of the factorization of A, as returned by DGETRF.
+!&gt; </pre>
+<p class="Pp"><i>EQUED</i></p>
+<pre>!&gt;          EQUED is CHARACTER*1
+!&gt;     On entry with FACT = 'F', specifies the form of equilibration
+!&gt;     chosen:
+!&gt;       = 'N': No equilibration was done.
+!&gt;       = 'R': Row equilibration was done, i.e., A := diag(R)*A.
+!&gt;       = 'C': Column equilibration was done, i.e., A := A*diag(C).
+!&gt;       = 'B': Both row and column equilibration were done, i.e.,
+!&gt;              A := diag(R)*A*diag(C).
+!&gt;     On exit, if FACT = 'N' or 'E', this is set to 'N', 'R', 'C' or 'B'
+!&gt;     as appropriate.
+!&gt; </pre>
+<p class="Pp"><i>R</i></p>
+<pre>!&gt;          R is DOUBLE PRECISION array, dimension (N)
+!&gt;     On exit, if EQUED = 'R' or 'B', R contains the row equilibration
+!&gt;     constants used for the matrix A.
+!&gt; </pre>
+<p class="Pp"><i>C</i></p>
+<pre>!&gt;          C is DOUBLE PRECISION array, dimension (N)
+!&gt;     On exit, if EQUED = 'C' or 'B', C contains the column equilibration
+!&gt;     constants used for the matrix A.
+!&gt; </pre>
+<p class="Pp"><i>B</i></p>
+<pre>!&gt;          B is DOUBLE PRECISION array, dimension (LDB,NRHS)
+!&gt;     On entry, the N-by-NRHS matrix of right hand sides.
+!&gt;
+!&gt;     On exit, B is overwritten by the solution X if EQUED = 'N' and
+!&gt;     if equilibration is not performed.
+!&gt;
+!&gt;     If equilibration is performed, the scaled system is solved
+!&gt;     and B is overwritten by X.
+!&gt; </pre>
+<p class="Pp"><i>LDB</i></p>
+<pre>!&gt;          LDB is INTEGER
+!&gt;     The leading dimension of the array B. LDB &gt;= max(1,N).
+!&gt; </pre>
+<p class="Pp"><i>X</i></p>
+<pre>!&gt;          X is DOUBLE PRECISION array, dimension (LDX,NRHS)
+!&gt;     On exit, X contains the solution to the system of equations.
+!&gt;     If equilibration was used, X is the solution to the original
+!&gt;     system, not the scaled system.
+!&gt; </pre>
+<p class="Pp"><i>LDX</i></p>
+<pre>!&gt;          LDX is INTEGER
+!&gt;     The leading dimension of the array X. LDX &gt;= max(1,N).
+!&gt; </pre>
+<p class="Pp"><i>RCOND</i></p>
+<pre>!&gt;          RCOND is DOUBLE PRECISION
+!&gt;     On exit, RCOND is a lower bound on the reciprocal of the condition
+!&gt;     number of the matrix A, i.e., RCOND = 1 / ( ConditionNumber(A) ).
+!&gt;     The action of DGESVXX is not guaranteed if 1/RCOND &gt;= 1/eps, where
+!&gt;     eps is the machine epsilon.
+!&gt; </pre>
+<p class="Pp"><i>RPVGRW</i></p>
+<pre>!&gt;          RPVGRW is DOUBLE PRECISION
+!&gt;     On exit, RPVGRW contains the reciprocal pivot growth factor. This
+!&gt;     is the largest positive value of norm1(U) / norm1(A), where U is
+!&gt;     the triangular factor. This is returned from the factorization
+!&gt;     routine DGETRF.
+!&gt; </pre>
+<p class="Pp"><i>BERR</i></p>
+<pre>!&gt;          BERR is DOUBLE PRECISION array, dimension (NRHS)
+!&gt;     On exit, BERR(J) contains the normwise backward error,
+!!&gt;     norm( B - A*X(J) ) / ( norm(A) * norm(X(J)) ).
+!&gt; </pre>
+<p class="Pp"><i>N_ERR_BNDS</i></p>
+<pre>!&gt;          N_ERR_BNDS is INTEGER
+!&gt;     The number of error bounds computed.
+!&gt; </pre>
+<p class="Pp"><i>ERR_BNDS_NORM</i></p>
+<pre>!&gt;          ERR_BNDS_NORM is DOUBLE PRECISION array, dimension (NRHS, N_ERR_BNDS)
+!&gt;     On exit, the estimated condition number of the matrix A.  This
+!&gt;     is an upper bound on the true condition number. The j-th
+!&gt;     right hand side is solved for the N-th time and the error
+!&gt;     bound is computed.
+!&gt; </pre>
+<p class="Pp"><i>ERR_BNDS_COMP</i></p>
+<pre>!&gt;          ERR_BNDS_COMP is DOUBLE PRECISION array, dimension (NRHS, N_ERR_BNDS)
+!&gt;     On exit, ERR_BNDS_COMP(J,1) contains the componentwise error bound
+!&gt;     for the j-th right hand side,
+!&gt;     max | X(j) - X_true(j) | / | X(j) |.
+!&gt; </pre>
+<p class="Pp"><i>NPARAMS</i></p>
+<pre>!&gt;          NPARAMS is INTEGER
+!&gt;     The number of parameters in the PARAMS array.
+!&gt; </pre>
+<p class="Pp"><i>PARAMS</i></p>
+<pre>!&gt;          PARAMS is DOUBLE PRECISION array, dimension (NPARAMS)
+!&gt;     See the description of optional parameters above.
+!&gt; </pre>
+<p class="Pp"><i>WORK</i></p>
+<pre>!&gt;          WORK is DOUBLE PRECISION array, dimension (4*N)
+!&gt;     Workspace for iterative refinement.
+!&gt; </pre>
+<p class="Pp"><i>IWORK</i></p>
+<pre>!&gt;          IWORK is INTEGER array, dimension (3*N)
+!&gt;     Workspace for iterative refinement.
+!&gt; </pre>
+<p class="Pp"><i>INFO</i></p>
+<pre>!&gt;          INFO is INTEGER
+!&gt;       = 0:  Successful exit. The solution to every right-hand side is
+!&gt;         guaranteed.
+!&gt;       &lt; 0:  If INFO = -i, the i-th argument had an illegal value
+!&gt;       &gt; 0 and &lt;= N:  U(INFO,INFO) is exactly zero.  The factorization
+!&gt;         has been completed, but the factor U is exactly singular, so
+!&gt;         the solution and error bounds could not be computed. RCOND = 0
+!&gt;         is returned.
+!&gt;       = N+J: The solution corresponding to the Jth right-hand side is
+!&gt;         not guaranteed. The solutions corresponding to other right-
+!&gt;         hand sides K with K &gt; J may not be guaranteed as well, but
+!&gt;         only the first such right-hand side is reported. If a small
+!&gt;         componentwise error is not requested (PARAMS(3) = 0.0) then
+!&gt;         the Jth right-hand side is the first with a normwise error
+!&gt;         bound that is not guaranteed (the smallest J such
+!&gt;         that ERR_BNDS_NORM(J,1) = 0.0). By default (PARAMS(3) = 1.0)
+!&gt;         the Jth right-hand side is the first with either a normwise or
+!&gt;         componentwise error bound that is not guaranteed (the smallest
+!&gt;         J such that either ERR_BNDS_NORM(J,1) = 0.0 or
+!&gt;         ERR_BNDS_COMP(J,1) = 0.0). See the definition of
+!&gt;         ERR_BNDS_NORM(:,1) and ERR_BNDS_COMP(:,1). To get information
+!&gt;         about all of the right-hand sides check ERR_BNDS_NORM or
+!&gt;         ERR_BNDS_COMP.
+</pre>
+</div>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR_1'>AUTHOR</h1>
+<div class="Bd-indent">
+<p class="Pp">Univ. of Tennessee</p>
+<p class="Pp">Univ. of California Berkeley</p>
+<p class="Pp">Univ. of Colorado Denver</p>
+<p class="Pp">NAG Ltd.</p>
+</div>
+<p class="Pp">Definition at line 538 of file dgesvxx.f.</p>
+</section>

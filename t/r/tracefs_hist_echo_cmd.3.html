@@ -1,0 +1,304 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">tracefs_hist_echo_cmd(3)</h1>
+<link rel="stylesheet" href="basic.css">
+، <b>tracefs_hist_get_event</b>()
+    و <b>tracefs_hist_get_system</b>() تُرجع سلاسل نصية مملوكة لكائن الرسم البياني.</p>
+<p class="Pp">جميع الدوال الأخرى تُرجع صفر عند النجاح أو -1 عند حدوث خطأ.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<div class="Bd-indent">
+<pre>#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;tracefs.h&gt;
+enum commands {
+        START,
+        PAUSE,
+        CONT,
+        RESET,
+        DELETE,
+        SHOW,
+};
+static void parse_system_event(char *group, char **system, char **event)
+{
+        *system = strtok(group, &quot;/&quot;);
+        *event = strtok(NULL, &quot;/&quot;);
+        if (!*event) {
+                *event = *system;
+                *system = NULL;
+        }
+}
+static int parse_keys(char *keys, struct tracefs_hist_axis **axes)
+{
+        char *sav = NULL;
+        char *key;
+        int cnt = 0;
+        for (key = strtok_r(keys, &quot;,&quot;, &amp;sav); key; key = strtok_r(NULL, &quot;,&quot;, &amp;sav)) {
+                struct tracefs_hist_axis *ax;
+                char *att;
+                ax = realloc(*axes, sizeof(*ax) * (cnt + 2));
+                if (!ax) {
+                        perror(&quot;Failed to allocate axes&quot;);
+                        exit(-1);
+                }
+                ax[cnt].key = key;
+                ax[cnt].type = 0;
+                ax[cnt + 1].key = NULL;
+                ax[cnt + 1].type = 0;
+                *axes = ax;
+                att = strchr(key, '.');
+                if (att) {
+                        *att++ = '\0';
+                        if (strcmp(att, &quot;hex&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_HEX;
+                        else if (strcmp(att, &quot;sym&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_SYM;
+                        else if (strcmp(att, &quot;sym_offset&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_SYM_OFFSET;
+                        else if (strcmp(att, &quot;syscall&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_SYSCALL;
+                        else if (strcmp(att, &quot;exec&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_EXECNAME;
+                        else if (strcmp(att, &quot;log&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_LOG;
+                        else if (strcmp(att, &quot;usecs&quot;) == 0)
+                                ax[cnt].type = TRACEFS_HIST_KEY_USECS;
+                        else {
+                                fprintf(stderr, &quot;Undefined attribute '%s'\n&quot;, att);
+                                fprintf(stderr,&quot;  Acceptable attributes:\n&quot;);
+                                fprintf(stderr,&quot;    hex, sym, sym_offset, syscall, exe, log, usecs\n&quot;);
+                                exit(-1);
+                        }
+                }
+                cnt++;
+        }
+        return cnt;
+}
+static void process_hist(enum commands cmd, const char *instance_name,
+                         char *group, char *keys, char *vals, char *sort,
+                         char *ascend, char *desc)
+{
+        struct tracefs_instance *instance = NULL;
+        struct tracefs_hist *hist;
+        struct tep_handle *tep;
+        struct tracefs_hist_axis *axes = NULL;
+        char *system;
+        char *event;
+        char *sav;
+        char *val;
+        int ret;
+        int cnt;
+        if (instance_name) {
+                instance = tracefs_instance_create(instance_name);
+                if (!instance) {
+                        fprintf(stderr, &quot;Failed instance create\n&quot;);
+                        exit(-1);
+                }
+        }
+        tep = tracefs_local_events(NULL);
+        if (!tep) {
+                perror(&quot;Could not read events&quot;);
+                exit(-1);
+        }
+        parse_system_event(group, &amp;system, &amp;event);
+        if (cmd == SHOW) {
+                char *content;
+                content = tracefs_event_file_read(instance, system, event,
+                                                  &quot;hist&quot;, NULL);
+                if (!content) {
+                        perror(&quot;Reading hist file&quot;);
+                        exit(-1);
+                }
+                printf(&quot;%s\n&quot;, content);
+                free(content);
+                return;
+        }
+        if (!keys) {
+                fprintf(stderr, &quot;Command needs -k option\n&quot;);
+                exit(-1);
+        }
+        cnt = parse_keys(keys, &amp;axes);
+        if (!cnt) {
+                fprintf(stderr, &quot;No keys??\n&quot;);
+                exit(-1);
+        }
+        /* Show examples of hist1d and hist2d */
+        switch (cnt) {
+        case 1:
+                hist = tracefs_hist_alloc(tep, system, event,
+                                          axes[0].key, axes[0].type);
+                break;
+        case 2:
+                hist = tracefs_hist_alloc_2d(tep, system, event,
+                                             axes[0].key, axes[0].type,
+                                             axes[1].key, axes[1].type);
+                break;
+        default:
+                /* Really, 1 and 2 could use this too */
+                hist = tracefs_hist_alloc_nd(tep, system, event, axes);
+        }
+        if (!hist) {
+                fprintf(stderr, &quot;Failed hist create\n&quot;);
+                exit(-1);
+        }
+        if (vals) {
+                sav = NULL;
+                for (val = strtok_r(vals, &quot;,&quot;, &amp;sav); val; val = strtok_r(NULL, &quot;,&quot;, &amp;sav)) {
+                        ret = tracefs_hist_add_value(hist, val);
+                        if (ret) {
+                                fprintf(stderr, &quot;Failed to add value %s\n&quot;, val);
+                                exit(-1);
+                        }
+                }
+        }
+        if (sort) {
+                sav = NULL;
+                for (val = strtok_r(sort, &quot;,&quot;, &amp;sav); val; val = strtok_r(NULL, &quot;,&quot;, &amp;sav)) {
+                        ret = tracefs_hist_add_sort_key(hist, val);
+                        if (ret) {
+                                fprintf(stderr, &quot;Failed to add sort key/val %s\n&quot;, val);
+                                exit(-1);
+                        }
+                }
+        }
+        if (ascend) {
+                sav = NULL;
+                for (val = strtok_r(ascend, &quot;,&quot;, &amp;sav); val; val = strtok_r(NULL, &quot;,&quot;, &amp;sav)) {
+                        ret = tracefs_hist_sort_key_direction(hist, val, TRACEFS_HIST_SORT_ASCENDING);
+                        if (ret) {
+                                fprintf(stderr, &quot;Failed to add ascending key/val %s\n&quot;, val);
+                                exit(-1);
+                        }
+                }
+        }
+        if (desc) {
+                sav = NULL;
+                for (val = strtok_r(desc, &quot;,&quot;, &amp;sav); val; val = strtok_r(NULL, &quot;,&quot;, &amp;sav)) {
+                        ret = tracefs_hist_sort_key_direction(hist, val, TRACEFS_HIST_SORT_DESCENDING);
+                        if (ret) {
+                                fprintf(stderr, &quot;Failed to add descending key/val %s\n&quot;, val);
+                                exit(-1);
+                        }
+                }
+        }
+        tracefs_error_clear(instance);
+        switch (cmd) {
+        case START:
+                ret = tracefs_hist_start(instance, hist);
+                if (ret) {
+                        char *err = tracefs_error_last(instance);
+                        if (err)
+                                fprintf(stderr, &quot;\n%s\n&quot;, err);
+                }
+                break;
+        case PAUSE:
+                ret = tracefs_hist_pause(instance, hist);
+                break;
+        case CONT:
+                ret = tracefs_hist_continue(instance, hist);
+                break;
+        case RESET:
+                ret = tracefs_hist_reset(instance, hist);
+                break;
+        case DELETE:
+                ret = tracefs_hist_destroy(instance, hist);
+                break;
+        case SHOW:
+                /* Show was already done */
+                break;
+        }
+        if (ret)
+                fprintf(stderr, &quot;Failed: command\n&quot;);
+        exit(ret);
+}
+int main (int argc, char **argv, char **env)
+{
+        enum commands cmd;
+        char *instance = NULL;
+        char *cmd_str;
+        char *event = NULL;
+        char *keys = NULL;
+        char *vals = NULL;
+        char *sort = NULL;
+        char *desc = NULL;
+        char *ascend = NULL;
+        if (argc &lt; 2) {
+                fprintf(stderr, &quot;usage: %s command [-B instance][-e [system/]event][-k keys][-v vals][-s sort]\n&quot;, argv[0]);
+                fprintf(stderr, &quot;      [-a ascending][-d descending]\n&quot;);
+                exit(-1);
+        }
+        cmd_str = argv[1];
+        if (!strcmp(cmd_str, &quot;start&quot;))
+                cmd = START;
+        else if (!strcmp(cmd_str, &quot;pause&quot;))
+                cmd = PAUSE;
+        else if (!strcmp(cmd_str, &quot;cont&quot;))
+                cmd = CONT;
+        else if (!strcmp(cmd_str, &quot;reset&quot;))
+                cmd = RESET;
+        else if (!strcmp(cmd_str, &quot;delete&quot;))
+                cmd = DELETE;
+        else if (!strcmp(cmd_str, &quot;show&quot;))
+                cmd = SHOW;
+        else {
+                fprintf(stderr, &quot;Unknown command %s\n&quot;, cmd_str);
+                exit(-1);
+        }
+        for (;;) {
+                int c;
+                c = getopt(argc - 1, argv + 1, &quot;e:k:v:B:s:d:a:&quot;);
+                if (c == -1)
+                        break;
+                switch (c) {
+                case 'e':
+                        event = optarg;
+                        break;
+                case 'k':
+                        keys = optarg;
+                        break;
+                case 'v':
+                        vals = optarg;
+                        break;
+                case 'B':
+                        instance = optarg;
+                        break;
+                case 's':
+                        sort = optarg;
+                        break;
+                case 'd':
+                        desc = optarg;
+                        break;
+                case 'a':
+                        ascend = optarg;
+                        break;
+                }
+        }
+        if (!event) {
+                event = &quot;kmem/kmalloc&quot;;
+                if (!keys)
+                        keys = &quot;call_site.sym,bytes_req&quot;;
+                if (!vals)
+                        vals = &quot;bytes_alloc&quot;;
+                if (!sort)
+                        sort = &quot;bytes_req,bytes_alloc&quot;;
+                if (!desc)
+                        desc = &quot;bytes_alloc&quot;;
+        }
+        process_hist(cmd, instance, event, keys, vals, sort, ascend, desc);
+}</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILES'><a class='permalink' href='#FILES'>الملفات</a></h1>
+<div class="Bd-indent">
+<pre><b>tracefs.h</b>
+        ملف الترويسة لتضمينه للوصول إلى واجهات برمجة التطبيقات للمكتبة.
+<b>-ltracefs</b>
+        مفتاح الربط لإضافته عند بناء برنامج يستخدم المكتبة.</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/libtracefs.3.en'>libtracefs(3)</a>, <a href='/man/libtraceevent.3.en'>libtraceevent(3)</a>,
+    <a href='/man/trace-cmd.1.en'>trace-cmd(1)</a>, <a href='/man/tracefs_hist_pause.3.en'>tracefs_hist_pause(3)</a>,
+    <a href='/man/tracefs_hist_continue.3.en'>tracefs_hist_continue(3)</a>, <a href='/man/tracefs_hist_reset.3.en'>tracefs_hist</a>

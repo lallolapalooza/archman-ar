@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>mlx5dv_qp_cancel_posted_send_wrs(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">mlx5dv_qp_cancel_posted_send_wrs(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/rdma-core/">rdma-core</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-MIT, GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-FreeBSD, GPL-2.0-or-later OR LicenseRef-Intel-BSD-3-Clause, GPL-2.0-or-later OR LicenseRef-PathScale-BSD-Patent-License, CC0-1.0, MIT, BSD-2-Clause, CPL-1.0 OR BSD-2-Clause OR GPL-2.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">mlx5dv_qp_cancel_posted_send_wrs(3)</td>
+    <td class="head-vol">دليل وظائف المكتبة</td>
+    <td class="head-rtitle">mlx5dv_qp_cancel_posted_send_wrs(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">mlx5dv_qp_cancel_posted_send_wrs - إلغاء جميع طلبات إرسال العمل المعلقة
+    باستخدام WRID المقدم في QP في حالة SQD</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>
+    <pre>#include &lt;infiniband/mlx5dv.h&gt;
+int mlx5dv_qp_cancel_posted_send_wrs(struct mlx5dv_qp_ex *mqp, uint64_t wr_id);
+</pre>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يتم استبدال طلبات العمل الملغاة بعمليات وهمية (NOP)، وسيتم إنشاء إكمالات
+    جيدة وفقًا للإشارة المطلوبة أصلاً في أعلام الإرسال، أو إكمالات
+    "مُصَفّاة" في حالة دخول QP إلى خطأ. يمكن إلغاء طلب عمل فقط عندما يكون QP في
+    حالة SQD.</p>
+<p class="Pp">وظيفة الإلغاء هي جزء من ميزة خط أنابيب التوقيع. تسمح هذه الميزة
+    بنشر عملية نقل متعلقة بالتوقيع مع إرسال استجابة جيدة إلى العميل.
+    عادةً، يجب على التطبيق الانتظار حتى تنتهي عملية النقل، والتحقق من MKEY بحثًا
+    عن أخطاء، وعندها فقط إرسال استجابة جيدة أو سيئة. ومع ذلك، فإن هذا يزيد من زمن
+    الكمون لتدفق المعاملات الجيد.</p>
+<p class="Pp">لتمكين هذه الميزة، يجب إنشاء QP مع علم الإنشاء
+    <b>MLX5DV_QP_CREATE_SIG_PIPELINING</b>. سيتوقف QP المنشأ بهذا العلم بعد عملية
+    نقل فشلت في التحقق من صحة التوقيع في حالة SQD. يتم إنشاء
+    <b>IBV_EVENT_SQ_DRAINED</b> لإعلام بالحالة الجديدة.</p>
+<p class="Pp">يجب نشر عملية الإرسال التي قد تحتاج إلى إلغاء بسبب توقيع سيء
+    لعملية سابقة مع الخيار <b>IBV_SEND_FENCE</b> في حقل
+    <b>ibv_qp_ex-&gt;wr_flags</b>.</p>
+<p class="Pp">عندما يتوقف QP عند SQD، فهذا يعني أن WR واحد على الأقل تسبب في خطأ
+    في التوقيع. قد لا يكون هذا هو آخر WR. قد يكون أكثر من WR واحد سببًا
+    لأخطاء التوقيع بحلول الوقت الذي يتوقف فيه QP أخيرًا. من المضمون أن QP قد
+    توقف في مكان ما بين WQE الذي أنتج خطأ التوقيع، وWQE التالي الذي يحتوي على
+    <b>IBV_SEND_FENCE</b> عليه.</p>
+<p class="Pp">يجب على البرنامج التعامل مع حدث SQD كما هو موضح أدناه:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>استقصاء كل شيء (الاستقصاء حتى 0 مرة) على CQ المقابل، مما يسمح باكتشاف
+      جميع أخطاء التوقيع الممكنة.</dd>
+  <dt>2.</dt>
+  <dd>المرور عبر جميع المعاملات "المفتوحة"، والتحقق من مفاتيح MKEYs ذات الصلة
+      باستخدام <a href='/man/mlx5dv_mkey_check.3.en'>mlx5dv_mkey_check(3)</a>، والعثور على المعاملة ذات الخطأ
+      في التوقيع، والحصول على <b>WRID</b> من سياق برنامج العملية ومعالجة
+      العملية الفاشلة.</dd>
+  <dt>3.</dt>
+  <dd>إلغاء SEND WR بواسطة WRID باستخدام
+      <b>mlx5dv_qp_cancel_posted_send_wrs</b>().</dd>
+  <dt>4.</dt>
+  <dd>تعديل QP للعودة إلى حالة RTS.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ARGUMENTS'><a class='permalink' href='#ARGUMENTS'>الوسائط</a></h1>
+<dl class="Bl-tag">
+  <dt id="mqp"><a class="permalink" href="#mqp"><i>mqp</i></a></dt>
+  <dd>QP للتحقيق، والذي يجب أن يكون في حالة SQD.</dd>
+  <dt id="wr_id"><a class="permalink" href="#wr_id"><i>wr_id</i></a></dt>
+  <dd>WRID المراد إلغاؤه.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">عدد طلبات العمل التي تم إلغاؤها، أو -errno في حالة حدوث خطأ.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">يجب فتح سياق DEVX باستخدام
+    <a href='/man/mlx5dv_open_device.3.en'>mlx5dv_open_device(3)</a>.</p>
+<p class="Pp">يجب استدعاؤه مع QP في حالة SQD.</p>
+<p class="Pp">يجب إنشاء QP مع علم الإنشاء
+    <b>MLX5DV_QP_CREATE_SIG_PIPELINING</b>. يجب على التطبيق الاستماع إلى أحداث QP،
+    وتوقع حدث SQD.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/mlx5dv_mkey_check.3.en'>mlx5dv_mkey_check(3)</a>, <a href='/man/mlx5dv_wr_mkey_configure.3.en'>mlx5dv_wr_mkey_configure(3)</a>,
+    <a href='/man/mlx5dv_wr_set_mkey_sig_block.3.en'>mlx5dv_wr_set_mkey_sig_block(3)</a>, <a href='/man/mlx5dv_create_mkey.3.en'>mlx5dv_create_mkey(3)</a>,
+    <a href='/man/mlx5dv_destroy_mkey.3.en'>mlx5dv_destroy_mkey(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">Oren Duer
+    <a class="Mt" href="mailto:oren@nvidia.com">oren@nvidia.com</a></p>
+<p class="Pp">Sergey Gorenko
+    <a class="Mt" href="mailto:sergeygo@nvidia.com">sergeygo@nvidia.com</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/rdma-core/">extra/rdma-core</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>60.0-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://github.com/linux-rdma/rdma-core">https://github.com/linux-rdma/rdma-core</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-MIT, GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-FreeBSD, GPL-2.0-or-later OR LicenseRef-Intel-BSD-3-Clause, GPL-2.0-or-later OR LicenseRef-PathScale-BSD-Patent-License, CC0-1.0, MIT, BSD-2-Clause, CPL-1.0 OR BSD-2-Clause OR GPL-2.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/rdma-core/">/listing/extra/rdma-core/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#ARGUMENTS">الوسائط</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/mlx5dv_qp_cancel_posted_send_wrs.3.en.txt">txt</a>, 
+        
+            <a href="/man/mlx5dv_qp_cancel_posted_send_wrs.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

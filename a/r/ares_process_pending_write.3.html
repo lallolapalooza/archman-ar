@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ares_process_pending_write(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ares_process_pending_write(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/c-ares/">c-ares</a></p>
+<p class="lic">التراخيص: MIT</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">ARES_SET_NOTIFY_PENDING_WRITE_CALLBACK(3)</td>
+    <td class="head-vol">دليل الوظائف المكتبية</td>
+    <td class="head-rtitle">ARES_SET_NOTIFY_PENDING_WRITE_CALLBACK(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">ares_set_pending_write_cb, ares_process_pending_write - وظيفة لتعيين رد اتصال يتم تشغيله عندما تكون هناك بيانات محتملة معلقة تحتاج إلى كتابتها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<pre>#include &lt;ares.h&gt;
+typedef void (*ares_pending_write_cb)(void *<i>data</i>);
+void ares_set_pending_write_cb(
+  ares_channel_t        *<i>channel</i>,
+  ares_pending_write_cb  <i>callback</i>,
+  void                  *<i>user_data</i>);
+void ares_process_pending_write(ares_channel_t *<i>channel</i>);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تقوم الوظيفة <a href='/man/ares_set_pending_write_cb.3.en'>ares_set_pending_write_cb(3)</a> بتعيين وظيفة رد اتصال <i>callback</i> في مقبض قناة ares المعطى <i>channel</i> والتي يتم استدعاؤها كلما كانت هناك بيانات TCP جديدة معلقة للكتابة. نظرًا لأن TCP يعتمد على التدفق، إذا تم وضع استعلامات متعددة في قائمة انتظار بشكل متتابع، فيمكن إرسالها كمخزن مؤقت كبير واحد. عادةً ما يتم تشغيل عملية استدعاء نظام <a href='/man/send.2.en'>send(2)</a> لكل استعلام.</p>
+<p class="Pp">عند تعيين رد الاتصال هذا، سيتم تشغيل حدث عندما يتم تخزين البيانات مؤقتًا، ولكن لم يتم كتابتها. يستخدم هذا الحدث لإيقاظ حلقة الأحداث للمتصل، والتي يجب أن تستدعي <a href='/man/ares_process_pending_write.3.en'>ares_process_pending_write(3)</a> باستخدام القناة المرتبطة برد الاتصال. في كل مرة يتم فيها تشغيل رد الاتصال، يجب أن يؤدي ذلك إلى استدعاء <a href='/man/ares_process_pending_write.3.en'>ares_process_pending_write(3)</a> من حلقة الأحداث للمتصل، وإلا فقد تحدث توقفات وأخطاء في المهلة. <b>يجب</b> ألا يستدعي رد الاتصال <a href='/man/ares_process_pending_write.3.en'>ares_process_pending_write(3)</a> مباشرة، وإلا فسيؤدي ذلك إلى إبطال أي ميزة لهذا الاستخدام. </p>
+<p class="Pp">يعتبر هذا تحسينًا، خاصة عند استخدام اتصالات قائمة على TLS التي تضيف عبئًا إضافيًا على تدفق البيانات. نظرًا للطبيعة غير المتزامنة لـ c-ares، لا توجد طريقة لتحديد متى قد يكون المتصل قد انتهى من إدراج الاستعلامات عبر أي من استدعاءات واجهة برمجة التطبيقات العامة الممكنة مثل <a href='/man/ares_getaddrinfo.3.en'>ares_getaddrinfo(3)</a> أو <a href='/man/ares_search_dnsrec.3.en'>ares_search_dnsrec(3)</a>، لذا هذا تحسين لمحاولة تجميع عمليات إرسال الاستعلامات معًا وسيعتمد على زمن استجابة الإشارة المتضمن في إيقاظ حلقة أحداث المستخدم.</p>
+<p class="Pp">إذا لم يتم تعيين رد اتصال، فسيتم كتابة البيانات فورًا إلى المقبس، وبالتالي تجاوز هذا التحسين.</p>
+<p class="Pp">لا يمكن استخدام هذا الخيار مع <i>ARES_OPT_EVENT_THREAD</i> الذي تم تمريره إلى <a href='/man/ares_init_options.3.en'>ares_init_options(3)</a> نظرًا لأنه لا يمتلك المتصل حلقة أحداث. يتم تمكين هذا التحسين تلقائيًا عند استخدام "خيط الأحداث" لأنه يعين رد الاتصال للإشارة الداخلية الخاصة به.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AVAILABILITY'><a class='permalink' href='#AVAILABILITY'>التوفر</a></h1>
+<p class="Pp">تم تقديم هذه الوظيفة لأول مرة في الإصدار 1.34.0 من c-ares.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp"><a href='/man/ares_init_options.3.en'>ares_init_options(3)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">13 أغسطس 2024</td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/c-ares/">extra/c-ares</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.34.5-1</dd>
+        <dt>المشروع الأصلي:</dt>
+        <dd><a href="https://c-ares.org/">https://c-ares.org/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>MIT</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/extra/c-ares/">/listing/extra/c-ares/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">ملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#AVAILABILITY">التوفر</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/ares_process_pending_write.3.en.txt">txt</a>, 
+        
+            <a href="/man/ares_process_pending_write.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

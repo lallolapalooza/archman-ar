@@ -1,0 +1,698 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pt-table-checksum(1p)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='BACKWARDS_COMPATIBILITY'><a class='permalink' href='#BACKWARDS_COMPATIBILITY'>BACKWARDS COMPATIBILITY</a></h1>
+<p class="Pp">Version 2.0 of pt-table-checksum is not backwards compatible with
+    pt-table-sync version 1.0. In some cases this is not a serious problem.
+    Adding a &quot;boundaries&quot; column to the table, and then updating it
+    with a manually generated WHERE clause, may suffice to let pt-table-sync
+    version 1.0 interoperate with pt-table-checksum version 2.0. Assuming an
+    integer primary key named 'id', You can try something like the
+  following:</p>
+<pre>ALTER TABLE checksums ADD boundaries VARCHAR(500);
+UPDATE checksums
+ SET boundaries = COALESCE(CONCAT('id BETWEEN ', lower_boundary,
+    ' AND ', upper_boundary), '1=1');</pre>
+<p class="Pp">Take into consideration that by default, pt-table-checksum use
+    <span class="Li">&quot;CRC32&quot;</span> checksums.
+    <span class="Li">&quot;CRC32&quot;</span> is not a cryptographic algorithm
+    and for that reason it is prone to have collisions. On the other hand,
+    <span class="Li">&quot;CRC32&quot;</span> algorithm is faster and less
+    CPU-intensive than <span class="Li">&quot;MD5&quot;</span> and
+    <span class="Li">&quot;SHA1&quot;</span>.</p>
+<p class="Pp">Related reading material: Percona Toolkit UDFs:
+    <a href='https://docs.percona.com/percona-server/8.0/udf-percona-toolkit.html'>https://docs.percona.com/percona-server/8.0/udf-percona-toolkit.html</a>
+    How to avoid hash collisions when using MySQL&#x2019;s CRC32 function:
+    <a href='https://www.percona.com/blog/2014/10/13/how-to-avoid-hash-collisions-when-using-mysqls-crc32-function/'>https://www.percona.com/blog/2014/10/13/how-to-avoid-hash-collisions-when-using-mysqls-crc32-function/</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIMITATIONS'><a class='permalink' href='#LIMITATIONS'>LIMITATIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="Replicas"><a class="permalink" href="#Replicas">Replicas using
+    row-based replication</a></dt>
+  <dd>pt-table-checksum requires statement-based replication, and it sets
+      <span class="Li">&quot;binlog_format=STATEMENT&quot;</span> on the source,
+      but due to a MySQL limitation replicas do not honor this change.
+      Therefore, checksums will not replicate past any replicas using row-based
+      replication that are sources for further replicas.
+    <p class="Pp">The tool automatically checks the
+        <span class="Li">&quot;binlog_format&quot;</span> on all servers. See
+        &quot;--[no]check-binlog-format&quot; .</p>
+    <p class="Pp">(Bug 899415
+        <a href='https://bugs.launchpad.net/percona-toolkit/+bug/899415'>https://bugs.launchpad.net/percona-toolkit/+bug/899415</a>)</p>
+  </dd>
+  <dt id="Schema"><a class="permalink" href="#Schema">Schema and table
+    differences</a></dt>
+  <dd>The tool presumes that schemas and tables are identical on the source and
+      all replicas. Replication will break if, for example, a replica does not
+      have a schema that exists on the source (and that schema is checksummed),
+      or if the structure of a table on a replica is different than on the
+      source.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Percona_XtraDB_Cluster'><a class='permalink' href='#Percona_XtraDB_Cluster'>Percona   XtraDB Cluster</a></h1>
+<p class="Pp">pt-table-checksum works with Percona XtraDB Cluster (PXC)
+    5.5.28-23.7 and newer. The number of possible Percona XtraDB Cluster setups
+    is large given that it can be used with regular replication as well.
+    Therefore, only the setups listed below are supported and known to work.
+    Other setups, like cluster to cluster, are not supported and probably don't
+    work.</p>
+<p class="Pp">Except where noted, all of the following supported setups require
+    that you use the <span class="Li">&quot;dsn&quot;</span> method for
+    &quot;--recursion-method&quot; to specify cluster nodes. Also, the lag check
+    (see &quot;REPLICA CHECKS&quot;) is not performed for cluster nodes.</p>
+<dl class="Bl-tag">
+  <dt id="Single"><a class="permalink" href="#Single">Single cluster</a></dt>
+  <dd>The simplest PXC setup is a single cluster: all servers are cluster nodes,
+      and there are no regular replicas. If all nodes are specified in the DSN
+      table (see &quot;--recursion-method&quot;), then you can run the tool on
+      any node and any diffs on any other nodes will be detected.
+    <p class="Pp">All nodes must be in the same cluster (have the same
+        <span class="Li">&quot;wsrep_cluster_name&quot;</span> value), else the
+        tool exits with an error. Although it's possible to have different
+        clusters with the same name, this should not be done and is not
+        supported. This applies to all supported setups.</p>
+  </dd>
+  <dt id="Single~2"><a class="permalink" href="#Single~2">Single cluster with
+    replicas</a></dt>
+  <dd>Cluster nodes can also be regular replication sources and replicate to
+      regular replicas. However, the tool can only detect diffs on a replica if
+      ran on the replica's &quot;source node&quot;. For example, if the cluster
+      setup is,
+        <pre>node1 &lt;-&gt; node2 &lt;-&gt; node3
+            |         |
+            |         +-&gt; replica3
+            +-&gt; replica2
+</pre>
+    <p class="Pp">you can detect diffs on replica3 by running the tool on node3,
+        but to detect diffs on replica2 you must run the tool again on node2. If
+        you run the tool on node1, it will not detect diffs on either
+      replica.</p>
+    <p class="Pp">Currently, the tool does not detect this setup or warn about
+        replicas that cannot be checked (e.g. replica2 when running on
+      node3).</p>
+    <p class="Pp">Replicas in this setup are still subject to
+        &quot;--[no]check-binlog-format&quot;.</p>
+  </dd>
+  <dt id="Replication"><a class="permalink" href="#Replication">Replication
+    source to single cluster</a></dt>
+  <dd>It is possible for a regular source to replicate to a cluster, as if the
+      cluster were one logical replica, like:
+        <pre>source -&gt; node1 &lt;-&gt; node2 &lt;-&gt; node3
+</pre>
+    <p class="Pp">The tool supports this setup but only if ran on the source and
+        if all nodes in the cluster are consistent with the &quot;direct
+        replica&quot; (node1 in this example) of the source. For example, if all
+        nodes have value &quot;foo&quot; for row 1 but the source has value
+        &quot;bar&quot; for the same row, this diff will be detected. Or if only
+        node1 has this diff, it will also be detected. But if only node2 or
+        node3 has this diff, it will not be detected. Therefore, this setup is
+        used to check that the source and the cluster as a whole are
+      consistent.</p>
+    <p class="Pp">In this setup, the tool can automatically detect the
+        &quot;direct replica&quot; (node1) when ran on the source, so you do not
+        have to use the <span class="Li">&quot;dsn&quot;</span> method for
+        &quot;--recursion-method&quot; because node1 will represent the entire
+        cluster, which is why all other nodes must be consistent with it.</p>
+    <p class="Pp">The tool warns when it detects this setup to remind you that
+        it only works when used as described above. These warnings do not affect
+        the exit status of the tool; they're only reminders to help avoid
+        false-positive results.</p>
+  </dd>
+  <dt id="RocksDB"><a class="permalink" href="#RocksDB">RocksDB support</a></dt>
+  <dd>Due to the limitations in the RocksDB engine like not supporting
+      binlog_format=STATEMENT or they way RocksDB handles Gap locks,
+      pt-table-checksum will skip tables using RocksDB engine. More Information:
+      (<a href='https://www.percona.com/doc/percona-server/LATEST/myrocks/limitations.html'>https://www.percona.com/doc/percona-server/LATEST/myrocks/limitations.html</a>)</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OUTPUT'><a class='permalink' href='#OUTPUT'>OUTPUT</a></h1>
+<p class="Pp">The tool prints tabular results, one line per table:</p>
+<pre>            TS ERRORS  DIFFS  ROWS  DIFF_ROWS CHUNKS SKIPPED    TIME TABLE
+10-20T08:36:50      0      0   200      0       1       0   0.005 db1.tbl1
+10-20T08:36:50      0      0   603      3       7       0   0.035 db1.tbl2
+10-20T08:36:50      0      0    16      0       1       0   0.003 db2.tbl3
+10-20T08:36:50      0      0   600      0       6       0   0.024 db2.tbl4</pre>
+<p class="Pp">Errors, warnings, and progress reports are printed to standard
+    error. See also &quot;--quiet&quot;.</p>
+<p class="Pp">Each table's results are printed when the tool finishes
+    checksumming the table. The columns are as follows:</p>
+<dl class="Bl-tag">
+  <dt id="TS"><a class="permalink" href="#TS">TS</a></dt>
+  <dd>The timestamp (without the year) when the tool finished checksumming the
+      table.</dd>
+  <dt id="ERRORS"><a class="permalink" href="#ERRORS">ERRORS</a></dt>
+  <dd>The number of errors and warnings that occurred while checksumming the
+      table. Errors and warnings are printed to standard error while the table
+      is in progress.</dd>
+  <dt id="DIFFS"><a class="permalink" href="#DIFFS">DIFFS</a></dt>
+  <dd>The number of chunks that differ from the source on one or more replicas.
+      If <span class="Li">&quot;--no-replicate-check&quot;</span> is specified,
+      this column will always have zeros. If &quot;--replicate-check-only&quot;
+      is specified, then only tables with differences are printed.</dd>
+  <dt id="ROWS"><a class="permalink" href="#ROWS">ROWS</a></dt>
+  <dd>The number of rows selected and checksummed from the table. It might be
+      different from the number of rows in the table if you use the --where
+      option.</dd>
+  <dt id="DIFF_ROWS"><a class="permalink" href="#DIFF_ROWS">DIFF_ROWS</a></dt>
+  <dd>The maximum number of differences per chunk. If a chunk has 2 different
+      rows and another chunk has 3 different rows, this value will be 3.</dd>
+  <dt id="CHUNKS"><a class="permalink" href="#CHUNKS">CHUNKS</a></dt>
+  <dd>The number of chunks into which the table was divided.</dd>
+  <dt id="SKIPPED"><a class="permalink" href="#SKIPPED">SKIPPED</a></dt>
+  <dd>The number of chunks that were skipped due one or more of these problems:
+        <pre>* MySQL not using the --chunk-index
+* MySQL not using the full chunk index (--[no]check-plan)
+* Chunk size is greater than --chunk-size * --chunk-size-limit
+* Lock wait timeout exceeded (--retries)
+* Checksum query killed (--retries)
+</pre>
+    <p class="Pp">As of pt-table-checksum 2.2.5, skipped chunks cause a non-zero
+        &quot;EXIT STATUS&quot;.</p>
+  </dd>
+  <dt id="TIME"><a class="permalink" href="#TIME">TIME</a></dt>
+  <dd>The time elapsed while checksumming the table.</dd>
+  <dt id="TABLE"><a class="permalink" href="#TABLE">TABLE</a></dt>
+  <dd>The database and table that was checksummed.</dd>
+</dl>
+<p class="Pp">If &quot;--replicate-check-only&quot; is specified, only checksum
+    differences on detected replicas are printed. The output is different: one
+    paragraph per replica, one checksum difference per line, and values are
+    separated by spaces:</p>
+<pre>Differences on h=127.0.0.1,P=12346
+TABLE CHUNK CNT_DIFF CRC_DIFF CHUNK_INDEX LOWER_BOUNDARY UPPER_BOUNDARY
+db1.tbl1 1 0 1 PRIMARY 1 100
+db1.tbl1 6 0 1 PRIMARY 501 600
+Differences on h=127.0.0.1,P=12347
+TABLE CHUNK CNT_DIFF CRC_DIFF CHUNK_INDEX LOWER_BOUNDARY UPPER_BOUNDARY
+db1.tbl1 1 0 1 PRIMARY 1 100
+db2.tbl2 9 5 0 PRIMARY 101 200</pre>
+<p class="Pp">The first line of a paragraph indicates the replica with
+    differences. In this example there are two: h=127.0.0.1,P=12346 and
+    h=127.0.0.1,P=12347. The columns are as follows:</p>
+<dl class="Bl-tag">
+  <dt id="TABLE~2"><a class="permalink" href="#TABLE~2">TABLE</a></dt>
+  <dd>The database and table that differs from the source.</dd>
+  <dt id="CHUNK"><a class="permalink" href="#CHUNK">CHUNK</a></dt>
+  <dd>The chunk number of the table that differs from the source.</dd>
+  <dt id="CNT_DIFF"><a class="permalink" href="#CNT_DIFF">CNT_DIFF</a></dt>
+  <dd>The number of chu
+</dd>
+</dl>
+ you should not use this option in most cases;
+        prefer "--chunk-time" instead.</p>
+    <p class="Pp">This option can override the default behavior, which is to
+        adjust chunk size dynamically to try to make chunks run in exactly
+        "--chunk-time" seconds. When this option isn't set explicitly,
+        its default value is used as a starting point, but after that, the tool
+        ignores this option's value. If you set this option explicitly, however,
+        then it disables the dynamic adjustment behavior and tries to make all
+        chunks exactly the specified number of rows.</p>
+    <p class="Pp">There is a subtlety: if the chunk index is not unique, then
+        it's possible that chunks will be larger than desired. For example, if a
+        table is chunked by an index that contains 10,000 of a given value,
+        there is no way to write a WHERE clause that matches only 1,000 of the
+        values, and that chunk will be at least 10,000 rows large. Such a chunk
+        will probably be skipped because of "--chunk-size-limit".</p>
+    <p class="Pp">Selecting a small chunk size will cause the tool to become
+        much slower, in part because of the setup work required for
+        "--[no]check-plan".</p>
+  </dd>
+  <dt id="chunk~4"><a class="permalink" href="#chunk~4">--chunk-size-limit</a></dt>
+  <dd>type: float; default: 2.0; group: Safety
+    <p class="Pp">Do not checksum chunks this much larger than the desired chunk
+        size.</p>
+    <p class="Pp">When a table has no unique indexes, chunk sizes can be
+        inaccurate. This option specifies a maximum tolerable limit to the
+        inaccuracy. The tool uses &lt;EXPLAIN&gt; to estimate how many rows are
+        in the chunk. If that estimate exceeds the desired chunk size times the
+        limit (twice as large, by default), then the tool skips the chunk.</p>
+    <p class="Pp">The minimum value for this option is 1, which means that no
+        chunk can be larger than "--chunk-size". You probably don't
+        want to specify 1, because rows reported by EXPLAIN are estimates, which
+        can be different from the real number of rows in the chunk. If the tool
+        skips too many chunks because they are oversized, you might want to
+        specify a value larger than the default of 2.</p>
+    <p class="Pp">You can disable oversized chunk checking by specifying a value
+        of 0.</p>
+  </dd>
+  <dt id="chunk~5"><a class="permalink" href="#chunk~5">--chunk-time</a></dt>
+  <dd>type: float; default: 0.5
+    <p class="Pp">Adjust the chunk size dynamically so each checksum query takes
+        this long to execute.</p>
+    <p class="Pp">The tool tracks the checksum rate (rows per second) for all
+        tables and each table individually. It uses these rates to adjust the
+        chunk size after each checksum query, so that the next checksum query
+        takes this amount of time (in seconds) to execute.</p>
+    <p class="Pp">The algorithm is as follows: at the beginning of each table,
+        the chunk size is initialized from the overall average rows per second
+        since the tool began working, or the value of "--chunk-size"
+        if the tool hasn't started working yet. For each subsequent chunk of a
+        table, the tool adjusts the chunk size to try to make queries run in the
+        desired amount of time. It keeps an exponentially decaying moving
+        average of queries per second, so that if the server's performance
+        changes due to changes in server load, the tool adapts quickly. This
+        allows the tool to achieve predictably timed queries for each table, and
+        for the server overall.</p>
+    <p class="Pp">If this option is set to zero, the chunk size doesn't
+        auto-adjust, so query checksum times will vary, but query checksum sizes
+        will not. Another way to do the same thing is to specify a value for
+        "--chunk-size" explicitly, instead of leaving it at the
+        default.</p>
+  </dd>
+  <dt id="columns"><a class="permalink" href="#columns">--columns</a></dt>
+  <dd>short form: -c; type: array; group: Filter
+    <p class="Pp">Checksum only this comma-separated list of columns. If a table
+        doesn't have any of the specified columns it will be skipped.</p>
+    <p class="Pp">This option applies to all tables, so it really only makes
+        sense when checksumming one table unless the tables have a common set of
+        columns.</p>
+  </dd>
+  <dt id="config"><a class="permalink" href="#config">--config</a></dt>
+  <dd>type: Array; group: Config
+    <p class="Pp">Read this comma-separated list of config files; if specified,
+        this must be the first option on the command line.</p>
+    <p class="Pp">See the "--help" output for a list of default config
+        files.</p>
+  </dd>
+  <dt>--[no]create-replicate-table</dt>
+  <dd>default: yes
+    <p class="Pp">Create the "--replicate" database and table if they
+        do not exist. The structure of the replicate table is the same as the
+        suggested table mentioned in "--replicate".</p>
+  </dd>
+  <dt id="databases"><a class="permalink" href="#databases">--databases</a></dt>
+  <dd>short form: -d; type: hash; group: Filter
+    <p class="Pp">Only checksum this comma-separated list of databases.</p>
+  </dd>
+  <dt>--databases-regex</dt>
+  <dd>type: string; group: Filter
+    <p class="Pp">Only checksum databases whose names match this Perl regex.
+        This is matched against the lowercase table name. This is the bare
+        regex; it should not be enclosed in slashes.</p>
+  </dd>
+  <dt id="defaults"><a class="permalink" href="#defaults">--defaults-file</a></dt>
+  <dd>short form: -F; type: string; group: Connection
+    <p class="Pp">Only read mysql options from the given file. You must give an
+        absolute pathname.</p>
+  </dd>
+  <dt id="disable"><a class="permalink" href="#disable">--disable-qrt-plugin</a></dt>
+  <dd>Disable the QRT (Query Response Time) plugin if it is enabled.</dd>
+  <dt>--[no]empty-replicate-table</dt>
+  <dd>default: yes
+    <p class="Pp">Delete previous checksums for each table before checksumming
+        the table. This option does not truncate the entire table, it only
+        deletes rows (checksums) for each table just before checksumming the
+        table. Therefore, if checksumming stops prematurely and there was
+        preexisting data, there will still be rows for tables that were not
+        checksummed before the tool was stopped.</p>
+    <p class="Pp">If you're resuming from a previous checksum run, then the
+        checksum records for the table from which the tool resumes won't be
+        emptied.</p>
+    <p class="Pp">To empty the entire replicate table, you must manually execute
+        <span class="Li">"TRUNCATE TABLE"</span> before running the
+        tool.</p>
+    <p class="Pp">See also -"--truncate-replicate-table".</p>
+  </dd>
+  <dt id="engines"><a class="permalink" href="#engines">--engines</a></dt>
+  <dd>short form: -e; type: hash; group: Filter
+    <p class="Pp">Only checksum tables which use these storage engines.</p>
+  </dd>
+  <dt id="explain"><a class="permalink" href="#explain">--explain</a></dt>
+  <dd>cumulative: yes; default: 0; group: Output
+    <p class="Pp">Show, but do not execute, checksum queries (disables
+        "--[no]empty-replicate-table"). If specified twice, the tool
+        actually iterates through the chunking algorithm, printing the upper and
+        lower boundary values for each chunk, but not executing the checksum
+        queries.</p>
+  </dd>
+  <dt id="fail"><a class="permalink" href="#fail">--fail-on-stopped-replication</a></dt>
+  <dd>If replication is stopped, fail with an error (exit status 128) instead of
+      waiting until replication is restarted.</dd>
+  <dt id="float"><a class="permalink" href="#float">--float-precision</a></dt>
+  <dd>type: int
+    <p class="Pp">Precision for FLOAT and DOUBLE number-to-string conversion.
+        Causes FLOAT and DOUBLE values to be rounded to the specified number of
+        digits after the decimal point, with the <b>ROUND()</b> function in
+        MySQL. This can help avoid checksum mismatches due to different
+        floating-point representations of the same values on different MySQL
+        versions and hardware. The default is no rounding; the values are
+        converted to strings by the <b>CONCAT()</b> function, and MySQL chooses
+        the string representation. If you specify a value of 2, for example,
+        then the values 1.008 and 1.009 will be rounded to 1.01, and will
+        checksum as equal.</p>
+  </dd>
+  <dt id="function"><a class="permalink" href="#function">--function</a></dt>
+  <dd>type: string
+    <p class="Pp">Hash function for checksums (FNV1A_64, MURMUR_HASH, SHA1, MD5,
+        CRC32, etc).</p>
+    <p class="Pp">The default is to use <b>CRC32()</b>, but <b>MD5()</b> and
+        <b>SHA1()</b> also work, and you can use your own function, such as a
+        compiled UDF, if you wish. The function you specify is run in SQL, not
+        in Perl, so it must be available to MySQL.</p>
+    <p class="Pp">MySQL doesn't have good built-in hash functions that are fast.
+        <b>CRC32()</b> is too prone to hash collisions, and <b>MD5()</b> and
+        <b>SHA1()</b> are very CPU-intensive. The <b>FNV1A_64()</b> UDF that is
+        distributed with Percona Server is a faster alternative. It is very
+        simple to compile and install; look at the header in the source code for
+        instructions. If it is installed, it is preferred over <b>MD5()</b>. You
+        can also use the <b>MURMUR_HASH()</b> function if you compile and
+        install that as a UDF; the source is also distributed with Percona
+        Server, and it might be better than <b>FNV1A_64()</b>.</p>
+  </dd>
+  <dt id="help"><a class="permalink" href="#help">--help</a></dt>
+  <dd>group: Help
+    <p class="Pp">Show help and exit.</p>
+  </dd>
+  <dt id="host"><a class="permalink" href="#host">--host</a></dt>
+  <dd>short form: -h; type: string; default: localhost; group: Connection
+    <p class="Pp">Host to connect to.</p>
+  </dd>
+  <dt id="ignore"><a class="permalink" href="#ignore">--ignore-columns</a></dt>
+  <dd>type: Hash; group: Filter
+    <p class="Pp">Ignore this comma-separated list of columns when calculating
+        the checksum. If a table has all of its columns filtered by
+        --ignore-columns, it will be skipped.</p>
+  </dd>
+  <dt id="ignore~2"><a class="permalink" href="#ignore~2">--ignore-databases</a></dt>
+  <dd>type: Hash; group: Filter
+    <p class="Pp">Ignore this comma-separated list of databases.</p>
+  </dd>
+  <dt id="ignore~3"><a class="permalink" href="#ignore~3">--ignore-databases-regex</a></dt>
+  <dd>type: string; group: Filter
+    <p class="Pp">Ignore databases whose names match this Perl regex.</p>
+  </dd>
+  <dt id="ignore~4"><a class="permalink" href="#ignore~4">--ignore-engines</a></dt>
+  <dd>type: Hash; default: FEDERATED,MRG_MyISAM; group: Filter
+    <p class="Pp">Ignore this comma-separated list of storage engines.</p>
+  </dd>
+  <dt id="ignore~5"><a class="permalink" href="#ignore~5">--ignore-tables</a></dt>
+  <dd>type: Hash; group: Filter
+    <p class="Pp">Ignore this comma-separated list of tables. Table names may be
+        qualified with the database name. The "--replicate" table is
+        always automatically ignored.</p>
+  </dd>
+  <dt id="ignore~6"><a class="permalink" href="#ignore~6">--ignore-tables-regex</a></dt>
+  <dd>type: string; group: Filter
+    <p class="Pp">Ignore tables whose names match the Perl regex. This is
+        matched against the lowercase table name. This is the bare regex; it
+        should not be enclosed in slashes.</p>
+  </dd>
+  <dt id="max"><a class="permalink" href="#max">--max-lag</a></dt>
+  <dd>type: time; default: 1s; group: Throttle
+    <p class="Pp">Pause checksumming until all replicas' lag is less than this
+        value. After each checksum query (each ch
+			لأن مزيج الجداول التعاملية وغير التعاملية في عبارات التدقيق سيؤدي إلى كتابتها في سجل النسخ المتماثل (binlog) على الرغم من وجود خطأ بها. سيتم بعد ذلك إعادة تشغيلها دون توقف بسبب التعارض (deadlock) على النسخ المتماثلة، وسيتعطل النسخ المتماثل مع رسالة "خطأ مختلف على المصدر والنسخة المتماثلة". هذه ليست مشكلة مع pt-table-checksum؛ بل هي مشكلة مع النسخ المتماثل في MySQL، ويمكنك قراءة المزيد عنها في دليل MySQL.</p>
+    <p class="Pp">لا يتم تدقيق الجدول المنسوخ (يقوم الأداة تلقائيًا بإضافة هذا الجدول إلى "--ignore-tables").</p>
+  </dd>
+  <dt>--[no]replicate-check</dt>
+  <dd>الافتراضي: yes
+    <p class="Pp">تحقق من النسخ المتماثلة بحثًا عن اختلافات في البيانات بعد الانتهاء من كل جدول. تجد الأداة الاختلافات عن طريق تنفيذ عبارة SELECT بسيطة على جميع النسخ المتماثلة المكتشفة. تقارن الاستعلام نتائج تدقيق النسخة المتماثلة بنتائج تدقيق المصدر. تعرض الاختلافات في عمود DIFFS في المخرجات.</p>
+  </dd>
+  <dt>--replicate-check-only</dt>
+  <dd>تحقق من النسخ المتماثلة بحثًا عن الاتساق دون تنفيذ استعلامات التدقيق. يُستخدم هذا الخيار فقط مع "--[no]replicate-check". إذا تم تحديده، فلن يقوم pt-table-checksum بتدقيق أي جداول. يتحقق من النسخ المتماثلة بحثًا عن الاختلافات التي تم العثور عليها بواسطة التدقيق السابق، ثم يخرج. قد يكون مفيدًا إذا كنت تشغل pt-table-checksum بصمت في وظيفة cron، على سبيل المثال، وتريد لاحقًا تقريرًا عن نتائج وظيفة cron، ربما لتطبيق فحص Nagios.</dd>
+  <dt>--replicate-check-retries</dt>
+  <dd>النوع: int؛ الافتراضي: 1
+    <p class="Pp">أعد محاولة مقارنة التدقيق هذا العدد من المرات عند مواجهة اختلاف. فقط عندما يستمر وجود اختلاف بعد هذا العدد من الفحوصات يعتبر صحيحًا. استخدام هذا الخيار بقيمة 2 أو أكثر يخفف من الاختلافات العرضية التي تنشأ عند استخدام الخيار "--resume".</p>
+  </dd>
+  <dt>--replicate-database</dt>
+  <dd>النوع: string
+    <p class="Pp">استخدم قاعدة البيانات هذه فقط. افتراضيًا، ينفذ pt-table-checksum الأمر USE لتحديد قاعدة البيانات التي تحتوي على الجدول الذي تعمل عليه حاليًا. هذا هو أفضل جهد لتجنب المشاكل مع عوامل تصفية النسخ المتماثل مثل binlog_ignore_db و replicate_ignore_db. ومع ذلك، يمكن لعوامل تصفية النسخ المتماثل إنشاء موقف لا توجد فيه طريقة صحيحة للقيام بالأشياء. قد لا يتم نسخ بعض العبارات، وقد تتسبب أخرى في فشل النسخ المتماثل. في مثل هذه الحالات، يمكنك استخدام هذا الخيار لتحديد قاعدة بيانات افتراضية يختارها pt-table-checksum باستخدام USE، ولا يغيرها أبدًا. انظر أيضًا "--[no]check-replication-filters".</p>
+  </dd>
+  <dt id="resume"><a class="permalink" href="#resume">--resume</a></dt>
+  <dd>استأنف التدقيق من آخر جزء مكتمل (يعطل "--[no]empty-replicate-table"). إذا توقفت الأداة قبل تدقيق جميع الجداول، فإن هذا الخيار يجعل التدقيق يستأنف من آخر جزء من آخر جدول أكملته.</dd>
+  <dt id="retries"><a class="permalink" href="#retries">--retries</a></dt>
+  <dd>النوع: int؛ الافتراضي: 2
+    <p class="Pp">أعد محاولة جزء هذا العدد من المرات عند حدوث خطأ غير مميت. الأخطاء غير المميتة هي مشاكل مثل انتهاء مهلة انتظار القفل أو قتل الاستعلام.</p>
+  </dd>
+  <dt id="run"><a class="permalink" href="#run">--run-time</a></dt>
+  <dd>النوع: time
+    <p class="Pp">مدة التشغيل. الافتراضي هو التشغيل حتى يتم تدقيق جميع الجداول. تسمح لاحقات قيمة الوقت هذه: s (ثوانٍ)، m (دقائق)، h (ساعات)، و d (أيام). اجمع هذا الخيار مع "--resume" لتدقيق أكبر عدد ممكن من الجداول في غضون وقت مخصص، واستأنف من حيث توقفت الأداة في المرة القادمة التي يتم تشغيلها.</p>
+  </dd>
+  <dt id="separator"><a class="permalink" href="#separator">--separator</a></dt>
+  <dd>النوع: string؛ الافتراضي: #
+    <p class="Pp">حرف الفاصل المستخدم لـ CONCAT_WS(). يُستخدم هذا الحرف لربط قيم الأعمدة عند التدقيق.</p>
+  </dd>
+  <dt id="skip"><a class="permalink" href="#skip">--skip-check-replica-lag</a></dt>
+  <dd>النوع: DSN؛ قابل للتكرار: yes
+    <p class="Pp">DSN لتجاوزه عند التحقق من تأخير النسخة المتماثلة. يمكن استخدامه عدة مرات. مثال: <span class="Li">"--skip-check-replica-lag h=127.1,P=12345 --skip-check-replica-lag h=127.1,P=12346"</span></p>
+  </dd>
+  <dt id="skip~2"><a class="permalink" href="#skip~2">--skip-check-slave-lag</a></dt>
+  <dd>النوع: DSN؛ قابل للتكرار: yes
+    <p class="Pp">تم إهمال هذا الخيار وسيتم إزالته في الإصدارات المستقبلية. استخدم "--skip-check-replica-lag" بدلاً منه.</p>
+  </dd>
+  <dt id="slave"><a class="permalink" href="#slave">--slave-user</a></dt>
+  <dd>النوع: string
+    <p class="Pp">تم إهمال هذا الخيار وسيتم إزالته في الإصدارات المستقبلية. استخدم "--replica-user" بدلاً منه.</p>
+  </dd>
+  <dt id="slave~2"><a class="permalink" href="#slave~2">--slave-password</a></dt>
+  <dd>النوع: string
+    <p class="Pp">تم إهمال هذا الخيار وسيتم إزالته في الإصدارات المستقبلية. استخدم "--replica-password" بدلاً منه.</p>
+  </dd>
+  <dt id="replica"><a class="permalink" href="#replica">--replica-user</a></dt>
+  <dd>النوع: string
+    <p class="Pp">يحدد المستخدم الذي سيتم استخدامه للاتصال بالنسخ المتماثلة. يسمح لك هذا المعامل بالحصول على مستخدم مختلف بصلاحيات أقل على النسخ المتماثلة ولكن يجب أن يكون هذا المستخدم موجودًا على جميع النسخ المتماثلة.</p>
+  </dd>
+  <dt id="replica~2"><a class="permalink" href="#replica~2">--replica-password</a></dt>
+  <dd>النوع: string
+    <p class="Pp">يحدد كلمة المرور التي سيتم استخدامها للاتصال بالنسخ المتماثلة. يمكن استخدامه مع "--replica-user" ويجب أن تكون كلمة مرور المستخدم هي نفسها على جميع النسخ المتماثلة.</p>
+  </dd>
+  <dt id="set"><a class="permalink" href="#set">--set-vars</a></dt>
+  <dd>النوع: Array؛ المجموعة: Connection
+    <p class="Pp">قم بتعيين متغيرات MySQL في هذه القائمة المفصولة بفواصل من أزواج "variable=value".</p>
+    <p class="Pp">افتراضيًا، تقوم الأداة بتعيين:</p>
+        <pre>wait_timeout=10000
+innodb_lock_wait_timeout=1
+</pre>
+    <p class="Pp">تتجاوز المتغيرات المحددة في سطر الأوامر هذه الافتراضات. على سبيل المثال، تحديد "--set-vars wait_timeout=500" يتجاوز القيمة الافتراضية 10000.</p>
+    <p class="Pp">تقوم الأداة بطباعة تحذير وتستمر إذا تعذر تعيين متغير.</p>
+  </dd>
+  <dt id="socket"><a class="permalink" href="#socket">--socket</a></dt>
+  <dd>الشكل المختصر: -S؛ النوع: string؛ المجموعة: Connection
+    <p class="Pp">ملف المقبس لاستخدامه للاتصال.</p>
+  </dd>
+  <dt id="replica~3"><a class="permalink" href="#replica~3">--replica-skip-tolerance</a></dt>
+  <dd>النوع: float؛ الافتراضي: 1.0
+    <p class="Pp">عندما يتم تمييز جدول مصدر للتدقيق في جزء واحد فقط ولكن جدول النسخة المتماثلة يتجاوز الحد الأقصى المقبول لهذا، يتم تخطي الجدول. نظرًا لأن عدد الصفوف غالبًا ما يكون تقديرات تقريبية، يتم في كثير من الأحيان تخطي الجداول دون داعٍ للاختلافات الصغيرة جدًا. يوفر هذا الخيار هامش تسامح للزيادة القصوى في الصفوف لمنع ذلك. على سبيل المثال، ستتحمل قيمة 1.2 جداول النسخ المتماثلة بما يصل إلى 20٪ صفوف إضافية.</p>
+  </dd>
+  <dt id="tables"><a class="permalink" href="#tables">--tables</a></dt>
+  <dd>الشكل المختصر: -t؛ النوع: hash؛ المجموعة: Filter
+    <p class="Pp">قم بتدقيق هذه القائمة من الجداول المفصولة بفواصل فقط. يمكن تأهيل أسماء الجداول باسم قاعدة البيانات.</p>
+  </dd>
+  <dt>--tables-regex</dt>
+  <dd>النوع: string؛ المجموعة: Filter
+    <p class="Pp">قم بتدقيق الجداول التي تتطابق أسماؤها مع تعبير Perl العادي هذا فقط.</p>
+  </dd>
+  <dt id="trim"><a class="permalink" href="#trim">--trim</a></dt>
+  <dd>أضف TRIM() إلى أعمدة VARCHAR (يساعد عند مقارنة 4.1 بالإصدار 5.0 وما فوق). هذا مفيد عندما لا تهتم باختلافات المسافات اللاحقة بين إصدارات MySQL التي تختلف في كيفية التعامل مع المسافات اللاحقة. الإصدارات MySQL 5.0 والإصدارات الأحدث تحتفظ بجميع المسافات اللاحقة في VARCHAR، بينما كانت الإصدارات السابقة تزيلها. هذه الاختلافات ستؤدي إلى اختلافات تدقيق خاطئة.</dd>
+  <dt id="truncate"><a class="permalink" href="#truncate">--truncate-replicate-table</a></dt>
+  <dd>اقتطع الجدول المنسوخ قبل بدء التدقيق. يختلف هذا المعامل عن "--[no]empty-replicate-table" الذي يحذف فقط الصفوف الخاصة بالجدول الذي يتم تدقيقه عند بدء التدقيق لهذا الجدول، بينما يقوم "--truncate-replicate-table" باقتطاع الجدول المنسوخ في بداية العملية وبالتالي، سيتم فقدان جميع معلومات التدقيق السابقة، حتى لو توقفت العملية بسبب خطأ.</dd>
+  <dt id="user"><a class="permalink" href="#user">--user</a></dt>
+  <dd>الشكل المختصر: -u؛ النوع: string؛ المجموعة: Connection
+    <p class="Pp">المستخدم لتسجيل الدخول إذا لم يكن المستخدم الحالي.</p>
+  </dd>
+  <dt id="version"><a class="permalink" href="#version">--version</a></dt>
+  <dd>المجموعة: Help
+    <p class="Pp">اعرض الإصدار واخرج.</p>
+  </dd>
+  <dt>--[no]version-check</dt>
+  <dd>الافتراضي: yes
+    <p class="Pp">تحقق من أحدث إصدار من Percona Toolkit و MySQL والبرامج الأخرى.</p>
+    <p class="Pp">هذه ميزة قياسية "للتحقق من التحديثات تلقائيًا"، مع ميزتين إضافيتين. أولاً، تتحقق الأداة من إصدارها الخاص وأيضًا من إصدارات البرامج التالية: نظام التشغيل، Percona Monitoring and Management (PMM)، MySQL، مشغل MySQL لـ Perl (DBD::mysql)، و Percona Toolkit. ثانيًا، تتحقق من الإصدارات ذات المشاكل المعروفة وتحذر منها. على سبيل المثال، كان لدى MySQL 5.5.25 خطأ حرج وتم إعادة إصداره كـ 5.5.25a.</p>
+    <p class="Pp">يتم إجراء اتصال آمن بخادم قاعدة بيانات التحقق من الإصدارات الخاص بـ Percona لإجراء هذه الفحوصات. يتم تسجيل كل طلب بواسطة الخادم، بما في ذلك أرقام إصدارات البرامج ومعرف فريد للنظام الذي تم فحصه. يتم إنشاء المعرف بواسطة برنامج تثبيت Percona Toolkit أو عند إجراء استدعاء قاعدة بيانات التحقق من الإصدارات لأول مرة.</p>
+    <p class="Pp">يتم طباعة أي تحديثات أو مشاكل معروفة إلى STDOUT قبل الإخراج العادي للأداة. يجب ألا تتداخل هذه الميزة أبدًا مع التشغيل العادي للأداة.</p>
+    <p class="Pp">لمزيد من المعلومات، تفضل بزيارة https://www.percona.com/doc/percona-toolkit/LATEST/version-check.html.</p>
+  </dd>
+  <dt id="where"><a class="permalink" href="#where">--where</a></dt>
+  <dd>النوع: string
+    <p class="Pp">قم فقط بمعالجة الصفوف التي تطابق عبارة WHERE هذه. يمكنك استخدام هذا الخيار لتحديد نطاق التدقيق لجزء فقط من الجدول. هذا مفيد بشكل خاص إذا كان لديك جداول للإلحاق فقط ولا تريد إعادة فحص جميع الصفوف باستمرار؛ يمكنك تشغيل وظيفة يومية لفحص صفوف الأمس فقط، على سبيل المثال.</p>
+    <p class="Pp">هذا الخيار يشبه إلى حد كبير الخيار -w في mysqldump. لا تحدد الكلمة المفتاحية WHERE. قد تحتاج إلى وضع القيمة بين علامتي اقتباس. إليك مثال:</p>
+        <pre>pt-table-checksum --where "ts &gt; CURRENT_DATE - INTERVAL 1 DAY"
+</pre>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REPLICA_CHECKS'><a class='permalink' href='#REPLICA_CHECKS'>فحوصات النسخ المتماثلة</a></h1>
+<p class="Pp">افتراضيًا، يحاول pt-table-checksum العثور على جميع النسخ المتماثلة المتصلة بمضيف المصدر والاتصال بها. تسمى هذه العملية الآلية "تكرار النسخ المتماثل" ويتم التحكم فيها بواسطة الخيارين "--recursion-method" و "--recurse".</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CHECKSUM_CHECKS"><a class="permalink" href="#CHECKSUM_CHECKS">فحوصات التدقيق</a></h1>
+<p class="Pp">يقوم الأداة بإجراء هذه الفحوصات على جميع النسخ المتماثلة:</p>
+<dl class="Bl-tag">
+  <dt>1. &quot;--[no]check-replication-filters&quot;</dt>
+  <dd>يفحص pt-table-checksum عوامل تصفية النسخ المتماثل على جميع النسخ المتماثلة لأنها يمكن أن تعقد أو تكسر عملية التدقيق. بشكل افتراضي، ستخرج الأداة إذا تم العثور على أي عوامل تصفية للنسخ المتماثل، ولكن يمكن تعطيل هذا الفحص عن طريق تحديد
+      <span class="Li">&quot;--no-check-replication-filters&quot;</span>.</dd>
+  <dt>2. &quot;--replicate&quot; table</dt>
+  <dd>يفحص pt-table-checksum وجود الجدول &quot;--replicate&quot; على جميع النسخ المتماثلة، وإلا فإن التدقيق يمكن أن يكسر النسخ المتماثل عندما تتكرر التحديثات على الجدول في المصدر إلى نسخة متماثلة لا تحتوي على الجدول. لا يمكن تعطيل هذا الفحص، وتنتظر الأداة إلى الأبد حتى يوجد الجدول على جميع النسخ المتماثلة، مع طباعة رسائل &quot;--progress&quot; أثناء انتظارها.</dd>
+  <dt>3. حجم الشريحة الواحدة</dt>
+  <dd>إذا كان يمكن تدقيق جدول في شريحة واحدة على المصدر، فسيتحقق pt-table-checksum من أن حجم الجدول على جميع النسخ المتماثلة أقل من &quot;--chunk-size&quot; * &quot;--chunk-size-limit&quot;. هذا يمنع مشكلة نادرة حيث يكون الجدول في المصدر فارغًا أو صغيرًا، ولكنه على نسخة متماثلة يكون أكبر بكثير. في هذه الحالة، سيؤدي تدقيق الشريحة الواحدة على المصدر إلى إرهاق النسخة المتماثلة.
+    <p class="Pp">تحدث مشكلة نادرة أخرى عندما يكون حجم الجدول على نسخة متماثلة قريبًا من &quot;--chunk-size&quot; * &quot;--chunk-size-limit&quot;. في مثل هذه الحالات، من المرجح أن يتم تخطي الجدول على الرغم من أنه آمن للتدقيق في شريحة واحدة. يحدث هذا لأن تقديرات حجم الجدول وهذه القيمة &quot;--chunk-size&quot; * &quot;--chunk-size-limit&quot; قريبتان جدًا من بعضهما البعض، ويصبح هذا الفحص أكثر حساسية لهامش خطأ التقديرات بدلاً من الاختلافات الهامة الفعلية في أحجام الجداول. يساهم تحديد قيمة أكبر لـ &quot;--chunk-size-limit&quot; في تجنب هذه المشكلة.</p>
+    <p class="Pp">لا يمكن تعطيل هذا الفحص.</p>
+  </dd>
+  <dt>4. التأخير</dt>
+  <dd>بعد كل شريحة، يتحقق pt-table-checksum من التأخير على جميع النسخ المتماثلة، أو فقط النسخة المتماثلة المحددة بواسطة &quot;--check-replica-lag&quot;. يساعد هذا الأداة على عدم إرهاق النسخ المتماثلة ببيانات التدقيق. لا توجد طريقة لتعطيل هذا الفحص، ولكن يمكنك تحديد نسخة متماثلة واحدة للتحقق منها باستخدام &quot;--check-replica-lag&quot;، وإذا كانت تلك النسخة المتماثلة هي الأسرع، فسيساعد ذلك على منع الأداة من الانتظار طويلاً حتى يتلاشى تأخير النسخة المتماثلة.</dd>
+  <dt>5. شرائح التدقيق</dt>
+  <dd>عندما ينتهي pt-table-checksum من تدقيق جدول، فإنه ينتظر حتى يتم نسخ شريحة التدقيق الأخيرة إلى جميع النسخ المتماثلة حتى يتمكن من إجراء &quot;--[no]replicate-check&quot;. يؤدي تعطيل هذا الخيار عن طريق تحديد --no-replicate-check إلى تعطيل هذا الفحص، ولكنه يعطل أيضًا الإبلاغ الفوري عن اختلافات التدقيق، مما يتطلب تشغيلًا ثانيًا للأداة باستخدام &quot;--replicate-check-only&quot; للعثور على اختلافات التدقيق وطباعتها.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="PLUGIN"><a class="permalink" href="#PLUGIN">المكون الإضافي</a></h1>
+<p class="Pp">يجب أن يحدد الملف المحدد بواسطة &quot;--plugin&quot; فئة (أي حزمة) تسمى
+    <span class="Li">&quot;pt_table_checksum_plugin&quot;</span> مع روتين فرعي
+    <span class="Li">new()</span>. ستقوم الأداة بإنشاء نسخة من هذه الفئة واستدعاء أي خطافات تعرفها. لا يلزم وجود خطافات، ولكن المكون الإضافي ليس مفيدًا جدًا بدونها.</p>
+<p class="Pp">يتم استدعاء خطافات (hooks) هذه، بهذا الترتيب، إذا تم تعريفها:</p>
+<pre>init
+before_replicate_check
+after_replicate_check
+get_replica_lag
+before_checksum_table
+after_checksum_table</pre>
+<p class="Pp">يتم تمرير وسائط مختلفة إلى كل خطاف. لمعرفة الوسائط التي يتم تمريرها إلى خطاف، ابحث عن اسم الخطاف في الكود المصدري للأداة، مثل:</p>
+<pre># --plugin hook
+if ( $plugin &amp;&amp; $plugin-&gt;can('init') ) {
+   $plugin-&gt;init(
+      replicas         =&gt; $replicas,
+      replica_lag_cxns =&gt; $replica_lag_cxns,
+      repl_table       =&gt; $repl_table,
+   );
+}</pre>
+<p class="Pp">يسبق التعليق <span class="Li">&quot;# --plugin hook&quot;</span> كل استدعاء للخطاف.</p>
+<p class="Pp">يرجى الاتصال بـ Percona إذا كانت لديك أسئلة أو تحتاج إلى مساعدة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DSN_OPTIONS"><a class="permalink" href="#DSN_OPTIONS">خيارات DSN</a></h1>
+<p class="Pp">تُستخدم خيارات DSN هذه لإنشاء DSN. يتم إعطاء كل خيار مثل
+    <span class="Li">&quot;option=value&quot;</span>. الخيارات حساسة لحالة الأحرف، لذلك P و p ليسا نفس الخيار. لا يمكن أن يكون هناك مسافة بيضاء قبل أو بعد <span class="Li">&quot;=&quot;</span> وإذا كانت القيمة تحتوي على مسافات بيضاء فيجب أن تكون مقتبسة. يتم فصل خيارات DSN بفواصل. انظر صفحة دليل percona-toolkit للحصول على التفاصيل الكاملة.</p>
+<ul class="Bl-bullet">
+  <li>A
+    <p class="Pp">dsn: charset; copy: yes</p>
+    <p class="Pp">مجموعة الأحرف الافتراضية.</p>
+  </li>
+  <li>D
+    <p class="Pp">copy: no</p>
+    <p class="Pp">قاعدة بيانات جدول DSN.</p>
+  </li>
+  <li>F
+    <p class="Pp">dsn: mysql_read_default_file; copy: yes</p>
+    <p class="Pp">ملف القيم الافتراضية للاتصال.</p>
+  </li>
+  <li>h
+    <p class="Pp">dsn: host; copy: yes</p>
+    <p class="Pp">الاتصال بالمضيف.</p>
+  </li>
+  <li>p
+    <p class="Pp">dsn: password; copy: yes</p>
+    <p class="Pp">كلمة المرور المستخدمة عند الاتصال. إذا كانت كلمة المرور تحتوي على فواصل، فيجب إلغاء تهريبها بشرطة مائلة عكسية: &quot;exam\,ple&quot;</p>
+  </li>
+  <li>P
+    <p class="Pp">dsn: port; copy: yes</p>
+    <p class="Pp">رقم المنفذ المستخدم للاتصال.</p>
+  </li>
+  <li>S
+    <p class="Pp">dsn: mysql_socket; copy: no</p>
+    <p class="Pp">ملف المقبس المستخدم للاتصال.</p>
+  </li>
+  <li>t
+    <p class="Pp">copy: no</p>
+    <p class="Pp">جدول DSN.</p>
+  </li>
+  <li>u
+    <p class="Pp">dsn: user; copy: yes</p>
+    <p class="Pp">المستخدم لتسجيل الدخول إذا لم يكن المستخدم الحالي.</p>
+  </li>
+  <li>s
+    <p class="Pp">dsn: mysql_ssl; copy: yes</p>
+    <p class="Pp">إنشاء اتصال SSL</p>
+  </li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">بيئة التشغيل</a></h1>
+<p class="Pp">يقوم متغير البيئة
+    <span class="Li">&quot;PTDEBUG&quot;</span> بتمكين إخراج تصحيح الأخطاء المطول إلى STDERR. لتمكين تصحيح الأخطاء والتقاط جميع المخرجات في ملف، قم بتشغيل الأداة مثل:</p>
+<pre>PTDEBUG=1 pt-table-checksum ... &gt; FILE 2&gt;&amp;1</pre>
+<p class="Pp">كن حذرًا: إخراج تصحيح الأخطاء غزير جدًا ويمكن أن يولد عدة ميغابايت من المخرجات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ATTENTION"><a class="permalink" href="#ATTENTION">انتباه</a></h1>
+<p class="Pp">قد يؤدي استخدام &lt;PTDEBUG&gt; إلى كشف كلمات المرور. عند تمكين تصحيح الأخطاء، يتم عرض جميع معلمات سطر الأوامر في المخرجات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYSTEM_REQUIREMENTS"><a class="permalink" href="#SYSTEM_REQUIREMENTS">متطلبات النظام</a></h1>
+<p class="Pp">تحتاج إلى Perl و DBI و DBD::mysql وبعض الحزم الأساسية التي يجب تثبيتها في أي إصدار حديث إلى حد ما من Perl.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">الأخطاء</a></h1>
+<p class="Pp">للحصول على قائمة بالأخطاء المعروفة، انظر
+    <a href="https://jira.percona.com/projects/PT/issues">https://jira.percona.com/projects/PT/issues</a>.</p>
+<p class="Pp">يرجى الإبلاغ عن الأخطاء في
+    <a href="https://jira.percona.com/projects/PT">https://jira.percona.com/projects/PT</a>. قم بتضمين المعلومات التالية في تقرير الخطأ الخاص بك:</p>
+<ul class="Bl-bullet">
+  <li>سطر الأوامر الكامل المستخدم لتشغيل الأداة</li>
+  <li>&quot;--version&quot; للأداة</li>
+  <li>إصدار MySQL لجميع الخوادم المعنية</li>
+  <li>المخرجات من الأداة بما في ذلك STDERR</li>
+  <li>ملفات الإدخال (سجلات / تفريغ / ملفات تكوين، إلخ)</li>
+</ul>
+<p class="Pp">إذا أمكن، قم بتضمين مخرجات تصحيح الأخطاء عن طريق تشغيل الأداة باستخدام
+    <span class="Li">&quot;PTDEBUG&quot;</span>؛ انظر
+    &quot;بيئة التشغيل&quot;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DOWNLOADING"><a class="permalink" href="#DOWNLOADING">التنزيل</a></h1>
+<p class="Pp">قم بزيارة
+    <a href="http://www.percona.com/software/percona-toolkit/">http://www.percona.com/software/percona-toolkit/</a>
+    لتنزيل أحدث إصدار من Percona Toolkit. أو، احصل على أحدث إصدار من سطر الأوامر:</p>
+<pre>wget percona.com/get/percona-toolkit.tar.gz
+wget percona.com/get/percona-toolkit.rpm
+wget percona.com/get/percona-toolkit.deb</pre>
+<p class="Pp">يمكنك أيضًا الحصول على أدوات فردية من أحدث إصدار:</p>
+<pre>wget percona.com/get/TOOL</pre>
+<p class="Pp">استبدل <span class="Li">&quot;TOOL&quot;</span> باسم أي أداة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">المؤلفون</a></h1>
+<p class="Pp">Baron Schwartz و Daniel Nichter</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ACKNOWLEDGMENTS"><a class="permalink" href="#ACKNOWLEDGMENTS">شكر وتقدير</a></h1>
+<p class="Pp">Claus Jeppesen، Francois Saint-Jacques، Giuseppe Maxia، Heikki
+    Tuuri، James Briggs، Martin Friebe، و Sergey Zhuravlev</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ABOUT_PERCONA_TOOLKIT"><a class="permalink" href="#ABOUT_PERCONA_TOOLKIT">حول Percona Toolkit</a></h1>
+<p class="Pp">هذه الأداة هي جزء من Percona Toolkit، وهي مجموعة من الأدوات المتقدمة لسطر الأوامر لـ MySQL تم تطويرها بواسطة Percona. تم إنشاء Percona Toolkit من مشروعين في يونيو 2011: Maatkit و Aspersa. تم إنشاء هذين المشروعين بواسطة Baron Schwartz وتم تطويرهما بشكل أساسي من قبله ومن قبل Daniel
+    Nichter. قم بزيارة
+    <a href="http://www.percona.com/software/">http://www.percona.com/software/</a> لمعرفة المزيد عن البرامج المجانية مفتوحة المصدر الأخرى من Percona.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COPYRIGHT,_LICENSE,_AND_WARRANTY"><a class="permalink" href="#COPYRIGHT,_LICENSE,_AND_WARRANTY">حقوق النشر، الترخيص، والضمان</a></h1>
+<p class="Pp">هذا البرنامج هو حقوق طبع ونشر 2011-2024 Percona LLC و/أو الشركات التابعة لها، 2007-2011 Baron Schwartz.</p>
+<p class="Pp">يتم تقديم هذا البرنامج &quot;كما هو&quot; وبدون أي ضمانات صريحة أو ضمنية، بما في ذلك، على سبيل المثال لا الحصر، الضمانات الضمنية الخاصة بالقابلية للتسويق والملاءمة لغرض معين.</p>
+<p class="Pp">هذا البرنامج هو برنامج مجاني؛ يمكنك إعادة توزيعه و/أو تعديله بموجب شروط رخصة جنو العمومية العامة كما نشرتها مؤسسة البرمجيات الحرة، الإصدار 2؛ أو رخصة Perl الفنية. على أنظمة UNIX والأنظمة المماثلة، يمكنك إصدار أمر `man perlgpl` أو `man perlartistic` لقراءة هذه التراخيص.</p>
+<p class="Pp">يجب أن تكون قد تلقيت نسخة من رخصة جنو العمومية العامة مع هذا البرنامج؛ إذا لم يكن الأمر كذلك، فاكتب إلى مؤسسة البرمجيات الحرة، Inc.، 59 Temple Place، Suite 330، Boston، MA 02111-1307 USA.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="VERSION"><a class="permalink" href="#VERSION">الإصدار</a></h1>
+<p class="Pp">pt-table-checksum 3.7.0</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="POD_ERRORS"><a class="permalink" href="#POD_ERRORS">أخطاء POD</a></h1>
+<p class="Pp">مرحباً! **كانت الوثيقة أعلاه تحتوي على بعض أخطاء الترميز، والتي تم توضيحها أدناه:**</p>
+<dl class="Bl-tag">
+  <dt id="Around"><a class="permalink" href="#Around">حول السطر
+    13017:</a></dt>
+  <dd>تم العثور على حرف غير ASCII قبل =encoding في 'MySQL&#x2019;s'. افتراض UTF-8</dd>
+</dl>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-01-01</td>
+    <td class="foot-os">perl v5.40.0</td>
+  </tr>
+</table>

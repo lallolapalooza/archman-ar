@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <title>perlapio(1perl) — Perl API for I/O Layers</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" type="text/css" href="/man.css">
+        <link rel="stylesheet" type="text/css" href="/style.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlapio.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+        <main>
+            <article>
+<section class="Sh">
+<h1>NAME</h1>
+<p class="Pp">perlapio — Perl API for I/O Layers</p>
+</section>
+<section class="Sh">
+<h1>SYNOPSIS</h1>
+<pre>#include "perlio.h"
+
+PerlIO_fast_gets(f)
+PerlIO_has_cntptr(f)
+PerlIO_canset_cnt(f)
+PerlIO_get_cnt(f)
+PerlIO_get_ptr(f)
+PerlIO_set_ptrcnt(f,p,c)
+PerlIO_set_cnt(f,c)
+PerlIO_has_base(f)
+PerlIO_get_base(f)
+PerlIO_get_bufsiz(f)
+
+PerlIO_apply_layers(aTHX_ f,mode,layers)
+PerlIO_binmode(aTHX_ f,ptype,imode,layers)
+PerlIO_debug(fmt,...)
+</pre>
+</section>
+<section class="Sh">
+<h1>DESCRIPTION</h1>
+<p class="Pp">This man page describes the Perl I/O API, which is an abstraction
+    layer over Perl's input/output mechanisms. It allows different underlying I/O
+    implementations (e.g., standard C stdio, POSIX stdio, or custom
+    implementations) to be used interchangeably.</p>
+<p class="Pp">The main interface is through a <span class="Li">PerlIO</span>
+    handle, which is a pointer to a <span class="Li">PerlIO</span> struct.
+    This handle is opaque to the user; it is opaque to the user; it is passed
+    around to all the functions described below.</p>
+<section class="Ss">
+<h2 class="Ss" id='Fast_Get_Interface'><a class='permalink' href='#Fast_Get_Interface'>Fast Get Interface</a></h2>
+<p class="Pp">The following functions provide a fast path for reading data from a
+    buffer without making a system call.</p>
+<dl class="Bl-tag">
+  <dt id="PerlIO_fast_gets(f)"><a class="permalink" href="#PerlIO_fast_gets(f)"><b>PerlIO_fast_gets(f)</b></a></dt>
+  <dd>Returns true if the underlying implementation supports the fast get interface.
+        This is a shorthand for:
+        <pre>PerlIO_has_cntptr(f) &amp;&amp; \
+                      PerlIO_canset_cnt(f) &amp;&amp; \
+                      'Can set pointer into buffer'</pre>
+  </dd>
+  <dt id="PerlIO_has_cntptr(f)"><a class="permalink" href="#PerlIO_has_cntptr(f)"><b>PerlIO_has_cntptr(f)</b></a></dt>
+  <dd>The implementation can return a pointer to the current position in the
+      &quot;buffer&quot; and a count of bytes available in the buffer. Do not
+      use this directly; use PerlIO_fast_gets.</dd>
+  <dt id="PerlIO_get_cnt(f)"><a class="permalink" href="#PerlIO_get_cnt(f)"><b>PerlIO_get_cnt(f)</b></a></dt>
+  <dd>Returns the count of readable bytes in the buffer. A zero or negative return
+      value indicates that no more bytes are available.</dd>
+  <dt id="PerlIO_get_ptr(f)"><a class="permalink" href="#PerlIO_get_ptr(f)"><b>PerlIO_get_ptr(f)</b></a></dt>
+  <dd>Returns a pointer to the next readable byte in the buffer. Accessing the
+      pointer (dereferencing) is only safe if <b>PerlIO_get_cnt()</b> has returned
+      a positive value. Only positive offsets up to the value returned by
+      <b>PerlIO_get_cnt()</b> are allowed.</dd>
+  <dt id="PerlIO_set_ptrcnt(f,p,c)"><a class="permalink" href="#PerlIO_set_ptrcnt(f,p,c)"><b>PerlIO_set_ptrcnt(f,p,c)</b></a></dt>
+  <dd>Sets the pointer into the buffer and a count of bytes still in the buffer.
+      Should only be used to set the pointer within the range implied by previous
+      calls to <span class="Li">&quot;PerlIO_get_ptr&quot;</span> and
+      <span class="Li">&quot;PerlIO_get_cnt&quot;</span>. The two values
+      <i>must</i> be consistent with each other (the implementation may only use
+      one or the other, or may require both).</dd>
+  <dt id="PerlIO_canset_cnt(f)"><a class="permalink" href="#PerlIO_canset_cnt(f)"><b>PerlIO_canset_cnt(f)</b></a></dt>
+  <dd>The implementation can adjust its idea of the number of bytes in the buffer.
+      Do not use this directly; use PerlIO_fast_gets.</dd>
+  <dt id="PerlIO_set_cnt(f,c)"><a class="permalink" href="#PerlIO_set_cnt(f,c)"><b>PerlIO_set_cnt(f,c)</b></a></dt>
+  <dd>Obscure - sets the count of bytes in the buffer. Deprecated. Only usable if
+      <b>PerlIO_canset_cnt()</b> returns true. Currently used only in doio.c to
+      force a count less than -1 to -1. Perhaps it should be PerlIO_set_empty or
+      similar. This call might actually do nothing if the &quot;count&quot; is
+      deduced from the pointer and a &quot;limit&quot;. Do not use this; use
+      <b>PerlIO_set_ptrcnt()</b>.</dd>
+  <dt id="PerlIO_has_base(f)"><a class="permalink" href="#PerlIO_has_base(f)"><b>PerlIO_has_base(f)</b></a></dt>
+  <dd>Returns true if the implementation has a buffer and can return a pointer to
+      the whole buffer and its size. Used by Perl for <b>-T</b> / <b>-B</b> tests.
+      Other uses would be very obscure...</dd>
+  <dt id="PerlIO_get_base(f)"><a class="permalink" href="#PerlIO_get_base(f)"><b>PerlIO_get_base(f)</b></a></dt>
+  <dd>Returns the *start* of the buffer. Access positive offsets in the buffer
+      only, up to the value returned by <b>PerlIO_get_bufsiz()</b>.</dd>
+  <dt id="PerlIO_get_bufsiz(f)"><a class="permalink" href="#PerlIO_get_bufsiz(f)"><b>PerlIO_get_bufsiz(f)</b></a></dt>
+  <dd>Returns the *total number of bytes* in the buffer. This is neither the
+      number that can be read, nor the amount of memory allocated to the buffer.
+      Rather, it is what the operating system and/or implementation happened to
+      <span class="Li">read()</span> (or whatever) the last time I/O was
+      requested.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Other_Functions'><a class='permalink' href='#Other_Functions'>Other Functions</a></h2>
+<dl class="Bl-tag">
+  <dt id="PerlIO_apply_layers(aTHX_"><a class="permalink" href="#PerlIO_apply_layers(aTHX_">PerlIO_apply_layers(aTHX_
+    f,mode,layers)</a></dt>
+  <dd>The new interface to the USE_PERLIO implementation. The layers
+      &quot;:crlf&quot; and &quot;:raw&quot; are the only ones allowed for other
+      implementations, and those are silently ignored. (As of perl5.8
+      &quot;:raw&quot; is deprecated.) Use <b>PerlIO_binmode()</b> below for the
+      portable case.</dd>
+  <dt id="PerlIO_binmode(aTHX_"><a class="permalink" href="#PerlIO_binmode(aTHX_">PerlIO_binmode(aTHX_
+    f,ptype,imode,layers)</a></dt>
+  <dd>The hook used by Perl's <span class="Li">&quot;binmode&quot;</span>
+      operator. <b>ptype</b> is Perl's character for the type of I/O:</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>'&lt;' read</dt>
+  <dd></dd>
+  <dt>'&gt;' write</dt>
+  <dd></dd>
+  <dt>'+' read/write</dt>
+  <dd></dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<p class="Pp"><b>imode</b> is <span class="Li">&quot;O_BINARY&quot;</span> or
+    <span class="Li">&quot;O_TEXT&quot;</span>.</p>
+<p class="Pp"><b>layers</b> is a string of layers to apply; only
+    &quot;:crlf&quot; makes sense in the non-USE_PERLIO case. (As of perl5.8
+    &quot;:raw&quot; is deprecated in favor of passing NULL.)</p>
+<p class="Pp">Portable cases are:</p>
+<pre>    PerlIO_binmode(aTHX_ f,ptype,O_BINARY,NULL);
+and
+    PerlIO_binmode(aTHX_ f,ptype,O_TEXT,&quot;:crlf&quot;);</pre>
+<p class="Pp">On Unix, these calls probably have no effect whatsoever. Elsewhere,
+    they alter &quot;\n&quot; to CR,LF translation and possibly cause a special
+    text &quot;end of file&quot; indicator to be written or honored on read.
+    The effect of making the call after performing any I/O on the handle depends
+    on the implementation. (It might be ignored, affect data that is already
+    buffered, or only apply to subsequent data.)</p>
+</div>
+<dl class="Bl-tag">
+  <dt id="PerlIO_debug(fmt,...)"><a class="permalink" href="#PerlIO_debug(fmt,...)">PerlIO_debug(fmt,...)</a></dt>
+  <dd>PerlIO_debug is a <b>printf()</b>-like function that can be used for
+      debugging. It has no return value. Its main use is inside PerlIO, where
+      using real printf, <b>warn()</b>, etc., would recursively call PerlIO and
+      cause problems.
+    <p class="Pp">PerlIO_debug writes to the file named by
+        <span class="Li">$ENV</span>{'PERLIO_DEBUG'}, or defaults to stderr if
+        the environment variable is not defined. Typical use might be:</p>
+        <pre>Bourne shells (sh, ksh, bash, zsh, ash, ...):
+ PERLIO_DEBUG=/tmp/perliodebug.log ./perl -Di somescript some args
+Csh/Tcsh:
+ setenv PERLIO_DEBUG /tmp/perliodebug.log
+ ./perl -Di somescript some args
+If you have the &quot;env&quot; utility:
+ env PERLIO_DEBUG=/tmp/perliodebug.log ./perl -Di somescript args
+Win32:
+ set PERLIO_DEBUG=perliodebug.log
+ perl -Di somescript some args
+</pre>
+    <p class="Pp">On a Perl built without
+        <span class="Li">&quot;-DDEBUGGING&quot;</span>, or when the
+        <span class="Li">&quot;-Di&quot;</span> command-line switch is not
+        specified, or under taint mode, <b>PerlIO_debug()</b> is a no-op.</p>
+  </dd>
+</dl>
+</section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>Version:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#Fast_Get_Interface">Fast Get Interface</a></li>
+        
+            <li><a href="#Other_Functions">Other Functions</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/perlapio.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlapio.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

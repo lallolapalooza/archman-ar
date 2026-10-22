@@ -1,0 +1,237 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">JSON(3pm)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "JSON::PP Documentation",
+  "sections": [
+    {
+      "heading": "Data Types",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "The following are valid JSON data types:\n\nArrays, Booleans (true/false), Null, Numbers, Objects, Strings."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note that the JSON specification does not support Perl's undef values. JSON::PP will map undefined values to JSON null."
+        }
+      ]
+    },
+    {
+      "heading": "Numbers",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "JSON numbers are represented by Perl scalars of type 'SCALAR' that are not strings and that can be converted to numbers, such as 1, -2.3, or 4e5."
+        },
+        {
+          "type": "paragraph",
+          "text": "Note that the conversion rules that JSON::PP uses are the same as Perl's (so they might differ to other languages). Also, your Perl interpreter might expose extensions to the floating point numbers of your platform, such as infinities or NaN's - these cannot be represented in JSON, and it is an error to pass those in."
+        },
+        {
+          "type": "paragraph",
+          "text": "JSON::PP backend modules trust what you pass to the \"encode\" method (or \"encode_json\" function) is a clean, validated data structure with values that can be represented as valid JSON values only, because it's not from an external data source (as opposed to JSON texts you pass to \"decode\" or \"decode_json\", which JSON backends consider tainted and don't trust). As JSON backends don't know exactly what you and consumers of your JSON texts want the unexpected values to be (you may want to convert them into null, or to stringify them with or without normalisation (string representation of infinities/NaN may vary depending on platforms), or to croak without conversion), you're advised to do what you and your consumers need before you encode, and also not to numify values that may start with values that look like a number (including infinities/NaN), without validating."
+        }
+      ]
+    },
+    {
+      "heading": "OBJECT SERIALISATION",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "As JSON cannot directly represent Perl objects, you have to choose between a pure JSON representation (without the ability to deserialise the object automatically again), and a nonstandard extension to the JSON syntax, tagged values."
+        },
+        {
+          "type": "paragraph",
+          "text": "SERIALISATION"
+        },
+        {
+          "type": "paragraph",
+          "text": "What happens when this module encounters a Perl object depends on the \"allow_blessed\", \"convert_blessed\" and \"allow_tags\" settings, which are used in this order:"
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "1. \"allow_tags\" is enabled and the object has a \"FREEZE\" method.",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "In this case, \"JSON\" creates a tagged JSON value, using a nonstandard extension to the JSON syntax."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "This works by invoking the \"FREEZE\" method on the object, with the first argument being the object to serialise, and the second argument being the constant string \"JSON\" to distinguish it from other serialisers."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "The \"FREEZE\" method can return any number of values (i.e. zero or more). These values and the package/classname of the object will then be encoded as a tagged JSON value in the following format:"
+                },
+                {
+                  "type": "code",
+                  "text": "(\"classname\")[FREEZE return values...]"
+                },
+                {
+                  "type": "paragraph",
+                  "text": "e.g.:"
+                },
+                {
+                  "type": "code",
+                  "text": "(\"URI\")[\\\"http://www.google.com/\\\"]\n(\"MyDate\")[2013,10,29]\n(\"ImageData::JPEG\")[\\\"Z3...VlCg==\\\"]"
+                },
+                {
+                  "type": "paragraph",
+                  "text": "For example, the hypothetical \"My::Object\" \"FREEZE\" method might use the objects \"type\" and \"id\" members to encode the object:"
+                },
+                {
+                  "type": "code",
+                  "text": "sub My::Object::FREEZE {\n   my ($self, $serialiser) = @_;\n   ($self->{type}, $self->{id})\n}"
+                }
+              ]
+            },
+            {
+              "term": "2. \"convert_blessed\" is enabled and the object has a \"TO_JSON\" method.",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "In this case, the \"TO_JSON\" method of the object is invoked in scalar context. It must return a single scalar that can be directly encoded into JSON. This scalar replaces the object in the JSON text."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "For example, the following \"TO_JSON\" method will convert all URI objects to JSON strings when serialised. The fact that these values originally were URI objects is lost."
+                },
+                {
+                  "type": "code",
+                  "text": "sub URI::TO_JSON {\n   my ($uri) = @_; # Corrected from $self to $uri for clarity\n   $uri->as_string\n}"
+                }
+              ]
+            },
+            {
+              "term": "3. \"allow_blessed\" is enabled.",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "The object will be serialised as a JSON null value."
+                }
+              ]
+            },
+            {
+              "term": "4. none of the above",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "If none of the settings are enabled or the respective methods are missing, this module throws an exception."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "DESERIALISATION"
+        },
+        {
+          "type": "paragraph",
+          "text": "For deserialisation there are only two cases to consider: either nonstandard tagging was used, in which case \"allow_tags\" decides, or objects cannot be automatically be deserialised, in which case you can use postprocessing or the \"filter_json_object\" or \"filter_json_single_key_object\" callbacks to get some real objects our of your JSON."
+        },
+        {
+          "type": "paragraph",
+          "text": "This section only considers the tagged value case: a tagged JSON object is encountered during decoding and \"allow_tags\" is disabled, a parse error will result (as if tagged values were not part of the grammar)."
+        },
+        {
+          "type": "paragraph",
+          "text": "If \"allow_tags\" is enabled, this module will look up the \"THAW\" method of the package/classname used during serialisation (it will not attempt to load the package as a Perl module). If there is no such method, the decoding will fail with an error."
+        },
+        {
+          "type": "paragraph",
+          "text": "Otherwise, the \"THAW\" method is invoked with the classname as first argument, the constant string \"JSON\" as second argument, and all the values from the JSON array (the values originally returned by the \"FREEZE\" method) as remaining arguments."
+        },
+        {
+          "type": "paragraph",
+          "text": "The method must then return the object. While technically you can return any Perl scalar, you might have to enable the \"allow_nonref\" setting to make that work in all cases, so better return an actual blessed reference."
+        },
+        {
+          "type": "paragraph",
+          "text": "As an example, let's implement a \"THAW\" function that regenerates the \"My::Object\" from the \"FREEZE\" example earlier:"
+        },
+        {
+          "type": "code",
+          "text": "sub My::Object::THAW {\n   my ($class, $serialiser, $type, $id) = @_; # Corrected from $self to $class for clarity\n   $class->new (type => $type, id => $id)\n}"
+        }
+      ]
+    },
+    {
+      "heading": "ENCODING/CODESET FLAG NOTES",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "This section is taken from JSON::XS."
+        },
+        {
+          "type": "paragraph",
+          "text": "The interested reader might have seen a number of flags that signify encodings or codesets - \"utf8\", \"latin1\" and \"ascii\". There seems to be some confusion on what these do, so here is a short comparison:"
+        },
+        {
+          "type": "paragraph",
+          "text": "\"utf8\" controls whether the JSON text created by \"encode\" (and expected by \"decode\") is UTF-8 encoded or not, while \"latin1\" and \"ascii\" only control whether \"encode\" escapes character values outside their respective codeset range. Neither of these flags conflict with each other, although some combinations make less sense than others."
+        },
+        {
+          "type": "paragraph",
+          "text": "Care has been taken to make all flags symmetrical with respect to \"encode\" and \"decode\", that is, texts encoded with any combination of these flag values will be correctly decoded when the same flags are used - in general, if you use different flag settings while encoding vs. when decoding you likely have a bug somewhere."
+        },
+        {
+          "type": "paragraph",
+          "text": "Below comes a verbose discussion of these flags. Note that a \"codeset\" is simply an abstract set of character-codepoint pairs, while an encoding takes those codepoint numbers and *encodes* them, in our case into octets. Unicode is (among other things) a codeset, UTF-8 is an encoding, and ISO-8859-1 (= latin 1) and ASCII are both codesets *and* encodings at the same time, which can be confusing."
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "\"utf8\" flag disabled",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "When \"utf8\" is disabled (the default), then \"encode\"/\"decode\" generate and expect Unicode strings, that is, characters with high ordinal Unicode values (> 255) will be encoded as such characters, and likewise such characters are decoded as-is, no changes to them will be done, except \"(re-)interpreting\" them as Unicode codepoints or Unicode characters, respectively (to Perl, these are the same thing in strings unless you do funny/weird/dumb stuff)."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "This is useful when you want to do the encoding yourself (e.g. when you want to have UTF-16 encoded JSON texts) or when some other layer does the encoding for you (for example, when printing to a terminal using a filehandle that transparently encodes to UTF-8 you certainly do NOT want to UTF-8 encode your data first and have Perl encode it another time)."
+                }
+              ]
+            },
+            {
+              "term": "\"utf8\" flag enabled",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "If the \"utf8\"-flag is enabled, \"encode\"/\"decode\" will encode all characters using the corresponding UTF-8 multi-byte sequence, and will expect your input strings to be encoded as UTF-8, that is, no \"character\" of the input string must have any value > 255, as UTF-8 does not allow that."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "The \"utf8\" flag therefore switches between two modes: disabled means you will get a Unicode string in Perl, enabled means you get an UTF-8 encoded octet/binary string in Perl."
+                }
+              ]
+            },
+            {
+              "term": "\"latin1\" or \"ascii\" flags enabled",
+              "description": [
+                {
+                  "type": "paragraph",
+                  "text": "With \"latin1\" (or \"ascii\") enabled, \"encode\" will escape characters with ordinal values > 255 (> 127 with \"ascii\") and encode the remaining characters as specified by the \"utf8\" flag."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "If \"utf8\" is disabled, then the result is also correctly encoded in those character sets (as both are proper subsets of Unicode, meaning that a Unicode string with all character values < 256 is the same thing as a ISO-8859-1 string, and a Unicode string with all character values < 128 is the same thing as an ASCII string in Perl)."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "If \"utf8\" is enabled, you still get a correct UTF-8-encoded string, regardless of these flags, just some more characters will be escaped using"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

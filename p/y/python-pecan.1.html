@@ -1,0 +1,2222 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">python-pecan(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/python-pecan/">python-pecan</a></p>
+<p class="lic">التراخيص: BSD</p>
+<link rel="stylesheet" href="basic.css">
+يطلب العميل <b>/hello.txt</b> أو يطلب
+    text/plain عبر ترويسة <b>Accept</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>@expose('html_template.mako')</pre>
+</div>
+</div>
+<p class="Pp">يخبر الثالث Pecan باستخدام ملف قالب <b>html_template.mako</b>
+    عندما يطلب العميل <b>/hello.html</b>. إذا طلب العميل
+    <b>/hello</b>، فسيستخدم Pecan نوع المحتوى <b>text/html</b> افتراضيًا؛ في
+    غياب نوع محتوى صريح، يفترض Pecan أن العميل يريد HTML.</p>
+<p class="Pp"><b>انظر أيضًا:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd><i>pecan.decorators -- Pecan Decorators</i></dd>
+</dl>
+</div>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='تحديد_مقاطع_المسار_الصريحة'><a class='permalink' href='#تحديد_مقاطع_المسار_الصريحة'>تحديد مقاطع المسار الصريحة</a></h2>
+<p class="Pp">في بعض الأحيان، قد ترغب في استخدام مقطع مسار في التوجيه الخاص بك
+    لا يعمل مع نهج Pecan التصريحي للتوجيه بسبب القيود في بناء جملة Python. على
+    سبيل المثال، إذا كنت ترغب في التوجيه لمسار يتضمن واصلات، مثل <b>/some-path/</b>،
+    فإن ما يلي <i>ليس</i> صالحًا في Python:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>class RootController(object):
+    @pecan.expose()
+    def some-path(self):
+        return dict()</pre>
+</div>
+</div>
+<p class="Pp">لتجاوز ذلك، يسمح لك Pecan بتحديد مقطع مسار صريح في مزخرف
+    <i>expose()</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>class RootController(object):
+    @pecan.expose(route='some-path')
+    def some_path(self):
+        return dict()</pre>
+</div>
+</div>
+<p class="Pp">في هذا المثال، سيستجيب تطبيق Pecan برمز <b>HTTP 200</b>
+    للطلبات التي تم إجراؤها على <b>/some-path/</b>، ولكن الطلبات التي تم
+    إجراؤها على <b>/some_path/</b> ستؤدي إلى <b>HTTP 404</b>.</p>
+<p class="Pp">يمكن أيضًا استخدام <i>route()</i> بشكل صريح كبديل للوسيط
+    <b>route</b> في <i>expose()</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>class RootController(object):
+    @pecan.expose()
+    def some_path(self):
+        return dict()
+pecan.route('some-path', RootController.some_path)</pre>
+</div>
+</div>
+<p class="Pp">يمكن معالجة التوجيه إلى وحدات التحكم الفرعية بالمثل عن طريق استخدام
+    <i>route()</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>class ChildController(object):
+    @pecan.expose()
+    def child(self):
+        return dict()
+class RootController(object):
+    pass
+pecan.route(RootController, 'child-path', ChildController())</pre>
+</div>
+</div>
+<p class="Pp">في هذا المثال، سيستجيب تطبيق Pecan برمز <b>HTTP 200</b>
+    للطلبات التي تم إجراؤها على <b>/child-path/child/</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='التوجيه_بناء_على_طريقة_الطلب'><a class='permalink' href='#التوجيه_بناء_على_طريقة_الطلب'>التوجيه بناء على طريقة الطلب</a></h2>
+<p class="Pp">يوفر الوسيط <b>generic</b> لـ <i>expose()</i> دعمًا لتجاوز عناوين
+    URL بناءً على طريقة الطلب. في المثال التالي، يمكن خدمة نفس عنوان URL بواسطة
+    طريقتين مختلفتين (واحدة لمعالجة HTTP <b>GET</b>، وأخرى لـ HTTP
+    <b>POST</b>) باستخدام <i>وحدات التحكم العامة</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+class RootController(object):
+    # HTTP GET /
+    @expose(generic=True, template='json')
+    def index(self):
+        return dict()
+    # HTTP POST /
+    @index.when(method='POST', template='json')
+    def index_POST(self, **kw):
+        uuid = create_something()
+        return dict(uuid=uuid)</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='خوارزمية_توجيه_Pecan'><a class='permalink' href='#خوارزمية_توجيه_Pecan'>خوارزمية توجيه Pecan</a></h2>
+<p class="Pp">في بعض الأحيان، لا يكون التوجيه القياسي للكائنات كافيًا لتوجيه عنوان
+    URL بشكل صحيح إلى وحدة تحكم. يوفر Pecan عدة طرق لقطع نظام توجيه الكائنات
+    لمعالجة عناوين URL بتحكم أكبر، بما في ذلك الأساليب الخاصة <b>_lookup()</b> و
+    <b>_default()</b> و <b>_route()</b>. يمنح تعريف هذه الأساليب على كائنات
+    وحدة التحكم الخاصة بك مرونة إضافية لمعالجة كل أو جزء من عنوان URL.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='التوجيه_إلى_وحدات_التحكم_الفرعية_باستخدام_&lt;b&gt;_lookup&lt;/b&gt;'><a class='permalink' href='#التوجيه_إلى_وحدات_التحكم_الفرعية_باستخدام_&lt;b&gt;_lookup&lt;/b&gt;'>التوجيه إلى وحدات التحكم الفرعية باستخدام <b>_lookup</b></a></h2>
+<p class="Pp">توفر الطريقة الخاصة <b>_lookup()</b> طريقة لمعالجة جزء من عنوان URL،
+    ثم إرجاع كائن وحدة تحكم جديد للتوجيه إليه للباقي.</p>
+<p class="Pp">قد تقبل الطريقة <b>_lookup()</b> وسيطًا واحدًا أو أكثر، وهي مقاطع
+    من مسار عنوان URL للمعالجة (مقسومة على <b>/</b>). يجب أن تأخذ <b>_lookup()</b>
+    أيضًا وسائط موضعية متغيرة تمثل بقية المسار، ويجب أن تتضمن أي جزء من المسار
+    لا تعالجه في قيمتها المرجعة. يستخدم المثال أدناه قائمة <b>*remainder</b>
+    التي سيتم تمريرها إلى وحدة التحكم المرجعة عندما تستمر خوارزمية توجيه الكائن.
+</p>
+<p class="Pp">بالإضافة إلى استخدامها لإنشاء وحدات تحكم ديناميكيًا، يتم استدعاء
+    <b>_lookup()</b> كملاذ أخير، عندما لا تتطابق أي طريقة وحدة تحكم أخرى مع
+    عنوان URL ولا توجد طريقة <b>_default()</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose, abort
+from somelib import get_student_by_name
+class StudentController(object):
+    def __init__(self, student):
+        self.student = student
+    @expose()
+    def name(self):
+        return self.student.name
+class RootController(object):
+    @expose()
+    def _lookup(self, primary_key, *remainder):
+        student = get_student_by_primary_key(primary_key)
+        if student:
+            return StudentController(student), remainder
+        else:
+            abort(404)</pre>
+</div>
+</div>
+<p class="Pp">سيؤدي طلب HTTP GET إلى <b>/8/name</b> إلى إرجاع اسم الطالب حيث
+    <b>primary_key == 8</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='الاحتياط_باستخدام_&lt;b&gt;_default&lt;/b&gt;'><a class='permalink' href='#الاحتياط_باستخدام_&lt;b&gt;_default&lt;/b&gt;'>الاحتياط باستخدام <b>_default</b></a></h2>
+<p class="Pp">يتم استدعاء الطريقة <b>_default()</b> كملاذ أخير عندما لا تتطابق أي
+    طرق وحدة تحكم أخرى مع عنوان URL عبر توجيه الكائنات القياسي.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+class RootController(object):
+    @expose()
+    def english(self):
+        return 'hello'
+    @expose()
+    def french(self):
+        return 'bonjour'
+    @expose()
+    def _default(self):
+        return 'I cannot say hello in that language'</pre>
+</div>
+</div>
+<p class="Pp">في المثال أعلاه، سيتم توجيه طلب إلى <b>/spanish</b> إلى
+    <b>RootController._default()</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='تعريف_التوجيه_المخصص_باستخدام_&lt;b&gt;_route&lt;/b&gt;'><a class='permalink' href='#تعريف_التوجيه_المخصص_باستخدام_&lt;b&gt;_route&lt;/b&gt;'>تعريف التوجيه المخصص باستخدام <b>_route</b></a></h2>
+<p class="Pp">تسمح الطريقة <b>_route()</b> لوحدة تحكم بتجاوز آلية توجيه Pecan بالكامل.
+    يستخدم Pecan نفسه الطريقة <b>_route()</b> لتنفيذ <i>RestController</i> الخاص
+    به. إذا كنت ترغب في تصميم نظام توجيه بديل فوق Pecan، فإن تعريف فئة وحدة
+    تحكم أساسية تحدد طريقة <b>_route()</b> سيمكنك من الحصول على تحكم كامل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='التفاعل_مع_كائن_الطلب_والاستجابة'><a class='permalink' href='#التفاعل_مع_كائن_الطلب_والاستجابة'>التفاعل مع كائن الطلب والاستجابة</a></h1>
+<p class="Pp">لكل طلب HTTP، يحتفظ Pecan <i>مرجع محلي للخيط</i> لكائن
+    الطلب والاستجابة، <b>pecan.request</b> و <b>pecan.response</b>. هذه
+    مثيلات لـ <b>pecan.Request</b> و <b>pecan.Response</b> على التوالي، ويمكن
+    التفاعل معها من داخل رمز وحدة تحكم Pecan:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>@pecan.expose()
+def login(self):
+    assert pecan.request.path == '/login'
+    username = pecan.request.POST.get('username')
+    password = pecan.request.POST.get('password')
+    pecan.response.status = 403
+    pecan.response.text = 'Bad Login!'</pre>
+</div>
+</div>
+<p class="Pp">بينما يقوم Pecan بتجريد الكثير من الحاجة إلى التفاعل مع هذه الكائنات
+    مباشرة، قد تكون هناك مواقف ترغب فيها في الوصول إليها، مثل:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>فحص مكونات URI</li>
+  <li>تحديد جوانب الطلب، مثل عنوان IP للمستخدم، أو ترويسة المرجع</li>
+  <li>تعيين ترويسات استجابة محددة</li>
+  <li>عرض جسم استجابة يدويًا</li>
+</ul>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='تحديد_استجابة_مخصصة'><a class='permalink' href='#تحديد_استجابة_مخصصة'>تحديد استجابة مخصصة</a></h2>
+<p class="Pp">قم بتعيين رمز استجابة HTTP محدد (مثل <b>203 معلومات غير موثوقة</b>)
+    عن طريق تعديل السمة <b>status</b> لكائن الاستجابة.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose, response
+class RootController(object):
+    @expose('json')
+    def hello(self):
+        response.status = 203
+        return {'foo': 'bar'}</pre>
+</div>
+</div>
+<p class="Pp">استخدم وظيفة الأداة المساعدة <i>abort()</i> لإطلاق أخطاء HTTP.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose, abort
+class RootController(object):
+    @expose('json')
+    def hello(self):
+        abort(404)</pre>
+</div>
+</div>
+<p class="Pp"><i>abort()</i> يطلق مثيلًا لـ <b>WSGIHTTPException</b> الذي
+    يستخدمه Pecan لعرض أجسام استجابة افتراضية لأخطاء HTTP. يتم تخزين هذا الاستثناء
+    في بيئة طلب WSGI في <b>pecan.original_exception</b>، حيث يمكن الوصول إليه لاحقًا
+    في دورة الطلب (بواسطة، على سبيل المثال، برامج وسيطة أخرى أو <i>مستندات خطأ
+    مخصصة</i>).</p>
+<p class="Pp">إذا كنت ترغب في إرجاع استجابة صريحة، يمكنك القيام بذلك باستخدام
+    <i>Response</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose, Response
+class RootController(object):
+    @expose()
+    def hello(self):
+        return Response('Hello, World!', 202)</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='توسيع_كائنات_الطلب_والاستجابة_في_Pecan'><a class='permalink' href='#توسيع_كائنات_الطلب_والاستجابة_في_Pecan'>توسيع كائنات الطلب والاستجابة في Pecan</a></h2>
+<p class="Pp">تطبيقات الطلب والاستجابة التي يوفرها WebOb قوية، ولكن في بعض الأحيان،
+    قد يكون من المفيد توسيع سلوكيات خاصة بالتطبيق على طلبك واستجابتك (مثل التحليل
+    المتخصص لترويسات الطلب أو تسلسل جسم الاستجابة المخصص). للقيام بذلك، قم بتعريف
+    فئات مخصصة ترث من <b>pecan.Request</b> و <b>pecan.Response</b> على التوالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>class MyRequest(pecan.Request):
+    pass
+class MyResponse(pecan.Response):
+    pass</pre>
+</div>
+</div>
+<p class="Pp">وقم بتعديل تكوين التطبيق الخاص بك لاستخدامها:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from myproject import MyRequest, MyResponse
+app = {
+    'root' : 'project.controllers.root.RootController',
+    'modules' : ['project'],
+    'static_root'   : '%(confdir)s/public',
+    'template_path' : '%(confdir)s/project/templates',
+    'request_cls': MyRequest,
+    'response_cls': MyResponse
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2<section class="Sh">
+<h1 class="Sh" id='SECURE'><a class='permalink' href='#SECURE'>SECURE</a></h1>
+<p class="Pp">The <i>secure()</i> decorator is used to protect controller methods
+    and classes. This decorator takes one argument: the name of the method (as a
+    string) which should be called to determine if the request should proceed.
+    If the method returns <i>True</i>, the request proceeds; otherwise, an
+    <i>HTTPUnauthorized</i> exception is raised.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.secure import secure
+class RootController(object):
+    def is_admin(self):
+        return True
+    @secure('is_admin')
+    @expose()
+    def index(self):
+        return 'Admin Page'</pre>
+</div>
+</div>
+<p class="Pp">In the example above, <i>is_admin()</i> is called when the user
+    attempts to access the <i>index()</i> method. If <i>is_admin()</i> returns
+    <i>False</i>, the user will be presented with a 401 Unauthorized error.</p>
+<p class="Pp">You can also use <i>secure()</i> to secure entire controller
+    classes. When used to decorate a class, it will check the security method
+    before entering any method within that controller.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.secure import secure
+class SecureController(object):
+    def check_access(self):
+        return True
+    @expose()
+    def index(self):
+        return 'Welcome'
+    @expose()
+    def another_page(self):
+        return 'Another Page'
+root = secure(SecureController(), 'check_access')</pre>
+</div>
+</div>
+<p class="Pp">In this example, the <i>check_access()</i> method will be called
+    before either <i>index()</i> or <i>another_page()</i> are invoked.</p>
+<p class="Pp">The <i>secure()</i> method also accepts a function argument. When
+    passing a function, make sure that the function is imported from another
+    file or defined in the same file before the class definition, otherwise you
+    will likely get error during module import.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.secure import secure
+from myapp.auth import user_authenitcated
+class RootController(object):
+    @secure(user_authenticated)
+    @expose()
+    def index(self):
+        return 'Logged in'</pre>
+</div>
+</div>
+<p class="Pp">You can also use the <i>secure()</i> method to change the behavior
+    of a <i>SecureController</i>. Decorating a method or wrapping a
+    subcontroller tells Pecan to use another security function other than the
+    default controller method. This is useful for situations where you want a
+    different level or type of security.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.secure import SecureController, secure
+from myapp.auth import user_authenticated, admin_user
+class ApiController(object):
+    pass
+class RootController(SecureController):
+    @classmethod
+    def check_permissions(cls):
+        return user_authenticated()
+    @classmethod
+    def check_api_permissions(cls):
+        return admin_user()
+    @expose()
+    def index(self):
+        return 'logged in user'
+    api = secure(ApiController(), 'check_api_permissions')</pre>
+</div>
+</div>
+<p class="Pp">In the example above, pecan will <i>only</i> call
+    <b>admin_user()</b> when a request is made for <b>/api/</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Multiple_Secure_Controllers'><a class='permalink' href='#Multiple_Secure_Controllers'>Multiple   Secure Controllers</a></h2>
+<p class="Pp">Secure controllers can be nested to provide increasing levels of
+    security on subcontrollers. In the example below, when a request is made for
+    <b>/admin/index/</b>, Pecan first calls <i>check_permissions()</i> on the
+    <b>RootController</b> and then calls <i>check_permissions()</i> on the
+    <b>AdminController</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.secure import SecureController
+from myapp.auth import user_logged_in, is_admin
+class AdminController(SecureController):
+    @classmethod
+    def check_permissions(cls):
+        return is_admin()
+    @expose()
+    def index(self):
+        return 'admin dashboard'
+class RootController(SecureController):
+    @classmethod
+    def check_permissions(cls):
+        return user_logged_in
+    @expose()
+    def index(self):
+        return 'user dashboard'</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PECAN_HOOKS'><a class='permalink' href='#PECAN_HOOKS'>PECAN   HOOKS</a></h1>
+<p class="Pp">Although it is easy to use WSGI middleware with Pecan, it can be
+    hard (sometimes impossible) to have access to Pecan's internals from within
+    middleware. Pecan Hooks are a way to interact with the framework, without
+    having to write separate middleware.</p>
+<p class="Pp">Hooks allow you to execute code at key points throughout the life
+    cycle of your request:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><i>on_route()</i>: called before Pecan attempts to route a request to a
+      controller</li>
+  <li><i>before()</i>: called after routing, but before controller code is
+    run</li>
+  <li><i>after()</i>: called after controller code has been run</li>
+  <li><i>on_error()</i>: called when a request generates an exception</li>
+</ul>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Implementating_a_Pecan_Hook'><a class='permalink' href='#Implementating_a_Pecan_Hook'>Implementating   a Pecan Hook</a></h2>
+<p class="Pp">In the below example, a simple hook will gather some information
+    about the request and print it to <b>stdout</b>.</p>
+<p class="Pp">Your hook implementation needs to import <i>PecanHook</i> so it
+    can be used as a base class. From there, you'll want to override the
+    <i>on_route()</i>, <i>before()</i>, <i>after()</i>, or <i>on_error()</i>
+    methods to define behavior.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan.hooks import PecanHook
+class SimpleHook(PecanHook):
+    def before(self, state):
+        print &quot;\nabout to enter the controller...&quot;
+    def after(self, state):
+        print &quot;\nmethod: \t %s&quot; % state.request.method
+        print &quot;\nresponse: \t %s&quot; % state.response.status</pre>
+</div>
+</div>
+<p class="Pp"><i>on_route()</i>, <i>before()</i>, and <i>after()</i> are each
+    passed a shared state object which includes useful information, such as the
+    request and response objects, and which controller was selected by Pecan's
+    routing:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan.hooks import PecanHook
+import webob
+import inspect
+class SimpleHook(PecanHook):
+    def on_route(self, state):
+        print &quot;\nabout to map the URL to a Python method (controller)...&quot;
+        assert state.controller is None  # Routing hasn't occurred yet
+        assert isinstance(state.request, webob.Request)
+        assert isinstance(state.response, webob.Response)
+        assert isinstance(state.hooks, list)  # A list of hooks to apply
+    def before(self, state):
+        print &quot;\nabout to enter the controller...&quot;
+        if state.request.path == '/':
+            #
+            # `state.controller` is a reference to the actual
+            # `@pecan.expose()`-ed controller that will be routed to
+            # and used to generate the response body
+            #
+            from myapp.controllers import RootController # Assuming RootController is in myapp.controllers
+            assert state.controller.__func__ is RootController.index.__func__
+            assert isinstance(state.arguments, inspect.Arguments)
+            print state.arguments.args
+            print state.arguments.varargs
+            print state.arguments.keywords
+        assert isinstance(state.request, webob.Request)
+        assert isinstance(state.response, webob.Response)
+        assert isinstance(state.hooks, list)</pre>
+</div>
+</div>
+<p class="Pp"><i>on_error()</i> is passed a shared state object <b>and</b> the
+    original exception. If an <i>on_error()</i> handler returns a Response
+    object, this response will be returned to the end user and no furthur
+    <i>on_error()</i> hooks will be executed:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan.hooks import PecanHook
+import webob
+class CustomErrorHook(PecanHook):
+    def on_error(self, state, exc):
+        # Assuming SomeExceptionType is defined elsewhere
+        # from myapp.exceptions import SomeExceptionType
+        # if isinstance(exc, SomeExceptionType):
+        #     return webob.Response('Custom Error!', status=500)
+        pass # Placeholder for actual exception handling</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Attaching_Hooks'><a class='permalink' href='#Attaching_Hooks'>Attaching   Hooks</a></h2>
+<p class="Pp">Hooks can be attached in a project-wide manner by specifying a
+    list of hooks in your project's configuration file.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>app = {
+    'root' : 'myapp.controllers.RootController',
+    'modules': ['myapp'],
+    'static_root': '%(confdir)s/public',
+    'template_path': '%(confdir)s/templates',
+    'debug': True,
+    'hooks': lambda: [SimpleHook()] # Assuming SimpleHook is defined in the same file or imported
+}</pre>
+</div>
+</div>
+<p class="Pp">Hooks can also be applied selectively to controllers and their
+    sub-controllers using the <b>__hooks__</b> attribute on one or more
+    controllers and subclassing <i>HookController</i>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.hooks import HookController
+# Assuming SimpleHook is imported from my_hooks module
+# from my_hooks import SimpleHook
+# Placeholder for SimpleHook if not imported
+class SimpleHook:
+    def before(self, state):
+        print(&quot;\nabout to enter the controller...&quot;)
+    def after(self, state):
+        print(&quot;\nmethod: \t %s&quot; % state.request.method)
+        print(&quot;\nresponse: \t %s&quot; % state.response.status)
+class SimpleController(HookController):
+    __hooks__ = [SimpleHook()]
+    @expose('json')
+    def index(self):
+        print &quot;DO SOMETHING!&quot;
+        return dict()</pre>
+</div>
+</div>
+<p class="Pp">Now that <b>SimpleHook</b> is included, let's see what happens
+    when we run the app and browse the application from our web browser.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>pecan serve config.py
+serving on 0.0.0.0:8080 view at http://127.0.0.1:8080
+about to enter the controller...
+DO SOMETHING!
+method:      GET
+response:    200 OK</pre>
+</div>
+</div>
+<p class="Pp">Hooks can be inherited from parent class or mixins. Just make sure
+    to subclass from <i>HookController</i>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan import expose
+from pecan.hooks import PecanHook, HookController
+class ParentHook(PecanHook):
+    priority = 1
+    def before(self, state):
+        print &quot;\nabout to enter the parent controller...&quot;
+class CommonHook(PecanHook):
+    priority = 2
+    def before(self, state):
+        print &quot;\njust a common hook...&quot;
+class SubHook(PecanHook):
+    def before(self, state):
+        print &quot;\nabout to enter the subcontroller...&quot;
+class SubMixin(object):
+    __hooks__ = [SubHook()]
+# We'll use the same instance for both controllers,
+# to avoid double calls
+common = CommonHook()
+class SubController(HookController, SubMixin):
+    __hooks__ = [common]
+    @expose('json')
+    def index(self):
+        print &quot;\nI AM THE SUB!&quot;
+        return dict()
+class RootController(HookController):
+    __hooks__ = [common, ParentHook()]
+    @expose('json')
+    def index(self):
+        print &quot;\nI AM THE ROOT!&quot;
+        return dict()
+    sub = SubController()</pre>
+</div>
+</div>
+<p class="Pp">Let's see what happens when we run the app. First loading the root
+    controller:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>pecan serve config.py
+serving on 0.0.0.0:8080 view at http://127.0.0.1:8080
+GET / HTTP/1.1&quot; 200
+about to enter the parent controller...
+just a common hook
+I AM THE ROOT!</pre>
+</div>
+</div>
+<p class="Pp">Then loading the sub controller:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>pecan serve config.py
+serving on 0.0.0.0:8080 view at http://127.0.0.1:8080
+GET /sub HTTP/1.1&quot; 200
+about to enter the parent controller...
+just a common hook
+about to enter the subcontroller...
+I AM THE SUB!</pre>
+</div>
+</div>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">Make sure to set proper priority values for nested hooks
+  in order to get them executed in the desired order.</div>
+</div>
+<p class="Pp"><b>WARNING:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">Two hooks of the same type will be added/executed twice,
+  if passed as different instances to a parent and a child controller. If passed
+  as one instance variable - will be invoked once for both controllers.</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Hooks_That_Come_with_Pecan'><a class='permalink' href='#Hooks_That_Come_with_Pecan'>Hooks   That Come with Pecan</a></h2>
+<p class="Pp">Pecan includes some hooks in its core. This section will describe
+    their different uses, how to configure them, and examples of common
+    scenarios.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='RequestViewerHook'><a class='permalink' href='#RequestViewerHook'>RequestViewerHook</a></h2>
+<p class="Pp">This hook is useful for debugging purposes. It has access to every
+    attribute the <b>response</b> object has plus a few others that are specific
+    to the framework.</p>
+<p class="Pp">There are two main ways that this hook can provide information
+    about a request:</p>
+n كتطبيق
+    "WSGI application" لأنه يطبق واجهة WSGI، لذلك
+    يمكن استخدام أي خادم "متوافق مع WSGI" لتقديم تطبيقك. فيما يلي بعض الأمثلة الشائعة:
+</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><a href="http://code.google.com/p/modwsgi/" class="archmanweb-grotty-link">mod_wsgi</a></li>
+  <li><a href="http://projects.unbit.it/uwsgi/" class="archmanweb-grotty-link">uWSGI</a></li>
+  <li><a href="http://gunicorn.org/" class="archmanweb-grotty-link">Gunicorn</a></li>
+  <li><a href="http://docs.pylonsproject.org/projects/waitress/en/latest/" class="archmanweb-grotty-link">waitress</a></li>
+  <li><a href="http://cherrypy.org/" class="archmanweb-grotty-link">CherryPy</a></li>
+</ul>
+</div>
+<p class="Pp">بشكل عام، يمكن إنشاء نقطة الدخول WSGI لأي تطبيق Pecan باستخدام
+    <i>deploy()</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>from pecan.deploy import deploy
+application = deploy('/path/to/some/app/config.py')</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Considerations_for_Static_Files'><a class='permalink' href='#Considerations_for_Static_Files'>اعتبارات الملفات الثابتة</a></h2>
+<p class="Pp">تأتي Pecan مع وسيط لتقديم الملفات الثابتة (مثل CSS، Javascript،
+    الصور) والذي **لا** يوصى باستخدامه في بيئة الإنتاج.</p>
+<p class="Pp">في بيئة الإنتاج، لا تقدم Pecan ملفات الوسائط بنفسها؛ إنها تترك
+    هذه المهمة لأي خادم ويب تختاره.</p>
+<p class="Pp">لتقديم الملفات الثابتة في بيئة الإنتاج، من الأفضل فصل
+    اهتماماتك عن طريق تقديم الملفات الثابتة بشكل منفصل عن تطبيق WSGI الخاص بك
+    (لأسباب الأداء بشكل أساسي). هناك عدة طرق شائعة لتحقيق ذلك. فيما يلي اثنتان:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>إعداد خادم وكيل (مثل <a href="http://nginx.org/en" class="archmanweb-grotty-link">nginx</a>،
+      <a href="http://www.cherokee-project.com" class="archmanweb-grotty-link">cherokee</a>،
+      <i>CherryPy</i>، أو <a href="http://www.lighttpd.net/" class="archmanweb-grotty-link">lighttpd</a>)
+      لتقديم الملفات الثابتة وتوجيه طلبات التطبيق إلى تطبيق WSGI الخاص بك:</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<p class="Pp">للبدء، تفضل بالاطلاع على وثائق <i>التثبيت والإعداد</i>
+    لـ mod_wsgi.</p>
+
+<p class="Pp">الخطوة الأولى هي إنشاء ملف <b>.wsgi</b> الذي سيستخدمه mod_wsgi
+    كنقطة دخول لتطبيقك:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># /var/www/simpleapp/app.wsgi
+from pecan.deploy import deploy
+application = deploy('/var/www/simpleapp/config.py')</pre>
+</div>
+</div>
+<p class="Pp">بعد ذلك، أضف إعداد Apache لتطبيقك. إليك مثال بسيط:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<p class="Pp">أخيرًا، أعد تشغيل Apache وجرب.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='uWSGI'><a class='permalink' href='#uWSGI'>uWSGI</a></h2>
+
+<p class="Pp">تشغيل تطبيقات Pecan باستخدام uWSGI أمر سهل:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<p class="Pp">تشغيل تطبيق Pecan على Gunicorn بسيط. دعنا نمر عبره باستخدام مشروع
+    Pecan الافتراضي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<p class="Pp">الأمثلة التالية موجهة نحو استخدام CherryPy كخادم مسؤول عن
+    التعامل مع تطبيق Pecan جنبًا إلى جنب مع تقديم الملفات الثابتة.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ pip install cherrypy
+$ pecan create simpleapp &amp;&amp; cd simpleapp
+$ python setup.py develop</pre>
+</div>
+</div>
+<p class="Pp">للتشغيل مع CherryPy، النهج الأسهل هو إنشاء برنامج نصي في جذر
+    المشروع (بجانب <b>setup.py</b>)، حتى نتمكن من وصف كيفية تقديم مثال التطبيق
+    الخاص بنا. إليك كيف يبدو البرنامج النصي (المسمى <b>run.py</b>):</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>import os
+import cherrypy
+from cheroot import wsgi
+from cheroot.wsgi import PathInfoDispatcher
+from pecan.deploy import deploy
+simpleapp_wsgi_app = deploy('/path/to/production_config.py')
+public_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'public'))
+# A dummy class for our Root object
+# necessary for some CherryPy machinery
+class Root(object):
+    pass
+def make_static_config(static_dir_name):
+    &quot;&quot;&quot;
+    All custom static configurations are set here, since most are common, it
+    makes sense to generate them just once.
+    &quot;&quot;&quot;
+    static_path = os.path.join('/', static_dir_name)
+    path = os.path.join(public_path, static_dir_name)
+    configuration = {
+        static_path: {
+            'tools.staticdir.on': True,
+            'tools.staticdir.dir': path
+        }
+    }
+    return cherrypy.tree.mount(Root(), '/', config=configuration)
+# Assuming your app has media on different paths, like 'css', and 'images'
+application = PathInfoDispatcher({
+    '/': simpleapp_wsgi_app,
+    '/css': make_static_config('css'),
+    '/images': make_static_config('images')
+})
+server = wsgi.Server(('0.0.0.0', 8080), application, server_name='simpleapp')
+try:
+    server.start()
+except KeyboardInterrupt:
+    print(&quot;Terminating server...&quot;)
+    server.stop()</pre>
+</div>
+</div>
+<p class="Pp">لبدء تشغيل الخادم، ما عليك سوى استدعائه باستخدام منفذ Python
+  التنفيذي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+
+<section class="Ss">
+<h2 class="Ss" id='Configuring_Logging'><a class='permalink' href='#Configuring_Logging'>تكوين التسجيل</a></h2>
+<p class="Pp">يتم توفير تكوين تسجيل نموذجي مع مشروع البدء السريع المقدم في
+    <i>إنشاء أول تطبيق Pecan لك</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ pecan create myapp</pre>
+</div>
+</div>
+<p class="Pp">يعرف التكوين الافتراضي معالجًا واحدًا ومسجلين.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># myapp/config.py
+app = { ... }
+server = { ... }
+logging = {
+    'root' : {'level': 'INFO', 'handlers': ['console']},
+    'loggers': {
+        'myapp': {'level': 'DEBUG', 'handlers': ['console']}
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        }
+    },
+    'formatters': {
+        'simple': {
+            'format': ('%(asctime)s %(levelname)-5.5s [%(name)s]'
+                       '[%(threadName)s] %(message)s')
+        }
+    }
+}</pre>
+</div>
+</div>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><b>console</b> يسجل الرسائل إلى <b>stderr</b> باستخدام تنسيق <b>simple</b>
+  </li>
+</ul>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="PECAN.HOOKS_--_PECAN_HOOKS">PECAN.HOOKS -- PECAN HOOKS</h1>
+<p class="Pp">The <i>pecan.hooks</i> module includes support for hook
+    functionality.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="class~18"><a class="permalink" href="#class~18"><b>class
+      pecan.hooks.PecanHook</b></a></dt>
+    <dd>Bases: <i>object</i></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="after(state)"><a class="permalink" href="#after(state)"><b>after(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called after the request
+        has been handled by the controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~21"><a class="permalink" href="#Parameters~21"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="before(state)"><a class="permalink" href="#before(state)"><b>before(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called after routing, but
+        before the request gets passed to your controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~22"><a class="permalink" href="#Parameters~22"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="on_error(state,"><a class="permalink" href="#on_error(state,"><b>on_error(state,
+        e)</b></a></dt>
+    <dd>Override this method to create a hook that gets called upon an exception
+        being raised in your controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~23"><a class="permalink" href="#Parameters~23"><b>Parameters</b></a></dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</li>
+    <li><b>e</b> -- The <b>Exception</b> object that was raised.</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="on_route(state)"><a class="permalink" href="#on_route(state)"><b>on_route(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called upon the start of
+        routing.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~24"><a class="permalink" href="#Parameters~24"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="class~19"><a class="permalink" href="#class~19"><b>class
+        pecan.hooks.RequestViewerHook(config=None, writer=&lt;_io.TextIOWrapper
+        name='&lt;stdout&gt;' mode='w' encoding='utf-8'&gt;, terminal=True,
+        headers=True)</b></a></dt>
+    <dd>Bases: <i>PecanHook</i></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~25"><a class="permalink" href="#Parameters~25"><b>Parameters</b></a></dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li><b>config</b> -- A (optional) dictionary that can hold <b>items</b> and/or
+        <b>blacklist</b> keys.</li>
+    <li><b>writer</b> -- The stream writer to use. Can redirect output to other
+        streams as long as the passed in stream has a <b>write</b> callable
+        method.</li>
+    <li><b>terminal</b> -- Outputs to the chosen stream writer (usually the
+        terminal)</li>
+    <li><b>headers</b> -- Sets values to the X-HTTP headers</li>
+</ul>
+</div>
+</div>
+<p class="Pp">Returns some information about what is going on in a single
+    request. It accepts specific items to report on but uses a default list of
+    items when none are passed in. Based on the requested <b>url</b>, items can
+    also be blacklisted. Configuration is flexible, can be passed in (or not)
+    and can contain some or all the keys supported.</p>
+<p class="Pp"><b>items</b></p>
+<p class="Pp">This key holds the items that this hook will display. When this
+    key is passed only the items in the list will be used. Valid items are
+    <i>any</i> item that the <b>request</b> object holds, by default it uses the
+    following:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li>path</li>
+    <li>status</li>
+    <li>method</li>
+    <li>controller</li>
+    <li>params</li>
+    <li>hooks</li>
+</ul>
+</div>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">This key should always use a <b>list</b> of items to
+    use.</div>
+</div>
+<p class="Pp"><b>blacklist</b></p>
+<p class="Pp">This key holds items that will be blacklisted based on <b>url</b>.
+    If there is a need to omit urls that start with <i>/javascript</i>, then
+    this key would look like:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>'blacklist': ['/javascript']</pre>
+</div>
+</div>
+<p class="Pp">As many blacklisting items as needed can be contained in the list.
+    The hook will verify that the url is not starting with items in this list to
+    display results, otherwise it will get omitted.</p>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">This key should always use a <b>list</b> of items to
+    use.</div>
+</div>
+<p class="Pp">For more detailed documentation about this hook, please see
+    <i>RequestViewerHook</i></p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="after(state)~2"><a class="permalink" href="#after(state)~2"><b>after(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called after the request
+        has been handled by the controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~26"><a class="permalink" href="#Parameters~26"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="format_hooks(hooks)"><a class="permalink" href="#format_hooks(hooks)"><b>format_hooks(hooks)</b></a></dt>
+    <dd>Tries to format the hook objects to be more readable Specific to Pecan
+        (not available in the request object)</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="get_controller(state)"><a class="permalink" href="#get_controller(state)"><b>get_controller(state)</b></a></dt>
+    <dd>Retrieves the actual controller name from the application Specific to
+        Pecan (not available in the request object)</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="class~20"><a class="permalink" href="#class~20"><b>class
+        pecan.hooks.TransactionHook(start, start_ro, commit, rollback,
+        clear)</b></a></dt>
+    <dd>Bases: <i>PecanHook</i></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~27"><a class="permalink" href="#Parameters~27"><b>Parameters</b></a></dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li><b>start</b> -- A callable that will bind to a writable database and start
+        a transaction.</li>
+    <li><b>start_ro</b> -- A callable that will bind to a readable database.</li>
+    <li><b>commit</b> -- A callable that will commit the active transaction.</li>
+    <li><b>rollback</b> -- A callable that will roll back the active
+        transaction.</li>
+    <li><b>clear</b> -- A callable that will clear your current context.</li>
+</ul>
+</div>
+</div>
+<p class="Pp">A basic framework hook for supporting wrapping requests in
+    transactions. By default, it will wrap all but <b>GET</b> and <b>HEAD</b>
+    requests in a transaction. Override the <b>is_transactional</b> method to
+    define your own rules for what requests should be transactional.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="after(state)~3"><a class="permalink" href="#after(state)~3"><b>after(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called after the request
+        has been handled by the controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~28"><a class="permalink" href="#Parameters~28"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="before(state)~2"><a class="permalink" href="#before(state)~2"><b>before(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called after routing, but
+        before the request gets passed to your controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~29"><a class="permalink" href="#Parameters~29"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="is_transactional(state)"><a class="permalink" href="#is_transactional(state)"><b>is_transactional(state)</b></a></dt>
+    <dd>Decide if a request should be wrapped in a transaction, based upon the
+        state of the request. By default, wraps all but <b>GET</b> and <b>HEAD</b>
+        requests in a transaction, along with respecting the <b>transactional</b>
+        decorator from :mod:pecan.decorators.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~30"><a class="permalink" href="#Parameters~30"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan state object for the current request.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="on_error(state,~2"><a class="permalink" href="#on_error(state,~2"><b>on_error(state,
+        e)</b></a></dt>
+    <dd>Override this method to create a hook that gets called upon an exception
+        being raised in your controller.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~31"><a class="permalink" href="#Parameters~31"><b>Parameters</b></a></dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+    <li><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</li>
+    <li><b>e</b> -- The <b>Exception</b> object that was raised.</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="on_route(state)~2"><a class="permalink" href="#on_route(state)~2"><b>on_route(state)</b></a></dt>
+    <dd>Override this method to create a hook that gets called upon the start of
+        routing.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~32"><a class="permalink" href="#Parameters~32"><b>Parameters</b></a></dt>
+    <dd><b>state</b> -- The Pecan <b>state</b> object for the current
+        request.</dd>
+</dl>
+</div>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PECAN.MIDDLEWARE.DEBUG_--_PECAN_DEBUGGING_MIDDLEWARE'><a class='permalink' href='#PECAN.MIDDLEWARE.DEBUG_--_PECAN_DEBUGGING_MIDDLEWARE'>PECAN.MIDDLEWARE.DEBUG   -- PECAN DEBUGGING MIDDLEWARE</a></h1>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PECAN.JSONIFY_--_PECAN_JSON_SUPPORT'><a class='permalink' href='#PECAN.JSONIFY_--_PECAN_JSON_SUPPORT'>PECAN.JSONIFY   -- PECAN JSON SUPPORT</a></h1>
+<p class="Pp">The <i>pecan.jsonify</i> module includes support for <b>JSON</b>
+    rule creation using generic functions.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="class~21"><a class="permalink" href="#class~21"><b>class
+        pecan.jsonify.GenericFunctionJSON(*, skipkeys=False, ensure_ascii=True,
+        check_circular=True, allow_nan=True, sort_keys=False, indent=None,
+        separators=None, default=None)</b></a></dt>
+    <dd>Bases: <i>GenericJSON</i></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="default(obj)"><a class="permalink" href="#default(obj)"><b>default(obj)</b></a></dt>
+    <dd>Converts an object and returns a <b>JSON</b>-friendly structure.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="Parameters~33"><a class="permalink" href="#Parameters~33"><b>Parameters</b></a></dt>
+    <dd><b>obj</b> -- object or structure to be converted into a
+        <b>JSON</b>-ifiable structure</dd>
+</dl>
+</div>
+<p class="Pp">Considers the following special cases in order:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt>&#x2022;</dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="object"><a class="permalink" href="#object"><b>object has a callable
+        __json__() attribute defined</b></a></dt>
+    <dd>returns the result of the call to __json__()</dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+    <dt>&#x2022;</dt>
+    <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+    <dt id="date"><a class="permalink" href="#date"><b>date and datetime
+        objects</b></a></dt>
+    <dd>returns the object cast to str</dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+    <dt>&#x2022;</dt>
+    <dd></dd>
+</dl>
+</div>
+<section class="Sh">
+<h1 class="Sh" id='PECAN.TEMPLATING_--_PECAN_TEMPLATING'><a class='permalink' href='#PECAN.TEMPLATING_--_PECAN_TEMPLATING'>PECAN.TEMPLATING   -- PECAN TEMPLATING</a></h1>
+<p class="Pp">The <i>pecan.templating</i> module provides renderers for the various
+    template engines that Pecan supports.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~26"><a class="permalink" href="#class~26"><b>class
+    pecan.templating.ExtraNamespace(extras={})</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Extra variables for the template namespace to pass to the
+        renderer as named parameters.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~35"><a class="permalink" href="#Parameters~35"><b>Parameters</b></a></dt>
+  <dd><b>extras</b> -- dictionary of extra parameters. Defaults to an empty
+      dict.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="make_ns(ns)"><a class="permalink" href="#make_ns(ns)"><b>make_ns(ns)</b></a></dt>
+  <dd>Returns the <i>lazily</i> created template namespace.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="update(d)"><a class="permalink" href="#update(d)"><b>update(d)</b></a></dt>
+  <dd>Updates the extra variable dictionary for the namespace.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~27"><a class="permalink" href="#class~27"><b>class
+    pecan.templating.GenshiRenderer(path, extra_vars)</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Defines the builtin <b>Genshi</b> renderer.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="render(template_path,"><a class="permalink" href="#render(template_path,"><b>render(template_path,
+    namespace)</b></a></dt>
+  <dd>Implements <b>Genshi</b> rendering.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~28"><a class="permalink" href="#class~28"><b>class
+    pecan.templating.JinjaRenderer(path, extra_vars)</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Defines the builtin <b>Jinja</b> renderer.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="render(template_path,~2"><a class="permalink" href="#render(template_path,~2"><b>render(template_path,
+    namespace)</b></a></dt>
+  <dd>Implements <b>Jinja</b> rendering.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~29"><a class="permalink" href="#class~29"><b>class
+    pecan.templating.JsonRenderer(path, extra_vars)</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Defines the builtin <b>JSON</b> renderer.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="render(template_path,~3"><a class="permalink" href="#render(template_path,~3"><b>render(template_path,
+    namespace)</b></a></dt>
+  <dd>Implements <b>JSON</b> rendering.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~30"><a class="permalink" href="#class~30"><b>class
+    pecan.templating.KajikiRenderer(path, extra_vars)</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Defines the builtin <b>Kajiki</b> renderer.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="render(template_path,~4"><a class="permalink" href="#render(template_path,~4"><b>render(template_path,
+    namespace)</b></a></dt>
+  <dd>Implements <b>Kajiki</b> rendering.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~31"><a class="permalink" href="#class~31"><b>class
+    pecan.templating.MakoRenderer(path, extra_vars)</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Defines the builtin <b>Mako</b> renderer.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="render(template_path,~5"><a class="permalink" href="#render(template_path,~5"><b>render(template_path,
+    namespace)</b></a></dt>
+  <dd>Implements <b>Mako</b> rendering.</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="class~32"><a class="permalink" href="#class~32"><b>class
+    pecan.templating.RendererFactory(custom_renderers={},
+    extra_vars={})</b></a></dt>
+  <dd>Bases: <a href="https://docs.python.org/3/library/functions.html#object" class="archmanweb-grotty-link">object</a>
+    <p class="Pp">Manufactures known Renderer objects.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~36"><a class="permalink" href="#Parameters~36"><b>Parameters</b></a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><b>custom_renderers</b> -- custom-defined renderers to manufacture</li>
+  <li><b>extra_vars</b> -- extra vars for the template namespace</li>
+</ul>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="add_renderers(custom_dict)"><a class="permalink" href="#add_renderers(custom_dict)"><b>add_renderers(custom_dict)</b></a></dt>
+  <dd>Adds a custom renderer.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~37"><a class="permalink" href="#Parameters~37"><b>Parameters</b></a></dt>
+  <dd><b>custom_dict</b> -- a dictionary of custom renderers to add</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="available(name)"><a class="permalink" href="#available(name)"><b>available(name)</b></a></dt>
+  <dd>Returns true if queried renderer class is available.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~38"><a class="permalink" href="#Parameters~38"><b>Parameters</b></a></dt>
+  <dd><b>name</b> -- renderer name</dd>
+</dl>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="get(name,"><a class="permalink" href="#get(name,"><b>get(name,
+    template_path)</b></a></dt>
+  <dd>Returns the renderer object.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~39"><a class="permalink" href="#Parameters~39"><b>Parameters</b></a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><b>name</b> -- name of the requested renderer</li>
+  <li><b>template_path</b> -- path to the template</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.templating.format_genshi_error(exc_value)"><a class="permalink" href="#pecan.templating.format_genshi_error(exc_value)"><b>pecan.templating.format_genshi_error(exc_value)</b></a></dt>
+  <dd>Implements <b>Genshi</b> renderer error formatting.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.templating.format_jinja_error(exc_value)"><a class="permalink" href="#pecan.templating.format_jinja_error(exc_value)"><b>pecan.templating.format_jinja_error(exc_value)</b></a></dt>
+  <dd>Implements <b>Jinja</b> renderer error formatting.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.templating.format_line_context(filename,"><a class="permalink" href="#pecan.templating.format_line_context(filename,"><b>pecan.templating.format_line_context(filename,
+    lineno, context=10)</b></a></dt>
+  <dd>Formats the the line context for error rendering.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~40"><a class="permalink" href="#Parameters~40"><b>Parameters</b></a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><b>filename</b> -- the location of the file, within which the error
+      occurred</li>
+  <li><b>lineno</b> -- the offending line number</li>
+  <li><b>context</b> -- number of lines of code to display before and after the
+      offending line.</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.templating.format_mako_error(exc_value)"><a class="permalink" href="#pecan.templating.format_mako_error(exc_value)"><b>pecan.templating.format_mako_error(exc_value)</b></a></dt>
+  <dd>Implements <b>Mako</b> renderer error formatting.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PECAN.TESTING_--_PECAN_TESTING'><a class='permalink' href='#PECAN.TESTING_--_PECAN_TESTING'>PECAN.TESTING   -- PECAN TESTING</a></h1>
+<p class="Pp">The <i>pecan.testing</i> module includes fixtures to help test
+    Pecan applications.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.testing.load_test_app(config=None,"><a class="permalink" href="#pecan.testing.load_test_app(config=None,"><b>pecan.testing.load_test_app(config=None,
+    **kwargs)</b></a></dt>
+  <dd>Used for functional tests where you need to test your literal application
+      and its integration with the framework.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Parameters~41"><a class="permalink" href="#Parameters~41"><b>Parameters</b></a></dt>
+  <dd><b>config</b> -- Can be a dictionary containing configuration, a string
+      which represents a (relative) configuration filename or <b>None</b> which
+      will fallback to get the <b>PECAN_CONFIG</b> env variable.</dd>
+</dl>
+</div>
+<p class="Pp">returns a pecan.Pecan WSGI application wrapped in a
+    webtest.TestApp instance.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>::</b></dt>
+  <dd>app = load_test_app('path/to/some/config.py')
+    <p class="Pp">resp = app.get('/path/to/some/resource').status_int assert
+        resp.status_int == 200</p>
+    <p class="Pp">resp = app.post('/path/to/some/resource', params={'param':
+        'value'}) assert resp.status_int == 302</p>
+  </dd>
+</dl>
+</div>
+<p class="Pp">Alternatively you could call <b>load_test_app</b> with no
+    parameters if the environment variable is set</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>app = load_test_app()
+resp = app.get('/path/to/some/resource').status_int
+assert resp.status_int == 200</pre>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.testing.reset_global_config()"><a class="permalink" href="#pecan.testing.reset_global_config()"><b>pecan.testing.reset_global_config()</b></a></dt>
+  <dd>When tests alter application configurations they can get sticky and
+      pollute other tests that might rely on a pristine configuration. This
+      helper will reset the config by overwriting it with
+      <b>pecan.configuration.DEFAULT</b>.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PECAN.UTIL_--_PECAN_UTILS'><a class='permalink' href='#PECAN.UTIL_--_PECAN_UTILS'>PECAN.UTIL   -- PECAN UTILS</a></h1>
+<p class="Pp">The <i>pecan.util</i> module includes utility functions for
+  Pecan.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="pecan.util.getargspec(method)"><a class="permalink" href="#pecan.util.getargspec(method)"><b>pecan.util.getargspec(method)</b></a></dt>
+  <dd>Drill through layers of decorators attempting to locate the actual argspec
+      for a method.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.7.0'><a class='permalink' href='#1.7.0'>1.7.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>added official support for Python 3.8 through 3.13
+      (<a href="https://github.com/pecan/pecan/pull/165" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/165</a>)</li>
+  <li>extensions pecan imports via <i>pecan.ext</i> has been removed
+      (<a href="https://github.com/pecan/pecan/issues/157" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/157</a>)</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.6.0'><a class='permalink' href='#1.6.0'>1.6.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>remove pecan's dependency on <a href="https://pypi.org/project/logutils/" class="archmanweb-grotty-link">https://pypi.org/project/logutils/</a>,
+      which is no longer actively maintained (<a href="h
+<a href="https://github.com/pecan/pecan/issues/159" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/159</a>)
+      نتيجة لذلك، لن يقوم سطر أوامر pecan بطباعة مستويات السجل الملونة بعد الآن</li>
+  <li>إزالة الدعم لـ Python 3.7 والإصدارات الأقدم</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.5.1'><a class='permalink' href='#1.5.1'>1.5.1</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تمت معالجة خطأ في التثبيت ناتج عن إدخال مكرر للبرنامج النصي
+      (<a href="https://github.com/pecan/pecan/pull/142" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/142</a>)</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.5.0'><a class='permalink' href='#1.5.0'>1.5.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>لم يعد pecan يعتمد على six (<a href="https://github.com/pecan/pecan/issues/144" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/144</a>)</li>
+  <li>يدعم pecan الآن SQLAlchemy 2.0 (<a href="https://github.com/pecan/pecan/issues/143" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/143</a>)</li>
+  <li>لم يعد pecan يدعم SQLAlchemy 1.3</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.4.2'><a class='permalink' href='#1.4.2'>1.4.2</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>لم يعد pecan يعتمد على webtest (<a href="https://github.com/pecan/pecan/issues/139" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/139</a>)</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.4.1'><a class='permalink' href='#1.4.1'>1.4.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إضافة دعم لـ Python 3.10</li>
+  <li>تمت إضافة مصنفات trove لـ Python 3.6 - 3.9</li>
+  <li>تم إصلاح خطأ يتعلق بـ setuptools كاعتمادية
+      (<a href="https://github.com/pecan/pecan/pull/122" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/122</a>)</li>
+  <li>تم إصلاح خطأ كان يكسر pecan عند استخدامه مع إصدارات معينة من SQLAlchemy
+      (<a href="https://github.com/pecan/pecan/pulls" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pulls</a>)</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.4.0'><a class='permalink' href='#1.4.0'>1.4.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يتطلب pecan الآن webob &gt;= 1.8</li>
+  <li>تم إصلاح خطأ عند تحليل رؤوس Accept معينة
+      (<a href="https://github.com/Pylons/webob/issues/403" class="archmanweb-grotty-link">https://github.com/Pylons/webob/issues/403</a>)</li>
+  <li>تمت إزالة الدعم الرسمي لـ Python 3.5</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.3.3'><a class='permalink' href='#1.3.3'>1.3.3</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح خطأ في RestController قام بتوجيه طلبات @secure معينة بشكل غير صحيح (<a href="https://github.com/pecan/pecan/pull/105" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/105</a>)</li>
+  <li>تمت إزالة الدعم الرسمي لـ Python 3.3</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.3.2'><a class='permalink' href='#1.3.2'>1.3.2</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>يعمل pecan الآن مع webob &lt; و &gt; 1.8 (<a href="https://github.com/pecan/pecan/pull/99" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/99</a>)</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.3.1'><a class='permalink' href='#1.3.1'>1.3.1</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم تثبيت webob على &lt;1.8 بسبب تغييرات مؤثرة في تحليل رؤوس Accept
+      (<a href="https://github.com/pecan/pecan/pull/97" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/97</a>)
+      (<a href="https://github.com/Pylons/webob/pull/338" class="archmanweb-grotty-link">https://github.com/Pylons/webob/pull/338</a>)</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.3.0'><a class='permalink' href='#1.3.0'>1.3.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم دعم pecan رسميًا لـ Python 3.6</li>
+  <li>لم يعد pecan مدعومًا لـ Python 2.6</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.2.1'><a class='permalink' href='#1.2.1'>1.2.1</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>التراجع عن تغيير API مستقر/تراجع (في الإصدار 1.2)
+      (<a href="https://github.com/pecan/pecan/issues/72" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/72</a>).
+      سيتم إعادة إصدار هذا التغيير في ترقية إصدار رئيسي مستقبلي.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.2'><a class='permalink' href='#1.2'>1.2</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إضافة رسالة خطأ أفضل عند تحديد عارض قوالب غير صالح
+      في <i>pecan.expose()</i> (<a href="https://github.com/pecan/pecan/issues/81" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/81</a>).</li>
+  <li>تُعامل وحدات تحكم Pecan التي تُرجع <i>None</i> الآن على أنها <i>HTTP
+      204 No</i> <i>Content</i> (<a href="https://github.com/pecan/pecan/issues/72" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/72</a>).</li>
+  <li>لم يعد الوسيط <i>method</i> لـ <i>pecan.expose()</i> لوحدات التحكم العامة
+      اختياريًا (<a href="https://github.com/pecan/pecan/pull/77" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/77</a>).</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.1.2'><a class='permalink' href='#1.1.2'>1.1.2</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح خطأ حيث لم تستفد أجسام الاستجابة HTTP المنسقة بـ JSON من
+      وظيفة تسجيل نوع JSON الخاصة بـ pecan
+      (<a href="http://pecan.readthedocs.io/en/latest/jsonify.html" class="archmanweb-grotty-link">http://pecan.readthedocs.io/en/latest/jsonify.html</a>)
+      (<a href="https://github.com/pecan/pecan/issues/68" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/68</a>).</li>
+  <li>تم تحديث أمثلة التعليمات البرمجية والوثائق لدعم انتقال readthedoc من
+      <i>readthedocs.org</i> إلى <i>readthedocs.io</i>.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.1.1'><a class='permalink' href='#1.1.1'>1.1.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يدعم Pecan الآن Python 3.5 رسميًا.</li>
+  <li>يستخدم Pecan الآن <i>inspect.signature</i> بدلاً من
+      <i>inspect.getargspec</i> في Python 3.5 والإصدارات الأعلى (لأن
+      <i>inspect.getargspec</i> تم إيقافه في هذه الإصدارات من Python
+    3).</li>
+  <li>تم إصلاح خطأ تسبب في تشغيل خطافات "بعد" عدة مرات عند استخدام
+      <i>pecan.redirect(..., internal=True)</i>
+      (<a href="https://github.com/pecan/pecan/issues/58" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/58</a>).</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.1.0'><a class='permalink' href='#1.1.0'>1.1.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><i>pecan.middleware.debug.DebugMiddleware</i> يقوم الآن بتسجيل الاستثناءات على مستوى
+      ERROR (<a href="https://github.com/pecan/pecan/pull/56" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/56</a>).</li>
+  <li>إصلاح خطأ في Javascript في قالب المشروع الافتراضي
+      (<a href="https://github.com/pecan/pecan/pull/55" class="archmanweb-grotty-link">https://github.com/pecan/pecan/pull/55</a>).</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.5'><a class='permalink' href='#1.0.5'>1.0.5</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>إصلاح خطأ في اكتشاف argspec الخاص بوحدة التحكم عند استخدام مزخرفات قائمة على الفئة
+      (<a href="https://github.com/pecan/pecan/issues/47" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/47</a>).</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.4'><a class='permalink' href='#1.0.4'>1.0.4</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إزالة تسرب مقبض ملف مفتوح عند قيام pecan بتصيير الأخطاء لقوالب Jinja2 و
+      Genshi (<a href="https://github.com/pecan/pecan/issues/30" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/30</a>).</li>
+  <li>تم حل خطأ تسبب في تكرار إخراج السجل في المشاريع
+      التي تم إنشاؤها باستخدام <i>pecan create</i> (<a href="https://github.com/pecan/pecan/issues/39" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/39</a>).</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.3'><a class='permalink' href='#1.0.3'>1.0.3</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم إصلاح خطأ في <i>pecan.hooks.HookController</i> لإصدارات أحدث من
+      Python3.4 (<a href="https://github.com/pecan/pecan/issues/19" class="archmanweb-grotty-link">https://github.com/pecan/pecan/issues/19</a>).</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.2'><a class='permalink' href='#1.0.2'>1.0.2</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح حالة طرفية في <i>pecan.util.getargspec</i> تسببت في إرجاع
+      argspec غير صحيح في مواقف معينة عند استخدام Python
+      2.6.</li>
+  <li>تمت إضافة <i>threading.lock</i> إلى مراقبة نظام الملفات في <i>pecan
+      serve</i> <i>--reload</i> لتجنب عمليات إعادة التحميل الزائدة للخادم.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.1'><a class='permalink' href='#1.0.1'>1.0.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح خطأ حيث لم يتم تخمين امتداد الملف بشكل صحيح لعناوين URL ذات الشرطة المائلة اللاحقة
+      (<i>file.html</i> مقابل <i>file.html/</i>)، مما أدى إلى رؤوس Content-Type غير صحيحة.</li>
+  <li>تم إصلاح خطأ خفي في تعيين سمة/عنصر <i>pecan.config.Configuration</i> تسبب في فشل بعض أنواع تغييرات التكوين بصمت.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='1.0.0'><a class='permalink' href='#1.0.0'>1.0.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم استبدال برنامج تصحيح الأخطاء الخاص بـ pecan (اختياريًا) بالاعتماد على حزمة
+      <i>backlash</i>. يجب على المطورين الذين يرغبون في تصحيح أخطاء تتبع المكدس على مستوى التطبيق بشكل تفاعلي <i>pip install backlash</i> في بيئة التطوير الخاصة بهم.</li>
+  <li>تم إصلاح خطأ متعلق بـ Content-Type: عند تحديد content_type صراحة كوسيط لـ <i>pecan.expose()</i>، يتم إعطاؤه الآن الأسبقية على عارض الافتراضي على مستوى التطبيق.</li>
+  <li>تم إصلاح خطأ منع استخدام أحرف معينة محددة في RFC3986 في مقاطع المسار.</li>
+  <li>تم إصلاح خطأ في <i>pecan.abort</i> قام بقمع تتبع المكدس الأصلي (ومنعت أدوات المراقبة مثل NewRelic من العمل بفعالية).</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.9.0'><a class='permalink' href='#0.9.0'>0.9.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إسقاط دعم Python 3.2.</li>
+  <li>تمت إضافة ميزة جديدة تسمح للمستخدمين بتحديد مقاطع مسار مخصصة لوحدات التحكم. هذا مفيد بشكل خاص لمقاطع المسار التي ليست معرفات Python صالحة (مثل مقاطع المسار التي تتضمن أحرف ترقيم معينة، مثل <i>/some/~path~/</i>).</li>
+  <li>تمت إضافة خيار تكوين جديد، <i>app.debugger</i>، والذي يسمح للمطورين بتحديد مصحح أخطاء بديل لـ <i>pdb</i> (على سبيل المثال، <i>ipdb</i>) عند إجراء تصحيح تفاعلي باستخدام <i>DebugMiddleware</i> الخاص بـ pecan.</li>
+  <li>تم تغيير مشاريع quickstart الجديدة الخاصة بـ pecan لتعيين سجل <i>pecan</i> الافتراضي
+<ul>
+  <li>تم تغيير مستوى التسجيل إلى <i>DEBUG</i> لأغراض التطوير.</li>
+  <li>تم إصلاح خطأ منع استخدام <i>staticmethods</i> كوحدات تحكم.</li>
+  <li>تم إصلاح خطأ فك ترميز في طريقة تعامل pecan مع أجزاء مسار URL المقتبسة
+      وسلاسل الاستعلام.</li>
+  <li>تم إصلاح العديد من الأخطاء في طريقة تعامل pecan مع أجزاء مسار Unicode
+      (على سبيل المثال، يمكنك الآن تعريف مسارات pecan التي تحتوي على رموز
+      تعبيرية).</li>
+  <li>تم إصلاح العديد من الأخطاء في RestController التي تسببت في إرجاع
+      <i>HTTP 404 Not Found</i> بدلاً من <i>HTTP 405 Method Not Allowed</i>.
+      بالإضافة إلى ذلك، يقوم RestController الآن بإرجاع رؤوس <i>Allow</i>
+      صالحة عند إرجاع <i>HTTP 405 Method Not Allowed</i>.</li>
+  <li>تم إصلاح خطأ سمح بتمييز طرق pecan الخاصة (<i>_route</i>، <i>_lookup</i>،
+      <i>_default</i>) كطرق REST عامة.</li>
+  <li>تمت إضافة تركيز أكبر في وثائق pecan على الحاجة إلى <i>debug=False</i>
+      في عمليات النشر الإنتاجية.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.8.3'><a class='permalink' href='#0.8.3'>0.8.3</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم تغيير pecan للتعامل بشكل أكثر سلاسة مع بعض حالات ترميز الطلبات
+      الغامضة. الآن تستجيب تطبيقات pecan بـ HTTP 400 (بدلاً من
+      UnicodeDecodeError غير معالجة، مما يؤدي إلى HTTP 500) عندما:</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تتكون طلبات HTTP POST من بيانات غير Unicode</li>
+  <li>تحتوي مسارات الطلبات على أحرف مرمزة بنسبة مئوية غير صالحة، على سبيل
+      المثال، <b>/some/path/%aa/</b></li>
+</ul>
+</div>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم تحسين الإسهاب للأخطاء المتعلقة بالاستيراد في ملفات تهيئة pecan، خاصة
+      تلك التي تتضمن استيرادات نسبية.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.8.2'><a class='permalink' href='#0.8.2'>0.8.2</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم إصلاح خطأ يكسر دعم متغيرات سلسلة الاستعلام متعددة القيم (على سبيل
+      المثال، <i>?check=a&amp;check=b</i>).</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.8.1'><a class='permalink' href='#0.8.1'>0.8.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم تحسين اكتشاف التكرار اللانهائي لـ PecanHook و pypy. هذا يصلح خطأ
+      تم اكتشافه في pecan + pypy والذي يمكن أن يؤدي إلى تكرار لانهائي عند
+      استخدام الفئة الرئيسية PecanHook.</li>
+  <li>تم إصلاح خطأ منع وحدات التحكم @exposed من استخدام @staticmethod.</li>
+  <li>تم إصلاح خطأ طفيف في حساب وسيطات وحدة التحكم.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.8.0'><a class='permalink' href='#0.8.0'>0.8.0</a></h1>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>بالنسبة لطلبات HTTP POST، يتم تعيين أجسام طلبات JSON إلى وسيطات الكلمات
+      المفتاحية لوحدة التحكم.</li>
+  <li>تم تحسين اكتشاف argspec والتسامح مع وحدات التحكم المغلفة.</li>
+  <li>عندما تكون وسيطات المسار غير صحيحة لـ RestController، يتم إرجاع HTTP
+      404، وليس 400.</li>
+  <li>عند اكتشاف عدم وجود محتوى لـ HTTP 204، يتم التقاط UnicodeDecodeError
+      بشكل صحيح.</li>
+  <li>تم إصلاح خطأ في التوجيه لوحدات التحكم الفرعية العامة.</li>
+  <li>تم إصلاح خطأ في التعامل مع الدوال العامة عندما تكون المتغيرات المحلية
+      للسياق معطلة.</li>
+  <li>تم إصلاح خطأ يخلط ترتيب الوسيطات للدوال العامة.</li>
+  <li>تمت إزالة <i>assert</i> للتحكم في التدفق؛ يمكن تحسينها بعيدًا باستخدام
+      <i>python -O</i>.</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.7.0'><a class='permalink' href='#0.7.0'>0.7.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح حالة طرفية في توجيه RestController كان يجب أن ترجع HTTP
+      400 ولكنها كانت تثير استثناءً بدلاً من ذلك (وبالتالي، HTTP 500).</li>
+  <li>تم إصلاح تكوين مسجل الجذر غير الصحيح لمشاريع pecan التي تم إنشاؤها بسرعة.</li>
+  <li>تمت إضافة <i>pecan.state.arguments</i>، وهي ميزة جديدة لفحص وسيطات
+      استدعاء وحدة التحكم.</li>
+  <li>تم إصلاح خطأ التكرار اللانهائي في تطبيق PecanHook. كان توريث كل من
+      <i>rest.RestController</i> و <i>hooks.HookController</i> يؤدي إلى خطأ
+      تكرار لانهائي في تطبيق الخطاف (مما منع بدء تشغيل التطبيقات).</li>
+  <li>تم تضمين اختبارات Pecan الآن في توزيع المصدر الخاص بها.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.6.1'><a class='permalink' href='#0.6.1'>0.6.1</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم إصلاح خطأ تسبب في قيام pecan بإرجاع HTTP 204 عن طريق الخطأ لأجسام
+      الاستجابة غير الفارغة.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.6.0'><a class='permalink' href='#0.6.0'>0.6.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إضافة دعم لتعطيل <i>pecan.request</i> و <i>pecan.response</i>
+      threadlocals على مستوى تطبيق WSGI لصالح تمرير المرجع الصريح. لمزيد من
+      المعلومات، راجع <i>Context/Thread-Locals مقابل تمرير الوسيطات الصريح</i>.</li>
+  <li>تمت إضافة دعم أفضل لتكوين الخطافات عبر التوريث والمزج. لمزيد من
+      المعلومات، راجع <i>إرفاق الخطافات</i>.</li>
+  <li>تمت إضافة دعم لتحديد تطبيقات طلب واستجابة مخصصة على مستوى تطبيق WSGI
+      للأشخاص الذين يرغبون في توسيع الوظائف التي توفرها الفئات الأساسية في
+      <i>webob</i>.</li>
+  <li>يمكن لوحدات تحكم Pecan الآن إرجاع مثيل <i>webob.Response</i> صريح
+      لتجاوز عرض قوالب Pecan والتسلسل.</li>
+  <li>بالنسبة للدوال العامة التي ترجع HTTP 405، يقوم pecan الآن بإنشاء رأس
+      <i>Allow</i> لتوصيل الطرق المقبولة للعميل.</li>
+  <li>تم إصلاح خطأ في الالتزام بـ RFC2616: إذا أعادت طريقة مكشوفة عدم وجود
+      جسم استجابة (أو مساحة اسم)، فإن pecan ستفرض الآن استجابة HTTP 204 (بدلاً
+      من HTTP 200).</li>
+  <li>تم إصلاح خطأ في الالتزام بـ RFC2616: عندما تستجيب pecan بـ HTTP 204 أو
+      HTTP 304، يتم تجريد رأس <i>Content-Type</i> تلقائيًا (لأن هذه الأنواع
+      من استجابات HTTP لا تحتوي على محتوى جسم).</li>
+  <li>تم إصلاح خطأ: الآن عندما يطلب العملاء JSON عبر رأس <i>Accept</i>، يتم
+      تسلسل استثناءات HTTP <i>webob</i> كـ JSON، وليس تمثيلها الأصلي لـ HTML.</li>
+  <li>تم إصلاح خطأ كسر التطبيقات التي حددت <i>default_renderer</i>
+      <i>= json</i>.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.5.0'><a class='permalink' href='#0.5.0'>0.5.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يضيف هذا الإصدار دعمًا رسميًا لـ pypy.</li>
+  <li>تمت إضافة تسجيل طلبات ملونة إلى أمر <i>pecan serve</i>.</li>
+  <li>تمت إضافة هيكل لإنشاء واجهة برمجة تطبيقات REST أساسية بسهولة.</li>
+  <li>تمت إضافة القدرة على تمرير وسيطات الكلمات المفتاحية العشوائية إلى
+      <i>pecan.testing.load_test_app</i>.</li>
+  <li>تم إصلاح خطأ متعلق بالتكرار في البرامج الوسيطة لمستند الخطأ.</li>
+  <li>تم إصلاح خطأ في أمر <i>gunicorn_pecan</i> تسبب في تسرب بيانات
+      <i>threading.local</i> بين خيوط green eventlet/gevent.</li>
+  <li>تم تحسين الوثائق من خلال الإصلاحات والبرامج التعليمية السردية لتطبيقات
+      pecan النموذجية.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.4.5'><a class='permalink' href='#0.4.5'>0.4.5</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح خطأ الشرطة المائلة اللاحقة لوحدات <i>RestController</i> التي
+      تحتوي على طريقة `_lookup`.</li>
+  <li>تم تنظيف مرجع تطبيق WSGI من الحالة المحلية للخيط في كل طلب (لتجنب
+      تسرب الذاكرة المحتمل، خاصة عند الاختبار).</li>
+  <li>تم تحسين وثائق pecan وتصحيح مراجع intersphinx.</li>
+  <li>يدعم pecan Python 3.4.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.4.4'><a class='permalink' href='#0.4.4'>0.4.4</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تمت إزالة حفظ بعض سمات وحدة التحكم في الذاكرة المؤقتة، مما قد يؤدي إلى
+      تسرب الذاكرة في عمليات البحث الديناميكية عن وحدات التحكم.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.4.3'><a class='permalink' href='#0.4.3'>0.4.3</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إصلاح العديد من الأخطاء لـ RestController.</li>
+  <li>تم إصلاح خطأ في معالجة الأمان لوحدات التحكم العامة.</li>
+  <li>تم حل خطأ في معالجات <i>_default</i> المستخدمة في <i>RestController</i>.</li>
+  <li>تم الاحتفاظ بـ <i>pecan.request.context</i> عبر عمليات إعادة التوجيه
+      الداخلية.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.4.2'><a class='permalink' href='#0.4.2'>0.4.2</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تمت إزالة تحسين توجيه يكسر المكون الإضافي WSME pecan.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.4.1'><a class='permalink' href='#0.4.1'>0.4.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم نقل المشروع إلى <a href="http://docs.openstack.org/infra/system-config/stackforge.html" class="archmanweb-grotty-link">بنية
+      StackForge</a>، بما في ذلك مراجعة الكود Gerrit، والتكامل المستمر Jenkins،
+      والنسخ المتطابق GitHub.</li>
+  <li>تمت إضافة مكون إضافي pecan لخادم <a href="https://uwsgi-docs.readthedocs.io" class="archmanweb-grotty-link">uwsgi</a>
+      الشائع.</li>
+  <li>تم استبدال الاعتمادية <b>simplegeneric</b> بالوظيفة الجديدة
+      <b>functools.singledispatch</b> استعدادًا لدعم Python 3.4.</li>
+  <li>تم تحسين توجيه الإرسال الأساسي لـ pecan لتحقيق أوقات استجابة أسرع بشكل
+      ملحوظ.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.3.2'><a class='permalink' href='#0.3.2'>0.3.2</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تم إجراء بعض التغييرات لتبسيط كيفية تمرير <b>pecan.conf.app</b> إلى
+      التطبيقات الجديدة.</li>
+  <li>تم إصلاح خطأ في التوجيه لتكوينات معينة لوحدة التحكم <b>_lookup</b>.</li>
+  <li>تم تحسين الوثائق لمعالجة تحميل الملفات.</li>
+  <li>تم إهمال خيار التهيئة <b>pecan.conf.requestviewer</b>.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.3.1'><a class='permalink' href='#0.3.1'>0.3.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يمكن لخطافات <b>on_error</b> الآن إرجاع كائنات Pecan Response.</li>
+  <li>تحديثات طفيفة للوثائق وأدوات الإصدار.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.3.0'><a class='permalink' href='#0.3.0'>0.3.0</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>يدعم Pecan الآن Python 2.6، 2.7، 3.2، و 3.3.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.4'><a class='permalink' href='#0.2.4'>0.2.4</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إضافة الدعم لطرق <b>_lookup</b> كبديل في RestController.</li>
+  <li>مجموعة متنوعة من التحسينات لوثائق المشروع.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.3'><a class='permalink' href='#0.2.3'>0.2.3</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إضافة مجموعة متنوعة من التحسينات إلى <b>pecan.core</b> التي تحسن وقت
+      معالجة الطلبات بحوالي 30% لتوجيه إرسال الكائنات البسيط.</li>
+  <li>تم تخزين الاستثناءات التي تثيرها <b>abort</b> في بيئة WSGI حتى يمكن
+      الوصول إليها لاحقًا في معالجة الطلب (على سبيل المثال، بواسطة برامج وسيطة
+      أخرى أو خطافات pecan).</li>
+  <li>تم جعل TransactionHook أكثر قوة بحيث لا تكون عرضة للفشل عند حدوث
+      استثناءات في خطافات pecan <i>أخرى</i> ضمن طلب.</li>
+  <li>تم إعادة ترتيب نص البدء السريع حتى لا يفوت المستخدمون خطوة ضرورية.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.2'><a class='permalink' href='#0.2.2'>0.2.2</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إلغاء تشويش تمييز بناء الجملة لـ JavaScript لتغليف دبيان.</li>
+  <li>استخراج اختبارات بناء القوالب إلى tox.</li>
+  <li>إضافة دعم لتحديد ملف تكوين pecan عبر متغير البيئة <b>PECAN_CONFIG</b>.</li>
+  <li>إصلاح خطأ في طرق <b>DELETE</b> في <b>RestControllers</b> متداخلة (اثنان أو أكثر).</li>
+  <li>إضافة توثيق لإرجاع رموز حالة HTTP محددة.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.1'><a class='permalink' href='#0.2.1'>0.2.1</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تضمين ترخيص وملف README وملف <b>requirements.txt</b> في التوزيعات.</li>
+  <li>تحسين الفحص باستخدام <b>dir()</b> لـ <b>pecan.request</b> و <b>pecan.response</b>.</li>
+  <li>إصلاح خطأ منع تطبيقات pecan من التركيب عند المسارات الافتراضية WSGI.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.0'><a class='permalink' href='#0.2.0'>0.2.0</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تحديث اختبارات قوالب المشروع الأساسية لتكون أكثر قابلية للتكرار.</li>
+  <li>إضافة خيار تكوين على مستوى التطبيق لتعطيل تخمين نوع المحتوى حسب عنوان URL.</li>
+  <li>إصلاح تبعية اختبار خاطئة على Jinja، إنها Jinja2.</li>
+  <li>إصلاح خطأ متعلق بالتوجيه في <b>RestController</b>. يحل #156.</li>
+  <li>إضافة مستند <b>CONTRIBUTING.rst</b> صريح.</li>
+  <li>تحسين رؤية المستندات المتعلقة بالنشر.</li>
+  <li>إضافة دعم لسكريبت سطر الأوامر <b>gunicorn_pecan</b>.</li>
+  <li>إزالة وتعليق بعض الاستيرادات غير المستخدمة (وبديل py26).</li>
+  <li>إصلاح خطأ: عدم تجريد امتداد نقطي من المسار إلا إذا كان له نوع mimetype مطابق.</li>
+  <li>إضافة اختبار لمشروع القوالب buildout يضمن اجتياز pep8.</li>
+  <li>إصلاح الإخراج المضلل لـ <b>$ pecan --version</b>.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='0.2.0B'><a class='permalink' href='#0.2.0B'>0.2.0B</a></h1>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إصلاح خطأ في <b>SecureController</b>. يحل #131.</li>
+  <li>استخراج تبعيات ملفات الأخطاء الثابتة الخاصة بـ middleware إلى ملفات مادية.</li>
+  <li>تحسين اختبار يمكن أن يفشل بسبب حالة سباق.</li>
+  <li>تحسين التوثيق حول تنسيق التكوين و <b>app.py</b>.</li>
+  <li>إضافة دعم للكشف عن نوع المحتوى عبر رؤوس HTTP Accept.</li>
+  <li>تصحيح تعليمات التثبيت المصدر في <b>README</b>.</li>
+  <li>إصلاح مثال كود غير صحيح في توثيق Hooks.</li>
+  <li>docs: إصلاح خطأ مطبعي بسيط في مثال التوجيه <b>*args</b>.</li>
+</ul>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENSE'><a class='permalink' href='#LICENSE'>LICENSE</a></h1>
+<p class="Pp">إطار عمل Pecan والتوثيق مرخصان بموجب ترخيص BSD:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>Copyright (c) &lt;2010&gt;, Pecan Framework
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the &lt;organization&gt; nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL &lt;COPYRIGHT HOLDER&gt; BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Jonathan LaCour</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>COPYRIGHT</a></h1>
+<p class="Pp">2010, Jonathan LaCour</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">August 16, 2025</td>
+    <td class="foot-os">1.7.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/python-pecan/">extra/python-pecan</a></dd>
+        <dt>Version:</dt>
+        <dd>1.7.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://github.com/pecan/pecan">https://github.com/pecan/pecan</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/python-pecan/">/listing/extra/python-pecan/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#INSTALLATION">INSTALLATION</a></li>
+        
+            <li><a href="#CREATING_YOUR_FIRST_PECAN_APPLICATION">CREATING YOUR FIRST PECAN APPLICATION</a></li>
+        
+            <li><a href="#CONTROLLERS_AND_ROUTING">CONTROLLERS AND ROUTING</a></li>
+        
+            <li><a href="#INTERACTING_WITH_THE_REQUEST_AND_RESPONSE_OBJECT">INTERACTING WITH THE REQUEST AND RESPONSE OBJECT</a></li>
+        
+            <li><a href="#TEMPLATING_IN_PECAN">TEMPLATING IN PECAN</a></li>
+        
+            <li><a href="#WRITING_RESTFUL_WEB_SERVICES_WITH_GENERIC_CONTROLLERS">WRITING RESTFUL WEB SERVICES WITH GENERIC CONTROLLERS</a></li>
+        
+            <li><a href="#WRITING_RESTFUL_WEB_SERVICES_WITH_RESTCONTROLLER">WRITING RESTFUL WEB SERVICES WITH RESTCONTROLLER</a></li>
+        
+            <li><a href="#CONFIGURING_PECAN_APPLICATIONS">CONFIGURING PECAN APPLICATIONS</a></li>
+        
+            <li><a href="#SECURITY_AND_AUTHENTICATION">SECURITY AND AUTHENTICATION</a></li>
+        
+            <li><a href="#PECAN_HOOKS">PECAN HOOKS</a></li>
+        
+            <li><a href="#JSON_SERIALIZATION">JSON SERIALIZATION</a></li>
+        
+            <li><a href="#CONTEXT/THREAD-LOCALS_VS._EXPLICIT_ARGUMENT_PASSING">CONTEXT/THREAD-LOCALS VS. EXPLICIT ARGUMENT PASSING</a></li>
+        
+            <li><a href="#COMMAND_LINE_PECAN">COMMAND LINE PECAN</a></li>
+        
+            <li><a href="#DEVELOPING_PECAN_APPLICATIONS_LOCALLY">DEVELOPING PECAN APPLICATIONS LOCALLY</a></li>
+        
+            <li><a href="#DEPLOYING_PECAN_IN_PRODUCTION">DEPLOYING PECAN IN PRODUCTION</a></li>
+        
+            <li><a href="#LOGGING">LOGGING</a></li>
+        
+            <li><a href="#TESTING_PECAN_APPLICATIONS">TESTING PECAN APPLICATIONS</a></li>
+        
+            <li><a href="#GENERATING_AND_VALIDATING_FORMS">GENERATING AND VALIDATING FORMS</a></li>
+        
+            <li><a href="#WORKING_WITH_SESSIONS_AND_USER_AUTHENTICATION">WORKING WITH SESSIONS AND USER AUTHENTICATION</a></li>
+        
+            <li><a href="#WORKING_WITH_DATABASES,_TRANSACTIONS,_AND_ORM&apos;S">WORKING WITH DATABASES, TRANSACTIONS, AND ORM'S</a></li>
+        
+            <li><a href="#CUSTOM_ERROR_DOCUMENTS">CUSTOM ERROR DOCUMENTS</a></li>
+        
+            <li><a href="#EXAMPLE_APPLICATION:_SIMPLE_FORMS_PROCESSING">EXAMPLE APPLICATION: SIMPLE FORMS PROCESSING</a></li>
+        
+            <li><a href="#EXAMPLE_APPLICATION:_SIMPLE_AJAX">EXAMPLE APPLICATION: SIMPLE AJAX</a></li>
+        
+            <li><a href="#PECAN.CORE_--_PECAN_CORE">PECAN.CORE -- PECAN CORE</a></li>
+        
+            <li><a href="#PECAN.COMMANDS_--_PECAN_COMMANDS">PECAN.COMMANDS -- PECAN COMMANDS</a></li>
+        
+            <li><a href="#PECAN.CONFIGURATION_--_PECAN_CONFIGURATION_ENGINE">PECAN.CONFIGURATION -- PECAN CONFIGURATION ENGINE</a></li>
+        
+            <li><a href="#PECAN.DECORATORS_--_PECAN_DECORATORS">PECAN.DECORATORS -- PECAN DECORATORS</a></li>
+        
+            <li><a href="#PECAN.DEPLOY_--_PECAN_DEPLOY">PECAN.DEPLOY -- PECAN DEPLOY</a></li>
+        
+            <li><a href="#PECAN.HOOKS_--_PECAN_HOOKS">PECAN.HOOKS -- PECAN HOOKS</a></li>
+        
+            <li><a href="#PECAN.MIDDLEWARE.DEBUG_--_PECAN_DEBUGGING_MIDDLEWARE">PECAN.MIDDLEWARE.DEBUG -- PECAN DEBUGGING MIDDLEWARE</a></li>
+        
+            <li><a href="#PECAN.JSONIFY_--_PECAN_JSON_SUPPORT">PECAN.JSONIFY -- PECAN JSON SUPPORT</a></li>
+        
+            <li><a href="#PECAN.REST_--_PECAN_REST_CONTROLLER">PECAN.REST -- PECAN REST CONTROLLER</a></li>
+        
+            <li><a href="#PECAN.ROUTING_--_PECAN_ROUTING">PECAN.ROUTING -- PECAN ROUTING</a></li>
+        
+            <li><a href="#PECAN.SECURE_--_PECAN_SECURE_CONTROLLERS">PECAN.SECURE -- PECAN SECURE CONTROLLERS</a></li>
+        
+            <li><a href="#PECAN.TEMPLATING_--_PECAN_TEMPLATING">PECAN.TEMPLATING -- PECAN TEMPLATING</a></li>
+        
+            <li><a href="#PECAN.TESTING_--_PECAN_TESTING">PECAN.TESTING -- PECAN TESTING</a></li>
+        
+            <li><a href="#PECAN.UTIL_--_PECAN_UTILS">PECAN.UTIL -- PECAN UTILS</a></li>
+        
+            <li><a href="#1.7.0">1.7.0</a></li>
+        
+            <li><a href="#1.6.0">1.6.0</a></li>
+        
+            <li><a href="#1.5.1">1.5.1</a></li>
+        
+            <li><a href="#1.5.0">1.5.0</a></li>
+        
+            <li><a href="#1.4.2">1.4.2</a></li>
+        
+            <li><a href="#1.4.1">1.4.1</a></li>
+        
+            <li><a href="#1.4.0">1.4.0</a></li>
+        
+            <li><a href="#1.3.3">1.3.3</a></li>
+        
+            <li><a href="#1.3.2">1.3.2</a></li>
+        
+            <li><a href="#1.3.1">1.3.1</a></li>
+        
+            <li><a href="#1.3.0">1.3.0</a></li>
+        
+            <li><a href="#1.2.1">1.2.1</a></li>
+        
+            <li><a href="#1.2">1.2</a></li>
+        
+            <li><a href="#1.1.2">1.1.2</a></li>
+        
+            <li><a href="#1.1.1">1.1.1</a></li>
+        
+            <li><a href="#1.1.0">1.1.0</a></li>
+        
+            <li><a href="#1.0.5">1.0.5</a></li>
+        
+            <li><a href="#1.0.4">1.0.4</a></li>
+        
+            <li><a href="#1.0.3">1.0.3</a></li>
+        
+            <li><a href="#1.0.2">1.0.2</a></li>
+        
+            <li><a href="#1.0.1">1.0.1</a></li>
+        
+            <li><a href="#1.0.0">1.0.0</a></li>
+        
+            <li><a href="#0.9.0">0.9.0</a></li>
+        
+            <li><a href="#0.8.3">0.8.3</a></li>
+        
+            <li><a href="#0.8.2">0.8.2</a></li>
+        
+            <li><a href="#0.8.1">0.8.1</a></li>
+        
+            <li><a href="#0.8.0">0.8.0</a></li>
+        
+            <li><a href="#0.7.0">0.7.0</a></li>
+        
+            <li><a href="#0.6.1">0.6.1</a></li>
+        
+            <li><a href="#0.6.0">0.6.0</a></li>
+        
+            <li><a href="#0.5.0">0.5.0</a></li>
+        
+            <li><a href="#0.

@@ -1,0 +1,340 @@
+ot;
+eval "\n#line " . __LINE__ . ' "' . __FILE__ . "\"\ndie 'foo'";
+print $@;
+__END__
+foo at goop line 345.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Experimental_Details_on_given_and_when'><a class='permalink' href='#Experimental_Details_on_given_and_when'>تفاصيل تجريبية حول given و when</a></h2>
+<p class="Pp">كما ذكرنا سابقاً، تعتبر ميزة "switch" تجريبية للغاية (ومن المقرر إزالتها في perl 5.42.0)؛ وهي عرضة للتغيير مع إشعار قصير. على وجه الخصوص، <span class="Li">"when"</span> لها سلوكيات صعبة من المتوقع أن تتغير لتصبح أقل صعوبة في المستقبل. لا تعتمد على تنفيذها الحالي (الخاطئ). قبل Perl 5.18، كان لـ <span class="Li">"given"</span> أيضًا سلوكيات صعبة يجب أن تحذر منها إذا كان يجب تشغيل التعليمات البرمجية الخاصة بك على إصدارات أقدم من Perl.</p>
+<p class="Pp">إليك مثال أطول على <span class="Li">"given"</span>:</p>
+<pre>use feature ":5.10";
+given ($foo) {
+    when (undef) {
+        say '$foo is undefined';
+    }
+    when ("foo") {
+        say '$foo is the string "foo"';
+    }
+    when ([1,3,5,7,9]) {
+        say '$foo is an odd digit';
+        continue; # Fall through
+    }
+    when ($_ &lt; 100) {
+        say '$foo is numerically less than 100';
+    }
+    when (\&complicated_check) {
+        say 'a complicated check for $foo is true';
+    }
+    default {
+        die q(I don't know what to do with $foo);
+    }
+}</pre>
+<p class="Pp">قبل Perl 5.18، كان <span class="Li">given(EXPR)</span> يعين قيمة <i>EXPR</i> إلى مجرد <b class="Sg">نسخة</b> مقيدة نطاقيًا <b class="Sg">(!)</b> من <span class="Li">$_</span>، وليس اسمًا مستعارًا مقيدًا ديناميكيًا بالطريقة التي يعمل بها <span class="Li">"foreach"</span>. هذا جعلها مشابهة لـ</p>
+<pre>do { my $_ = EXPR; ... }</pre>
+<p class="Pp">باستثناء أن الكتلة كانت تخرج تلقائيًا بواسطة <span class="Li">"when"</span> ناجحة أو <span class="Li">"break"</span> صريحة. نظرًا لأنها كانت مجرد نسخة، ولأنها كانت مقيدة نطاقيًا فقط، وليست مقيدة نطاقيًا ديناميكيًا، لم تتمكن من القيام بالأشياء التي اعتدت عليها في حلقة <span class="Li">"foreach"</span>. على وجه الخصوص، لم تعمل مع استدعاءات الدوال العشوائية إذا حاولت تلك الدوال الوصول إلى <span class="Li">$_</span>. من الأفضل الالتزام بـ <span class="Li">"foreach"</span> لهذا الغرض.</p>
+<p class="Pp">تأتي معظم القوة من المطابقة الذكية الضمنية التي يمكن تطبيقها أحيانًا. في معظم الأحيان، يتم التعامل مع <span class="Li">when(EXPR)</span> على أنها مطابقة ذكية ضمنية لـ <span class="Li">$_</span>، أي، <span class="Li">"$_ ~~ EXPR"</span>. (انظر "Smartmatch Operator" في perlop لمزيد من المعلومات حول المطابقة الذكية). ولكن عندما يكون <i>EXPR</i> أحد الحالات الاستثنائية العشر (أو ما شابهها) المذكورة أدناه، يتم استخدامه مباشرة كقيمة منطقية.</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>استدعاء إجراء معرف من قبل المستخدم أو استدعاء طريقة.</dd>
+  <dt>2.</dt>
+  <dd>مطابقة تعبير عادي في شكل <span class="Li">"/REGEX/"</span>، <span class="Li">"$foo =~ /REGEX/"</span>، أو <span class="Li">"$foo =~ EXPR"</span>. وأيضًا، مطابقة تعبير عادي معكوسة في شكل <span class="Li">"!/REGEX/"</span>، <span class="Li">"$foo !~ /REGEX/"</span>، أو <span class="Li">"$foo !~ EXPR"</span>.</dd>
+  <dt>3.</dt>
+  <dd>مطابقة ذكية تستخدم عامل التشغيل <span class="Li">"~~"</span> الصريح، مثل <span class="Li">"EXPR ~~ EXPR"</span>.
+    <p class="Pp"><b>ملاحظة:</b> غالبًا ما ستحتاج إلى استخدام
+        <span class="Li">"$c ~~ $_"</span> لأن الحالة الافتراضية تستخدم
+        <span class="Li">"$_ ~~ $c"</span>، والتي غالبًا ما تكون عكس ما تريده.</p>
+  </dd>
+  <dt>4.</dt>
+  <dd>عامل تشغيل مقارنة منطقية مثل <span class="Li">"$_ &lt; 10"</span> أو <span class="Li">"$x eq "abc""</span>. عوامل التشغيل العلائقية التي ينطبق عليها هذا هي المقارنات الرقمية الست
+      (<span class="Li">"&lt;"</span>،
+      <span class="Li">"&gt;"</span>،
+      <span class="Li">"&lt;="</span>،
+      <span class="Li">"&gt;="</span>،
+      <span class="Li">"=="</span>، و
+      <span class="Li">"!="</span>)، والمقارنات النصية الست
+      (<span class="Li">"lt"</span>،
+      <span class="Li">"gt"</span>،
+      <span class="Li">"le"</span>،
+      <span class="Li">"ge"</span>،
+      <span class="Li">"eq"</span>، و
+      <span class="Li">"ne"</span>).</dd>
+  <dt>5.</dt>
+  <dd>ثلاث وظائف مدمجة على الأقل <span class="Li">defined(...)</span>،
+      <span class="Li">exists(...)</span>، و <span class="Li">eof(...)</span>. قد نضيف المزيد لاحقًا إذا فكرنا فيها.</dd>
+  <dt>6.</dt>
+  <dd>تعبير معكوس، سواء كان <span class="Li">"!(EXPR)"</span> أو
+      <span class="Li">not(EXPR)</span>، أو تشغيل حصري منطقي،
+      <span class="Li">"(EXPR1) xor (EXPR2)"</span>. الإصدارات الثنائية (
+      <span class="Li">"~"</span> و
+      <span class="Li">"^"</span>) غير مدرجة.</dd>
+  <dt>7.</dt>
+  <dd>عامل تشغيل اختبار الملف، مع 4 استثناءات بالضبط:
+      <span class="Li>"-s"</span>،
+      <span class="Li>"-M"</span>،
+      <span class="Li>"-A"</span>، و
+      <span class="Li>"-C"</span>، لأنها ترجع قيمًا رقمية، وليست قيمًا منطقية. عامل تشغيل اختبار الملف <span class="Li>"-z"</span> غير مدرج في قائمة الاستثناءات.</dd>
+  <dt>8.</dt>
+  <dd>عوامل التشغيل <span class="Li">".."</span> و
+      <span class="Li>"..."</span> flip-flop. لاحظ أن عامل التشغيل <span class="Li>"..."</span> flip-flop مختلف تمامًا عن عبارة <span class="Li>"..."</span> الإهليلجية الموصوفة للتو.</dd>
+</dl>
+<p class="Pp">في هذه الحالات الثمانية المذكورة أعلاه، يتم استخدام قيمة EXPR مباشرة كقيمة منطقية، لذلك لا يتم إجراء أي مطابقة ذكية. قد تفكر في <span class="Li">"when"</span> على أنها مطابقة ذكية ذكية.</p>
+<p class="Pp">علاوة على ذلك، تقوم Perl بفحص المعاملات الخاصة بعوامل التشغيل المنطقية لتحديد ما إذا كان سيتم استخدام المطابقة الذكية لكل منها عن طريق تطبيق الاختبار أعلاه على المعاملات:</p>
+<dl class="Bl-tag">
+  <dt>9.</dt>
+  <dd>إذا كان EXPR هو <span class="Li">"EXPR1 &amp;&amp; EXPR2"</span> أو
+      <span class="Li">"EXPR1 and EXPR2"</span>، يتم تطبيق الاختبار
+      <i>بشكل متكرر</i> على كل من EXPR1 و EXPR2. فقط إذا اجتاز كلا المعاملين الاختبار،
+      <i>بشكل متكرر</i>، سيتم التعامل مع التعبير على أنه منطقي. بخلاف ذلك، سيتم استخدام المطابقة الذكية.</dd>
+  <dt>10.</dt>
+  <dd>إذا كان EXPR هو <span class="Li">"EXPR1 || EXPR2"</span>،
+      <span class="Li">"EXPR1 // EXPR2"</span>، أو
+      <span class="Li">"EXPR1 or EXPR2"</span>، يتم تطبيق الاختبار
+      <i>بشكل متكرر</i> على EXPR1 فقط (والذي قد يكون بحد ذاته عامل تشغيل AND ذي أسبقية أعلى، على سبيل المثال، وبالتالي يخضع للقاعدة السابقة)، وليس على EXPR2. إذا كان من المقرر أن يستخدم EXPR1 المطابقة الذكية، فإن EXPR2 سيستخدمها أيضًا، بغض النظر عما يحتويه EXPR2. ولكن إذا لم يتمكن EXPR2 من استخدام المطابقة الذكية، فلن يتم استخدام الوسيط الثاني أيضًا. هذا يختلف تمامًا عن حالة <span class="Li">"&amp;&amp;"</span> الموصوفة للتو، لذا كن حذرًا.</dd>
+</dl>
+<p class="Pp">هذه القواعد معقدة، ولكن الهدف هو أن تقوم بما تريده (حتى لو لم تفهم تمامًا لماذا تقوم به). على سبيل المثال:</p>
+<pre>when (/^\d+$/ &amp;&amp; $_ &lt; 75) { ... }</pre>
+<p class="Pp">سيتم التعامل معها على أنها مطابقة منطقية لأن القواعد تقول إن كل من مطابقة التعبير العادي والاختبار الصريح على <span class="Li">$_</span> سيتم التعامل معهما كقيم منطقية.</p>
+<p class="Pp">أيضًا:</p>
+<pre>when ([qw(foo bar)] &amp;&amp; /baz/) { ... }</pre>
+<p class="Pp">سيستخدم المطابقة الذكية لأن أحد المعاملين فقط هو منطقي: الآخر يستخدم المطابقة الذكية، وهذا هو الذي يفوز.</p>
+<p class="Pp">علاوة على ذلك:</p>
+<pre>when ([qw(foo bar)] || /^baz/) { ... }</pre>
+<p class="Pp">سيستخدم المطابقة الذكية (يتم النظر في المعامل الأول فقط)، بينما</p>
+<pre>when (/^baz/ || [qw(foo bar)]) { ... }</pre>
+<p class="Pp">سيختبر فقط التعبير العادي، مما يتسبب في التعامل مع كلا المعاملين كقيم منطقية. احذر من هذا، لأن مرجع المصفوفة هو دائمًا قيمة صحيحة، مما يجعله زائدًا عن الحاجة فعليًا. ليس فكرة جيدة.</p>
+<p class="Pp">لا تزال عوامل التشغيل المنطقية المتطابقة ذاتيًا تُحسّن. لا تغرّك كتابة</p>
+<pre>when ("foo" or "bar") { ... }</pre>
+<p class="Pp">سيتم تحسين هذا إلى
+    <span class="Li">"foo"</span>، لذلك لن يتم النظر في
+    <span class="Li>"bar"</span> أبدًا (على الرغم من أن القواعد تقول استخدام مطابقة ذكية على
+    <span class="Li>"foo"</span>). للتناوب مثل هذا، سيعمل مرجع المصفوفة، لأن هذا سيؤدي إلى بدء المطابقة الذكية:</p>
+<pre>when ([qw(foo bar)] { ... }</pre>
+<p class="Pp">هذا يعادل إلى حد ما وظيفة السقوط في عبارة switch بأسلوب C (لا تخلط بين وظيفة السقوط في Perl - انظر أدناه)، حيث يتم استخدام نفس الكتلة لعدة عبارات
+    <span class="Li">"case"</span>.</p>
+<p class="Pp">اختصار مفيد آخر هو أنه إذا استخدمت مصفوفة حرفية أو جدول تجزئة كمعامل لـ <span class="Li">"given"</span>، فسيتم تحويلها إلى مرجع. لذا فإن <span class="Li">given(@foo)</span> هو نفس <span class="Li">given(\@foo)</span>، على سبيل المثال.</p>
+<p class="Pp"><span class="Li">"default"</span> يعمل تمامًا مثل
+    <span class="Li">"when(1 == 1)"</span>، وهو ما يعني أنه يتطابق دائمًا.</p>
+<p class="Pp"><i>الخروج</i></p>
+<p class="Pp">يمكنك استخدام الكلمة المفتاحية <span class="Li">"break"</span> للخروج من كتلة
+    <span class="Li">"given"</span> المحيطة. كل كتلة <span class="Li">"when"</span> تنتهي ضمنيًا بـ
+    <span class="Li">"break"</span>.</p>
+<p class="Pp"><i>السقوط</i></p>
+<p class="Pp">يمكنك استخدام الكلمة المفتاحية <span class="Li">"continue"</span> للسقوط من حالة إلى
+    <span class="Li">"when"</span> أو
+    <span class="Li">"default"</span> التالية مباشرة:</p>
+<pre>given($foo) {
+    when (/x/) { say '$foo contains an x'; continue }
+    when (/y/) { say '$foo contains a y'            }
+    default    { say '$foo does not contain a y'    }
+}</pre>
+<p class="Pp"><i>قيمة الإرجاع</i></p>
+<p class="Pp">عندما تكون عبارة <span class="Li">"given"</span> صالحة أيضًا كتعبير (على سبيل المثال، عندما تكون العبارة الأخيرة في كتلة)، فإنها تُقيّم إلى:</p>
+<ul class="Bl-bullet">
+  <li>قائمة فارغة بمجرد مواجهة
+      <span class="Li">"break"</span> صريحة.</li>
+  <li>قيمة آخر تعبير تم تقييمه في عبارة
+      <span class="Li">"when"</span>/<span class="Li">"default"</span> الناجحة، إذا كان هناك واحد.</li>
+  <li>قيمة آخر تعبير تم تقييمه في كتلة
+      <span class="Li">"given"</span> إذا لم تكن أي شرطة صحيحة.</li>
+</ul>
+<p class="Pp">في كلتا الحالتين الأخيرتين، يتم تقييم التعبير الأخير في السياق الذي تم تطبيقه على كتلة
+    <span class="Li">"given"</span>.</p>
+<p class="Pp">لاحظ أنه على عكس <span class="Li">"if"</span> و
+    <s<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>perlsyn - perl syntax</title>
+        <link rel="stylesheet" type="text/css" href="/man.css"/>
+        <link rel="stylesheet" type="text/css" href="/arch.css"/>
+        <link rel="stylesheet" type="text/css" href="/syntax.css"/>
+        <link rel="icon" href="/favicon.ico"/>
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlsyn.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+        
+        <main class="container">
+            <article>
+<section class="manual-page">
+<h1 class="manual-page-title">perlsyn</h1>
+<div class="manual-page-section">
+<h2 id="NAME">NAME</h2>
+<p class="Pp">perlsyn - Perl syntax</p>
+</div>
+<div class="manual-page-section">
+<h2 id="DESCRIPTION">DESCRIPTION</h2>
+<p class="Pp"><span class="Li">&quot;unless&quot;</span>، تفشل
+    <span class="Li">&quot;when&quot;</span> دائمًا في تقييم قائمة فارغة.</p>
+<pre>my $price = do {
+    given ($item) {
+        when ([&quot;pear&quot;, &quot;apple&quot;]) { 1 }
+        break when &quot;vote&quot;;      # My vote cannot be bought
+        1e10  when /Mona Lisa/;
+        &quot;unknown&quot;;
+    }
+};</pre>
+<p class="Pp">حاليًا، لا يمكن استخدام كتل
+    <span class="Li">&quot;given&quot;</span> كتعابير صحيحة دائمًا. قد يتم معالجة
+    هذا في إصدار مستقبلي من Perl.</p>
+<p class="Pp"><i>التبديل في حلقة</i></p>
+<p class="Pp">بدلاً من استخدام
+    <span class="Li">given()</span>، يمكنك استخدام حلقة
+    <span class="Li">foreach()</span>. على سبيل المثال، هذه طريقة لعد عدد المرات
+    التي يظهر فيها سلسلة نصية معينة في مصفوفة:</p>
+<pre>use v5.10.1;
+my $count = 0;
+for (@array) {
+    when (&quot;foo&quot;) { ++$count }
+}
+print &quot;\@array contains $count copies of 'foo'\n&quot;;</pre>
+<p class="Pp">أو في إصدار أحدث:</p>
+<pre>use v5.14;
+my $count = 0;
+for (@array) {
+    ++$count when &quot;foo&quot;;
+}
+print &quot;\@array contains $count copies of 'foo'\n&quot;;</pre>
+<p class="Pp">في نهاية جميع كتل
+    <span class="Li">&quot;when&quot;</span>، يوجد
+    <span class="Li">&quot;next&quot;</span> ضمني. يمكنك إلغاء ذلك باستخدام
+    <span class="Li">&quot;last&quot;</span> صريح إذا كنت مهتمًا فقط بأول تطابق
+    وحده.</p>
+<p class="Pp">لا يعمل هذا إذا حددت متغير حلقة بشكل صريح، كما في
+    <span class="Li">&quot;for $item (@array)&quot;</span>. يجب عليك استخدام المتغير
+    الافتراضي
+    <span class="Li">$_</span>.</p>
+<p class="Pp"><i>الاختلافات عن Raku</i></p>
+<p class="Pp">لا تتوافق تعابير Perl 5 الذكية و
+    <span class="Li">&quot;given&quot;</span>/<span class="Li">&quot;when&quot;</span>
+    مع نظيراتها في Raku. الاختلاف الأكثر وضوحًا والأقل أهمية هو أنه في Perl 5،
+    تكون الأقواس مطلوبة حول الوسيط الخاص بـ
+    <span class="Li">given()</span> و
+    <span class="Li">when()</span> (باستثناء عندما يتم استخدام الأخير كملحق
+    للعبارة). الأقواس في Raku اختيارية دائمًا في بنية تحكم مثل
+    <span class="Li">if()</span>،
+    <span class="Li">while()</span>، أو
+    <span class="Li">when()</span>؛ لا يمكن جعلها اختيارية في Perl 5 دون قدر كبير
+    من الارتباك المحتمل، لأن Perl 5 سيحلل التعبير</p>
+<pre>given $foo {
+    ...
+}</pre>
+<p class="Pp">كما لو كان الوسيط الخاص بـ
+    <span class="Li">&quot;given&quot;</span> عنصرًا في الهاش
+    <span class="Li">%foo</span>، مع تفسير الأقواس كصيغة عنصر الهاش.</p>
+<p class="Pp">ومع ذلك، هناك العديد والعديد من الاختلافات الأخرى. على سبيل المثال،
+    يعمل هذا في Perl 5:</p>
+<pre>use v5.12;
+my @primary = (&quot;red&quot;, &quot;blue&quot;, &quot;green&quot;);
+if (@primary ~~ &quot;red&quot;) {
+    say &quot;primary smartmatches red&quot;;
+}
+if (&quot;red&quot; ~~ @primary) {
+    say &quot;red smartmatches primary&quot;;
+}
+say &quot;that's all, folks!&quot;;</pre>
+<p class="Pp">لكنه لا يعمل على الإطلاق في Raku. بدلاً من ذلك، يجب عليك استخدام
+    المشغل (القابل للموازاة)
+    <span class="Li">&quot;any&quot;</span>:</p>
+<pre>if any(@primary) eq &quot;red&quot; {
+    say &quot;primary smartmatches red&quot;;
+}
+if &quot;red&quot; eq any(@primary) {
+    say &quot;red smartmatches primary&quot;;
+}</pre>
+<p class="Pp">جدول المطابقات الذكية في "Smartmatch Operator" في perlop ليس متطابقًا
+    مع ما اقترحته مواصفات Raku، ويرجع ذلك أساسًا إلى الاختلافات بين نماذج بيانات
+    Raku و Perl 5، وأيضًا لأن مواصفات Raku قد تغيرت منذ أن انتقل Perl 5 إلى
+    التبني المبكر.</p>
+<p class="Pp">في Raku، ستقوم
+    <span class="Li">when()</span> دائمًا بمطابقة ذكية ضمنية مع وسيطها، بينما في Perl 5
+    من المريح (وإن كان محتملًا مربكًا) إلغاء هذه المطابقة الذكية الضمنية في
+    مواقف مختلفة محددة بشكل غير دقيق إلى حد ما، كما هو موضح أعلاه بشكل تقريبي. (يكمن
+    الفرق إلى حد كبير في أن Perl 5 لا يمتلك، حتى داخليًا، نوعًا منطقيًا.)</p>
+</section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>Version:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/perlsyn.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlsyn.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

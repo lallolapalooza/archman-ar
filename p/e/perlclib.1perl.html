@@ -1,0 +1,350 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlclib.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+- documentation:
+    often imprecise.</p>
+  </li>
+  <li>Do all your business before any other code can change things. If you make
+      changes, change back before returning.</li>
+  <li>Save the result of a query of global information to a per-instance area
+      before allowing another instance to execute. Then you can work on it at
+      your leisure. This might be an automatic C variable for non-pointers, or
+      something as described above in <span class="Li">&quot;&quot;Safely
+      Storing Static Data in XS&quot; in perlxs&quot;</span>.</li>
+</ul>
+<p class="Pp">Without threading, you don't have to worry about being interrupted
+    by the system giving control to another thread. With threading, you will
+    have to uses mutexes, and be concerned with the possibility of deadlock.</p>
+  <section class="Ss">
+    <h2 class="Ss" id='Functions_always_unsuitable_for_use_under_multi-threads'>
+      Functions   always unsuitable for use under multi-threads
+    </h2>
+    <p class="Pp">A few functions are considered totally unsuited for use in a
+        multi-thread environment. These must be called only during single-thread
+        operation.</p>
+    <pre> endusershell()    @getaliasent()      muntrace()   rexec()
+ ether_aton()      @getrpcbyname()     profil()     rexec_af()
+ ether_ntoa()      @getrpcbynumber()   rcmd()       setusershell()
+ fts_children()    @getrpcent()        rcmd_af()    ttyslot()
+ fts_read()         getusershell()     re_comp()
+@getaliasbyname()   mtrace()           re_exec()</pre>
+    <p class="Pp"><span class="Li">&quot;@&quot;</span> above marks the functions
+        for which there are preferred alternatives available on some platforms, and
+        those alternatives may be suitable for multi-thread use.</p>
+  </section>
+  <section class="Ss">
+    <h2 class="Ss" id='Functions_which_must_be_called_at_least_once_before_starting_threads'>
+      Functions   which must be called at least once before starting threads
+    </h2>
+    <p class="Pp">Some functions perform initialization on their first call that
+        must be done while still in a single-thread environment, but subsequent
+        calls are thread-safe when executed in a critical section. Therefore, they
+        must be called at least once before switching to multi-threads:</p>
+    <pre>getutent()  getutline()  getutxid()    mallinfo()  valloc()
+getutid()   getutxent()  getutxline()  pvalloc()</pre>
+  </section>
+  <section class="Ss">
+    <h2 class="Ss" id='Functions_that_are_thread-safe_when_called_with_appropriate_arguments'>
+      Functions   that are thread-safe when called with appropriate arguments
+    </h2>
+    <p class="Pp">Some of the functions are thread-safe if called with arguments
+        that comply with certain (easily met) restrictions. These are:</p>
+    <pre>ctermid()        mbrlen()      mbsrtowcs()  wcrtomb()
+cuserid()        mbrtowc()     tmpnam()     wcsnrtombs()
+error_at_line()  mbsnrtowcs()  va_arg()     wcsrtombs()</pre>
+    <p class="Pp">See the man pages of each for details. (For completeness, the list
+        includes functions that you shouldn't be using anyway because of other
+        reasons.)</p>
+  </section>
+  <section class="Ss">
+    <h2 class="Ss" id='Functions_vulnerable_to_signals'>
+      Functions   vulnerable to signals
+    </h2>
+    <p class="Pp">Some functions are vulnerable to asynchronous signals. These
+      are:</p>
+    <pre>getlogin()    getutid()    getutxid()    login()   pututline()  updwtmp()
+getlogin_r()  getutline()  getutxline()  logout()  pututxline() wordexp()
+getutent()    getutxent()  glob()        logwtmp() sleep()</pre>
+    <p class="Pp">Some libc's implement BAqsystem()' thread-safely. But in others,
+        it also has signal issues.</p>
+  </section>
+  <section class="Ss">
+    <h2 class="Ss" id='General_issues_with_thread-safety'>
+      General   issues with thread-safety
+    </h2>
+    <p class="Pp">Some libc functions use and/or modify a global state, such as a
+        database. The libc functions presume that there is only one instance at a
+        time operating on that database. Unpredictable results occur if more than
+        one does, even if the database is not changed. For example, typically there
+        is a global iterator for such a data base and that iterator is maintained by
+        libc, so that each new read from any instance advances it, meaning that no
+        instance will see all the entries. The only way to make these thread-safe is
+        to have an exclusive lock on a mutex from the open call through the close.
+        You are advised to not use such databases from more than one instance at a
+        time.</p>
+    <p class="Pp">Other examples of functions that use a global state include
+        pseudo-random number generators. Some libc implementations of BAqrand()',
+        for example, may share the data across threads; and others may have
+        per-thread data. The shared ones will have unreproducible results, as the
+        threads will vary in their timings and interactions. This may be what you
+        want; or it may not be. (This particular function is a candidate to be
+        removed from the POSIX Standard because of these issues.)</p>
+    <p class="Pp">Functions that output to a stream also are considered
+        thread-unsafe when locking is not done. But the typical consequences are
+        just that the data is output in an unpredictable order; that outcome may be
+        totally acceptable to you.</p>
+    <p class="Pp">Since the current working directory is global to a process, all
+        instances depend on it. One instance doing a <a href='/man/chdir.2.en'>chdir(2)</a> affects all the
+        other instances. In a multi-threaded environment, any libc call that expects
+        the directory to not change for the duration of its execution will have
+        undefined results if another thread interrupts it at just the wrong time and
+        changes the directory. The man pages only list one such call, <b>nftw()</b>.
+        But there may be other issues lurking.</p>
+  </section>
+  <section class="Ss">
+    <h2 class="Ss" id='Reentrant_equivalent_functions'>
+      Reentrant   equivalent functions
+    </h2>
+    <p class="Pp">Some functions that are problematic with regard to MULTIPLICITY
+        have reentrant versions (on some or all platforms) that are better suited,
+        with fewer (perhaps no) races when run under threads.</p>
+    <p class="Pp">Some of these reentrant functions that are available on all
+        platforms should always be used anyway; they are in the lists directly under
+        &quot;libc functions to avoid&quot;.</p>
+    <p class="Pp">Others may not be available on some platforms, or have issues that
+        make them undesirable to use even when they are available. Or it may just be
+        more complicated and tedious to use the reentrant version. For these, perl
+        has a mechanism for automatically substituting that reentrant version when
+        available and desirable, while hiding the complications from your code. This
+        feature is enabled by default for code in the Perl core and its extensions.
+        To enable it in other XS modules,</p>
+    <pre>#define PERL_REENTRANT</pre>
+    <p class="Pp">It is simpler for you to use the unpreferred version in your code,
+        and rely on this feature to do the better thing, in part because no
+        substitution is done if the alternative is not available or desirable on the
+        platform, nor if threads aren't enabled. You just write as if there weren't
+        threads, and you get the better behavior without having to think about
+      it.</p>
+    <p class="Pp">On some platforms the safer library functions may fail if the
+        result buffer is too small (for example the user group databases may be
+        rather large, and the reentrant functions may have to carry around a full
+        snapshot of those databases). Perl will start with a small buffer, but keep
+        retrying and growing the result buffer until the result fits. If this
+        limitless growing sounds bad for security or memory consumption reasons you
+        can recompile Perl with
+        <span class="Li">&quot;PERL_REENTRANT_MAXSIZE&quot;</span> #defined to the
+        maximum number of bytes you will allow.</p>
+    <p class="Pp">Below is a list of the non-reentrant functions and their reentrant
+        alternatives. This substitution is done even on functions that you shouldn't
+        be using in the first place. These are marked by a
+        <span class="Li">&quot;*&quot;</span>. You should instead use the alternate
+        given in the lists directly under &quot;libc functions to avoid&quot;.</p>
+    <p class="Pp">Even so, some of the preferred alternatives are considered
+        obsolete or otherwise unwise to use on some platforms. These are marked with
+        a '?'. Also, some alternatives aren't Perl-defined functions and aren't in
+        the POSIX Standard, so won't be widely available. These are marked with '~'.
+        (Remember that the automatic substitution only happens when they are
+        available and desirable, so you can just use the unpreferred
+      alternative.)</p>
+    <pre>*asctime()             ?asctime_r()
+ crypt()               ~crypt_r()
+ ctermid()             ~ctermid_r()
+*ctime()               ?ctime_r()
+ endgrent()           ?~endgrent_r()
+ endhostent()         ?~endhostent_r()
+ endnetent()          ?~endnetent_r()
+ endprotoent()        ?~endprotoent_r()
+ endpwent()           ?~endpwent_r()
+ endservent()         ?~endservent_r()
+ getgrent()            ~getgrent_r()
+ getgrgid()             getgrgid_r()
+ getgrnam()             getgrnam_r()
+ gethostbyaddr()       ~gethostbyaddr_r()
+ gethostbyname()       ~gethostbyname_r()
+ gethostent()          ~gethostent_r()
+ getlogin()             getlogin_r()
+ getnetbyaddr()        ~getnetbyaddr_r()
+ getnetbyname()        ~getnetbyname_r()
+ getnetent()           ~getnetent_r()
+ getprotobyname()      ~getprotobyname_r()
+ getprotobynumber()    ~getprotobynumber_r()
+ getprotoent()         ~getprotoent_r()
+ getpwent()            ~getpwent_r()
+ getpwnam()             getpwnam_r()
+ getpwuid()             getpwuid_r()
+ getservbyname()       ~getservbyname_r()
+ getservbyport()       ~getservbyport_r()
+ getservent()          ~getservent_r()
+ getspnam()            ~getspnam_r()
+ gmtime()               gmtime_r()
+ localtime()            localtime_r()
+ readdir()             ?readdir_r()
+ readdir64()           ~readdir64_r()
+ setgrent()           ?~setgrent_r()
+ sethostent()         ?~sethostent_r()
+*setlocale()          ?~setlocale_r()
+ setnetent()          ?~setnetent_r()
+ setprotoent()        ?~setprotoent_r()
+ setpwent()           ?~setpwent_r()
+ setservent()         ?~setservent_r()
+*strerror()             strerror_r()
+*tmpnam()              ~tmpnam_r()
+ ttyname()              ttyname_r()</pre>
+    <p class="Pp">The Perl-furnished items are documented in perlapi.</p>
+    <p class="Pp">The bottom line is:</p>
+    <dl class="Bl-tag">
+      <dt id="For">For items marked
+        &quot;*&quot;</dt>
+      <dd>Replace all uses of these with the preferred alternative given in the
+          lists directly under &quot;libc functions to avoid&quot;.</dd>
+      <dt id="For~2">For the remaining
+        items</dt>
+      <dd>If you really need to use these functions, you have two choices:</dd>
+    </dl>
+    <div class="Bd-indent">
+      <dl class="Bl-tag">
+        <dt id="If">If you #define
+          PERL_REENTRANT</dt>
+        <dd>Use the function in the first column as-is, and let perl do the work of
+            substituting the function in the right column if available on the
+            platform, and it is deemed suitable for use.
+          <p class="Pp">You should look at the man pages for both versions to find any
+              other gotchas.</p>
+        </dd>
+        <dt id="If~2">If you don't enable automatic
+          substitution</dt>
+        <dd>You should examine the application's code to determine if the column 1
+ function presents a real problem under threads given the circumstances it
+      is used in. You can go directly to the column 2 replacement, but beware of
+      the ones that are marked. Some of those may be nonexistent or flaky on
+      some platforms.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Functions_that_need_the_environment_to_be_constant'><a class='permalink' href='#Functions_that_need_the_environment_to_be_constant'>الوظائف التي تحتاج إلى ثبات البيئة</a></h2>
+<p class="Pp">نظرًا لأن البيئة عالمية للعملية، تعتمد جميع المثيلات عليها. تغيير مثيل واحد للبيئة يؤثر على جميع المثيلات الأخرى. تحت سلاسل العمليات، أي استدعاء libc يتوقع ألا تتغير البيئة طوال مدة تنفيذه سيكون له نتائج غير محددة إذا قامت سلسلة عمليات أخرى بمقاطعته في وقت غير مناسب وغيرت البيئة. هذه هي الوظائف التي تدرجها صفحات الدليل على أنها حساسة لذلك.</p>
+<pre>catopen()               gethostbyname2()    newlocale()
+ctime()                 gethostbyname2_r()  regerror()
+ctime_r()               gethostbyname_r()   secure_getenv()
+endhostent()            gethostent()        sethostent()
+endhostent_r()          gethostent_r()      sethostent_r()
+endnetent()             gethostid()         setlocale()
+endnetent_r()           getnameinfo()       setlocale_r()
+execlp()                getnetbyname()      setnetent()
+execvp()                getnetent()         setnetent_r()
+execvpe()               getopt()            strftime()
+fnmatch()               getopt_long()       strptime()
+getaddrinfo()           getopt_long_only()  sysconf()
+get_current_dir_name()  getrpcport()        syslog()
+getdate()               glob()              tempnam()
+getdate_r()             gmtime()            timegm()
+getenv()                gmtime_r()          timelocal()
+gethostbyaddr()         localtime()         tzset()
+gethostbyaddr_r()       localtime_r()       vsyslog()
+gethostbyname()         mktime()</pre>
+<p class="Pp">العديد من هذه الوظائف إشكالية تحت سلاسل العمليات لأسباب أخرى أيضًا. انظر صفحات الدليل لأي وظيفة تستخدمها.</p>
+<p class="Pp">تعرف Perl آليات قفل (mutexes) تسمى <span class="Li">&quot;ENV_READ_LOCK&quot;</span> و <span class="Li">&quot;ENV_READ_UNLOCK&quot;</span> لتغليف استدعاءات هذه الوظائف. تحتاج إلى مراعاة احتمالية حدوث قفل مميت (deadlock). من المتوقع أن يتم وضع آلية مختلفة وتفضيلها لـ Perl v5.42.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Locale-specific_issues'><a class='permalink' href='#Locale-specific_issues'>مشاكل خاصة باللغة (Locale)</a></h2>
+<p class="Pp">كانت برامج لغة C في الأصل تحتوي على لغة عالمية واحدة للعملية بأكملها. وجد لاحقًا أن هذا غير كافٍ للعديد من الأغراض، لذلك غيرت الامتدادات اللاحقة ذلك، أولاً مع Windows، ثم POSIX 2008. في Windows، يمكنك تغيير أي سلسلة عمليات في أي وقت للعمل إما بلغة لكل سلسلة عمليات، أو باللغة العالمية، باستخدام وظيفة libc جديدة خاصة. في POSIX، تعمل واجهة برمجة التطبيقات الأصلية فقط على اللغة العالمية، ولكن هناك واجهة برمجة تطبيقات جديدة تمامًا لمعالجة لغات لكل سلسلة عمليات أو اللغة العالمية. كما هو الحال مع Windows (ولكن باستخدام واجهة برمجة التطبيقات الجديدة)، يمكن تبديل سلسلة عمليات في أي وقت للعمل على اللغة العالمية، أو لغة لكل سلسلة عمليات.</p>
+<p class="Pp">عندما يقوم مثيل بتغيير اللغة العالمية، تتأثر جميع المثيلات الأخرى التي تستخدم اللغة العالمية. تقريبًا جميع الوظائف المتعلقة باللغة المدرجة مباشرة تحت "التعامل مع Perl المضمن وسلاسل العمليات" لها سلوك غير محدد إذا قامت سلسلة عمليات أخرى بمقاطعة تنفيذها وغيرت اللغة. تحت سلاسل العمليات، يمكن لسلسلة عمليات أخرى أن تفعل ذلك بالضبط.</p>
+<p class="Pp">ولكن، على الأنظمة التي تحتوي على لغات لكل سلسلة عمليات، ابتداءً من Perl v5.28، تستخدم Perl هذه اللغات بعد التهيئة؛ لا يتم استخدام اللغة العالمية إلا إذا قامت رمز XS باستدعاء <span class="Li">switch_to_global_locale()</span>. يؤثر هذا فقط على السلسلة التي استدعتها. إذا كان هناك بحد أقصى مثيل واحد يستخدم اللغة العالمية، فلن تتأثر المثيلات الأخرى، ولن تتغير لغة الوظائف التي يتم تنفيذها بشكل متزامن في سلاسل العمليات الأخرى، ويصبح هذا الموضوع غير ذي أهمية. سيتم تعريف رمز معالج C المسبق <span class="Li">&quot;USE_THREAD_SAFE_LOCALE&quot;</span> إذا كانت لغات لكل سلسلة عمليات متاحة وتم تجميع Perl لاستخدامها. تنفيذ لغات لكل سلسلة عمليات على بعض المنصات، مثل معظم المنصات المستندة إلى *BSD، معطل لدرجة أن ملفات تلميحات Perl لها تقوم بتعطيل إمكانية استخدامها عن عمد.</p>
+<p class="Pp">والعكس صحيح، على الأنظمة التي تحتوي على لغة عالمية فقط، فإن وجود سلاسل عمليات مختلفة تستخدم لغات مختلفة من غير المرجح أن يعمل بشكل جيد؛ وتغيير اللغة خطير، وغالبًا ما يؤدي إلى تعطل.</p>
+<p class="Pp">لدى Perl رموز مكثفة للعمل بأفضل شكل ممكن على كلا النوعين من الأنظمة. يجب عليك دائمًا استخدام <span class="Li">Perl_setlocale()</span> لتغيير اللغة والاستعلام عنها، حيث أنها تعمل بشكل محمول عبر نطاق الاحتمالات.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">perlapi, perlapio, perlguts, perlxs</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>أدلة:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#libc_functions_to_avoid">وظائف libc يجب تجنبها</a></li>
+        
+            <li><a href="#Dealing_with_locales">التعامل مع اللغات</a></li>
+        
+            <li><a href="#Dealing_with_embedded_perls_and_threads">التعامل مع Perl المضمن وسلاسل العمليات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perlclib.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlclib.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها رخصتها الخاصة
+               المحددة في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

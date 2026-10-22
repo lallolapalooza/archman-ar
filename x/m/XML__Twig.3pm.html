@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>XML::Twig(3pm) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">XML__Twig(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">XML::Twig(3)</td>
+    <td class="head-vol">User Contributed Perl Documentation</td>
+    <td class="head-rtitle">XML::Twig(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">XML::Twig - A perl module for processing huge XML documents in
+    tree mode.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<p class="Pp">Note that this documentation is intended as a reference to the
+    module.</p>
+<p class="Pp">Complete docs, including a tutorial, examples, an easier to use
+    HTML version, a quick reference card and a FAQ are available at
+    <a href='http://www.xmltwig.org/xmltwig'>http://www.xmltwig.org/xmltwig</a>.</p>
+<p class="Pp">Small documents (loaded in memory as a tree):</p>
+<pre>my $twig=XML::Twig-&gt;new();    # create the twig
+$twig-&gt;parsefile( 'doc.xml'); # build it
+my_process( $twig);           # use twig methods to process it
+$twig-&gt;print;                 # output the twig</pre>
+<p class="Pp">Huge documents (processed in combined stream/tree mode):</p>
+<pre># at most one div will be loaded in memory
+my $twig=XML::Twig-&gt;new(
+  twig_handlers =&gt;
+    { title   =&gt; sub { $_-&gt;set_tag( 'h2') }, # change title tags to h2
+                                             # $_ is the current element
+      para    =&gt; sub { $_-&gt;set_tag( 'p')  }, # change para to p
+      hidden  =&gt; sub { $_-&gt;delete;       },  # remove hidden elements
+      list    =&gt; \&amp;my_list_process,          # process list elements
+      div     =&gt; sub { $_[0]-&gt;flush;     },  # output and free memory
+    },
+  pretty_print =&gt; 'indented',                # output will be nicely formatted
+  empty_tags   =&gt; 'html',                    # outputs &lt;empty_tag /&gt;
+                       );
+$twig-&gt;parsefile( 'my_big.xml');
+sub my_list_process
+  { my( $twig, $list)= @_;
+    # ...
+  }</pre>
+<p class="Pp">See XML::Twig 101 for other ways to use the module, as a filter
+    for example.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">This module provides a way to process XML documents. It is built
+    on top of <span class="Li">&quot;XML::Parser&quot;</span>.</p>
+<p class="Pp">The module offers a tree interface to the document, while allowing
+    you to output the parts of it that have been completely processed.</p>
+<p class="Pp">It allows minimal resource (CPU and memory) usage by building the
+    tree only for the parts of the documents that need actual processing,
+    through the use of the <span class="Li">&quot;twig_roots &quot;</span> and
+    <span class="Li">&quot;twig_print_outside_roots &quot;</span> options. The
+    <span class="Li">&quot;finish &quot;</span> and
+    <span class="Li">&quot;finish_print &quot;</span> methods also help to
+    increase performance.</p>
+<p class="Pp">XML::Twig tries to make simple things easy, so it tries its best
+    to takes care of a lot of the (usually) annoying (but sometimes necessary)
+    features that come with XML and XML::Parser.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TOOLS'><a class='permalink' href='#TOOLS'>TOOLS</a></h1>
+<p class="Pp">XML::Twig comes with a few command-line utilities:</p>
+<section class="Ss">
+<h2 class="Ss" id='xml_pp_-_xml_pretty-printer'><a class='permalink' href='#xml_pp_-_xml_pretty-printer'>xml_pp -   xml pretty-printer</a></h2>
+<p class="Pp">XML pretty-print using XML::Twig.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='xml_grep_-_grep_XML_files_looking_for_specific_elements'><a class='permalink' href='#xml_grep_-_grep_XML_files_looking_for_specific_elements'>xml_grep -   grep XML files looking for specific elements</a></h2>
+<p class="Pp"><span class="Li">&quot;xml_grep&quot;</span> does a grep on XML
+    files. Instead of using regular expressions it uses XPath expressions (in
+    fact the subset of XPath supported by XML::Twig).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='xml_split_-_cut_a_big_XML_file_into_smaller_chunks'><a class='permalink' href='#xml_split_-_cut_a_big_XML_file_into_smaller_chunks'>xml_split   - cut a big XML file into smaller chunks</a></h2>
+<p class="Pp"><span class="Li">&quot;xml_split&quot;</span> takes a (presumably
+    big) XML file and split it in several smaller files, based on various
+    criteria (level in the tree, size or an XPath expression).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='xml_merge_-_merge_back_XML_files_split_with_xml_split'><a class='permalink' href='#xml_merge_-_merge_back_XML_files_split_with_xml_split'>xml_merge   - merge back XML files split with xml_split</a></h2>
+<p class="Pp"><span class="Li">&quot;xml_merge&quot;</span> takes several xml
+    files that have been split using
+    <span class="Li">&quot;xml_split&quot;</span> and recreates a single
+  file.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='xml_spellcheck_-_spellcheck_XML_files'><a class='permalink' href='#xml_spellcheck_-_spellcheck_XML_files'>xml_spellcheck   - spellcheck XML files</a></h2>
+<p class="Pp"><span class="Li">&quot;xml_spellcheck&quot;</span> lets you
+    spell-check the contents of an XML file. It extracts the text (the content
+    of elements and optionally of attributes), call a spell checker on it, then
+    recreates the XML document.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='XML::Twig_101'><a class='permalink' href='#XML::Twig_101'>XML::Twig   101</a></h1>
+<p class="Pp">XML::Twig can be used either on &quot;small&quot; XML documents
+    (that fit in memory), or on huge ones by processing parts of the document
+    and outputting or discarding them once they are processed.</p>
+<section class="Ss">
+<h2 class="Ss" id='Loading_an_XML_document_and_processing_it'><a class='permalink' href='#Loading_an_XML_document_and_processing_it'>Loading   an XML document and processing it</a></h2>
+<pre>my $t= XML::Twig-&gt;new();
+$t-&gt;parse( '&lt;d&gt;&lt;title&gt;title&lt;/title&gt;&lt;para&gt;p 1&lt;/para&gt;&lt;para&gt;p 2&lt;/para&gt;&lt;/d&gt;');
+my $root= $t-&gt;root;
+$root-&gt;set_tag( 'html');              # change doc to html
+$title= $root-&gt;first_child( 'title'); # get the title
+$title-&gt;set_tag( 'h1');               # turn it into h1
+my @para= $root-&gt;children( 'para');   # get the para children
+foreach my $para (@para)
+  { $para-&gt;set_tag( 'p'); }           # turn them into p
+$t-&gt;print;                            # output the document</pre>
+<p class="Pp">Other useful methods include:</p>
+<p class="Pp">att: <span class="Li">&quot;$elt-&gt;att( 'foo')&quot;</span>
+    return the <span class="Li">&quot;foo&quot;</span> attribute for an
+  element,</p>
+<p class="Pp">set_att : <span class="Li">&quot;$elt-&gt;set_att( foo =&gt;
+    &quot;bar&quot;)&quot;</span> sets the
+    <span class="Li">&quot;foo&quot;</span> attribute to the
+    <span class="Li">&quot;bar&quot;</span> value,</p>
+<p class="Pp">next_sibling:
+    <span class="Li">&quot;$elt-&gt;next_sibling&quot;</span> return the next
+    sibling in the document (in the example
+    <span class="Li">&quot;$title-&gt;next_sibling&quot;</span> is the first
+    <span class="Li">&quot;para&quot;</span>, you can also (and actually should)
+    use <span class="Li">&quot;$elt-&gt;next_sibling( 'para')&quot;</span> to
+    get it.</p>
+<p class="Pp">The document can also be transformed through the use of the cut,
+    copy, paste and move methods: <span class="Li">&quot;$title-&gt;cut;
+    $title-&gt;paste( after =&gt; $p);&quot;</span> for example.</p>
+<p class="Pp">And much, much more, see XML::Twig::Elt.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Processing_an_XML_document_chunk_by_chunk'><a class='permalink' href='#Processing_an_XML_document_chunk_by_chunk'>Processing   an XML document chunk by chunk</a></h2>
+<p class="Pp">One of the strengths of XML::Twig is that it lets you work with
+    files that do not fit in memory. Storing an XML document in memory as a tree
+    is quite memory-expensive; the expansion factor being often around 10x.</p>
+<p class="Pp">To do this, you can define handlers that will be called once a
+    specific element has been completely parsed (closed). In these handlers, you
+    can access the element and process it as you see fit, using the navigation
+    and the cut/copy/paste methods, plus lots of convenient ones like
+    <span class="Li">&quot;prefix &quot;</span>. Once the element is completely
+    processed, you can then <span class="Li">&quot;flush &quot;</span> it, which
+    outputs the element and frees its memory. You can also
+    <span class="Li">&quot;purge &quot;</span> it if you don't need to output it
+    (if you are just extracting some data from the document for example). The
+    handler will be called again once the next relevant element has been
+  parsed.</p>
+<pre>my $t= XML::Twig-&gt;new( twig_handlers =&gt;
+                        { section =&gt; \&amp;section,
+                          para   =&gt; sub { $_-&gt;set_tag( 'p'); }
+                        },
+                     );
+$t-&gt;parsefile( 'doc.xml');
+# the handler is called once a section is completely parsed, ie when
+# the end tag for section is found, it receives the twig itself and
+# the element (including all its sub-elements) as arguments
+sub section
+  { my( $t, $section)= @_;      # arguments for all twig_handlers
+    $section-&gt;set_tag( 'div');  # change the tag name
+    # let's use the attribute nb as a prefix to the title
+    my $title= $section-&gt;first_child( 'title'); # find the title
+    my $nb= $title-&gt;att( 'nb'); # get the attribute
+    $title-&gt;prefix( &quot;$nb - &quot;);  # easy isn't it?
+    $section-&gt;flush;            # outputs the section and frees memory
+  }</pre>
+<p class="Pp">When a handler is called, <span class="Li">$_</span> contains the
+    element matched by the handler.</p>
+<p class="Pp">You can trigger h
+</div>
+</section>
+                
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+# -*- coding: utf-8 -*-
+
+sections:
+  - title: "> handlers on more elaborate conditions"
+    content: |
+      This handler matches only <span class="Li">"title"</span> elements that
+      are in in <span class="Li">"section"</span> elements:
+
+      <pre>my $t= XML::Twig-&gt;new( twig_handlers =&gt;
+                               { 'section/title' =&gt; sub { $_-&gt;print } }
+                           )
+                      -&gt;parsefile( 'doc.xml');</pre>
+
+      Here <span class="Li">"sub { $_-&gt;print }"</span>
+      simply prints the current element.
+
+      Handlers can also test for the presence or content of
+      attributes:
+
+      <pre>my $t= XML::Twig-&gt;new( twig_handlers =&gt;
+                          { 'section[@level="1" or @force]' =&gt; sub { $_-&gt;print } }
+                           );
+                      -&gt;parsefile( 'doc.xml');</pre>
+
+      You can also use <span class="Li">"start_tag_handlers "</span> to process an element as soon as the start tag is found.
+
+  - title: "> Processing just parts of an XML document"
+    content: |
+      The twig_roots mode builds only the required sub-trees from the
+      document. Anything outside of the twig roots is ignored:
+
+      <pre>my $t= XML::Twig-&gt;new(
+           # the twig will include just the root and selected titles
+               twig_roots   =&gt; { 'section/title' =&gt; \&amp;print_n_purge,
+                                 'annex/title'   =&gt; \&amp;print_n_purge
+               }
+                          );
+      $t-&gt;parsefile( 'doc.xml');
+      sub print_n_purge
+        { my( $t, $elt)= @_;
+          print $elt-&gt;text;    # print the text (including sub-element texts)
+          $t-&gt;purge;           # frees the memory
+        }</pre>
+
+      You can use that mode when you want to process parts of a
+      documents but are not interested in the rest and you don't want to pay the
+      price, either in time or memory, to build the tree for the it.
+
+  - title: "> Building an XML filter"
+    content: |
+      You can combine the <span class="Li">"twig_roots"</span>
+      and the <span class="Li">"twig_print_outside_roots"</span> options
+      to build filters, which let you modify selected elements and output the rest
+      of the document as-is.
+
+      This would convert prices in $ to prices in Euro in a
+      document:
+
+      <pre>my $t= XML::Twig-&gt;new(
+               twig_roots   =&gt; { 'price' =&gt; \&amp;convert, },   # process prices
+               twig_print_outside_roots =&gt; 1,               # print the rest
+                          );
+      $t-&gt;parsefile( 'doc.xml');
+      sub convert
+        { my( $t, $price)= @_;
+          my $currency=  $price-&gt;att( 'currency');          # get the currency
+          if( $currency eq 'USD')
+            { $usd_price= $price-&gt;text;                     # get the price
+              # %rate is just a conversion table
+              my $euro_price= $usd_price * $rate{usd2euro};
+              $price-&gt;set_text( $euro_price);               # set the new price
+              $price-&gt;set_att( currency =&gt; 'EUR');          # don't forget this!
+            }
+          $price-&gt;print;                                    # output the price
+        }</pre>
+
+  - title: "> XML::Twig and various versions of Perl, XML::Parser and expat:"
+    content: |
+      XML::Twig is a lot more sensitive to variations in versions of
+      perl, XML::Parser and expat than to the OS, so this should cover some
+      reasonable configurations.
+
+      The "recommended configuration" is perl 5.10.0+ (for good Unicode support), XML::Parser 2.31+, and expat 1.95.5+.
+
+      See
+      &lt;<a href='http://testers.cpan.org/search?request=dist'>http://testers.cpan.org/search?request=dist</a>&amp;dist=XML-Twig&gt; for
+      the CPAN testers reports on XML::Twig, which list all tested
+      configurations.
+
+      An Atom feed of the CPAN Testers results is available at
+      <a href='http://xmltwig.org/rss/twig_testers.rss'>http://xmltwig.org/rss/twig_testers.rss</a>.
+
+      Finally:
+
+      - XML::Twig does <b>NOT</b> work with expat 1.95.4.
+      - XML::Twig only works with XML::Parser 2.27 in perl 5.10.0+.
+        Note that I can't compile XML::Parser 2.27 anymore, so I can't guarantee
+        that it still works.
+      - XML::Parser 2.28 does not really work.
+
+      When in doubt, upgrade expat, XML::Parser, and Scalar::Util.
+
+      Finally, for some optional features, XML::Twig depends on some
+      additional modules. The complete list, which depends somewhat on the version
+      of Perl that you are running, is given by running
+      <span class="Li">"t/zz_dump_config.t"</span>.
+
+sections_bottom:
+  - title: "> Simplifying XML processing"
+    content: |
+      - <b>Whitespaces</b>:
+        Whitespaces that look non-significant are discarded. This behaviour can be
+        controlled using the <span class="Li">"keep_spaces "</span>,
+        <span class="Li">"keep_spaces_in "</span> and
+        <span class="Li">"discard_spaces_in "</span> options.
+      - <b>Encoding</b>:
+        You can specify that you want the output in the same encoding as the input
+        (provided you have valid XML, which means you have to specify the encoding
+        either in the document or when you create the Twig object) using the
+        <span class="Li">"keep_encoding "</span> option.
+        You can also use <span class="Li">"output_encoding "</span> to convert the internal UTF-8 format to the required
+        encoding.
+      - <b>Comments and Processing Instructions (PI)</b>:
+        Comments and PIs can be hidden from the processing, but still appear in
+        the output (they are carried by the "real" element closer to
+        them). Or, they can be made available to processing as
+        <span class="Li">"#COMMENT"</span> and
+        <span class="Li">"#PI"</span> elements.
+      - <b>Pretty Printing</b>:
+        XML::Twig can output the document pretty-printed so it is easier to read
+        for us humans.
+      - <b>Surviving an untimely death</b>:
+        XML parsers are supposed to react violently when fed improper XML.
+        XML::Parser just dies.
+        XML::Twig provides the <span class="Li">"safe_parse "</span>
+        and the <span class="Li">"safe_parsefile "</span> methods which wraps the parse in an
+        <span class="Li">"eval"</span> and returns either the parsed
+        twig or 0 in case of failure.
+      - <b>Private attributes</b>:
+        Attributes with a name starting with # (illegal in XML!) will not be
+        output, so you can safely use them to store temporary values during
+        processing. Note that you can store anything in a private attribute, not
+        just text, it's just a regular Perl variable, so a reference to an object
+        or a huge data structure is perfectly fine.
+
+  - title: "> CLASSES"
+    content: |
+      XML::Twig uses a very limited number of classes. The ones you are
+      most likely to use are <span class="Li">"XML::Twig "</span>, which
+      represents a complete XML document, including the document itself (the root
+      of the document itself is <span class="Li">"root "</span>), its
+      handlers, its input or output filters... The other main class is
+      <span class="Li">"XML::Twig::Elt "</span>, which models an XML
+      element. "Element" here has a very wide definition: it can be a
+      regular element, or text stored in a
+      <span class="Li">"#PCDATA"</span> (or
+      <span class="Li">"#CDATA"</span>) tag, an entity (tag is
+      <span class="Li">"#ENT"</span>), a Processing Instruction
+      (<span class="Li">"#PI"</span>), or a comment
+      (<span class="Li">"#COMMENT"</span>).
+
+      XML::Twig and XML::Twig::Elt are the two commonly used
+      classes.
+
+      You might want to look the <span class="Li">"elt_class "</span> option if you want to subclass
+      <span class="Li">"XML::Twig::Elt"</span>.
+
+      Attributes are just attached to their parent element, they are not
+      objects per se. (Please use the provided methods <span class="Li">"att "</span>
+      and <span class="Li">"set_att "</span> to access
+      them, if you access them as a hash, then your code becomes implementation
+      dependent and might break in the future.)
+
+      Other classes that are seldom used are
+      <span class="Li">"XML::Twig::Entity_list "</span> and
+      <span class="Li">"XML::Twig::Entity "</span>.
+
+      If you use <span class="Li">"XML::Twig::XPath "</span>
+      instead of <span class="Li">"XML::Twig"</span>, elements are then
+      created as <span class="Li">"XML::Twig::XPath::Elt "</span>.
+
+  - title: "> METHODS"
+    sections:
+      - title: "> XML::Twig"
+        content: |
+          A twig is a subclass of XML::Parser, so all XML::Parser methods
+          can be called on a twig object, including parse and parsefile.
+          <span class="Li">"setHandlers"</span> on the other hand cannot be
+          used, see <span class="Li">"BUGS "</span>.
+
+          - <b>new</b>:
+            This is a class method, the constructor for XML::Twig. Options are passed
+            as keyword-value pairs. Recognized options are the same as XML::Parser,
+            plus some (in fact a lot!) XML::Twig specifics.
+
+            New Options:
+
+            - <b>twig_handlers</b>:
+              This argument consists of a hash <span class="Li">"{ expression
+              =&quot;"</span> \&amp;handler}&gt; where expression is a an <i>XPath-like
+              expression</i> (+ some others).
+
+              XPath expressions are limited to using the child and
+              descendant axis (indeed you can't specify an axis), and predicates
+              cannot be nested. You can use the
+              <span class="Li">"string"</span>, or
+              <span class="Li">string(&lt;tag&gt;)</span> function (except in
+              <span class="Li">"twig_roots"</span> triggers).
+
+              Additionally you can use regexps (/ delimited) to match
+              attribute and string values.
+
+              Examples:
+                <pre>foo
+foo/bar
+foo//bar
+/foo/bar
+/foo//bar
+/foo/bar[@att1 = "val1" and @att2 = "val2"]/baz[@a &gt;= 1]
+foo[string()=~ /^duh!+/]
+/foo[string(bar)=~ /\d+/]/baz[@att != 3]
+</pre>
+
+              #CDATA can be used to call a handler for a CDATA tag. #COMMENT
+              can be used to call a handler for comments.
+
+              Some additional (
+(غير XPath) أيضًا لتسهيل الاستخدام: </p>
+</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="processing"><a class="permalink" href="#processing">تعليمات المعالجة</a></dt>
+<dd>تؤدي '؟' أو '#PI' إلى تشغيل المعالج لأي تعليمة معالجة، ويؤدي '؟ &lt;target&gt;' أو '#PI &lt;target&gt;' إلى تشغيل معالج لتعليمات المعالجة بالهدف المحدد (على سبيل المثال: '#PI xml-stylesheet').</dd>
+<dt id="level(_level_)"><a class="permalink" href="#level(_level_)">level(&lt;level&gt;)</a></dt>
+<dd>يشغل المعالج على أي عنصر في هذا المستوى في الشجرة (الجذر هو المستوى 1).</dd>
+<dt>_all_</dt>
+<dd>يشغل المعالج لـ <b>جميع</b> العناصر في الشجرة.</dd>
+<dt>_default_</dt>
+<dd>يشغل المعالج لكل عنصر لا يحتوي على أي معالج آخر.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<p class="Pp">يتم تقييم المعالجات ووضعها في قائمة انتظار مقابل المستند المدخل، ثم تنفيذها. التغييرات التي تم إجراؤها بواسطة معالج واحد (مثل تغيير أسماء العلامات، أو نقل أو تغليف العنصر - حتى في معالجات علامة البداية) &lt;لا&gt; تؤثر على المعالجات اللاحقة الموجودة في قائمة الانتظار حتى لو تسببت التعديلات في عدم تطابق تعبير المشغل الخاص بها. هناك استثناء لهذا: السمات "الخاصة" (التي تبدأ أسماؤها بـ '#' والتي لا يمكن إنشاؤها إلا أثناء المعالجة، نظرًا لأنها ليست XML صالحة) يتم التحقق منها مقابل "الخصلة" الحالية.</p>
+<p class="Pp">يتم تشغيل المعالجات بترتيب ثابت، مرتبة حسب نوعها (تعبيرات XPath أولاً، ثم regexps، ثم المستوى)، ثم حسب ما إذا كانت تحدد مسارًا كاملاً (يبدأ من عنصر الجذر) أم لا، ثم حسب عدد الخطوات في التعبير، ثم عدد الشروط، ثم عدد الاختبارات في الشروط. يتم تشغيل المعالجات التي لا تحدد الخطوة الأخيرة فيها خطوة (<span class="Li">"foo/bar/*"</span>) بعد معالجات XPath الأخرى. أخيرًا، يتم تشغيل معالجات <span class="Li">"_all_"</span> أخيرًا.</p>
+<p class="Pp"><b>هام</b>: بمجرد تشغيل معالج، إذا أعاد 0، فلن يتم استدعاء أي معالج آخر، باستثناء معالج <span class="Li">"_all_"</span> الذي يتم استدعاؤه دائمًا.</p>
+<p class="Pp">إذا أعاد معالج قيمة صحيحة وطبقت معالجات أخرى، فسيتم استدعاء المعالج التالي المناسب. كرر، اشطف، رغوي ...؛ الاستثناء لهذه القاعدة هو عندما يتم تعيين خيار "do_not_chain_handlers" ، في هذه الحالة سيتم استدعاء المعالج الأول فقط.</p>
+<p class="Pp">من الجيد إعادة قيمة صحيحة قصيرة (مثل 1) صراحةً من المعالجات؛ هذا يضمن استدعاء المعالجات المناسبة الأخرى حتى لو كان البيان الأخير للمعالج يقيم إلى خطأ. يمكن أن يؤدي هذا أيضًا إلى تسريع الكود عن طريق تجنب نسخ نتيجة البيان الأخير للكود وتمريره إلى الكود الذي يدير المعالجات. يمكن أن يكون له قيمة 1 بدلاً من سلسلة طويلة.</p>
+<p class="Pp">عند تحليل العلامة الختامية لعنصر، يتم استدعاء المعالج المقابل مع وسيطتين: "الخصلة" و "Element ". تتضمن "الخصلة" شجرة المستند التي تم بناؤها حتى الآن، والعنصر هو الشجرة الفرعية الكاملة للعنصر.</p>
+<p class="Pp">نظرًا لأنه يتم استدعاء المعالجات فقط عند العثور على العلامة الختامية للعنصر، فهذا يعني أنه يتم استدعاء المعالجات للعناصر الداخلية قبل المعالجات للعناصر الخارجية.</p>
+<p class="Pp"><span class="Li">$_</span> يتم تعيينه أيضًا للعنصر، لذلك من السهل كتابة معالجات مضمنة مثل:</p>
+<pre>para =&gt; sub { $_-&gt;set_tag( 'p'); }</pre>
+<p class="Pp">يتم تخزين النص في عناصر يكون اسمها علامة "#PCDATA" (بسبب المحتوى المختلط، النص والعنصر الفرعي في عنصر، لا توجد طريقة لتخزين النص كمجرد سمة للعنصر المحيط).</p>
+<p class="Pp"><b>تحذير</b>: إذا كنت قد استخدمت "purge" أو "flush" على "الخصلة"، فقد لا يكون العنصر كاملاً: قد تكون بعض عناصره الفرعية قد تم مسحها بالكامل أو شطفها، وقد تم طباعة علامة البداية (بواسطة "flush") بالفعل، لذلك قد لا يكون تغيير علامتها هو النتيجة المتوقعة.</p>
+</div>
+<dl class="Bl-tag">
+<dt id="twig_roots"><a class="permalink" href="#twig_roots">جذور الخصلة</a></dt>
+<dd>تسمح لك هذه الوسيطة ببناء الشجرة فقط للعناصر التي تهتم بها.
+<pre>مثال: my $t= XML::Twig-&gt;new( twig_roots =&gt; { title =&gt; 1, subtitle =&gt; 1});
+         $t-&gt;parsefile( file);
+         my $t= XML::Twig-&gt;new( twig_roots =&gt; { 'section/title' =&gt; 1});
+         $t-&gt;parsefile( file);
+</pre>
+<p class="Pp">يعيد خصلة تحتوي على مستند يشمل فقط عناصر "title" و "subtitle"، كعناصر فرعية للعنصر الجذر.</p>
+<p class="Pp">يمكنك استخدام <i>generic_attribute_condition</i>، <i>attribute_condition</i>، <i>full_path</i>، <i>partial_path</i>، <i>tag</i>، <i>tag_regexp</i>، <i>_default_</i> و <i>_all_</i> لتشغيل بناء الخصلة. لا يمكن استخدام <i>string_condition</i> و <i>regexp_condition</i> كمحتوى للعنصر، ولأن السلسلة النصية لم يتم تحليلها بعد عند التحقق من الشرط.</p>
+<p class="Pp"><b>تحذير</b>: يتم التحقق من المسارات للمستند. حتى لو تم استخدام خيار "twig_roots"، فسيتم التحقق منها مقابل شجرة المستند الكاملة، وليس الشجرة الافتراضية التي أنشأتها XML::Twig.</p>
+<p class="Pp"><b>تحذير</b>: يجب ألا تكون عناصر twig_roots متداخلة، فهذا من شأنه أن يربك XML::Twig بشكل ميؤوس منه.</p>
+<p class="Pp">ملاحظة: يمكنك تعيين معالجات (twig_handlers) باستخدام twig_roots
+<br/>
+مثال: my <span class="Li">$t</span>= XML::Twig-&gt;new( twig_roots
+=&gt;
+<br/>
+{ title =&gt; sub { <span class="Li">$_</span>[1]-&gt;print;},
+<br/>
+subtitle =&gt; \&amp;process_subtitle
+<br/>
+}
+<br/>
+);
+<br/>
+<span class="Li">$t</span>-&gt;parsefile( file);</p>
+</dd>
+<dt id="twig_print_outside_roots"><a class="permalink" href="#twig_print_outside_roots">طباعة الخصلة خارج الجذور</a></dt>
+<dd>يجب استخدامه بالاقتران مع وسيطة "twig_roots". عند تعيينه على قيمة صحيحة، يقوم بطباعة المستند خارج عناصر "twig_roots".
+<pre>مثال: my $t= XML::Twig-&gt;new( twig_roots =&gt; { title =&gt; \&amp;number_title },
+                               twig_print_outside_roots =&gt; 1,
+                              );
+          $t-&gt;parsefile( file);
+          { my $nb;
+          sub number_title
+            { my( $twig, $title);
+              $nb++;
+              $title-&gt;prefix( &quot;$nb &quot;);
+              $title-&gt;print;
+            }
+          }
+</pre>
+<p class="Pp">يطبع هذا المثال المستند خارج عنصر "title"، ويستدعي "number_title" لكل عنصر "title"، ويطبعه، ثم يستأنف طباعة المستند. يتم بناء الخصلة فقط لعناصر "title".</p>
+<p class="Pp">إذا كانت القيمة مرجعًا لمقبض ملف، فسيتم إخراج المستند خارج عناصر "twig_roots" إلى مقبض الملف هذا:</p>
+<pre>open( my $out, '&gt;', 'out_file.xml') or die &quot;cannot open out file.xml out_file:$!&quot;;
+my $t= XML::Twig-&gt;new( twig_roots =&gt; { title =&gt; \&amp;number_title },
+                       # default output to $out
+                       twig_print_outside_roots =&gt; $out,
+                     );
+       { my $nb;
+         sub number_title
+           { my( $twig, $title);
+             $nb++;
+             $title-&gt;prefix( &quot;$nb &quot;);
+             $title-&gt;print( $out);    # you have to print to \*OUT here
+           }
+         }
+</pre>
+</dd>
+<dt id="start_tag_handlers"><a class="permalink" href="#start_tag_handlers">معالجات علامة البداية</a></dt>
+<dd>مصفوفة <span class="Li">"&lt;{ expression => \&amp;handler }&gt;"</span>. يعين معالجات العناصر التي يتم استدعاؤها عند فتح العنصر (في نهاية معالج XML::Parser "Start"). يتم استدعاء المعالجات مع وسيطتين: الخصلة والعنصر. يكون العنصر فارغًا في تلك المرحلة، ولكن يتم إنشاء سماته.
+<p class="Pp">يمكنك استخدام <i>generic_attribute_condition</i>، <i>attribute_condition</i>، <i>full_path</i>، <i>partial_path</i>، <i>tag</i>، <i>tag_regexp</i>، <i>_default_</i> و <i>_all_</i> لتشغيل المعالج.</p>
+<p class="Pp">لا يمكن استخدام <i>string_condition</i> و <i>regexp_condition</i> كمحتوى للعنصر، حيث لم يتم تحليل السلسلة النصية بعد عند التحقق من الشرط.</p>
+<p class="Pp">الاستخدامات الرئيسية لمعالجات علامة البداية هي تغيير اسم العلامة (قد تضطر إلى القيام بذلك بمجرد العثور على علامة الفتح إذا كنت تخطط لـ "flush" الخصلة في نقطة ما في العنصر، وإنشاء سمات مؤقتة سيتم استخدامها عند معالجة العناصر الفرعية باستخدام "twig_handlers" العادية).</p>
+<p class="Pp">يجب عليك أيضًا استخدامه لتغيير العلامات إذا استخدمت "flush". إذا قمت بتغيير العلامة في "twig_handler" عادي، فقد تكون علامة البداية قد تم شطفها بالفعل.</p>
+<p class="Pp"><b>ملاحظة</b>: يمكن استدعاء معالجات "start_tag" خارج "twig_roots" إذا تم استخدام هذه الوسيطة، في هذه الحالة يتم استدعاء المعالجات بالوسيطات التالية: <span class="Li">$t</span> (الخصلة)، <span class="Li">$tag</span> (علامة العنصر) و <span class="Li">%att</span> (مصفوفة سمات العنصر).</p>
+<p class="Pp">إذا تم استخدام وسيطة "twig_print_outside_roots" أيضًا، إذا أعاد آخر معالج تم استدعاؤه قيمة "true"، فسيتم طباعة علامة البداية كما ظهرت في المستند الأصلي؛ إذا أعاد المعالج قيمة "false"، فلن يتم طباعة علامة البداية (حتى تتمكن من طباعة سلسلة معدلة بنفسك على سبيل المثال).</p>
+<p class="Pp">لاحظ أنه يمكنك استخدام طريقة التجاهل في "start_tag_handlers" (وفقط هناك).</p>
+</dd>
+<dt id="end_tag_handlers"><a class="permalink" href="#end_tag_handlers">معالجات علامة النهاية</a></dt>
+<dd>مصفوفة <span class="Li">"&lt;{ expression => \&amp;handler }&gt;"</span>. يعين معالجات العناصر التي يتم استدعاؤها عند إغلاق العنصر (في نهاية معالج XML::Parser "End"). يتم استدعاء المعالجات مع وسيطتين: الخصلة وعلامة العنصر.
+<p class="Pp">يتم استدعاء <i>twig_handlers</i> عند تحليل عنصر بالكامل، فلماذا توجد هذه الخيار المكرر؟ هناك استخدام واحد فقط لـ "end_tag_handlers": عند استخدام خيار "twig_roots"، لتشغيل</p>
+</dd>
+</dl>  معالج لعنصر <b>خارج</b> الجذور. هذا مفيد جدًا، على سبيل المثال،
+        لترقيم العناوين في مستند باستخدام أقسام متداخلة:</p>
+        <pre>my @no= (0);
+my $no;
+my $t= XML::Twig-&gt;new(
+        start_tag_handlers =&gt;
+         { section =&gt; sub { $no[$#no]++; $no= join '.', @no; push @no, 0; } },
+        twig_roots         =&gt;
+         { title   =&gt; sub { $_[1]-&gt;prefix( $no); $_[1]-&gt;print; } },
+        end_tag_handlers   =&gt; { section =&gt; sub { pop @no;  } },
+        twig_print_outside_roots =&gt; 1
+                    );
+ $t-&gt;parsefile( $file);
+</pre>
+    <p class="Pp">استخدام <span class="Li">&quot;end_tag_handlers&quot;</span>
+        بدون <span class="Li">&quot;twig_roots&quot;</span> سيؤدي إلى خطأ.</p>
+  </dd>
+  <dt id="do_not_chain_handlers"><a class="permalink" href="#do_not_chain_handlers">do_not_chain_handlers</a></dt>
+  <dd>إذا تم تعيين هذا الخيار إلى قيمة صحيحة، فسيتم استدعاء معالج واحد فقط لكل عنصر، حتى لو استوفى عدة شروط.
+    <p class="Pp">لاحظ أن المعالج <span class="Li">&quot;_all_&quot;</span>
+        لا يزال يُستدعى بغض النظر.</p>
+  </dd>
+  <dt id="ignore_elts"><a class="permalink" href="#ignore_elts">ignore_elts</a></dt>
+  <dd>يتيح لك هذا الخيار تجاهل العناصر عند بناء الـ twig. هذا مفيد في الحالات التي لا يمكنك فيها استخدام
+      <span class="Li">&quot;twig_roots&quot;</span> لتجاهل العناصر، على سبيل المثال إذا كان العنصر المطلوب تجاهله هو شقيق للعناصر التي تهتم بها.
+    <p class="Pp">مثال:</p>
+        <pre>my $twig= XML::Twig-&gt;new( ignore_elts =&gt; { elt =&gt; 'discard' });
+$twig-&gt;parsefile( 'doc.xml');
+</pre>
+    <p class="Pp">سيؤدي هذا إلى بناء الـ twig الكامل للمستند، باستثناء أن جميع عناصر
+        <span class="Li">&quot;elt&quot;</span> (وأطفالها) سيتم حذفها.</p>
+    <p class="Pp">المفاتيح في الهاش هي محفزات، محدودة بنفس المجموعة الفرعية مثل
+        <span class="Li">&quot;start_tag_handlers &quot;</span>. يمكن أن تكون القيم
+        <span class="Li">&quot;discard&quot;</span> لحذف العنصر،
+        <span class="Li">&quot;print&quot;</span> لطباعة العنصر كما هو،
+        <span class="Li">&quot;string&quot;</span> لتخزين نص العناصر المهملة، بما في ذلك الترميز، في حقل من الـ twig:
+        <span class="Li">&quot;$t-&gt;{twig_buffered_string}&quot;</span> أو مرجع إلى قيمة واحدة، وفي هذه الحالة سيتم تخزين نص العناصر المهملة، بما في ذلك الترميز، في القيمة. أي قيمة أخرى ستُعامل على أنها
+        <span class="Li">&quot;discard&quot;</span>.</p>
+  </dd>
+  <dt id="char_handler"><a class="permalink" href="#char_handler">char_handler</a></dt>
+  <dd>مرجع إلى روتين فرعي سيتم استدعاؤه في كل مرة يتم فيها العثور على
+      <span class="Li">&quot;#PCDATA&quot;</span>.
+    <p class="Pp">الروتين الفرعي يستقبل السلسلة النصية كمعامل، ويعيد السلسلة النصية المعدلة:</p>
+        <pre># نريد جميع النصوص بأحرف كبيرة
+sub my_char_handler
+  { my( $text)= @_;
+    $text= uc( $text);
+    return $text;
+  }
+</pre>
+  </dd>
+  <dt id="css_sel"><a class="permalink" href="#css_sel">css_sel</a></dt>
+  <dd>عند تعيينه إلى قيمة صحيحة، يسمح بالمحدِّدات
+      <span class="Li">&quot;tag.class&quot;</span> في المعالجات.
+    <p class="Pp">النقطة هي حرف صالح في أسماء العناصر، على سبيل المثال
+        <span class="Li">&quot;div.header&quot;</span> هو اسم XML صالح تمامًا.</p>
+    <p class="Pp">ولكن نظرًا لأن XML::Twig يُستخدم كثيرًا لمعالجة XHTML، ولهجات HTML، فمن الملائم جدًا أن نكون قادرين على استخدام
+        <span class="Li">&quot;div.header&quot;</span> لتشغيل عنصر
+        <span class="Li">&quot;div&quot;</span> بفئة
+        <span class="Li">&quot;header&quot;</span>، بدلاً من الطريقة الأكثر تعقيدًا
+        <span class="Li">&quot;div[@class=~/\bheader\b/]&quot;</span>.</p>
+    <p class="Pp">لاحظ أن صيغة
+        <span class="Li">&quot;tag.class&quot;</span> مدعومة في تعابير التنقل، ما لم يتم تعيين
+        <span class="Li">&quot;css_sel&quot;</span> صراحةً إلى 0.</p>
+  </dd>
+  <dt id="elt_class"><a class="permalink" href="#elt_class">elt_class</a></dt>
+  <dd>اسم فئة تُستخدم لتخزين العناصر. يجب أن ترث هذه الفئة من
+      <span class="Li">&quot;XML::Twig::Elt&quot;</span> (وبشكل افتراضي هي
+      <span class="Li">&quot;XML::Twig::Elt&quot;</span>). يُستخدم هذا الخيار لإنشاء فئة فرعية لفئة العنصر وتوسيعها بطرق جديدة.
+    <p class="Pp">هذا الخيار مطلوب لأنه أثناء تحليل XML، يتم إنشاء العناصر بواسطة
+        <span class="Li">&quot;XML::Twig&quot;</span> بدون أي تحكم من كود المستخدم.</p>
+  </dd>
+  <dt id="keep_atts_order"><a class="permalink" href="#keep_atts_order">keep_atts_order</a></dt>
+  <dd>يؤدي تعيين هذا الخيار إلى قيمة صحيحة إلى ربط هاش السمات بكائن
+      <span class="Li">&quot;Tie::IxHash&quot;</span>. هذا يعني أن
+      <span class="Li">&quot;Tie::IxHash&quot;</span> يجب أن يكون مثبتًا ليكون هذا الخيار متاحًا. ويعني أيضًا أن الهاش يحتفظ بترتيبه، لذلك ستحصل على السمات بالترتيب. هذا يسمح بإخراج السمات بنفس الترتيب الذي كانت عليه في المستند الأصلي.</dd>
+  <dt id="keep_encoding"><a class="permalink" href="#keep_encoding">keep_encoding</a></dt>
+  <dd>هذا خيار شرير (قليلاً؟): إذا لم يكن مستند XML مشفرًا بـ UTF-8 وترغب في الاحتفاظ به كذلك، فإن تعيين keep_encoding سيستخدم طريقة original_string الخاصة بـ
+      <span class="Li">&quot;Expat&quot;</span> للحرف، وبالتالي الاحتفاظ بالترميز الأصلي، بالإضافة إلى الكيانات الأصلية في السلاسل النصية.
+    <p class="Pp">راجع ملف الاختبار
+        <span class="Li">&quot;t/test6.t&quot;</span> لمعرفة النتائج التي يمكنك توقعها من خيارات الترميز المختلفة.</p>
+    <p class="Pp"><b>تحذير</b>: لا يتم استخدام هذا الخيار عند التحليل باستخدام المحلل غير المتزامن
+        (<span class="Li">&quot;parse_start&quot;</span>،
+        <span class="Li">&quot;parse_more&quot;</span>، طرق parse_done)
+        والذي ربما لا يجب عليك استخدامه مع XML::Twig على أي حال لأنه غير مختبر تمامًا!</p>
+  </dd>
+  <dt id="output_encoding"><a class="permalink" href="#output_encoding">output_encoding</a></dt>
+  <dd>ينشئ هذا الخيار مرشح إخراج باستخدام
+      <span class="Li">&quot;Encode&quot;</span>،
+      <span class="Li">&quot;Text::Iconv&quot;</span>، أو
+      <span class="Li">&quot;Unicode::Map8&quot;</span> و
+      <span class="Li">&quot;Unicode::Strings&quot;</span>، ويحدد الترميز في إعلان XML. هذه هي أسهل طريقة للتعامل مع الترميزات. إذا كنت بحاجة إلى ميزات أكثر تعقيدًا، فانظر
+      <span class="Li">&quot;output_filter&quot;</span> أدناه.</dd>
+  <dt id="output_filter"><a class="permalink" href="#output_filter">output_filter</a></dt>
+  <dd>يُستخدم هذا الخيار لتحويل ترميز الأحرف للمستند الناتج. يتم تمريره إما بسلسلة نصية تتوافق مع مرشح محدد مسبقًا أو مرجع لروتين فرعي. سيتم استدعاء المرشح في كل مرة يتم فيها معالجة مستند أو عنصر بواسطة وظائف "print"
+      (<span class="Li">&quot;print&quot;</span>،
+      <span class="Li">&quot;sprint&quot;</span>،
+      <span class="Li">&quot;flush&quot;</span>).
+    <p class="Pp">المرشحات المعرفة مسبقًا:</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="latin1"><a class="permalink" href="#latin1">latin1</a></dt>
+  <dd>يستخدم إما
+      <span class="Li">&quot;Encode&quot;</span>،
+      <span class="Li">&quot;Text::Iconv&quot;</span>، أو
+      <span class="Li">&quot;Unicode::Map8&quot;</span> و
+      <span class="Li">&quot;Unicode::String&quot;</span>، أو تعبير عادي (يعمل فقط مع XML::Parser 2.27)، بهذا الترتيب، لتحويل جميع الأحرف إلى ISO-8859-15 (عادةً ما يكون latin1 مرادفًا لـ ISO-8859-1، ولكن في الواقع يبدو أن ISO-8859-15، الذي يتضمن علامة اليورو، أكثر فائدة وربما ما يريده معظم الناس).</dd>
+  <dt id="html"><a class="permalink" href="#html">html</a></dt>
+  <dd>يقوم بنفس التحويل مثل
+      <span class="Li">&quot;latin1&quot;</span>، بالإضافة إلى ترميز الكيانات باستخدام
+      <span class="Li">&quot;HTML::Entities&quot;</span> (من الغريب أنك ستحتاج إلى تثبيت HTML::Entities ليكون متاحًا). يجب استخدام هذا فقط إذا كانت العلامات وأسماء السمات نفسها بالـ US-ASCII، وإلا فسيتم تحويلها ولن يكون الإخراج XML صالحًا بعد الآن.</dd>
+  <dt id="safe"><a class="permalink" href="#safe">safe</a></dt>
+  <dd>يحول الإخراج إلى ASCII (US) فقط بالإضافة إلى <i>كيانات الأحرف</i>
+      (<span class="Li">&quot;&amp;#nnn;&quot;</span>) يجب استخدام هذا فقط إذا كانت العلامات وأسماء السمات نفسها بالـ US-ASCII، وإلا فسيتم تحويلها ولن يكون الإخراج XML صالحًا بعد الآن.</dd>
+  <dt id="safe_hex"><a class="permalink" href="#safe_hex">safe_hex</a></dt>
+  <dd>نفس الشيء مثل
+      <span class="Li">&quot;safe&quot;</span> باستثناء أن كيانات الأحرف تكون بالست عشري
+      (<span class="Li">&quot;&amp;#xnnn;&quot;</span>).</dd>
+  <dt id="encode_convert"><a class="permalink" href="#encode_convert">encode_convert
+    ($encoding)</a></dt>
+  <dd>يعيد مرجعًا فرعيًا يمكن استخدامه لتحويل سلاسل utf8 إلى
+      <span class="Li">$encoding</span>). يستخدم
+      <span class="Li">&quot;Encode&quot;</span>.
+        <pre>my $conv = XML::Twig::encode_convert( 'latin1');
+my $t = XML::Twig-&gt;new(output_filter =&gt; $conv);
+</pre>
+  </dd>
+  <dt id="iconv_convert"><a class="permalink" href="#iconv_convert">iconv_convert
+    ($encoding)</a></dt>
+  <dd>تُستخدم هذه الوظيفة لإنشاء روتين فرعي للمرشح سيتم استخدامه لتحويل الأحرف إلى الترميز المستهدف باستخدام
+      <span class="Li">&quot;Text::Iconv&quot;</span> (والذي يجب تثبيته، انظر توثيق الوحدة النمطية و
+      <span class="Li">&quot;iconv&quot;</span> المكتبة لمعرفة الترميزات المتاحة على نظامك).
+        <pre>my $conv = XML::Twig::iconv_convert( 'latin1');
+my $t = XML::Twig-&gt;new(output_filter =&gt; $conv);
+</pre>
+  </dd>
+  <dt id="unicode_convert"><a class="permalink" href="#unicode_convert">unicode_convert
+    ($encoding)</a></dt>
+  <dd>تُستخدم هذه الوظيفة لإنشاء روتين فرعي للمرشح سيتم استخدامه لتحويل الأحرف إلى الترميز المستهدف باستخدام
+      <span class="Li">&quot;Unicode::Strings&quot;</span> و
+      <span class="Li">&quot;Unicode::Map8&quot;</span> (والتي يجب تثبيتها، انظر توثيق الوحدات النمطية لمعرفة الترميزات المتاحة على نظامك).
+        <pre>my $conv = XML::Twig::unicode_convert( 'latin1');
+my $t = XML::Twig-&gt;new(output_filter =&gt; $conv);
+</pre>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<p class="Pp">لا تستخدم الطريقتان
+    <span class="Li">&quot;text&quot;</span> و
+    <span class="Li">&quot;att&quot;</span> المرشح، لذا فإن نتائجهما دائمًا بالـ unicode.</p>
+<p class="Pp">هذه المرشحات المعلنة مسبقًا تستند إلى روتينات فرعية يمكن استخدامها بنفسها (مثل
+  <span class="Li">&quot;XML::Twig::foo&quot;</span>).</p>
+<dl class="Bl-tag">
+  <dt id="html_encode"><a class="permalink" href="#html_encode">html_encode
+    ($string)</a></dt>
+  <dd>يستخدم
+      <span class="Li">&quot;HTML::Entities&quot;</span> لترميز سلسلة utf8.</dd>
+  <dt id="safe_encode"><a class="permalink" href="#safe_encode">safe_encode
+    ($string)</a></dt>
+  <dd>يستخدم
+      <span class="Li">&quot;Encode&quot;</span> لترميز الأحرف غير ASCII في السلسلة بصيغة
+      <span class="Li">&quot;&amp;#&lt;nnnn&gt;;&quot;</span>.</dd>
+  <dt id="safe_encode_hex"><a class="permalink" href="#safe_encode_hex">safe_encode_hex
+    ($string)</a></dt>
+  <dd>يستخدم
+      <span class="Li">&quot;Encode&quot;</span> لترميز الأحرف غير ASCII في السلسلة</dd>
+</dl>
+</div>
+insanely long URL).
+    <p class="Pp">Note that to be totaly conformant to the &quot;spec&quot;, the
+        order of attributes should not be changed, so if they are not already in
+        alphabetical order you will need to use the
+        <span class="Li">&quot;keep_atts_order &quot;</span> option.</p>
+  </dd>
+  <dt id="cvs"><a class="permalink" href="#cvs">cvs</a></dt>
+  <dd>Same as <span class="Li">&quot;indented_a &quot;</span>.</dd>
+  <dt id="wrapped"><a class="permalink" href="#wrapped">wrapped</a></dt>
+  <dd>Same as <span class="Li">&quot;indented_c&quot;</span>, but lines are
+      wrapped using Text::Wrap::wrap. The default length for lines is the
+      default for <span class="Li">$Text::Wrap::columns</span>, and can be
+      changed by changing that variable.</dd>
+  <dt id="record"><a class="permalink" href="#record">record</a></dt>
+  <dd>This is a record-oriented pretty print that display data in records, one
+      field per line (which looks a LOT like
+      <span class="Li">&quot;indented&quot;</span>).</dd>
+  <dt id="record_c"><a class="permalink" href="#record_c">record_c</a></dt>
+  <dd>Stands for record compact, one record per line.</dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="empty_tags"><a class="permalink" href="#empty_tags">empty_tags</a></dt>
+  <dd>Sets the empty tag display style
+      ('<span class="Li">&quot;normal&quot;</span>',
+      '<span class="Li">&quot;html&quot;</span>' or
+      '<span class="Li">&quot;expand&quot;</span>').
+    <p class="Pp"><span class="Li">&quot;normal&quot;</span> outputs an empty
+        tag '<span class="Li">&quot;&lt;tag/&gt;&quot;</span>',
+        <span class="Li">&quot;html&quot;</span> adds a space
+        '<span class="Li">&quot;&lt;tag /&gt;&quot;</span>' for elements that
+        can be empty in XHTML and <span class="Li">&quot;expand&quot;</span>
+        outputs
+      '<span class="Li">&quot;&lt;tag&gt;&lt;/tag&gt;&quot;</span>'.</p>
+  </dd>
+  <dt id="quote"><a class="permalink" href="#quote">quote</a></dt>
+  <dd>Sets the quote character for attributes
+      ('<span class="Li">&quot;single&quot;</span>' or
+      '<span class="Li">&quot;double&quot;</span>').</dd>
+  <dt id="escape_gt"><a class="permalink" href="#escape_gt">escape_gt</a></dt>
+  <dd>By default XML::Twig does not escape the &gt; character in its output, as
+      it is not mandated by the XML spec. With this option on, &gt; is replaced
+      by <span class="Li">&quot;&amp;gt;&quot;</span>.</dd>
+  <dt id="comments"><a class="permalink" href="#comments">comments</a></dt>
+  <dd>Sets the way comments are processed:
+      '<span class="Li">&quot;drop&quot;</span>' (default),
+      '<span class="Li">&quot;keep&quot;</span>' or
+      '<span class="Li">&quot;process&quot;</span>'.
+    <p class="Pp">Comment processing options:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="drop"><a class="permalink" href="#drop">drop</a></dt>
+  <dd>Drops the comments; they are not read, nor printed to the output.</dd>
+  <dt id="keep"><a class="permalink" href="#keep">keep</a></dt>
+  <dd>Comments are loaded and will appear on the output; they are not accessible
+      within the twig and will not interfere with processing though.
+    <p class="Pp"><b>Note</b>: Comments in the middle of a text element such
+      as:</p>
+        <pre>&lt;p&gt;text &lt;!-- comment --&gt; more text --&gt;&lt;/p&gt;
+</pre>
+    <p class="Pp">are kept at their original position in the text. Using
+        &quot;print&quot; methods like <span class="Li">&quot;print&quot;</span>
+        or <span class="Li">&quot;sprint&quot;</span> will return the comments
+        in the text. Using <span class="Li">&quot;text&quot;</span> or
+        <span class="Li">&quot;field&quot;</span> on the other hand will
+      not.</p>
+    <p class="Pp">Any use of <span class="Li">&quot;set_pcdata&quot;</span> on
+        the <span class="Li">&quot;#PCDATA&quot;</span> element (directly or
+        through other methods like
+        <span class="Li">&quot;set_content&quot;</span>) will delete the
+        comment(s).</p>
+  </dd>
+  <dt id="process"><a class="permalink" href="#process">process</a></dt>
+  <dd>Comments are loaded in the twig and are treated as regular elements with a
+      <span class="Li">&quot;tag&quot;</span> value of
+      <span class="Li">&quot;#COMMENT&quot;</span>. This can interfere with
+      processing if you expect
+      <span class="Li">&quot;$elt-&gt;{first_child}&quot;</span> to be an
+      element but find a comment there. Schema validation will not protect you
+      from this as comments can happen anywhere. You can use
+      <span class="Li">&quot;$elt-&gt;first_child( 'tag')&quot;</span> (which is
+      a good habit anyway) to get what you want.
+    <p class="Pp">Consider using <span class="Li">&quot;process&quot;</span> if
+        you are outputting SAX events from XML::Twig.</p>
+  </dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="pi"><a class="permalink" href="#pi">pi</a></dt>
+  <dd>Sets the way processing instructions are processed:
+      '<span class="Li">&quot;drop&quot;</span>',
+      '<span class="Li">&quot;keep&quot;</span>' (default), or
+      '<span class="Li">&quot;process&quot;</span>'.
+    <p class="Pp">Note that you can also set PI handlers in the
+        <span class="Li">&quot;twig_handlers&quot;</span> option:</p>
+        <pre>'?'       =&gt; \&amp;handler
+'?target' =&gt; \&amp;handler2
+</pre>
+    <p class="Pp">The handlers will be called with two parameters, the twig and
+        the PI element if <span class="Li">&quot;pi&quot;</span> is set to
+        <span class="Li">&quot;process&quot;</span>, and with three, the twig,
+        the target and the data if <span class="Li">&quot;pi&quot;</span> is set
+        to <span class="Li">&quot;keep&quot;</span>. Of course they will not be
+        called if <span class="Li">&quot;pi&quot;</span> is set to
+        <span class="Li">&quot;drop&quot;</span>.</p>
+    <p class="Pp">If <span class="Li">&quot;pi&quot;</span> is set to
+        <span class="Li">&quot;keep&quot;</span>, the handler should return a
+        string that will be used as-is as the PI text (it should look like
+        &quot;<span class="Li">&quot; &lt;?target data?&quot;</span> &gt;&quot;
+        or '' if you want to remove the PI),</p>
+    <p class="Pp">Only one handler will be called,
+        <span class="Li">&quot;?target&quot;</span> or
+        <span class="Li">&quot;?&quot;</span> if no specific handler for that
+        target is available.</p>
+  </dd>
+  <dt id="map_xmlns"><a class="permalink" href="#map_xmlns">map_xmlns</a></dt>
+  <dd>This option is passed a hashref that maps uris to prefixes. The prefixes
+      in the document will be replaced by the ones in the map. The mapped
+      prefixes can (actually have to) be used to trigger handlers, or navigate
+      or query the document.
+    <p class="Pp">Example:</p>
+        <pre>my $t= XML::Twig-&gt;new( map_xmlns =&gt; {'http://www.w3.org/2000/svg' =&gt; &quot;svg&quot;},
+                       twig_handlers =&gt;
+                         { 'svg:circle' =&gt; sub { $_-&gt;set_att( r =&gt; 20) } },
+                       pretty_print =&gt; 'indented',
+                     )
+                -&gt;parse( '&lt;doc xmlns:gr=&quot;http://www.w3.org/2000/svg&quot;&gt;
+                            &lt;gr:circle cx=&quot;10&quot; cy=&quot;90&quot; r=&quot;10&quot;/&gt;
+                         &lt;/doc&gt;'
+                       )
+                -&gt;print;
+</pre>
+    <p class="Pp">This will output:</p>
+        <pre>&lt;doc xmlns:svg=&quot;http://www.w3.org/2000/svg&quot;&gt;
+   &lt;svg:circle cx=&quot;10&quot; cy=&quot;90&quot; r=&quot;20&quot;/&gt;
+&lt;/doc&gt;
+</pre>
+  </dd>
+  <dt id="keep_original_prefix"><a class="permalink" href="#keep_original_prefix">keep_original_prefix</a></dt>
+  <dd>When used with <span class="Li">&quot;map_xmlns &quot;</span>, this option
+      makes <span class="Li">&quot;XML::Twig&quot;</span> use the original
+      namespace prefixes when outputting a document. The mapped prefix are still
+      be used for triggering handlers and in navigation and query methods.
+        <pre>my $t= XML::Twig-&gt;new( map_xmlns =&gt; {'http://www.w3.org/2000/svg' =&gt; &quot;svg&quot;},
+                       twig_handlers =&gt;
+                         { 'svg:circle' =&gt; sub { $_-&gt;set_att( r =&gt; 20) } },
+                       keep_original_prefix =&gt; 1,
+                       pretty_print =&gt; 'indented',
+                     )
+                -&gt;parse( '&lt;doc xmlns:gr=&quot;http://www.w3.org/2000/svg&quot;&gt;
+                            &lt;gr:circle cx=&quot;10&quot; cy=&quot;90&quot; r=&quot;10&quot;/&gt;
+                         &lt;/doc&gt;'
+                       )
+                -&gt;print;
+</pre>
+    <p class="Pp">This outputs:</p>
+        <pre>&lt;doc xmlns:gr=&quot;http://www.w3.org/2000/svg&quot;&gt;
+   &lt;gr:circle cx=&quot;10&quot; cy=&quot;90&quot; r=&quot;20&quot;/&gt;
+&lt;/doc&gt;
+</pre>
+  </dd>
+  <dt id="original_uri"><a class="permalink" href="#original_uri">original_uri
+    ($prefix)</a></dt>
+  <dd>Called within a handler, this returns the uri bound to the namespace
+      prefix in the original document.</dd>
+  <dt id="index"><a class="permalink" href="#index">index ($arrayref or
+    $hashref)</a></dt>
+  <dd>This option creates lists of specific elements during the parsing of the
+      XML. It takes a reference to either a list of triggering expressions or to
+      a hash name =&gt; expression, and for each one generates the list of
+      elements that match the expression. The list can be accessed through the
+      <span class="Li">&quot;index &quot;</span> method.
+    <p class="Pp">Example:</p>
+        <pre># using an array ref
+my $t= XML::Twig-&gt;new( index =&gt; [ 'div', 'table' ])
+                -&gt;parsefile( &quot;foo.xml&quot;);
+my $divs= $t-&gt;index( 'div');
+my $first_div= $divs-&gt;[0];
+my $last_table= $t-&gt;index( table =&gt; -1);
+# using a hashref to name the indexes
+my $t= XML::Twig-&gt;new( index =&gt; { email =&gt; 'a[@href=~/^ \s*mailto:/]'})
+                -&gt;parsefile( &quot;foo.xml&quot;);
+my $last_emails= $t-&gt;index( email =&gt; -1);
+</pre>
+    <p class="Pp">Note that the index is not maintained after the parsing. If
+        elements are deleted, renamed, or otherwise hurt during processing, the
+        index is NOT updated. (Changing the id element, on the other hand, will
+        update the index).</p>
+  </dd>
+  <dt id="att_accessors"><a class="permalink" href="#att_accessors">att_accessors
+    &lt;list of attribute names&gt;</a></dt>
+  <dd>Creates methods that give direct access to attribute:
+        <pre>my $t= XML::Twig-&gt;new( att_accessors =&gt; [ 'href', 'src'])
+                -&gt;parsefile( $file);
+my $first_href= $t-&gt;first_elt( 'img')-&gt;src; # same as -&gt;att( 'src')
+$t-&gt;first_elt( 'img')-&gt;src( 'new_logo.png') # changes the attribute value
+</pre>
+  </dd>
+  <dt id="elt_accessors"><a class="permalink" href="#elt_accessors">elt_accessors</a></dt>
+  <dd>Creates methods that give direct access to the first child element (in
+      scalar context) or the list of elements (in list context):
+    <p class="Pp">The list of accessors to create can be given in two different
+        ways: in an array, or in a hash alias =&gt; expression.</p>
+        <pre>my $t=  XML::Twig-&gt;new( elt_accessors =&gt; [ 'head'])
+                -&gt;parsefile( $file);
+my $title_text= $t-&gt;root-&gt;head-&gt;field( 'title');
+# same as $title_text= $t-&gt;root-&gt;first_child( 'head')-&gt;field( 'title');
+my $t=  XML::Twig-&gt;new( elt_accessors =&gt; { warnings =&gt; 'p[@class=&quot;warning&quot;]', d2 =&gt; 'div[2]'}, )
+                -&gt;parsefile( $file);
+my $body= $t-&gt;first_elt( 'body');
+my @warnings= $body-&gt;warnings; # same as $body-&gt;children( 'p[@class=&quot;warning&quot;]');
+my $s2= $body-&gt;d2;             # same as $body-&gt;first_child( 'div[2]')
+</pre>
+  </dd>
+  <dt id="field_accessors"><a class="permalink" href="#field_accessors">field_accessors</a></dt>
+  <dd>Creates
+   مع شجرة فرعية وسيخرج بشكل جيد التكوين. بعد اكتمال التحليل،
+      لا تنسَ "flush" مرة أخرى لـ
+      طباعة نهاية المستند. يتم أيضًا طباعة إعلانات doctype والكيانات.
+    <p class="Pp">تأخذ "flush" مقبولة اختيارية
+        مقبض ملف كوسيط.</p>
+    <p class="Pp">إذا استخدمت "flush" في أي
+        نقطة أثناء التحليل، سيتم مسح المستند آخر مرة عند
+        نهاية التحليل، إلى مقبض الملف المناسب.</p>
+    <p class="Pp">خيارات: استخدم
+        الخيار "update_DTD" إذا قمت بتحديث (الداخلي) DTD و/أو قائمة الكيانات وتريد
+        إخراج DTD المحدث.</p>
+    <p class="Pp">الخيار "pretty_print"
+        يحدد الطباعة الجميلة للمستند.</p>
+        <pre>مثال: $t-&gt;flush( Update_DTD =&gt; 1);
+         $t-&gt;flush( $filehandle, pretty_print =&gt; 'indented');
+         $t-&gt;flush( \*FILE);
+</pre>
+  </dd>
+  <dt id="flush_up_to"><a class="permalink" href="#flush_up_to">flush_up_to
+    ($elt, $optional_filehandle, %options)</a></dt>
+  <dd>يقوم بمسح ما يصل إلى العنصر $elt. هذا يسمح لك بالاحتفاظ بجزء من الشجرة في الذاكرة عند
+      "flush".
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="purge"><a class="permalink" href="#purge">purge</a></dt>
+  <dd>يفعل نفس الشيء مثل "flush" باستثناء أنه
+      لا يطبع الشجرة. إنه يحذف فقط جميع العناصر التي تم تحليلها بالكامل حتى الآن.</dd>
+  <dt id="purge_up_to"><a class="permalink" href="#purge_up_to">purge_up_to
+    ($elt)</a></dt>
+  <dd>يقوم بمسح ما يصل إلى العنصر $elt. هذا يسمح لك بالاحتفاظ بجزء من الشجرة في الذاكرة عند
+      "purge".</dd>
+  <dt id="print"><a class="permalink" href="#print">print ($optional_filehandle,
+    %options)</a></dt>
+  <dd>يطبع المستند بأكمله المرتبط بالشجرة. يجب استخدامه فقط بعد
+      التحليل.
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="print_to_file"><a class="permalink" href="#print_to_file">print_to_file
+    ($filename, %options)</a></dt>
+  <dd>يطبع المستند بأكمله المرتبط بالشجرة إلى الملف
+      $filename. يجب استخدامه فقط بعد
+      التحليل.
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="safe_print_to_file"><a class="permalink" href="#safe_print_to_file">safe_print_to_file
+    ($filename, %options)</a></dt>
+  <dd>يطبع المستند بأكمله المرتبط بالشجرة إلى الملف
+      $filename. هذا المتغير، الذي يعمل فقط على *nix على الأرجح، يطبع إلى ملف مؤقت ثم ينقل الملف المؤقت لـ
+      الكتابة فوق الملف الأصلي.
+    <p class="Pp">هذا أكثر أمانًا عندما يمكن لعمليتين كتابة نفس الملف: فقط الأخيرة ستنجح، ولكن لن يتم إتلاف الملف. غالبًا ما أستخدم هذا لمهام cron، لذا فإن اختبار التعليمات البرمجية لا يتداخل مع مهمة cron التي تعمل في نفس الوقت.</p>
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="sprint"><a class="permalink" href="#sprint">sprint</a></dt>
+  <dd>يعيد نص المستند بأكمله المرتبط بالشجرة. يجب استخدامه فقط بعد
+      التحليل.
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="trim"><a class="permalink" href="#trim">trim</a></dt>
+  <dd>يقوم بتقليم المستند: يتخلص من المسافات الأولية والنهائية، ويستبدل
+      المسافات المتعددة بمسافة واحدة.</dd>
+  <dt id="toSAX1"><a class="permalink" href="#toSAX1">toSAX1 ($handler)</a></dt>
+  <dd>يرسل أحداث SAX للشجرة إلى معالج SAX1
+      $handler.</dd>
+  <dt id="toSAX2"><a class="permalink" href="#toSAX2">toSAX2 ($handler)</a></dt>
+  <dd>يرسل أحداث SAX للشجرة إلى معالج SAX2
+      $handler.</dd>
+  <dt id="flush_toSAX1"><a class="permalink" href="#flush_toSAX1">flush_toSAX1
+    ($handler)</a></dt>
+  <dd>نفس "flush"، باستثناء أنه يتم إرسال أحداث SAX
+      إلى معالج SAX1 $handler بدلاً من
+      طباعة الشجرة.</dd>
+  <dt id="flush_toSAX2"><a class="permalink" href="#flush_toSAX2">flush_toSAX2
+    ($handler)</a></dt>
+  <dd>نفس "flush"، باستثناء أنه يتم إرسال أحداث SAX
+      إلى معالج SAX2 $handler بدلاً من
+      طباعة الشجرة.</dd>
+  <dt id="ignore"><a class="permalink" href="#ignore">ignore</a></dt>
+  <dd>يجب استدعاء هذه الطريقة أثناء التحليل، عادة في
+      "start_tag_handlers". يتسبب في تخطي العنصر أثناء التحليل: لا يتم بناء الشجرة لهذا العنصر؛ لن يكون متاحًا أثناء التحليل أو بعده. لا يشغل العنصر أي ذاكرة وسيكون التحليل أسرع.
+    <p class="Pp">لاحظ أنه يمكن استدعاء هذه الطريقة أيضًا على عنصر. إذا كان
+        العنصر هو أب للعنصر الحالي، فسيتم تجاهل هذا العنصر (لن يتم بناء الشجرة له بعد الآن وسيتم حذف ما تم بناؤه بالفعل).</p>
+  </dd>
+  <dt id="set_pretty_print"><a class="permalink" href="#set_pretty_print">set_pretty_print
+    ($style)</a></dt>
+  <dd>تعيين طريقة الطباعة الجميلة، من بين
+      "none" (الافتراضي)،
+      "nsgmls"،
+      "nice"،
+      "indented"،
+      "indented_c"،
+      "wrapped"،
+      "record"، و
+      "record_c".
+    <p class="Pp"><b>تحذير:</b> نمط الطباعة الجميل هو متغير **عام**، لذلك بمجرد تعيينه ينطبق على **جميع** "print" (و"sprint"). وينطبق الشيء نفسه إذا استخدمت XML::Twig مع "mod_perl". لا ينبغي أن يكون هذا مشكلة حيث أن XML الذي يتم إنشاؤه صالح على أي حال، ومعالجات XML (بالإضافة إلى معالجات HTML، بما في ذلك المتصفحات) لا ينبغي أن تهتم. أخبرني إذا كانت هذه مشكلة كبيرة، ولكن في الوقت الحالي، فإن المفاضلة بين الأداء والنظافة تفضل بوضوح النهج العام.</p>
+  </dd>
+  <dt id="set_empty_tag_style"><a class="permalink" href="#set_empty_tag_style">set_empty_tag_style
+    ($style)</a></dt>
+  <dd>يعين نمط عرض الوسم الفارغ
+      ("normal"،
+      "html"، أو
+      "expand"). كما هو الحال مع "set_pretty_print"، فإنه يعين علامة عامة.
+    <p class="Pp">"normal" يخرج وسمًا فارغًا "<tag/>"،
+        "html" يضيف مسافة "<tag />" للعناصر التي يمكن أن تكون فارغة في XHTML، و "expand" يخرج
+      "<tag></tag>".</p>
+  </dd>
+  <dt id="set_remove_cdata"><a class="permalink" href="#set_remove_cdata">set_remove_cdata
+    ($flag)</a></dt>
+  <dd>يعين (أو يلغي) العلامة التي تجبر الشجرة على إخراج
+      مقاطع "#CDATA" كـ "#PCDATA" عادي (محمي).</dd>
+  <dt id="print_prolog"><a class="permalink" href="#print_prolog">print_prolog
+    ($optional_filehandle, %options)</a></dt>
+  <dd>يطبع المقدمة (إعلان XML + DTD + إعلانات الكيانات) لمستند.
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="prolog"><a class="permalink" href="#prolog">prolog
+    ($optional_filehandle, %options)</a></dt>
+  <dd>يعيد المقدمة (إعلان XML + DTD + إعلانات الكيانات) لمستند.
+    <p class="Pp">خيارات: انظر "flush".</p>
+  </dd>
+  <dt id="finish"><a class="permalink" href="#finish">finish</a></dt>
+  <dd>يستدعي طريقة Expat "finish". يلغي جميع المعالجات (بما في ذلك المعالجات الداخلية التي تحدد السياق)، ولكن يواصل Expat التحليل حتى نهاية المستند أو حتى يجد خطأ. يجب أن ينتهي أسرع بكثير من وجود المعالجات.</dd>
+  <dt id="finish_print"><a class="permalink" href="#finish_print">finish_print</a></dt>
+  <dd>يوقف معالجة الشجرة، ويمسح الشجرة، ويمضي قدمًا في إنهاء طباعة المستند بأسرع ما يمكن. استخدم هذه الطريقة عند تعديل مستند وعند اكتمال التعديل.</dd>
+  <dt id="finish_now"><a class="permalink" href="#finish_now">finish_now</a></dt>
+  <dd>يوقف معالجة الشجرة، ولا يكمل تحليل المستند (الذي قد لا يكون جيد التكوين بعد النقطة التي يتم فيها استدعاء "finish_now"). يستأنف التنفيذ بعد استدعاء "Lparse" أو "parsefile". محتوى الشجرة هو ما تم تحليله حتى الآن (تعتبر جميع العناصر المفتوحة في وقت استدعاء "finish_now" مغلقة).</dd>
+  <dt id="set_expand_external_entities"><a class="permalink" href="#set_expand_external_entities">set_expand_external_entities</a></dt>
+  <dd>نفس استخدام خيار "expand_external_ents" عند إنشاء الشجرة.</dd>
+  <dt id="set_input_filter"><a class="permalink" href="#set_input_filter">set_input_filter</a></dt>
+  <dd>نفس استخدام خيار "input_filter" عند إنشاء الشجرة.</dd>
+  <dt id="set_keep_atts_order"><a class="permalink" href="#set_keep_atts_order">set_keep_atts_order</a></dt>
+  <dd>نفس استخدام خيار "keep_atts_order" عند إنشاء الشجرة.</dd>
+  <dt id="set_keep_encoding"><a class="permalink" href="#set_keep_encoding">set_keep_encoding</a></dt>
+  <dd>نفس استخدام خيار "keep_encoding" عند إنشاء الشجرة.</dd>
+  <dt id="escape_gt~2"><a class="permalink" href="#escape_gt~2">escape_gt</a></dt>
+  <dd>نفس استخدام خيار "escape_gt" عند إنشاء الشجرة.</dd>
+  <dt id="do_not_escape_gt"><a class="permalink" href="#do_not_escape_gt">do_not_escape_gt</a></dt>
+  <dd>يعيد سلوك XML::Twig إلى افتراضيه بعدم الهروب من &gt; في مخرجاته.</dd>
+  <dt id="set_output_filter"><a class="permalink" href="#set_output_filter">set_output_filter</a></dt>
+  <dd>نفس استخدام خيار "output_filter" عند إنشاء الشجرة.</dd>
+  <dt id="set_output_text_filter"><a class="permalink" href="#set_output_text_filter">set_output_text_filter</a></dt>
+  <dd>نفس استخدام خيار "output_text_filter" عند إنشاء الشجرة.</dd>
+  <dt id="add_stylesheet"><a class="permalink" href="#add_stylesheet">add_stylesheet
+    ($type, @options)</a></dt>
+  <dd>يضيف ورقة أنماط خارجية إلى مستند XML.
+    <p class="Pp">الأنواع والخيارات المدعومة هي:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="xsl"><a class="permalink" href="#xsl">xsl</a></dt>
+  <dd>الخيار: عنوان URL لورقة الأنماط.
+    <p class="Pp">مثال:</p>
+        <pre>$t</pre>
+</div>
+<item>
+  <method name="split">
+    <description>
+      <p>The <span class="Li">$elt</span> element is split wherever the <span class="Li">$regexp</span> matches.</p>
+      <p>The text matched by the regexp is replaced by the <span class="Li">$optional_tag</span> (optionally followed by attributes <span class="Li">$optional_attribute_hashref</span>), and the captured values ($1, $2...) are themselves wrapped in elements.</p>
+      <p><span class="Li">$1</span> is wrapped in <span class="Li">$tag1</span>, with attributes <span class="Li">$atts1</span> if <span class="Li">$atts1</span> is given (as a hashref), <span class="Li">$2</span> is wrapped in <span class="Li">$tag2</span>...</p>
+      <p>if <span class="Li">$elt</span> is <span class="Li">&quot;&lt;p&gt;tati tata &lt;b&gt;tutu tati titi&lt;/b&gt; tata tati tata&lt;/p&gt;&quot;</span>:</p>
+      <pre>$elt-&gt;split( qr/(ta)ti/, 'foo', {type =&gt; 'toto'} )
+</pre>
+      <p>will change <span class="Li">$elt</span> to:</p>
+      <pre>&lt;p&gt;&lt;foo type=&quot;toto&quot;&gt;ta&lt;/foo&gt; tata &lt;b&gt;tutu &lt;foo type=&quot;toto&quot;&gt;ta&lt;/foo&gt;
+    titi&lt;/b&gt; tata &lt;foo type=&quot;toto&quot;&gt;ta&lt;/foo&gt; tata&lt;/p&gt;
+</pre>
+      <p>The regexp can be passed either as a string or as <span class="Li">&quot;qr//&quot;</span>, it defaults to \s+ just as the <span class="Li">&quot;split&quot;</span> built-in (but this would be quite a useless behaviour without the <span class="Li">$optional_tag</span> parameter).</p>
+      <p><span class="Li">$optional_tag</span> defaults to PCDATA or CDATA, depending on the initial element type.</p>
+      <p>Returns the list of descendants (including un-touched original elements and newly created ones).</p>
+    </description>
+  </method>
+  <method name="mark">
+    <parameters>
+      <param name="$regexp"/>
+      <param name="$optional_tag"/>
+      <param name="$optional_attribute_ref"/>
+    </parameters>
+    <description>This method behaves exactly as split, except only the newly created elements are returned.</description>
+  </method>
+  <method name="wrap_children">
+    <parameters>
+      <param name="$regexp_string"/>
+      <param name="$tag"/>
+      <param name="$optional_attribute_hashref"/>
+    </parameters>
+    <description>
+      <p>Wrap the children of the element that match the regexp in an element <span class="Li">$tag</span>. If <span class="Li">$optional_attribute_hashref</span> is passed, then the new element will have these attributes.</p>
+      <p>Returns the calling element.</p>
+      <p>The <span class="Li">$regexp_string</span> includes tags, within pointy brackets, as in <span class="Li">&quot;&lt;title&gt;&lt;para&gt;+&quot;</span> and the usual Perl modifiers (+*?...). Inside tag brackets, only <span class="Li">&quot;.&quot;</span> is treated as a special regex character for matching tag names. Outside tag brackets, the usual modifiers (<span class="Li">&quot;+*?&quot;</span>...) work normally for matching tags, including lookaheads.</p>
+      <p><b>Note</b>: Currently, lookbehinds do not work because the <span class="Li">&quot;&lt;&quot;</span> in the lookbehind expression causes issues with tag recognition.</p>
+      <p><span class="Li">&quot;^&quot;</span> and <span class="Li">&quot;$&quot;</span> are interpreted as the beginning and end of the children in the current twig.</p>
+      <p>Tags can be further qualified with attributes: <span class="Li">&quot;&lt;para type=&quot;warning&quot; classif=&quot;cosmic_secret&quot;&gt;+&quot;</span>. The values for attributes should be xml-escaped: <span class="Li">&quot;&lt;candy type=&quot;M&amp;amp;Ms&quot;&gt;*&quot;</span> (<span class="Li">&quot;&lt;&quot;</span>, <span class="Li">&quot;&amp;&quot;</span> <span class="Li"><b>&quot;&gt;&quot;</b></span><b></b> and <span class="Li">&quot;&quot;&quot;</span> should be escaped).</p>
+      <p>Note that elements might get extra <span class="Li">&quot;id&quot;</span> attributes in the process. See add_id. Use strip_att to remove unwanted id's.</p>
+      <p>For example, if the element <span class="Li">$elt</span> has the following content:</p>
+      <pre>&lt;body&gt;
+  &lt;h1&gt;Fruit&lt;/h1&gt;
+  &lt;p&gt;content&lt;/p&gt;
+  &lt;h2&gt;Apples&lt;/h2&gt;
+  &lt;p&gt;content&lt;/p&gt;
+  &lt;h3&gt;Apple Varieties&lt;/h3&gt;
+  &lt;p&gt;content&lt;/p&gt;
+  &lt;h2&gt;Oranges&lt;/h2&gt;
+  &lt;p&gt;content&lt;/p&gt;
+  &lt;h1&gt;Vegetables&lt;/h1&gt;
+  &lt;p&gt;content&lt;/p&gt;
+  &lt;h2&gt;Leafy Vegetables&lt;/h2&gt;
+  &lt;p&gt;content&lt;/p&gt;
+&lt;/body&gt;
+</pre>
+      <p>Then after running the code:</p>
+      <pre>$elt-&gt;wrap_children('&lt;h3&gt;.*?(?=(&lt;h.&gt;)|$)', 'topic');  # &lt;h.&gt; can match h1/h2/h3
+$elt-&gt;wrap_children('&lt;h2&gt;.*?(?=(&lt;h.&gt;)|$)', 'topic');  # &lt;h.&gt; can match h1/h2
+$elt-&gt;wrap_children('&lt;h1&gt;.*?(?=(&lt;h.&gt;)|$)', topic =&gt; {toplevel =&gt; 'true'});  # &lt;h.&gt; can match h1
+$elt-&gt;strip_att('id');
+</pre>
+      <p><span class="Li">$elt</span> will contain:</p>
+      <pre>&lt;body&gt;
+  &lt;topic toplevel=&quot;true&quot;&gt;
+    &lt;h1&gt;Fruit&lt;/h1&gt;
+    &lt;p&gt;content&lt;/p&gt;
+    &lt;topic&gt;
+      &lt;h2&gt;Apples&lt;/h2&gt;
+      &lt;p&gt;content&lt;/p&gt;
+      &lt;topic&gt;
+        &lt;h3&gt;Apple Varieties&lt;/h3&gt;
+        &lt;p&gt;content&lt;/p&gt;
+      &lt;/topic&gt;
+    &lt;/topic&gt;
+    &lt;topic&gt;
+      &lt;h2&gt;Oranges&lt;/h2&gt;
+      &lt;p&gt;content&lt;/p&gt;
+    &lt;/topic&gt;
+  &lt;/topic&gt;
+  &lt;topic toplevel=&quot;true&quot;&gt;
+    &lt;h1&gt;Vegetables&lt;/h1&gt;
+    &lt;p&gt;content&lt;/p&gt;
+    &lt;topic&gt;
+      &lt;h2&gt;Leafy Vegetables&lt;/h2&gt;
+      &lt;p&gt;content&lt;/p&gt;
+    &lt;/topic&gt;
+  &lt;/topic&gt;
+&lt;/body&gt;
+</pre>
+    </description>
+  </method>
+  <method name="subs_text">
+    <parameters>
+      <param name="$regexp"/>
+      <param name="$replace"/>
+    </parameters>
+    <description>
+      <p>subs_text does text substitution, similar to perl's <span class="Li">&quot; s///&quot;</span> operator.</p>
+      <p><span class="Li">$regexp</span> must be a perl regexp, created with the <span class="Li">&quot;qr&quot;</span> operator.</p>
+      <p>Returns the calling element.</p>
+      <p><span class="Li">$replace</span> can include <span class="Li">&quot;$1, $2&quot;</span>... from the <span class="Li">$regexp</span>. It can also be used to create element and entities, by using <span class="Li">&quot;&amp;elt( tag =&gt; { att =&gt; val }, text)&quot;</span> (similar syntax as <span class="Li">&quot;new &quot;</span>) and <span class="Li">&amp;ent( name)</span>.</p>
+      <p>Here is a rather complex example:</p>
+      <pre>$elt-&gt;subs_text( qr{(?&lt;!do not )link to (http://([^\s,]*))},
+               'see &amp;elt( a =&gt;{ href =&gt; $1 }, $2)'
+             );
+</pre>
+      <p>This replaces text like <i>link to <a href='http://www.xmltwig.org'>http://www.xmltwig.org</a></i> by <i>see &lt;a href=&quot;www.xmltwig.org&quot;&gt;www.xmltwig.org&lt;/a&gt;</i>, but not <i>do not link to...</i>.</p>
+      <p>Generating entities (here replacing spaces with &amp;nbsp;):</p>
+      <pre>$elt-&gt;subs_text( qr{ },'&amp;ent( &quot;&amp;nbsp;&quot;)');
+</pre>
+      <p>or, using a variable:</p>
+      <pre>my $ent=&quot;&amp;nbsp;&quot;;
+$elt-&gt;subs_text( qr{ }, &quot;&amp;ent( '$ent')&quot;);
+</pre>
+      <p>Note that the substitution is always global, as in using the <span class="Li">&quot;g&quot;</span> modifier in a perl substitution, and that it is performed on all text descendants of the element.</p>
+      <p><b>Bug</b>: in the <span class="Li">$regexp</span>, you can only use <span class="Li">&quot;\1&quot;</span>, <span class="Li">&quot;\2&quot;</span>... if the replacement expression does not include elements or attributes. eg:</p>
+      <pre>$t-&gt;subs_text( qr/((t[aiou])\2)/, '$2');             # ok, replaces toto, tata, titi, tutu by to, ta, ti, tu
+$t-&gt;subs_text( qr/((t[aiou])\2)/, '&amp;elt(p =&gt; $1)' ); # NOK, does not find toto...
+</pre>
+    </description>
+  </method>
+  <method name="add_id">
+    <parameters>
+      <param name="$optional_coderef"/>
+    </parameters>
+    <description>
+      <p>Adds an id to the element.</p>
+      <p>If the element already has an id, no new id is generated.</p>
+      <p>Returns the id value (existing or newly generated).</p>
+      <p>The id is an attribute, <span class="Li">&quot;id&quot;</span> by default, see the <span class="Li">&quot;id&quot;</span> option for XML::Twig <span class="Li">&quot;new&quot;</span> to change it. Use an id starting with <span class="Li">&quot;#&quot;</span> to get an id that's not output by print, flush or sprint, yet that allows you to use the elt_id method to get the element easily.</p>
+      <p>By default, the method create an id of the form <span class="Li">&quot;twig_id_&lt;nnnn&gt;&quot;</span>, where <span class="Li">&quot;&lt;nnnn&gt;&quot;</span> is a number, incremented each time the method is called successfully.</p>
+    </description>
+  </method>
+  <method name="set_id_seed">
+    <parameters>
+      <param name="$prefix"/>
+    </parameters>
+    <description>By default, the id generated by <span class="Li">&quot;add_id &quot;</span> is <span class="Li">&quot;twig_id_&lt;nnnn&gt;&quot;</span>, <span class="Li">&quot;set_id_seed&quot;</span> changes the prefix to <span class="Li">$prefix</span> and resets the number to 1.</description>
+  </method>
+  <method name="strip_att">
+    <parameters>
+      <param name="@att_list"/>
+    </parameters>
+    <description>
+      <p>Removes the attributes in <span class="Li">@att_list</span> from the calling element and all its descendants.</p>
+      <p>Returns the calling element.</p>
+    </description>
+  </method>
+  <method name="change_att_name">
+    <parameters>
+      <param name="$old_name"/>
+      <param name="$new_name"/>
+    </parameters>
+    <description>
+      <p>Changes the name of the attribute from <span class="Li">$old_name</span> to <span class="Li">$new_name</span>. If there is no attribute <span class="Li">$old_name</span>, nothing happens.</p>
+      <p>Returns the calling element.</p>
+    </description>
+  </method>
+  <method name="lc_attnames">
+    <description>
+      <p>Lowercases the name of all the attributes of the element.</p>
+      <p>Returns the calling element.</p>
+    </description>
+  </method>
+  <method name="sort_children_on_value">
+    <parameters>
+      <param name="%options"/>
+    </parameters>
+    <description>
+      <p>Sorts the children of the element in place according to their text. All children are sorted.</p>
+      <p>Returns the calling element, with its children sorted.</p>
+      <p><span class="Li">%options</span> are:</p>
+      <pre>type  : numeric |  alpha     (default: alpha)
+order : normal  |  reverse   (default: normal)
+</pre>
+      <p>Returns the element, with its children sorted.</p>
+    </description>
+  </method>
+  <method name="sort_children_on_att">
+    <parameters>
+      <param name="$att"/>
+      <param name="%options"/>
+    </parameters>
+    <description>
+      <p>Sorts the children of the element in place according to attribute <span class="Li">$att</span>. <span class="Li">%options</span> are the same as for <span class="Li">&quot;sort_children_on_value&quot;</span>.</p>
+      <p>Returns the calling element, with its children sorted.</p>
+    </description>
+  </method>
+  <method name="sort_children_on_field">
+    <parameters>
+      <param name="$tag"/>
+      <param name="%options"/>
+    </parameters>
+    <description>
+      <p>Sorts the children of the element in place, according to the field <span class="Li">$tag</span> (the text of the first child of the child with this tag). <span class="Li">%options</span> are the same as for <span class="Li">&quot;sort_children_on_value&quot;</span>.</p>
+      <p>Returns the calling element, with its children sorted.</p>
+    </description>
+  </method>
+  <method name="sort_children(">
+    <parameters>
+      <param name="$get_key"/>
+      <param name="%options"/>
+    </parameters>
+    <description>
+      <p>Sorts the children of the element in place. The <span class="Li">$get_key</span> argument</p>
+    </description>
+  </method>
+</item>
+ href="#ns_prefix">ns_prefix</a></dt>
+  <dd>تُرجع بادئة مساحة الاسم للعنصر.</dd>
+  <dt id="current_ns_prefixes"><a class="permalink" href="#current_ns_prefixes">current_ns_prefixes</a></dt>
+  <dd>تُرجع قائمة ببادئات مساحة الاسم الصالحة للعنصر. ترتيب
+      البادئات في القائمة ليس له معنى. إذا كانت مساحة الاسم الافتراضية
+      مرتبطة حاليًا، فسيظهر '' في القائمة.</dd>
+  <dt id="inherit_att"><a class="permalink" href="#inherit_att">inherit_att
+    ($att, @optional_tag_list)</a></dt>
+  <dd>تُرجع قيمة سمة موروثة من علامات الأب. يتم العثور على القيمة
+      المرتجعة عن طريق البحث عن السمة في العنصر ثم بالدور في كل من أسلافه. إذا
+      تم توفير
+      <span class="Li">@optional_tag_list</span>، فسيتم التحقق فقط من الأسلاف الذين توجد علامتهم في القائمة.</dd>
+  <dt id="all_children_are"><a class="permalink" href="#all_children_are">all_children_are
+    ($optional_condition)</a></dt>
+  <dd>تُرجع صحيحًا (العنصر المتصل) إذا كانت جميع عناصر الأطفال للعنصر تمر بالشرط
+      الاختياري <span class="Li">$optional_condition</span>، وإلا تُرجع خطأ (0).</dd>
+  <dt id="level"><a class="permalink" href="#level">level
+    ($optional_condition)</a></dt>
+  <dd>تُرجع عمق العنصر في الشجرة (الجذر هو 0). إذا
+      تم تقديم <span class="Li">$optional_condition</span>، فسيتم عد الأسلاف الذين يتطابقون مع الشرط فقط.
+    <p class="Pp"><b>تحذير</b>: في شجرة تم إنشاؤها باستخدام
+        الخيار <span class="Li">&quot;twig_roots&quot;</span>، لن تُرجع هذه الدالة المستوى في شجرة المستند، سيكون المستوى 0 هو جذر المستند، وسيكون المستوى 1 هو عناصر
+        <span class="Li">&quot;twig_roots&quot;</span>. أثناء التحليل (في
+        <span class="Li">&quot;twig_handler&quot;</span>)، يمكنك استخدام
+        الطريقة <span class="Li">&quot;depth&quot;</span> على كائن الشجرة للحصول على عمق التحليل الفعلي.</p>
+  </dd>
+  <dt id="in"><a class="permalink" href="#in">in ($potential_parent)</a></dt>
+  <dd>تُرجع صحيحًا (العنصر الأصل المحتمل) إذا كان العنصر موجودًا في الأصل المحتمل
+      (<span class="Li">$potential_parent</span> هو عنصر)، وإلا تُرجع خطأ (0).</dd>
+  <dt id="in_context"><a class="permalink" href="#in_context">in_context ($cond,
+    $optional_level)</a></dt>
+  <dd>تُرجع صحيحًا (العنصر المتضمن المتطابق) إذا كان العنصر متضمنًا في عنصر
+      يجتاز <span class="Li">$cond</span> اختياريًا ضمن
+      <span class="Li">$optional_level</span> مستويات، وإلا تُرجع خطأ (0).</dd>
+  <dt id="pcdata"><a class="permalink" href="#pcdata">pcdata</a></dt>
+  <dd>تُرجع نص عنصر <span class="Li">&quot;#PCDATA&quot;</span>
+      أو <span class="Li">&quot;undef&quot;</span> إذا لم يكن العنصر
+      <span class="Li">&quot;#PCDATA&quot;</span>.</dd>
+  <dt id="pcdata_xml_string"><a class="permalink" href="#pcdata_xml_string">pcdata_xml_string</a></dt>
+  <dd>تُرجع نص عنصر <span class="Li">&quot;#PCDATA&quot;</span>
+      أو <span class="Li">&quot;undef&quot;</span> إذا لم يكن العنصر
+      <span class="Li">&quot;#PCDATA&quot;</span>. النص "مهرب XML" (يتم استبدال '&' و '<' بـ '&amp;' و '&amp;lt;').</dd>
+  <dt id="set_pcdata"><a class="permalink" href="#set_pcdata">set_pcdata
+    ($text)</a></dt>
+  <dd>يضبط نص عنصر <span class="Li">&quot;#PCDATA&quot;</span>.
+      لا تتحقق هذه الطريقة مما إذا كان العنصر هو بالفعل
+      <span class="Li">&quot;#PCDATA&quot;</span>، لذا عادةً ما يجب عليك استخدام
+      <span class="Li">&quot;set_text &quot;</span> بدلاً من ذلك.</dd>
+  <dt id="append_pcdata"><a class="permalink" href="#append_pcdata">append_pcdata
+    ($text)</a></dt>
+  <dd>يضيف النص في نهاية عنصر
+      <span class="Li">&quot;#PCDATA&quot;</span>.</dd>
+  <dt id="is_cdata"><a class="permalink" href="#is_cdata">is_cdata</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر عنصر
+      <span class="Li">&quot;#CDATA&quot;</span>، وتُرجع خطأ ('') بخلاف ذلك.</dd>
+  <dt id="is_text"><a class="permalink" href="#is_text">is_text</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر عنصر
+      <span class="Li">&quot;#CDATA&quot;</span> أو
+      <span class="Li">&quot;#PCDATA&quot;</span>، وتُرجع خطأ ('') بخلاف ذلك.</dd>
+  <dt id="cdata"><a class="permalink" href="#cdata">cdata</a></dt>
+  <dd>تُرجع نص عنصر <span class="Li">&quot;#CDATA&quot;</span>
+      أو <span class="Li">&quot;undef&quot;</span> إذا لم يكن العنصر
+      <span class="Li">&quot;#CDATA&quot;</span>.</dd>
+  <dt id="cdata_string"><a class="permalink" href="#cdata_string">cdata_string</a></dt>
+  <dd>تُرجع سلسلة XML لعنصر
+      <span class="Li">&quot;#CDATA&quot;</span>، بما في ذلك علامات الفتح والإغلاق.</dd>
+  <dt id="set_cdata"><a class="permalink" href="#set_cdata">set_cdata
+    ($text)</a></dt>
+  <dd>يضبط نص عنصر
+      <span class="Li">&quot;#CDATA&quot;</span>.</dd>
+  <dt id="append_cdata"><a class="permalink" href="#append_cdata">append_cdata
+    ($text)</a></dt>
+  <dd>يضيف النص في نهاية عنصر
+      <span class="Li">&quot;#CDATA&quot;</span>.</dd>
+  <dt id="remove_cdata~2"><a class="permalink" href="#remove_cdata~2">remove_cdata</a></dt>
+  <dd>يحول جميع أقسام
+      <span class="Li">&quot;#CDATA&quot;</span> في العنصر إلى عناصر
+      <span class="Li">&quot;#PCDATA&quot;</span> عادية. هذا مفيد عند تحويل XML إلى HTML، لأن المتصفحات لا تدعم أقسام CDATA.</dd>
+  <dt id="extra_data"><a class="permalink" href="#extra_data">extra_data</a></dt>
+  <dd>تُرجع البيانات الإضافية (التعليقات وتعليمات المعالجة) المرفقة بعنصر.</dd>
+  <dt id="set_extra_data"><a class="permalink" href="#set_extra_data">set_extra_data
+    ($extra_data)</a></dt>
+  <dd>يضبط البيانات الإضافية (التعليقات وتعليمات المعالجة) المرفقة بعنصر.</dd>
+  <dt id="append_extra_data"><a class="permalink" href="#append_extra_data">append_extra_data
+    ($extra_data)</a></dt>
+  <dd>يضيف البيانات الإضافية إلى البيانات الإضافية الموجودة قبل العنصر (إذا لم تكن هناك بيانات إضافية سابقة، فسيتم إنشاؤها).</dd>
+  <dt id="set_asis"><a class="permalink" href="#set_asis">set_asis</a></dt>
+  <dd>يضبط خاصية للعنصر تسبب إخراجه دون أن يتم تهريبه بواسطة XML بواسطة دوال الطباعة: إذا كان يحتوي على
+      <span class="Li">&quot;a &lt; b&quot;</span>، فسيتم إخراجه على هذا النحو وليس كـ
+      <span class="Li">&quot;a &amp;amp;lt; b&quot;</span>. يمكن أن يكون هذا مفيدًا لإنشاء عناصر نصية سيتم إخراجها كعلامات.
+    <p class="Pp">لاحظ أن جميع أحفاد
+        <span class="Li">&quot;#PCDATA&quot;</span> للعنصر يتم تمييزهم أيضًا على أنهم يمتلكون الخاصية (هم الذين يتأثرون بالتغيير فعليًا).</p>
+    <p class="Pp">إذا كان العنصر عنصر
+        <span class="Li">&quot;#CDATA&quot;</span>، فسيتم إخراجه أيضًا كما هو، دون علامات
+        <span class="Li">&quot;#CDATA&quot;</span>. وينطبق الشيء نفسه على أي عنصر
+        <span class="Li">&quot;#CDATA&quot;</span> من أحفاد العنصر.</p>
+    <p class="Pp">تُرجع العنصر المتصل.</p>
+  </dd>
+  <dt id="set_not_asis"><a class="permalink" href="#set_not_asis">set_not_asis</a></dt>
+  <dd>يلغي خاصية "asis" للعنصر وأحفاده النصيين.</dd>
+  <dt id="is_asis"><a class="permalink" href="#is_asis">is_asis</a></dt>
+  <dd>تُرجع حالة خاصية "asis" للعنصر (1 أو
+      <span class="Li">&quot;undef&quot;</span>).</dd>
+  <dt id="closed"><a class="permalink" href="#closed">closed</a></dt>
+  <dd>تُرجع صحيحًا إذا تم إغلاق العنصر. قد يكون مفيدًا إذا كنت في مكان ما في الشجرة، أثناء التحليل، وليس لديك فكرة عما إذا كان عنصر الأصل قد تم تحميله بالكامل أم لا.</dd>
+  <dt id="get_type"><a class="permalink" href="#get_type">get_type</a></dt>
+  <dd>تُرجع نوع العنصر:
+      '<span class="Li">&quot;#ELT&quot;</span>' للعناصر "الحقيقية"،
+      أو '<span class="Li">&quot;#PCDATA&quot;</span>'،
+      '<span class="Li">&quot;#CDATA&quot;</span>'،
+      '<span class="Li">&quot;#COMMENT&quot;</span>'،
+      '<span class="Li">&quot;#ENT&quot;</span>'،
+      '<span class="Li">&quot;#PI&quot;</span>'.</dd>
+  <dt id="is_elt"><a class="permalink" href="#is_elt">is_elt</a></dt>
+  <dd>تُرجع العنصر المتصل إذا كان العنصر عنصرًا "حقيقيًا"،
+      أو 0 إذا كان <span class="Li">&quot;#PCDATA&quot;</span>،
+      <span class="Li">&quot;#CDATA&quot;</span>...</dd>
+  <dt id="contains_only_text"><a class="permalink" href="#contains_only_text">contains_only_text</a></dt>
+  <dd>تُرجع صحيحًا (العنصر المتصل) إذا كان العنصر لا يحتوي على أي
+      عنصر "حقيقي" آخر، وإلا تُرجع خطأ (0).</dd>
+  <dt id="contains_only"><a class="permalink" href="#contains_only">contains_only
+    ($exp)</a></dt>
+  <dd>تُرجع صحيحًا (قائمة عناصر الأطفال المتطابقة) إذا كانت جميع عناصر الأطفال للعنصر تتطابق مع التعبير <span class="Li">$exp</span>، وإلا تُرجع خطأ (0).
+        <pre>if( $para-&gt;contains_only( 'tt')) { ... }
+</pre>
+  </dd>
+  <dt id="contains_a_single"><a class="permalink" href="#contains_a_single">contains_a_single
+    ($exp)</a></dt>
+  <dd>تُرجع (عنصر الطفل المتطابق) إذا كان العنصر يحتوي على عنصر طفل واحد
+      يتطابق مع التعبير <span class="Li">$exp</span>، وإلا تُرجع خطأ (0).</dd>
+  <dt id="is_field"><a class="permalink" href="#is_field">is_field</a></dt>
+  <dd>نفس <span class="Li">&quot;contains_only_text&quot;</span>.</dd>
+  <dt id="is_pcdata"><a class="permalink" href="#is_pcdata">is_pcdata</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر عنصر
+      <span class="Li">&quot;#PCDATA&quot;</span>، وإلا تُرجع
+      خطأ ('').</dd>
+  <dt id="is_ent"><a class="permalink" href="#is_ent">is_ent</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر كيانًا (كيان غير موسع)
+      عنصرًا، وإلا تُرجع خطأ ('').</dd>
+  <dt id="is_empty"><a class="permalink" href="#is_empty">is_empty</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر فارغًا، وإلا تُرجع خطأ
+    ('').</dd>
+  <dt id="set_empty"><a class="permalink" href="#set_empty">set_empty</a></dt>
+  <dd>يضع علامة على العنصر على أنه فارغ. لا يتم إجراء أي فحص إضافي، لذلك إذا لم يكن العنصر فارغًا بالفعل، فستكون النتيجة خاطئة. التأثير الوحيد لهذه الطريقة هو أن الإخراج سيكون <span class="Li">&quot;&lt;tag
+      att=&quot;value&quot;&quot;/&gt;&quot;</span>.
+    <p class="Pp">تُرجع العنصر المتصل.</p>
+  </dd>
+  <dt id="set_not_empty"><a class="permalink" href="#set_not_empty">set_not_empty</a></dt>
+  <dd>يضع علامة على العنصر على أنه غير فارغ. إذا كان فارغًا بالفعل، فسيتم إخراج العنصر كـ <span class="Li">&quot;&lt;tag
+      att=&quot;value&quot;&quot;&gt;&lt;/tag&gt;&quot;</span>.
+    <p class="Pp">تُرجع العنصر المتصل.</p>
+  </dd>
+  <dt id="is_pi"><a class="permalink" href="#is_pi">is_pi</a></dt>
+  <dd>تُرجع صحيحًا (1) إذا كان العنصر تعليمات معالجة
+      (<span class="Li">&quot;#PI&quot;</span>) عنصرًا، وإلا تُرجع خطأ
+      ('').</dd>
+  <dt id="target"><a class="permalink" href="#target">target</a></dt>
+  <dd>تُرجع هدف تعليمات المعالجة.</dd>
+  <dt id="set_target"><a class="permalink" href="#set_target">set_target
+    ($target)</a></dt>
+  <dd>يضبط هدف تعليمات المعالجة.
+    <p class="Pp">تُرجع العنصر المتصل.</p>
+  </dd>
+  <dt id="data"><a class="permalink" href="#data">data</a></dt>
+  <dd>تُرجع جزء البيانات من تعليمات المعالجة.</dd>
+  <dt id="set_data"><a class="permalink" href="#set_data">set_data
+    ($data)</a></dt>
+  <dd>يضبط بيانات تعليمات المعالجة.
+    <p class="Pp">تُرجع العنصر المتصل.</p>
+  </dd>
+  <dt id="set_pi"><a class="permalink" href="#set_pi">set_pi ($target,
+    $data)</a></dt>
+  <dd>يضبط الهدف والبيانات لتعليمات المعالجة.</dd>
+<dl>
+  <dt id="pi_string"><a class="permalink" href="#pi_string">pi_string</a></dt>
+  <dd>Returns the string form of a processing instruction
+      (<span class="Li">&quot;&lt;?target data?&gt;&quot;</span>).</dd>
+  <dt id="is_comment"><a class="permalink" href="#is_comment">is_comment</a></dt>
+  <dd>Returns true (1) if the element is a comment
+      (<span class="Li">&quot;#COMMENT&quot;</span>) element, otherwise returns
+      false ('').</dd>
+  <dt id="set_comment"><a class="permalink" href="#set_comment">set_comment
+    ($comment_text)</a></dt>
+  <dd>Set the text for a comment.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="comment"><a class="permalink" href="#comment">comment</a></dt>
+  <dd>Returns the content of a comment (just the text, not the
+      <span class="Li">&quot;&lt;!--&quot;</span> and
+      <span class="Li">&quot;--&gt;&quot;</span>), or
+      <span class="Li">&quot;undef&quot;</span>.</dd>
+  <dt id="comment_string"><a class="permalink" href="#comment_string">comment_string</a></dt>
+  <dd>Returns the XML string for a comment (<span class="Li">&quot;&lt;!--
+      comment --&gt;&quot;</span>).
+    <p class="Pp">Note that an XML comment cannot start or end with a '-', or
+        include '--' (<a href='http://www.w3.org/TR/2008/REC-xml-20081126/#sec-comments'>http://www.w3.org/TR/2008/REC-xml-20081126/#sec-comments</a>),
+        if that is the case (because you have created the comment yourself
+        presumably, as it could not be in the input XML), then a space will be
+        inserted before an initial '-', after a trailing one or between two '-'
+        in the comment (which could presumably mangle javascript
+        &quot;hidden&quot; in an XHTML comment).</p>
+    <p class="Pp">The element must be a valid comment element.</p>
+  </dd>
+  <dt id="set_ent"><a class="permalink" href="#set_ent">set_ent
+    ($entity)</a></dt>
+  <dd>Sets an (non-expanded) entity (<span class="Li">&quot;#ENT&quot;</span>).
+      <span class="Li">$entity</span>) is the entity text
+      (<span class="Li">&quot;&amp;ent;&quot;</span>).
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="ent"><a class="permalink" href="#ent">ent</a></dt>
+  <dd>Returns the entity for an entity
+      (<span class="Li">&quot;#ENT&quot;</span>) element
+      (<span class="Li">&quot;&amp;ent;&quot;</span>), otherwise returns
+      <span class="Li">&quot;undef&quot;</span>.</dd>
+  <dt id="ent_name"><a class="permalink" href="#ent_name">ent_name</a></dt>
+  <dd>Returns the entity name for an entity
+      (<span class="Li">&quot;#ENT&quot;</span>) element
+      (<span class="Li">&quot;ent&quot;</span>).
+    <p class="Pp">The element must be a valid entity element.</p>
+  </dd>
+  <dt id="ent_string"><a class="permalink" href="#ent_string">ent_string</a></dt>
+  <dd>Returns the entity, either expanded if the expanded version is available,
+      or non-expanded (<span class="Li">&quot;&amp;ent;&quot;</span>) otherwise.
+    <p class="Pp">The element must be a valid entity element.</p>
+  </dd>
+  <dt id="child"><a class="permalink" href="#child">child ($offset,
+    $optional_condition)</a></dt>
+  <dd>Returns the <span class="Li">$offset</span>-th child of the element,
+      optionally the <span class="Li">$offset</span>-th child that matches
+      <span class="Li">$optional_condition</span>. The children are treated as a
+      list, so <span class="Li">&quot;$elt-&gt;child( 0)&quot;</span> is the
+      first child, while <span class="Li">&quot;$elt-&gt;child( -1)&quot;</span>
+      is the last child.</dd>
+  <dt>child_text ($offset, $optional_condition)</dt>
+  <dd>Returns the text of a child or <span class="Li">&quot;undef&quot;</span>
+      if the sibling does not exist. Arguments are the same as child.</dd>
+  <dt>last_child ($optional_condition)</dt>
+  <dd>Returns the last child of the element, or the last child matching
+      <span class="Li">$optional_condition</span> (ie the last of the element
+      children matching the condition), or
+      <span class="Li">&quot;undef&quot;</span> if none exist/match.</dd>
+  <dt>last_child_text ($optional_condition)</dt>
+  <dd>Same as <span class="Li">&quot;first_child_text&quot;</span> but for the
+      last child.</dd>
+  <dt id="sibling"><a class="permalink" href="#sibling">sibling ($offset,
+    $optional_condition)</a></dt>
+  <dd>Returns the next or previous <span class="Li">$offset</span>-th sibling of
+      the element, or the <span class="Li">$offset</span>-th one matching
+      <span class="Li">$optional_condition</span>. If
+      <span class="Li">$offset</span> is negative then a previous sibling is
+      returned, if <span class="Li">$offset</span> is positive then a next
+      sibling is returned. <span class="Li">&quot;$offset=0&quot;</span> returns
+      the element if there is no condition or if the element matches the
+      condition&gt;, <span class="Li">&quot;undef&quot;</span> otherwise.</dd>
+  <dt id="sibling_text"><a class="permalink" href="#sibling_text">sibling_text
+    ($offset, $optional_condition)</a></dt>
+  <dd>Returns the text of a sibling or <span class="Li">&quot;undef&quot;</span>
+      if the sibling does not exist. Arguments are the same as
+      <span class="Li">&quot;sibling&quot;</span>.</dd>
+  <dt id="prev_siblings"><a class="permalink" href="#prev_siblings">prev_siblings
+    ($optional_condition)</a></dt>
+  <dd>Returns the list of previous siblings (optionally matching
+      <span class="Li">$optional_condition</span>) for the element. The elements
+      are ordered in document order.</dd>
+  <dt id="next_siblings"><a class="permalink" href="#next_siblings">next_siblings
+    ($optional_condition)</a></dt>
+  <dd>Returns the list of siblings (optionally matching
+      <span class="Li">$optional_condition</span>) following the element. The
+      elements are ordered in document order.</dd>
+  <dt id="siblings"><a class="permalink" href="#siblings">siblings
+    ($optional_condition)</a></dt>
+  <dd>Returns the list of siblings (optionally matching
+      <span class="Li">$optional_condition</span>) of the element (excluding the
+      element itself). The elements are ordered in document order.</dd>
+  <dt id="pos"><a class="permalink" href="#pos">pos
+    ($optional_condition)</a></dt>
+  <dd>Returns the position of the element in the children list. The first child
+      has a position of 1 (as in XPath).
+    <p class="Pp">If the <span class="Li">$optional_condition</span> is given,
+        then only siblings that match the condition are counted. If the element
+        itself does not match the condition, then 0 is returned.</p>
+  </dd>
+  <dt id="atts"><a class="permalink" href="#atts">atts</a></dt>
+  <dd>Returns a hash ref containing the element attributes.</dd>
+  <dt id="set_atts"><a class="permalink" href="#set_atts">set_atts ({
+    att1=&gt;$att1_val, att2=&gt; $att2_val... })</a></dt>
+  <dd>Set the element attributes with the hash ref supplied as the argument. The
+      previous attributes are lost (ie the attributes set by
+      <span class="Li">&quot;set_atts&quot;</span> replace all of the attributes
+      of the element).
+    <p class="Pp">You can also pass a list instead of a hashref:
+        <span class="Li">&quot;$elt-&gt;set_atts( att1 =&gt;
+        'val1',...)&quot;</span>.</p>
+  </dd>
+  <dt id="del_atts"><a class="permalink" href="#del_atts">del_atts</a></dt>
+  <dd>Deletes all attributes of the element.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="att_nb"><a class="permalink" href="#att_nb">att_nb</a></dt>
+  <dd>Returns the number of attributes for the element.</dd>
+  <dt id="has_atts"><a class="permalink" href="#has_atts">has_atts</a></dt>
+  <dd>Returns true if the element has attributes. (In fact, this is an alias for
+      <span class="Li">&quot;att_nb &quot;</span>.)</dd>
+  <dt id="has_no_atts"><a class="permalink" href="#has_no_atts">has_no_atts</a></dt>
+  <dd>Returns true if the element has no attributes, false (0) otherwise.</dd>
+  <dt id="att_names"><a class="permalink" href="#att_names">att_names</a></dt>
+  <dd>Returns a list of the attribute names for the element.</dd>
+  <dt id="att_xml_string"><a class="permalink" href="#att_xml_string">att_xml_string
+    ($att, $options)</a></dt>
+  <dd>Returns the attribute value, where '&amp;', '&lt;' and quote (&quot; or
+      the value of the quote option at twig creation) are XML-escaped.
+    <p class="Pp">The options are passed as a hashref. Setting
+        <span class="Li">&quot;escape_gt&quot;</span> to a true value will also
+        escape '&gt;'.</p>
+  </dd>
+  <dt id="set_id"><a class="permalink" href="#set_id">set_id ($id)</a></dt>
+  <dd>Sets the <span class="Li">&quot;id&quot;</span> attribute of the element
+      to the value. See <span class="Li">&quot;elt_id &quot;</span> to change
+      the id attribute name.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="id~2"><a class="permalink" href="#id~2">id</a></dt>
+  <dd>Gets the id attribute value (or <span class="Li">&quot;undef&quot;</span>
+      if none).</dd>
+  <dt id="del_id"><a class="permalink" href="#del_id">del_id ($id)</a></dt>
+  <dd>Deletes the <span class="Li">&quot;id&quot;</span> attribute of the
+      element and remove it from the id list for the document.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="class"><a class="permalink" href="#class">class</a></dt>
+  <dd>Returns the <span class="Li">&quot;class&quot;</span> attribute for the
+      element (methods on the <span class="Li">&quot;class&quot;</span>
+      attribute are quite convenient when dealing with XHTML, or plain XML that
+      will eventually be displayed using CSS).</dd>
+  <dt id="lclass"><a class="permalink" href="#lclass">lclass</a></dt>
+  <dd>Same as <span class="Li">&quot;class &quot;</span>, except that this
+      method is an lvalue, so you can do <span class="Li">&quot;$elt-&gt;lclass=
+      &quot;foo&quot;&quot;</span>.</dd>
+  <dt id="set_class"><a class="permalink" href="#set_class">set_class
+    ($class)</a></dt>
+  <dd>Sets the <span class="Li">&quot;class&quot;</span> attribute for the
+      element to <span class="Li">$class</span>.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="add_class"><a class="permalink" href="#add_class">add_class
+    ($class)</a></dt>
+  <dd>Adds <span class="Li">$class</span> to the element
+      <span class="Li">&quot;class&quot;</span> attribute: the new class is
+      added only if not already present.
+    <p class="Pp">Note that classes are then sorted alphabetically, so the
+        <span class="Li">&quot;class&quot;</span> attribute can be changed even
+        if the class is already there.</p>
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="remove_class"><a class="permalink" href="#remove_class">remove_class
+    ($class)</a></dt>
+  <dd>Remove <span class="Li">$class</span> from the element
+      <span class="Li">&quot;class&quot;</span> attribute.
+    <p class="Pp">Note that classes are then sorted alphabetically, so the
+        <span class="Li">&quot;class&quot;</span> attribute can be changed even
+        if the class is already there.</p>
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="add_to_class"><a class="permalink" href="#add_to_class">add_to_class
+    ($class)</a></dt>
+  <dd>Same as add_class.</dd>
+  <dt id="att_to_class"><a class="permalink" href="#att_to_class">att_to_class
+    ($att)</a></dt>
+  <dd>Sets the <span class="Li">&quot;class&quot;</span> attribute to the value
+      of attribute <span class="Li">$att</span>.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="add_att_to_class"><a class="permalink" href="#add_att_to_class">add_att_to_class
+    ($att)</a></dt>
+  <dd>Adds the value of attribute <span class="Li">$att</span> to the
+      <span class="Li">&quot;class&quot;</span> attribute of the element.
+    <p class="Pp">Returns the calling element.</p>
+  </dd>
+  <dt id="move_att_to_class"><a class="permalink" href="#move_at
+</dl>
+<section class="Sh">
+<h1 class="Sh" id="DTD"><a class="permalink" href="#DTD">DTD</a></h1>
+<dl class="Bl-tag">
+  <dt id="internal"><a class="permalink" href="#internal">Internal DTD</a></dt>
+  <dd>يتضمن مستند XML DTD داخليًا ، وربما تعريفات كيانات.
+    <p class="Pp">إذا استخدمت الخيار <code>load_DTD</code> عند إنشاء الـ twig ، يمكن الوصول إلى معلومات DTD وتعريفات الكيانات.</p>
+    <p class="Pp">سيتم "مسح" (أو "طباعة") DTD وتعريفات الكيانات كما هي (إذا لم يتم تعديلها) أو كما تم إعادة بنائها (بشكل سيء ، يتم فقدان التعليقات ، ولا يتم الاحتفاظ بالترتيب ، نظرًا لمحتواها ، لا ينبغي لأحد رؤية هذا DTD) إذا تم تعديلها. يمكنك أيضًا تعديلها مباشرة عن طريق تغيير الحقل <code>$twig-&gt;{twig_doctype}-&gt;{internal}</code> (مباشرة من XML::Parser ، راجع وثيقة معالج <code>Doctype</code>).</p>
+  </dd>
+  <dt id="External"><a class="permalink" href="#External">External DTD</a></dt>
+  <dd>يتضمن مستند XML مرجعًا إلى DTD خارجي ، وربما تعريفات كيانات.
+    <p class="Pp">إذا استخدمت <code>load_DTD</code> عند إنشاء الـ twig ، يمكن الوصول إلى معلومات DTD وتعريفات الكيانات. سيتم "مسح" (أو "طباعة") تعريفات الكيانات إما كما هي (إذا لم يتم تعديلها) أو كما تم إعادة بنائها (بشكل سيء ، يتم فقدان التعليقات ، ولا يتم الاحتفاظ بالترتيب).</p>
+    <p class="Pp">يمكنك تغيير نوع المستند من خلال طريقة <code>$twig-&gt;set_doctype</code> وطباعة dtd من خلال طريقتي <code>$twig-&gt;dtd_text</code> أو <code>$twig-&gt;dtd_print</code>.</p>
+    <p class="Pp">إذا كنت بحاجة إلى تعديل قائمة الكيانات ، فهذه ربما تكون أسهل طريقة للقيام بذلك.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Flush"><a class='permalink' href='#Flush'>Flush</a></h2>
+<p class="Pp">تذكر أنه يتم استدعاء معالجات العناصر عند إغلاق العنصر ، لذلك إذا كان لديك معالجات للعناصر المتداخلة ، فسيتم استدعاء المعالجات الداخلية أولاً. هذا يجعل ، على سبيل المثال ، ترقيم الأقسام المتداخلة (أو البنود ، أو العناصر div) أكثر صعوبة مما يبدو ، حيث يتم التعامل مع العناوين في الأقسام الداخلية قبل الأقسام الخارجية.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<dl class="Bl-tag">
+  <dt id="segfault"><a class="permalink" href="#segfault">segfault during
+    parsing</a></dt>
+  <dd>يحدث هذا عند تحليل المستندات الضخمة ، أو العديد من المستندات الصغيرة ، مع إصدار Perl قبل 5.16.
+    <p class="Pp">هذا بسبب خطأ في كيفية التعامل مع المراجع الضعيفة في Perl نفسها.</p>
+    <p class="Pp">الحل هو إما الترقية إلى Perl 5.16 أو أحدث (<code>perlbrew</code> أداة رائعة لإدارة العديد من تثبيتات Perl على نفس الجهاز).</p>
+    <p class="Pp">طريقة أخرى ، غير موصى بها ، لحل المشكلة هي إيقاف تشغيل المراجع الضعيفة عن طريق كتابة <code>XML::Twig::_set_weakrefs( 0);</code> في أعلى الكود. هذا غير مدعوم تمامًا ، وقد يؤدي إلى مشاكل أخرى.</p>
+  </dd>
+  <dt id="entity~2"><a class="permalink" href="#entity~2">entity
+    handling</a></dt>
+  <dd>بسبب سلوك XML::Parser ، تختفي الكيانات غير الأساسية في قيم السمات إذا لم يتم الإعلان عنها في المستند: <code>att="val&amp;ent;"</code> سيتم تحويله إلى <code>att =&gt; val</code> ، ما لم تستخدم الوسيط <code>keep_encoding</code> إلى <code>XML::Twig-&gt;new</code>.</dd>
+  <dt id="DTD"><a class="permalink" href="#DTD">DTD handling</a></dt>
+  <dd>طرق التعامل مع DTD بها العديد من الأخطاء. لا يستخدمها أحد ويبدو أنه من الصعب جدًا جعلها تعمل في جميع الحالات ، بما في ذلك مع العديد من الإصدارات غير المتوافقة قليلاً من XML::Parser و libexpat.
+    <p class="Pp">بشكل أساسي ، يمكنك قراءة DTD ، وإخراجها بشكل صحيح ، وتحديث الكيانات ، ولكن ليس أكثر من ذلك.</p>
+    <p class="Pp">لذا استخدم XML::Twig مع المستندات المستقلة ، أو مع المستندات التي تشير إلى DTD خارجي ، ولكن لا تتوقع منه تحليل DTD بشكل صحيح وحتى إخراجه مرة أخرى.</p>
+  </dd>
+  <dt id="ID"><a class="permalink" href="#ID">ID list</a></dt>
+  <dd>قائمة المعرفات (ID) لا يتم تحديثها عند قص العناصر أو حذفها.</dd>
+  <dt id="change_gi"><a class="permalink" href="#change_gi">change_gi</a></dt>
+  <dd>لن تعمل هذه الطريقة بشكل صحيح إذا قمت بما يلي:
+    <pre>$twig-&gt;change_gi( $old1, $new);
+$twig-&gt;change_gi( $old2, $new);
+$twig-&gt;change_gi( $new, $even_newer);
+</pre>
+  </dd>
+  <dt id="sanity"><a class="permalink" href="#sanity">sanity check on
+    XML::Parser method calls</a></dt>
+  <dd>يجب على XML::Twig منع استدعاءات بعض طرق XML::Parser ، وخاصة طريقة <code>setHandlers</code>.</dd>
+  <dt id="pretty"><a class="permalink" href="#pretty">pretty printing</a></dt>
+  <dd>الطباعة الجميلة (على الأقل باستخدام نمط <code>indented</code>) يصعب الحصول عليها بشكل صحيح! سيتم طباعة العناصر التي تنتمي إلى المستند بشكل جميل فقط. طباعة العناصر التي لا تنتمي إلى الـ twig تجعل من المستحيل على XML::Twig تحديد عمقها ، وبالتالي مستوى المسافة البادئة لها.
+    <p class="Pp">هناك أيضًا خطأ لا مفر منه عند استخدام <code>flush</code> والطباعة الجميلة للعناصر ذات المحتوى المختلط التي تبدأ بعنصر مضمن:</p>
+    <pre>&lt;elt&gt;&lt;b&gt;b&lt;/b&gt;toto&lt;b&gt;bold&lt;/b&gt;&lt;/elt&gt;
+سيتم إخراجها كـ
+&lt;elt&gt;
+  &lt;b&gt;b&lt;/b&gt;toto&lt;b&gt;bold&lt;/b&gt;&lt;/elt&gt;
+</pre>
+    <p class="Pp">إذا قمت بمسح الـ twig عند العثور على العنصر <code>&lt;b&gt;</code>.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="Globals"><a class="permalink" href="#Globals">Globals</a></h1>
+<p class="Pp">هذه هي الأشياء التي يمكن أن تعبث بالكود المستدعى ، خاصة إذا كان متعدد الخيوط. قد تسبب أيضًا مشاكل تحت mod_perl.</p>
+<dl class="Bl-tag">
+  <dt id="Exported"><a class="permalink" href="#Exported">Exported
+    constants</a></dt>
+  <dd>سواء كنت تريدها أم لا ، تحصل عليها! هذه هي الإجراءات الفرعية لاستخدامها كثوابت عند إنشاء أو اختبار العناصر:
+    <pre>PCDATA  return '#PCDATA'
+CDATA   return '#CDATA'
+PI      return '#PI', I had the choice between PROC and PI :--(
+</pre>
+  </dd>
+  <dt id="Module"><a class="permalink" href="#Module">Module scoped values:
+    constants</a></dt>
+  <dd>لا ينبغي أن تسبب هذه أي مشاكل:
+    <pre>%base_ent= ( '&gt;' =&gt; '&amp;gt;',
+         '&lt;' =&gt; '&amp;lt;',
+         '&amp;' =&gt; '&amp;amp;',
+         &quot;'&quot; =&gt; '&amp;apos;',
+         '&quot;' =&gt; '&amp;quot;',
+       );
+CDATA_START   = &quot;&lt;![CDATA[&quot;;
+CDATA_END     = &quot;]]&gt;&quot;;
+PI_START      = &quot;&lt;?&quot;;
+PI_END        = &quot;?&gt;&quot;;
+COMMENT_START = &quot;&lt;!--&quot;;
+COMMENT_END   = &quot;--&gt;&quot;;
+</pre>
+    <p class="Pp">أنماط الطباعة الجميلة:</p>
+    <pre>( $NSGMLS, $NICE, $INDENTED, $INDENTED_C, $WRAPPED, $RECORD1, $RECORD2)= (1..7);
+</pre>
+    <p class="Pp">نمط إخراج العلامات الفارغة:</p>
+    <pre>( $HTML, $EXPAND)= (1..2);
+</pre>
+  </dd>
+  <dt id="Module~2"><a class="permalink" href="#Module~2">Module scoped values:
+    might be changed</a></dt>
+  <dd>معظم هذه تتعامل مع الطباعة الجميلة ، لذلك أسوأ ما يمكن أن يحدث هو على الأرجح أن مخرجات XML لن تبدو صحيحة ، ولكنها لا تزال صالحة ويتم معالجتها بشكل متطابق من قبل معالجات XML.
+    <p class="Pp"><code>$empty_tag_style</code> يمكن أن تعبث بمتصفحات HTML ، وتغيير <code>$ID</code> سيخلق على الأرجح مشاكل.</p>
+    <pre>$pretty=0;           # pretty print style
+$quote='&quot;';          # quote for attributes
+$INDENT= '  ';       # indent for indented pretty print
+$empty_tag_style= 0; # how to display empty tags
+$ID                  # attribute used as an id ('id' by default)
+</pre>
+  </dd>
+  <dt id="Module~3"><a class="permalink" href="#Module~3">Module scoped values:
+    definitely changed</a></dt>
+  <dd>يتم استخدام هذين المتغيرين لاستبدال العلامات بفهرس ، وبالتالي توفير بعض المساحة عند إنشاء twig. إذا تسببت لك حقًا في الكثير من المتاعب ، فأخبرني ، ربما يكون من الممكن إنشاء مفتاح تبديل أو على الأقل إصدار من XML::Twig لا يقوم بهذا التحسين.
+    <pre>%gi2index;     # tag =&gt; index
+@index2gi;     # list of tags
+</pre>
+  </dd>
+</dl>
+<p class="Pp">إذا كنت بحاجة إلى معالجة كل هذه القيم ، يمكنك استخدام الطرق التالية على كائن XML::Twig:</p>
+<dl class="Bl-tag">
+  <dt id="global_state"><a class="permalink" href="#global_state">global_state</a></dt>
+  <dd>يعيد هاشريف مع جميع المتغيرات العامة التي يستخدمها XML::Twig.
+    <p class="Pp">يحتوي الهاش على الحقول التالية: <code>"pretty"</code>، <code>"quote"</code>، <code>"indent"</code>، <code>"empty_tag_style"</code>، <code>"keep_encoding"</code>، <code>"expand_external_entities"</code>، <code>"output_filter"</code>، <code>"output_text_filter"</code>، <code>"keep_atts_order"</code>.</p>
+  </dd>
+  <dt id="set_global_state"><a class="permalink" href="#set_global_state">set_global_state
+    ($state)</a></dt>
+  <dd>يضبط الحالة العامة ، $state هو هاشريف.</dd>
+  <dt id="save_global_state"><a class="permalink" href="#save_global_state">save_global_state</a></dt>
+  <dd>يحفظ الحالة العامة الحالية.</dd>
+  <dt id="restore_global_state"><a class="permalink" href="#restore_global_state">restore_global_state</a></dt>
+  <dd>يستعيد الحالة المحفوظة سابقًا (باستخدام <code>Lsave_global_state</code>&gt;.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="TODO"><a class="permalink" href="#TODO">TODO</a></h1>
+<dl class="Bl-tag">
+  <dt id="SAX"><a class="permalink" href="#SAX">SAX handlers</a></dt>
+  <dd>السماح لـ XML::Twig بالعمل فوق أي محلل SAX.</dd>
+  <dt id="multiple"><a class="permalink" href="#multiple">multiple twigs are not
+    well supported</a></dt>
+  <dd>عدد من ميزات الـ twig عامة في الوقت الحالي. وتشمل هذه قائمة المعرفات و "مجمع العلامات" (إذا كنت تستخدم <code>change_gi</code> فإنك تغير العلامة لجميع الـ twigs).
+    <p class="Pp">سيحاول إصدار مستقبلي دعم ذلك مع محاولة عدم إثقال الأداء (على الأقل عند استخدام twig واحد!).</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">AUTHOR</a></h1>
+<p class="Pp">Michel Rodriguez &lt;mirod@cpan.org&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LICENSE"><a class="permalink" href="#LICENSE">LICENSE</a></h1>
+<p class="Pp">هذه المكتبة هي برنامج مجاني ؛ يمكنك إعادة توزيعها و/أو تعديلها بموجب نفس الشروط التي يعمل بها Perl نفسه.</p>
+<p class="Pp">يجب إرسال تقارير الأخطاء باستخدام: <i>RT
+    <a href='http://rt.cpan.org/NoAuth/Bugs.html?Dist=XML-Twig'>http://rt.cpan.org/NoAuth/Bugs.html?Dist=XML-Twig</a></i>.</p>
+<p class="Pp">يمكن إرسال التعليقات إلى mirod@cpan.org.</p>
+<p class="Pp">صفحة XML::Twig موجودة على <a href='http://www.xmltwig.org/xmltwig/'>http://www.xmltwig.org/xmltwig/</a></p>

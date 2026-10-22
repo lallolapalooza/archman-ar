@@ -1,0 +1,196 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">sd-stub(7)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "systemd-stub",
+  "sections": [
+    {
+      "title": "OVERVIEW",
+      "content": [
+        "systemd-stub is a minimalist EFI boot loader that aims to load a unified kernel image (UKI) and run it. It is designed to be embedded directly into the kernel image itself, forming a unified EFI binary. This approach simplifies the boot process and enhances security by ensuring the integrity of the boot loader and kernel. The stub performs essential initialization tasks, measures the kernel and its components into the TPM (Trusted Platform Module) PCRs (Platform Configuration Registers) for security verification, and then transfers control to the kernel. It supports various configurations, including multiple boot profiles and Secure Boot, making it a versatile option for modern boot environments."
+      ]
+    },
+    {
+      "title": "INSTALLATION",
+      "content": [
+        "systemd-stub is typically built into the unified kernel image (UKI) using tools like `ukify`. It is not installed as a separate package on the system. The resulting UKI is an EFI executable that can be placed on an EFI System Partition (ESP) and booted directly by the firmware or an existing boot manager."
+      ]
+    },
+    {
+      "title": "OPTIONS",
+      "content": [
+        {
+          "heading": "UKI Profiles",
+          "description": "Unified kernel images can contain multiple boot profiles. Each profile is defined by a `LOADER_ENTRY_NAME` directive in the UKI's configuration. This directive specifies a unique identifier for the profile, which can be used by boot managers to present different boot options to the user. For example, a UKI might contain profiles for a standard boot, a recovery mode, and a factory reset. The `LOADER_ENTRY_NAME` should be a human-readable string that appears in the boot menu entry for this profile (e.g., `TITLE='Factory Reset this Device'`)."
+        }
+      ]
+    },
+    {
+      "title": "TPM PCR NOTES",
+      "content": [
+        "When a unified kernel using `systemd-stub` is invoked, the firmware measures it as a whole into TPM PCR 4, covering all embedded resources, such as the stub code itself, the core kernel, the embedded initrd, and the kernel command line (including all UKI profiles).",
+        "Note that when `systemd-stub` measures a PE section, it measures the amount of bytes that the section takes up in memory (`VirtualSize`) and not the amount of bytes that the section takes up on disk (`SizeOfRawData`). This means that if the size in memory is larger than the size on disk, `systemd-stub` will end up measuring extra zeroes. To avoid this from happening, it is recommended to make sure that the size in memory of each section that is measured by `systemd-stub` is always smaller than or equal to the size on disk. `ukify` automatically ensures this when building UKIs or addons.",
+        "The Linux kernel measures all initrds it receives into TPM PCR 9. This means every type of initrd (of the selected UKI profile) will possibly be measured two or three times: the initrds embedded in the kernel image will be measured to PCR 4, PCR 9, and PCR 11; the initrd synthesized from credentials (and the one synthesized from configuration extensions) will be measured to both PCR 9 and PCR 12; the initrd synthesized from system extensions will be measured to both PCR 4 and PCR 9. The following table summarizes the OS resources and the PCRs they are measured to:",
+        {
+          "type": "table",
+          "caption": "Table 2. OS Resource PCR Summary",
+          "headers": [
+            "OS Resource",
+            "Measurement PCR"
+          ],
+          "rows": [
+            [
+              "systemd-stub code (the entry point of the unified PE binary)",
+              "4"
+            ],
+            [
+              "Core kernel code (embedded in unified PE binary)",
+              "4 + 11"
+            ],
+            [
+              "OS release information (embedded in the unified PE binary)",
+              "4 + 11"
+            ],
+            [
+              "Main initrd (embedded in unified PE binary)",
+              "4 + 9 + 11"
+            ],
+            [
+              "Microcode initrd (embedded in unified PE binary)",
+              "4 + 9 + 11"
+            ],
+            [
+              "Default kernel command line (embedded in unified PE binary)",
+              "4 + 11"
+            ],
+            [
+              "Overridden kernel command line",
+              "12"
+            ],
+            [
+              "Boot splash (embedded in the unified PE binary)",
+              "4 + 11"
+            ],
+            [
+              "TPM2 PCR signature JSON (embedded in unified PE binary, synthesized into initrd)",
+              "4 + 9"
+            ],
+            [
+              "TPM2 PCR PEM public key (embedded in unified PE binary, synthesized into initrd)",
+              "4 + 9 + 11"
+            ],
+            [
+              "Credentials (synthesized initrd from companion files)",
+              "9 + 12"
+            ],
+            [
+              "System Extensions (synthesized initrd from companion files)",
+              "9 + 13"
+            ],
+            [
+              "Configuration Extensions (synthesized initrd from companion files)",
+              "9 + 12"
+            ],
+            [
+              "Selected profile unless zero",
+              "12"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "title": "EFI VARIABLES",
+      "content": [
+        "The following EFI variables are defined, set, and read by `systemd-stub`, under the vendor UUID \"4a67b082-0a4c-41cf-b6c7-440b29bb8c4f\", for communication between the boot stub and the OS:",
+        {
+          "heading": "LoaderDevicePartUUID",
+          "description": "Contains the partition UUID of the partition the boot loader has been started from on the current boot (usually an EFI System Partition). If already set by the boot loader, this will remain untouched by `systemd-stub`. If not set yet, this will be set to the partition UUID of the partition the unified kernel is started from, in order to support systems that directly boot into a unified kernel image, bypassing any boot loader. `systemd-gpt-auto-generator(8)` uses this information to automatically find the disk booted from, in order to discover various other partitions on the same disk automatically. Added in version 224."
+        },
+        {
+          "heading": "LoaderFirmwareInfo, LoaderFirmwareType",
+          "description": "Brief firmware information. Use `bootctl(1)` to view this data. Added in version 250."
+        },
+        {
+          "heading": "LoaderTpm2ActivePcrBanks",
+          "description": "Hexadecimal string representation of a bitmask with values defined by the TCG EFI Protocol Specification for TPM 2.0 as EFI_TCG2_BOOT_HASH_ALG_*. If no TPM2 support or no active banks were detected, will be set to 0. Set by the boot loader. Use `systemd-analyze(1)` to view this data. Added in version 258."
+        },
+        {
+          "heading": "LoaderImageIdentifier",
+          "description": "The file system path to the EFI executable of the boot loader for the current boot, relative to the partition's root directory (i.e., relative to the partition indicated by `LoaderDevicePartUUID`, see above). If not set yet, this will be set to the file system path of the EFI executable of the booted unified kernel, in order to support systems that directly boot into a unified kernel image, bypassing any boot loader. Use `bootctl(1)` to view this data. Added in version 237."
+        },
+        {
+          "heading": "StubDevicePartUUID, StubImageIdentifier",
+          "description": "Similar to `LoaderDevicePartUUID` and `LoaderImageIdentifier`, but indicates the location of the unified kernel image EFI binary rather than the location of the boot loader binary, regardless of whether booted via a boot loader or not. Added in version 257."
+        },
+        {
+          "heading": "StubDeviceURL",
+          "description": "If the kernel image has been invoked via network booting, this variable contains the originating URL. This may be used to automatically acquire additional resources from the same source. Added in version 258."
+        },
+        {
+          "heading": "StubInfo",
+          "description": "Brief stub information. Use `bootctl(1)` to view this data. Added in version 250."
+        },
+        {
+          "heading": "StubPcrKernelImage",
+          "description": "The PCR register index the kernel image, initrd image, boot splash, devicetree database, and the embedded command line are measured into, formatted as decimal ASCII string (e.g., \"11\"). This variable is set if a measurement was successfully completed, and remains unset otherwise. Added in version 252."
+        },
+        {
+          "heading": "StubPcrKernelParameters",
+          "description": "The PCR register index the kernel command line and credentials are measured into, formatted as decimal ASCII string (e.g., \"12\"). This variable is set if a measurement was successfully completed, and remains unset otherwise. Added in version 252."
+        },
+        {
+          "heading": "StubPcrInitRDSysExts",
+          "description": "The PCR register index the system extensions for the initrd, which are picked up from the file system the kernel image is located on. Formatted as decimal ASCII string (e.g., \"13\"). This variable is set if a measurement was successfully completed, and remains unset otherwise. Added in version 252."
+        },
+        {
+          "heading": "StubPcrInitRDConfExts",
+          "description": "The PCR register index the configuration extensions for the initrd, which are picked up from the file system the kernel image is located on. Formatted as decimal ASCII string (e.g., \"12\"). This variable is set if a measurement was successfully completed, and remains unset otherwise. Added in version 255."
+        },
+        {
+          "heading": "StubProfile",
+          "description": "The numeric index of the selected profile, without the \"@\", formatted as decimal string. Set both on single-profile and multi-profile UKIs. (In the former case, this variable will be set to \"0\" unconditionally.) Added in version 257."
+        },
+        "Note that some of the variables above may also be set by the boot loader. The stub will only set them if they are not set already. Some of these variables are defined by the Boot Loader Interface[5]."
+      ]
+    },
+    {
+      "title": "INITRD RESOURCES",
+      "content": [
+        "The following resources are passed as initrd cpio archives to the booted kernel, and thus make up the initial file system hierarchy in the initrd execution environment:",
+        {
+          "heading": "/",
+          "description": "The main initrd from the \".initrd\" PE section of the unified kernel image. Added in version 252."
+        },
+        {
+          "heading": "/.extra/credentials/*.cred",
+          "description": "Credential files (suffix \".cred\") that are placed next to the unified kernel image (as described above) are copied into the `/.extra/credentials/` directory in the initrd execution environment. Added in version 252."
+        },
+        {
+          "heading": "/.extra/global_credentials/*.cred",
+          "description": "Similarly, credential files in the `/loader/credentials/` directory in the file system the unified kernel image is placed in are copied into the `/.extra/global_credentials/` directory in the initrd execution environment. Added in version 252."
+        },
+        {
+          "heading": "/.extra/sysext/*.sysext.raw",
+          "description": "System extension image files (suffix \".sysext.raw\") that are placed next to the unified kernel image (as described above) are copied into the `/.extra/sysext/` directory in the initrd execution environment. Added in version 252."
+        },
+        {
+          "heading": "/.extra/global_sysext/*.sysext.raw",
+          "description": "Similarly, system extension image files (suffix \".sysext.raw\") that are placed in the `/loader/extensions/` directory in the file system the unified kernel image is placed in are copied into the `/.extra/global_sysext/` directory in the initrd execution environment. Added in version 258."
+        },
+        {
+          "heading": "/.extra/confext/*.confext.raw",
+          "description": "Configuration extension image files (suffix \".confext.raw\") that are placed next to the unified kernel image (as described above) are copied into the `/.extra/confext/` directory in the initrd execution environment. Added in version 255."
+        },
+        {
+          "heading": "/.extra/global_confext/*.confext.raw",
+          "description": "Similarly, configuration extension image files (suffix \".confext.raw\") that are placed in the `/loader/extensions/` directory in the file system the unified kernel image is placed in are copied into the `/.extra/global_confext/` directory in the initrd execution environment. Added in version 258."
+        },
+        {
+          "heading": "/.extra/tpm2-pcr-signature.json",
+          "description": "The TPM2 PCR signature JSON object included in the"
+        }
+      ]
+    }
+  ]
+}

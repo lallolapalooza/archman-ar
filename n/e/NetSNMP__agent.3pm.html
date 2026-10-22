@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>NetSNMP::agent(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">NetSNMP__agent(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/net-snmp/">net-snmp</a></p>
+<p class="lic">التراخيص: BSD</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">agent(3)</td>
+    <td class="head-vol">مساهمات مستخدم وثائق Perl</td>
+    <td class="head-rtitle">agent(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">NetSNMP::agent - امتداد Perl لوكيل net-snmp.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>use NetSNMP::agent;
+my $agent = new NetSNMP::agent('Name' =&gt; 'my_agent_name');</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تنفذ هذه الوحدة مجموعة من واجهات برمجة التطبيقات (API) لجعل وكيل SNMP يعمل كوكيل snmp، وكيل فرعي snmp (باستخدام بروتوكول الوكيل الفرعي AgentX) و/أو واجهات perl مضمنة مباشرة داخل خدمة وكيل net-snmp التقليدية.</p>
+<p class="Pp">انظر أيضًا البرنامج التعليمي حول واجهة برمجة تطبيقات C العامة لـ Net-SNMP، والتي تنفذها هذه الوحدة بطريقة Perl، وبرنامج تعليمي خاص بـ Perl على:</p>
+<a href='http://www.net-snmp.org/tutorial-5/toolkit/'>http://www.net-snmp.org/tutorial-5/toolkit/</a>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Sub-agent_example'><a class='permalink' href='#Sub-agent_example'>مثال على وكيل فرعي</a></h2>
+<pre>use NetSNMP::agent (':all');
+use NetSNMP::ASN qw(ASN_OCTET_STR);
+my $value = &quot;hello world&quot;;
+sub myhandler {
+    my ($handler, $registration_info, $request_info, $requests) = @_;
+    my $request;
+    for($request = $requests; $request; $request = $request-&gt;next()) {
+        my $oid = $request-&gt;getOID();
+        if ($request_info-&gt;getMode() == MODE_GET) {
+            # ... بشكل عام، ستحسب القيمة من oid
+            if ($oid == new NetSNMP::OID(&quot;.1.3.6.1.4.1.8072.9999.9999.7375.1.0&quot;)) {
+                $request-&gt;setValue(ASN_OCTET_STR, $value);
+            }
+        } elsif ($request_info-&gt;getMode() == MODE_GETNEXT) {
+            # ... بشكل عام، ستحسب القيمة من oid
+            if ($oid &lt; new NetSNMP::OID(&quot;.1.3.6.1.4.1.8072.9999.9999.7375.1.0&quot;)) {
+                $request-&gt;setOID(&quot;.1.3.6.1.4.1.8072.9999.9999.7375.1.0&quot;);
+                $request-&gt;setValue(ASN_OCTET_STR, $value);
+            }
+        } elsif ($request_info-&gt;getMode() == MODE_SET_RESERVE1) {
+            if ($oid != new NetSNMP::OID(&quot;.1.3.6.1.4.1.8072.9999.9999.7375.1.0&quot;)) {  # قم بإجراء التحقق من الأخطاء هنا
+                $request-&gt;setError($request_info, SNMP_ERR_NOSUCHNAME);
+            }
+        } elsif ($request_info-&gt;getMode() == MODE_SET_ACTION) {
+            # ... (أو استخدم القيمة)
+            $value = $request-&gt;getValue();
+        }
+    }
+}
+my $agent = new NetSNMP::agent(
+                        # يجعل الوكيل يقرأ ملف my_agent_name.conf
+                        'Name' =&gt; &quot;my_agent_name&quot;,
+                        'AgentX' =&gt; 1
+                        );
+$agent-&gt;register(&quot;my_agent_name&quot;, &quot;.1.3.6.1.4.1.8072.9999.9999.7375&quot;,
+                 \&amp;myhandler);
+my $running = 1;
+while($running) {
+        $agent-&gt;agent_check_and_process(1);
+}
+$agent-&gt;shutdown();</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Embedded_agent_example'><a class='permalink' href='#Embedded_agent_example'>مثال على وكيل مضمن</a></h2>
+<pre># ضع هذا في ملف .pl، ثم في ملف snmpd.conf الخاص بك ضع:
+#    perl do '/path/to/file.pl';
+use NetSNMP::agent;
+my $agent;
+sub myhandler {
+    my ($handler, $registration_info, $request_info, $requests) = @_;
+    # ...
+}
+$agent = new NetSNMP::agent(
+                        'Name' =&gt; 'my_agent_name'
+                        );
+$agent-&gt;register(&quot;my_agent_name&quot;, &quot;.1.3.6.1.4.1.8072.9999.9999.7375&quot;,
+                 \&amp;myhandler);
+$agent-&gt;main_loop();</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CONSTRUCTOR'><a class='permalink' href='#CONSTRUCTOR'>المنشئ</a></h1>
+<pre>new ( OPTIONS )
+    هذا هو منشئ كائن NetSNMP::agent جديد.
+    الخيارات الممكنة هي:
+    Name    - اسم الوكيل (اختياري، الافتراضي هو &quot;perl&quot;)
+              (سيقرأ مكتب SNMP ملف تكوين snmp باسم NAME.conf
+              بناءً على هذه الوسيطة.)
+    AgentX  - اجعلنا وكيلاً فرعيًا (0 = خطأ، 1 = صحيح)
+              (يجب أن يكون وكيل Master AgentX من NetSNMP قيد التشغيل أولاً)
+    Ports   - المنافذ التي سيستمع عليها هذا الوكيل (مثال: &quot;udp:161,tcp:161&quot;)
+    مثال:
+    $agent = new NetSNMP::agent(
+                             'Name' =&gt; 'my_agent_name',
+                             'AgentX' =&gt; 1
+                             );</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='METHODS'><a class='permalink' href='#METHODS'>الأساليب</a></h1>
+<pre>register (NAME, OID, \&amp;handler_routine )
+    يسجل معالج الاستدعاء مع OID معين.
+    $agent-&gt;register();
+    رمز الإرجاع 0 يشير إلى عدم وجود خطأ.
+agent_check_and_process ( BLOCKING )
+    قم بتشغيل تكرار واحد للحلقة الرئيسية.
+    BLOCKING - استدعاء حظر أو عدم حظر. 1 = صحيح، 0 = خطأ.
+    $agent-&gt;agent_check_and_process(1);
+main_loop ()
+    يدير الوكيل في حلقة. لا يعود.
+shutdown ()
+    يقوم بإغلاق الوكيل أو الوكيل الفرعي بشكل أنيق.
+    $agent-&gt;shutdown();</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HANDLER_CALLBACKS'><a class='permalink' href='#HANDLER_CALLBACKS'>استدعاءات المعالج</a></h1>
+<pre>handler ( HANDLER, REGISTRATION_INFO, REQUEST_INFO, REQUESTS )
+    يتم استدعاء المعالج بالمعلمات التالية:
+    HANDLER                 - تم الإصلاح
+    REGISTRATION_INFO       - ما هي المعاني الصحيحة لهذه؟
+    REQUEST_INFO            -
+    REQUESTS                -
+    مثال للمعالج:
+    sub myhandler {
+        my ($handler, $reg_info, $request_info, $requests) = @_;
+        # ...
+    }</pre>
+<p class="Pp">سيتم استدعاء الإجراء الفرعي للمعالج عند استلام طلب SNMP بواسطة الوكيل لأي شيء تحت OID المسجل. يتم تمرير 4 وسيطات إلى المعالج: <span class="Li">$handler</span>،
+    <span class="Li">$registration_info</span>،
+    <span class="Li">$request_info</span>، <span class="Li">$requests</span>.
+    تتوافق هذه مع الوسيطات التي تم تمريرها إلى إصدار C من نفس واجهة برمجة التطبيقات. لاحظ أنها ليست كائنات كاملة تمامًا ولكنها &quot;كافية&quot; وظيفيًا
+    في هذا الوقت.</p>
+<section class="Ss">
+<h2 class="Ss" id='$request_info_object_functions'><a class='permalink' href='#$request_info_object_functions'>وظائف كائن $request_info</a></h2>
+<pre>getMode ()
+    يعيد وضع الطلب. انظر قسم الأوضاع (MODES) للحصول على
+    قائمة الأوضاع الصالحة.
+    $mode = $request-&gt;getMode();</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='$registration_info_object_functions'><a class='permalink' href='#$registration_info_object_functions'>وظائف كائن $registration_info</a></h2>
+<pre>getRootOID ()
+    يعيد كائن NetSNMP::OID يصف نقطة التسجيل
+    التي يتم استدعاء المعالج لها (في حال
+    قمت بتسجيل وظيفة معالج واحدة لـ OIDs متعددة، وهو ما ينبغي أن يكون
+    نادرًا على أي حال)
+    $root_oid = $request-&gt;getRootOID();</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='$request_object_functions'><a class='permalink' href='#$request_object_functions'>وظائف كائن $request</a></h2>
+<pre>next ()
+    يعيد الطلب التالي في القائمة أو undef إذا لم يكن هناك
+    طلب تالي.
+    $request = $request-&gt;next();
+getOID ()
+    يعيد OID الطلب (فئة NetSNMP::OID).
+    $oid = $request-&gt;getOID();
+setOID (new NetSNMP::OID(&quot;someoid&quot;))
+    يضبط OID الطلب إلى قيمة oid تم تمريرها. يجب
+    عادةً ما يتم القيام بذلك فقط أثناء معالجة طلبات GETNEXT.
+    $request-&gt;setOID(new NetSNMP::OID(&quot;someoid&quot;));
+getValue ()
+    يعيد قيمة الطلب. تستخدم على سبيل المثال عند
+    تعيين القيم.
+    $value = $request-&gt;getValue();
+    تم الإصلاح: كيف تحصل على نوع القيمة؟ هل هو متاح حتى؟
+           [Wes: لا، ليس بعد.]
+setValue ( TYPE, DATA )
+    يضبط البيانات التي سيتم إرجاعها إلى الوكيل.
+    يعيد 1 عند النجاح، 0 عند الخطأ.
+    TYPE - نوع البيانات. انظر NetSNMP::ASN للأنواع الصالحة.
+    DATA - البيانات المراد إرجاعها.
+    $ret = $request-&gt;setValue(ASN_OCTET_STR, &quot;test&quot;);
+setError ( REQUEST_INFO, ERROR_CODE )
+    يضبط رمز الخطأ المحدد للطلب. انظر قسم رموز الأخطاء (ERROR CODES)
+    للحصول على قائمة الرموز الصالحة.
+    $request-&gt;setError($request_info, SNMP_ERR_NOTWRITABLE);
+getProcessed ()
+    يشير علامة المعالجة إلى أن الطلب لا يحتاج إلى
+    معالجة لأنه تم التعامل معه بالفعل بواسطة شخص آخر (معالج أعلى).
+    $processed = $request-&gt;getProcessed();
+setProcessed ( PROCESSED )
+    يضبط علامة المعالجة في الطلب. لا تحتاج عمومًا
+    إلى تعيينها بنفسك.
+    PROCESSED - 0 = خطأ، 1 = صحيح
+    $request-&gt;setProcessed(1);
+getDelegated ()
+    إذا كان بإمكانك التعامل مع طلب في الخلفية أو في وقت لاحق
+    (مثال، أنت تنتظر مقبض ملف، أو حركة مرور شبكة، أو ...)، يمكن تعيين علامة التفويض
+    في الطلب. عندما
+    تتم معالجة الطلب في المستقبل، يجب إعادة تعيين العلامة
+    إلى 0 حتى يعرف الوكيل أنه يمكنه إنهاء
+    الطلب الأصلي وإعادته إلى المدير. لم يتم اختبار هذا
+    داخل Perl، ولكن من المفترض أن يعمل.
+    $delegated = $request-&gt;getDelegated();
+setDelegated ( DELEGATED )
+    يضبط علامة التفويض.
+    DELEGATED - 0 = خطأ، 1 = صحيح
+    $request-&gt;setDelegated(1);
+getRepeat ()
+    تشير علامة التكرار إلى أنه يتم التعامل مع عملية getbulk وهذا
+    يشير إلى عدد الإجابات التي يجب إرجاعها. بشكل عام، إذا لم تقم بالتسجيل
+    لمعالجة دعم getbulk مباشرة بنفسك، فلن تحتاج</pre>
+</section>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        
+<footer id="footer">
+    
+</footer>
+
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id='MODES'><a class='permalink' href='#MODES'>أنماط</a></h1>
+<pre>MODE_GET
+MODE_GETBULK
+MODE_GETNEXT
+MODE_SET_ACTION
+MODE_SET_BEGIN
+MODE_SET_COMMIT
+MODE_SET_FREE
+MODE_SET_RESERVE1
+MODE_SET_RESERVE2
+MODE_SET_UNDO</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERROR_CODES'><a class='permalink' href='#ERROR_CODES'>رموز الخطأ</a></h1>
+<pre>SNMP_ERR_NOERROR
+SNMP_ERR_TOOBIG
+SNMP_ERR_NOSUCHNAME
+SNMP_ERR_BADVALUE
+SNMP_ERR_READONLY
+SNMP_ERR_GENERR
+SNMP_ERR_NOACCESS
+SNMP_ERR_WRONGTYPE
+SNMP_ERR_WRONGLENGTH
+SNMP_ERR_WRONGENCODING
+SNMP_ERR_WRONGVALUE
+SNMP_ERR_NOCREATION
+SNMP_ERR_INCONSISTENTVALUE
+SNMP_ERR_RESOURCEUNAVAILABLE
+SNMP_ERR_COMMITFAILED
+SNMP_ERR_UNDOFAILED
+SNMP_ERR_AUTHORIZATIONERROR
+SNMP_ERR_NOTWRITABLE</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">يرجى إرسال بريد إلى القائمة البريدية net-snmp-users@lists.sourceforge.net للحصول على المساعدة أو الأسئلة أو التعليقات حول هذه الوحدة.</p>
+<p class="Pp">الوحدة من تأليف:
+  <br/>
+   Wes Hardaker &lt;hardaker@users.sourceforge.net&gt;</p>
+<p class="Pp">التوثيق من تأليف:
+  <br/>
+   Toni Willberg &lt;toniw@iki.fi&gt;
+  <br/>
+   Wes Hardaker &lt;hardaker@users.sourceforge.net&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp"><a href='/man/NetSNMP::OID.3.en'>NetSNMP::OID(3)</a>، <a href='/man/NetSNMP::ASN.3.en'>NetSNMP::ASN(3)</a>،
+  <a href='/man/perl.1.en'>perl(1)</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقل" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/net-snmp/">extra/net-snmp</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.9.4-7</dd>
+        <dt>المشروع الأصلي:</dt>
+        <dd><a href="http://www.net-snmp.org/">http://www.net-snmp.org/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>BSD</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/net-snmp/">/listing/extra/net-snmp/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الموجز</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#CONSTRUCTOR">المُنشئ</a></li>
+        
+            <li><a href="#METHODS">الطرق</a></li>
+        
+            <li><a href="#HANDLER_CALLBACKS">دوال معالجة الاستدعاء</a></li>
+        
+            <li><a href="#MODES">أنماط</a></li>
+        
+            <li><a href="#ERROR_CODES">رموز الخطأ</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/NetSNMP::agent.3pm.en.txt">txt</a>، 
+        
+            <a href="/man/NetSNMP::agent.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

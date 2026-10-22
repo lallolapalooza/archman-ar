@@ -1,0 +1,3748 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>syd(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">syd(1)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SYD(1)</td>
+    <td class="head-vol">دليل الأوامر العامة</td>
+    <td class="head-rtitle">SYD(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp"><b>syd</b> - نواة تطبيقات صلبة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الموجز</a></h1>
+<p class="Pp"><b>syd</b> [-acefhlmpqxEPV] [--] {أمر [وسيط... ]}</p>
+<p class="Pp"><b>syd</b> [-acefhlmpqxEPV] [--] {مكتبة.so}</p>
+<p class="Pp"><b>syd</b> --api</p>
+<p class="Pp"><b>syd</b> --check</p>
+<p class="Pp"><b>syd</b> --el</p>
+<p class="Pp"><b>syd</b> --sh</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">Syd هي أداة تستفيد من استدعاء النظام <a href='/man/seccomp.2.en'>seccomp(2)</a> لعزل العمليات (sandboxing) على أنظمة Linux الإصدار 5.19 أو أحدث. تتيح هذه الأداة تحكماً دقيقاً في الوصول إلى نظام الملفات والشبكة للعملية <i>دون الحاجة إلى صلاحيات الجذر (root)</i>. تم تصميم Syd لتكون سهلة الاستخدام عبر مجموعة واسعة من البنى، بما في ذلك <b>x86</b>، <b>x86_64</b>، <b>x32</b>، <b>armv7</b>، <b>aarch64</b>، <b>loongarch64</b>، <b>mips</b>، <b>mips64</b>، <b>mips64el</b>، <b>ppc</b>، <b>ppc64</b>، <b>ppc64le</b>، <b>riscv64</b>، و <b>s390x</b>، لتجسيد مبدأ توفير وصول بسيط ومرن وقوي للمستخدمين على Linux.</p>
+<p class="Pp">تتمحور الوظيفة الأساسية لـ Syd حول تقييد وصول العملية إلى الموارد من خلال عدة آليات:</p>
+<ul class="Bl-bullet">
+  <li><b>ربط نقاط التركيب (Bind Mounts)</b>: تُستخدم داخل مساحة اسم التركيب لفرض قيود على مستوى نظام الملفات الافتراضي (VFS)، مثل <b>للقراءة فقط</b>، <b>nodev</b>، <b>noexec</b>، <b>nosuid</b>، و <b>nosymfollow</b>.</li>
+  <li><b>Landlock</b>: يستخدم قيود المسار للقراءة فقط وللقراءة والكتابة على مستوى النواة.</li>
+  <li><b>seccomp-bpf</b>: يطبق مرشحات مستخدم Secure Computing (seccomp) لعزل العمليات في مساحة النواة.</li>
+  <li><b>seccomp-notify</b>: يتيح العزل في مساحة النواة مع خيار احتياطي لمساحة المستخدم لفك مرجع وسيطات المؤشر في استدعاءات النظام، بما في ذلك أسماء المسارات وعناوين الشبكة. تستخدم فحوصات الوصول أنماط تشبه أنماط Unix shell وتدوين CIDR، مع افتراض رفض استدعاءات النظام التي تسبب <b>EACCES</b> أثناء محاولة محاكاة الاستدعاءات الناجحة للتخفيف من هجمات <b>الوقت بين الفحص والوقت بين الاستخدام (TOCTOU)</b>.</li>
+</ul>
+<p class="Pp">المتطلبات الأساسية لـ Syd تشمل نواة Linux تدعم استدعاءات النظام <a href='/man/pidfd_getfd.2.en'>pidfd_getfd(2)</a> و <a href='/man/pidfd_send_signal.2.en'>pidfd_send_signal(2)</a>، عملية <b>SECCOMP_USER_NOTIF_FLAG_CONTINUE</b> في مرفق Secure Computing، ويفضل خيار النواة <b>CONFIG_CROSS_MEMORY_ATTACH</b>. لمحاكاة استدعاءات النظام، يستخدم Syd عملية seccomp <b>SECCOMP_IOCTL_NOTIF_ADDFD</b>. علاوة على ذلك، تقوم Syd بضبط العلم <b>SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV</b> للتعامل بشكل صحيح مع المقاطعات أثناء التتبع. بينما <i>يتطلب الإصدار 5.19 من Linux أو أحدث</i>، لدعم Landlock، تتطلب Syd نواة مهيأة بخيار <b>CONFIG_LSM_LANDLOCK</b> تدعم <i>إصدار Landlock ABI 3</i>، مع توفر <a href='/man/syd-lock.1.en'>syd-lock(1)</a> كبرنامج مساعد للتحقق من دعم النواة. يوصى بخيارات نواة Linux <b>CONFIG_KCMP</b> و <b>CONFIG_UNIX_DIAG</b>.</p>
+<p class="Pp">تلتزم Syd بالحفاظ على معايير أمنية صارمة من خلال تحديد المساحة المتاحة للعمليات المعزولة بدقة. في قسم <b>الأمان (SECURITY)</b> من صفحة الدليل <a href='/man/syd.7.en'>syd(7)</a>، يتم تقديم قائمة مفصلة بتدابير الأمان التي تنفذها Syd، بالإضافة إلى تكوينات اختيارية لتخفيف بعض القيود. تسمح هذه المرونة باستيعاب مجموعة متنوعة من العمليات داخل بيئة العزل.</p>
+<p class="Pp">تم تصميم نهج الأمان داخل Syd بعناية لتحقيق توازن بين الحماية القوية والمرونة التشغيلية، مما يضمن للمستخدمين القدرة على ضبط آليات العزل لتلبية متطلبات محددة. من خلال تقديم رؤى حول تقنيات التحصين وخيارات التخصيص، تمكّن Syd المستخدمين من التنقل بفعالية في المقايضات بين الأمان والوظائف.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>خيارات</a></h1>
+<p class="Pp">يتم فهم الخيارات التالية:</p>
+<table class="tbl">
+  <tr>
+    <td><b>-h</b>, <b>--help</b></td>
+    <td>عرض الاستخدام والخروج.</td>
+  </tr>
+  <tr>
+    <td><b>-V</b>, <b>--version</b></td>
+    <td>عرض الإصدار والخروج.</td>
+  </tr>
+  <tr>
+    <td><b>-C</b>, <b>--check</b></td>
+    <td>طباعة معلومات دعم العزل للنظام الحالي والخروج.</td>
+  </tr>
+  <tr>
+    <td><b>-v</b>, <b>--verbose</b></td>
+    <td>كن مطولاً، يعادل الأمر <b>log/verbose:true</b>.</td>
+  </tr>
+  <tr>
+    <td><b>-c</b></td>
+    <td>توافق shell تسجيل الدخول</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يتسبب في تنفيذ الأمر تحت shell مع ملف تعريف <b>المستخدم</b>.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Shell التنفيذ هو <b>/bin/sh</b> افتراضياً.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>استخدم متغير البيئة <b>SYD_SHELL</b> للتجاوز.</td>
+  </tr>
+  <tr>
+    <td><b>-f</b></td>
+    <td>توافق shell تسجيل الدخول.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يتسبب في قيام Syd بتحليل ملف تعريف <b>المستخدم</b> عند البدء.</td>
+  </tr>
+  <tr>
+    <td><b>-l</b>, <b>--login</b></td>
+    <td>توافق shell تسجيل الدخول</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يتسبب في قيام Syd بتحليل ملف تعريف <b>المستخدم</b> عند البدء.</td>
+  </tr>
+  <tr>
+    <td><b>-q</b></td>
+    <td>تمكين وضع الإقلاع السريع لأوقات بدء تشغيل أسرع.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يجب تمرير هذا كأول خيار وإلا سيتم تجاهله.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>انظر شرح متغير البيئة <b>SYD_QUICK_BOOT</b> لسلامة هذا الخيار.</td>
+  </tr>
+  <tr>
+    <td><b>-x</b></td>
+    <td>تمكين وضع <b>التتبع</b> المعروف أيضًا باسم &quot;التشغيل الجاف&quot;.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>في هذا الوضع، ستسمح Syd باستدعاءات النظام حتى لو أدت إلى انتهاكات الوصول.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يمكن استخدام هذا الوضع مع تسجيل مفصل لبناء ملفات تعريف العزل بطريقة آلية.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>راجع <a href='/man/pandora.1.en'>pandora(1)</a> وهو أداة تستخدم وضع تتبع Syd لتوليد ملفات تعريف العزل تلقائياً.</td>
+  </tr>
+  <tr>
+    <td><b>-m config</b></td>
+    <td>تهيئة العزل أثناء التهيئة، يمكن تكرارها.</td>
+  </tr>
+  <tr>
+    <td><b>-p name</b></td>
+    <td>استخدام ملف تعريف عزل أثناء التهيئة، يمكن تكرارها.</td>
+  </tr>
+  <tr>
+    <td><b>-P path</b></td>
+    <td>تشغيل ملف تكوين أثناء التهيئة، يمكن تكراره.</td>
+  </tr>
+  <tr>
+    <td><b>-a alias</b></td>
+    <td>تعيين اسم مستعار للأمر. يتم تمريره كـ <b>argv[0]</b> للبرنامج.</td>
+  </tr>
+  <tr>
+    <td><b>-e</b></td>
+    <td>استخدم <b>-e var=val</b> لوضع var=val في البيئة للأمر، يمكن تكرارها.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>استخدم <b>-e var</b> لإزالة var من البيئة للأمر، يمكن تكرارها.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>استخدم <b>-e var=</b> لتمرير متغير بيئة غير آمن، يمكن تكرارها.</td>
+  </tr>
+  <tr>
+    <td><b>-E mode</b></td>
+    <td>تصدير قواعد الحوسبة الآمنة بالتنسيق المحدد إلى المخرج القياسي والخروج.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يجب أن يكون الوضع واحداً من <b>bpf</b> أو <b>pfc</b>:</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td><b>bpf</b>، المعروف أيضاً باسم <b>Berkeley Packet Filter</b> هو تنسيق ثنائي، يمكن قراءته آلياً، بينما</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td><b>pfc</b>، المعروف أيضاً باسم <b>Pseudo Filter Code</b> هو تنسيق نصي، يمكن قراءته بشرياً.</td>
+  </tr>
+  <tr>
+    <td><b>--api</b></td>
+    <td>إخراج مواصفات واجهة برمجة التطبيقات <a href='/man/syd.2.en'>syd(2)</a> بتنسيق JSON.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>هذه المواصفات مخصصة لتسهيل توليد روابط لغوية.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>هذه المواصفات متاحة أيضاً عبر المسار السحري
+      <b>/dev/syd</b>.</td>
+  </tr>
+  <tr>
+    <td><b>--el</b></td>
+    <td>إخراج <b>syd.el</b> وهو تطبيق Emacs Lisp لواجهة <a href='/man/stat.2.en'>stat(2)</a> الخاصة بـ Syd.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>هذا الملف متاح أيضاً عبر المسار السحري <b>/dev/syd.el</b>.</td>
+  </tr>
+  <tr>
+    <td><b>--sh</b></td>
+    <td>إخراج نص برمجي shell يحدد الدالة المساعدة <b>esyd</b>.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>هذا الملف متاح أيضاً عبر المسار السحري <b>/dev/syd.sh</b>.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يعمل مع POSIX sh، bash، و zsh.</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>يمكنك استخدام <b>eval &quot;$(syd --sh)&quot;</b> في ملف تهيئة shell الخاص بك.</td>
+  </tr>
+</table>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INVOCATION'><a class='permalink' href='#INVOCATION'>الاستدعاء</a></h1>
+<p class="Pp">يمكن لـ Syd إما تنفيذ أمر بالوسائط المحددة أو تحميل مكتبة ديناميكية وتنفيذ الدالة <i>syd_main()</i> منها. في حال كان الوسيط الأول غير الخيارات ينتهي باللاحقة <b>.so</b>، فمن المتوقع أن يكون هو مسار مكتبة ديناميكية ليتم تحميلها. يتم تحميل المكتبة الديناميكية في وقت مبكر عند بدء التشغيل في عملية Syd بحيث يمكن حتى لنظام الملفات الذي تمتلكه أن يتم تركيبه <i>ممنوع التنفيذ (noexec)</i>، باستخدام مثلاً bind+/:/:noexec. هذا يسمح بإنشاء نظام مقيد للغاية.</p>
+</div>
+</section>
+                
+            </article>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+  "html_file_structure": [
+    {
+      "tag": "section",
+      "class": "Sh",
+      "children": [
+        {
+          "tag": "h1",
+          "class": "Sh",
+          "id": "LOGGING",
+          "children": [
+            {
+              "tag": "a",
+              "class": "permalink",
+              "href": "#LOGGING",
+              "text": "LOGGING"
+            }
+          ]
+        },
+        {
+          "tag": "p",
+          "class": "Pp",
+          "text": "The following log levels are supported:"
+        },
+        {
+          "tag": "table",
+          "class": "tbl",
+          "attributes": {
+            "border": "1",
+            "style": "border-style: solid;"
+          },
+          "children": [
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "children": [
+                    {
+                      "tag": "b",
+                      "text": "error"
+                    }
+                  ]
+                },
+                {
+                  "tag": "td",
+                  "text": "Error messages, these are always printed."
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "children": [
+                    {
+                      "tag": "b",
+                      "text": "warn"
+                    }
+                  ]
+                },
+                {
+                  "tag": "td",
+                  "text": "Warning messages, these are always printed."
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "children": [
+                    {
+                      "tag": "b",
+                      "text": "info"
+                    }
+                  ]
+                },
+                {
+                  "tag": "td",
+                  "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "children": [
+                    {
+                      "tag": "b",
+                      "text": "msg"
+                    }
+                  ]
+                },
+                {
+                  "tag": "td",
+                  "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "children": [
+                    {
+                      "tag": "b",
+                      "text": "tip"
+                    }
+                  ]
+                },
+                {
+                  "tag": "td",
+                  "text": "Informational messages on how to configure the sandbox"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "section",
+      "class": "Sh",
+      "children": [
+        {
+          "tag": "h1",
+          "class": "Sh",
+          "id": "EXIT_CODES",
+          "children": [
+            {
+              "tag": "a",
+              "class": "permalink",
+              "href": "#EXIT_CODES",
+              "text": "EXIT CODES"
+            }
+          ]
+        },
+        {
+          "tag": "p",
+          "class": "Pp",
+          "text": "Syd exits with the same exit code as the sandbox process itself. If the sandbox process exits with a signal, Syd exits with 128 plus the value of the signal. In case there was an error in spawning or waiting for the sandbox process, Syd exits with <b>errno</b> indicating the error condition. E.g. <b>syd</b> <b>true</b> returns <b>0</b>, <b>syd false</b> returns <b>1</b>, and <b>syd -- syd true</b> returns <b>16</b> which stands for <b>EBUSY</b> which means <b>Device or resource busy</b> indicating there is already a secure computing filter loaded."
+        }
+      ]
+    },
+    {
+      "tag": "section",
+      "class": "Sh",
+      "children": [
+        {
+          "tag": "h1",
+          "class": "Sh",
+          "id": "BENCHMARKS",
+          "children": [
+            {
+              "tag": "a",
+              "class": "permalink",
+              "href": "#BENCHMARKS",
+              "text": "BENCHMARKS"
+            }
+          ]
+        },
+        {
+          "tag": "p",
+          "class": "Pp",
+          "text": "The table below lists the benchmark runs we ran for Syd:"
+        },
+        {
+          "tag": "table",
+          "class": "tbl",
+          "attributes": {
+            "border": "1",
+            "style": "border-style: solid;"
+          },
+          "children": [
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "1: compile kernel"
+                },
+                {
+                  "tag": "td",
+                  "text": "sydbox-{1,3}"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2534",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2534"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "2: compile kernel"
+                },
+                {
+                  "tag": "td",
+                  "text": "sydbox-{1,3}"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2536",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2536"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "3: unpack compressed tarball"
+                },
+                {
+                  "tag": "td",
+                  "text": "sydbox-{1,3}, Gentoo sandbox"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2537",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2537"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "4: compile kernel"
+                },
+                {
+                  "tag": "td",
+                  "text": "sydbox-{1,3}, Gentoo sandbox"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2594",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2594"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "5: compile kernel in a Podman container"
+                },
+                {
+                  "tag": "td",
+                  "text": "syd-oci, crun, runc, youki, gvisor"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2613",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2613"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "6: compile kernel in a Podman container"
+                },
+                {
+                  "tag": "td",
+                  "text": "syd-oci, crun, runc, youki, gvisor"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2622",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2622"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "tr",
+              "children": [
+                {
+                  "tag": "td",
+                  "text": "7: run sqlite-bench"
+                },
+                {
+                  "tag": "td",
+                  "text": "no-syd, syd, syd+crypt"
+                },
+                {
+                  "tag": "td",
+                  "attributes": {
+                    "style": "text-align: center;"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "href": "https://gitlab.exherbo.org/-/snippets/2758",
+                      "text": "https://gitlab.exherbo.org/-/snippets/2758"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "section",
+      "class": "Sh",
+      "children": [
+        {
+          "tag": "h1",
+          "class": "Sh",
+          "id": "SEE_ALSO",
+          "children": [
+            {
+              "tag": "a",
+              "class": "permalink",
+              "href": "#SEE_ALSO",
+              "text": "SEE ALSO"
+            }
+          ]
+        },
+        {
+          "tag": "p",
+          "class": "Pp",
+          "children": [
+            {
+              "tag": "a",
+              "href": "/man/syd.2.en",
+              "text": "syd(2)"
+            },
+            ", ",
+            {
+              "tag": "a",
+              "href": "/man/syd.5.en",
+              "text": "syd(5)"
+            },
+            ", ",
+            {
+              "tag": "a",
+              "href": "/man/syd.7.en",
+              "text": "syd(7)"
+            },
+            ", ",
+            {
+              "tag": "a",
+              "href": "/man/syd-lock.1.en",
+              "text": "syd-lock(1)"
+            },
+            ", ",
+            {
+              "tag": "a",
+              "href": "/man/syd-ls.1.en",
+              "text": "syd-ls(1)"
+            }
+          ]
+        },
+        {
+          "tag": "ul",
+          "class": "Bl-bullet",
+          "children": [
+            {
+              "tag": "li",
+              "children": [
+                "<b>syd</b> homepage: ",
+                {
+                  "tag": "a",
+                  "href": "https://sydbox.exherbo.org/",
+                  "text": "https://sydbox.exherbo.org/"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>libsyd</b> homepage: ",
+                {
+                  "tag": "a",
+                  "href": "https://libsyd.exherbo.org/",
+                  "text": "https://libsyd.exherbo.org/"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>pandora</b> homepage: ",
+                {
+                  "tag": "a",
+                  "href": "https://lib.rs/pandora_box",
+                  "text": "https://lib.rs/pandora_box"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>paludis</b> homepage: ",
+                {
+                  "tag": "a",
+                  "href": "http://paludis.exherbo.org/",
+                  "text": "http://paludis.exherbo.org/"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>Landlock</b> homepage: ",
+                {
+                  "tag": "a",
+                  "href": "https://landlock.io",
+                  "text": "https://landlock.io"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>Path</b> wiki: ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/Path_(computing",
+                  "text": "https://en.wikipedia.org/wiki/Path_(computing"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>Unix domain socket</b> wiki:\n      ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/Unix_domain_socket",
+                  "text": "https://en.wikipedia.org/wiki/Unix_domain_socket"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>IPv4</b> wiki: ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/IPv4",
+                  "text": "https://en.wikipedia.org/wiki/IPv4"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>IPv6</b> wiki: ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/IPv6",
+                  "text": "https://en.wikipedia.org/wiki/IPv6"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>TOCTOU</b> wiki:\n      ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use",
+                  "text": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>VFS</b> wiki: ",
+                {
+                  "tag": "a",
+                  "href": "https://en.wikipedia.org/wiki/Virtual_file_system",
+                  "text": "https://en.wikipedia.org/wiki/Virtual_file_system"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>ipnetwork</b> documentation: ",
+                {
+                  "tag": "a",
+                  "href": "https://docs.rs/ipnetwork",
+                  "text": "https://docs.rs/ipnetwork"
+                }
+              ]
+            },
+            {
+              "tag": "li",
+              "children": [
+                "<b>Enabling Logging</b>:\n      ",
+                {
+                  "tag": "a",
+                  "href": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging",
+                  "text": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "section",
+      "class": "Sh",
+      "children": [
+        {
+          "tag": "h1",
+          "class": "Sh",
+          "id": "AUTHORS",
+          "children": [
+            {
+              "tag": "a",
+              "class": "permalink",
+              "href": "#AUTHORS",
+              "text": "AUTHORS"
+            }
+          ]
+        },
+        {
+          "tag": "p",
+          "class": "Pp",
+          "children": [
+            "Maintained by Ali Polatel. Up-to-date sources can be found at ",
+            {
+              "tag": "a",
+              "href": "https://gitlab.exherbo.org/sydbox/sydbox.git",
+              "text": "https://gitlab.exherbo.org/sydbox/sydbox.git"
+            },
+            " and bugs/patches can be\n    submitted to ",
+            {
+              "tag": "a",
+              "href": "https://gitlab.exherbo.org/groups/sydbox/-/issues",
+              "text": "https://gitlab.exherbo.org/groups/sydbox/-/issues"
+            },
+            ". Discuss in\n    #sydbox on Libera Chat or in #sydbox:mailstation.de on Matrix."
+          ]
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "tag": "table",
+    "class": "foot",
+    "children": [
+      {
+        "tag": "tr",
+        "children": [
+          {
+            "tag": "td",
+            "class": "foot-date",
+            "text": "2025-12-02"
+          },
+          {
+            "tag": "td",
+            "class": "foot-os",
+            "text": ""
+          }
+        ]
+      }
+    ]
+  },
+  "sidebar": {
+    "tag": "aside",
+    "id": "sidebar",
+    "children": [
+      {
+        "tag": "section",
+        "class": "search",
+        "children": [
+          {
+            "tag": "form",
+            "action": "/search",
+            "class": "search direct-search",
+            "role": "search",
+            "children": [
+              {
+                "tag": "input",
+                "type": "search",
+                "placeholder": "Search manual page",
+                "name": "q",
+                "value": ""
+              },
+              {
+                "tag": "input",
+                "type": "submit",
+                "name": "go",
+                "value": "Go"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "section",
+        "class": "package-info",
+        "children": [
+          {
+            "tag": "p",
+            "text": "Package information:"
+          },
+          {
+            "tag": "dl",
+            "children": [
+              {
+                "tag": "dt",
+                "text": "Package name:"
+              },
+              {
+                "tag": "dd",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "https://www.archlinux.org/packages/extra/x86_64/syd/",
+                    "text": "extra/syd"
+                  }
+                ]
+              },
+              {
+                "tag": "dt",
+                "text": "Version:"
+              },
+              {
+                "tag": "dd",
+                "text": "3.45.2-3"
+              },
+              {
+                "tag": "dt",
+                "text": "Upstream:"
+              },
+              {
+                "tag": "dd",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "https://gitlab.exherbo.org/sydbox/sydbox",
+                    "text": "https://gitlab.exherbo.org/sydbox/sydbox"
+                  }
+                ]
+              },
+              {
+                "tag": "dt",
+                "text": "Licenses:"
+              },
+              {
+                "tag": "dd",
+                "text": "GPL-3.0-only"
+              },
+              {
+                "tag": "dt",
+                "text": "Manuals:"
+              },
+              {
+                "tag": "dd",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "/listing/extra/syd/",
+                    "text": "/listing/extra/syd/"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "details",
+        "children": [
+          {
+            "tag": "summary",
+            "text": "Table of contents"
+          },
+          {
+            "tag": "nav",
+            "class": "toc",
+            "children": [
+              {
+                "tag": "ul",
+                "children": [
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#NAME",
+                        "text": "NAME"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#SYNOPSIS",
+                        "text": "SYNOPSIS"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#DESCRIPTION",
+                        "text": "DESCRIPTION"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#OPTIONS",
+                        "text": "OPTIONS"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#INVOCATION",
+                        "text": "INVOCATION"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#ENVIRONMENT",
+                        "text": "ENVIRONMENT"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#LOGGING",
+                        "text": "LOGGING"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#EXIT_CODES",
+                        "text": "EXIT CODES"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#BENCHMARKS",
+                        "text": "BENCHMARKS"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#SEE_ALSO",
+                        "text": "SEE ALSO"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "#AUTHORS",
+                        "text": "AUTHORS"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "nav",
+        "class": "other-sections",
+        "children": [
+          {
+            "tag": "p",
+            "text": "In other sections:"
+          },
+          {
+            "tag": "ul",
+            "children": [
+              {
+                "tag": "li",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.2.en",
+                    "text": "syd(2)"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.5.en",
+                    "text": "syd(5)"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.7.en",
+                    "text": "syd(7)"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "nav",
+        "class": "other-formats",
+        "children": [
+          {
+            "tag": "p",
+            "text": "Other formats:\n        "
+          },
+          {
+            "tag": "a",
+            "href": "/man/syd.1.en.txt",
+            "text": "txt"
+          },
+          ", \n        ",
+          {
+            "tag": "a",
+            "href": "/man/syd.1.en.raw",
+            "text": "raw"
+          }
+        ]
+      }
+    ]
+  },
+  "article": {
+    "tag": "article",
+    "children": [
+      {
+        "tag": "section",
+        "class": "Sh",
+        "children": [
+          {
+            "tag": "h1",
+            "class": "Sh",
+            "id": "LOGGING",
+            "children": [
+              {
+                "tag": "a",
+                "class": "permalink",
+                "href": "#LOGGING",
+                "text": "LOGGING"
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "class": "Pp",
+            "text": "The following log levels are supported:"
+          },
+          {
+            "tag": "table",
+            "class": "tbl",
+            "attributes": {
+              "border": "1",
+              "style": "border-style: solid;"
+            },
+            "children": [
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "children": [
+                      {
+                        "tag": "b",
+                        "text": "error"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "td",
+                    "text": "Error messages, these are always printed."
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "children": [
+                      {
+                        "tag": "b",
+                        "text": "warn"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "td",
+                    "text": "Warning messages, these are always printed."
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "children": [
+                      {
+                        "tag": "b",
+                        "text": "info"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "td",
+                    "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "children": [
+                      {
+                        "tag": "b",
+                        "text": "msg"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "td",
+                    "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "children": [
+                      {
+                        "tag": "b",
+                        "text": "tip"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "td",
+                    "text": "Informational messages on how to configure the sandbox"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "section",
+        "class": "Sh",
+        "children": [
+          {
+            "tag": "h1",
+            "class": "Sh",
+            "id": "EXIT_CODES",
+            "children": [
+              {
+                "tag": "a",
+                "class": "permalink",
+                "href": "#EXIT_CODES",
+                "text": "EXIT CODES"
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "class": "Pp",
+            "text": "Syd exits with the same exit code as the sandbox process itself. If the sandbox process exits with a signal, Syd exits with 128 plus the value of the signal. In case there was an error in spawning or waiting for the sandbox process, Syd exits with <b>errno</b> indicating the error condition. E.g. <b>syd</b> <b>true</b> returns <b>0</b>, <b>syd false</b> returns <b>1</b>, and <b>syd -- syd true</b> returns <b>16</b> which stands for <b>EBUSY</b> which means <b>Device or resource busy</b> indicating there is already a secure computing filter loaded."
+          }
+        ]
+      },
+      {
+        "tag": "section",
+        "class": "Sh",
+        "children": [
+          {
+            "tag": "h1",
+            "class": "Sh",
+            "id": "BENCHMARKS",
+            "children": [
+              {
+                "tag": "a",
+                "class": "permalink",
+                "href": "#BENCHMARKS",
+                "text": "BENCHMARKS"
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "class": "Pp",
+            "text": "The table below lists the benchmark runs we ran for Syd:"
+          },
+          {
+            "tag": "table",
+            "class": "tbl",
+            "attributes": {
+              "border": "1",
+              "style": "border-style: solid;"
+            },
+            "children": [
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "1: compile kernel"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "sydbox-{1,3}"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2534",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2534"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "2: compile kernel"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "sydbox-{1,3}"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2536",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2536"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "3: unpack compressed tarball"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "sydbox-{1,3}, Gentoo sandbox"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2537",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2537"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "4: compile kernel"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "sydbox-{1,3}, Gentoo sandbox"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2594",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2594"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "5: compile kernel in a Podman container"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "syd-oci, crun, runc, youki, gvisor"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2613",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2613"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "6: compile kernel in a Podman container"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "syd-oci, crun, runc, youki, gvisor"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2622",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2622"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "tr",
+                "children": [
+                  {
+                    "tag": "td",
+                    "text": "7: run sqlite-bench"
+                  },
+                  {
+                    "tag": "td",
+                    "text": "no-syd, syd, syd+crypt"
+                  },
+                  {
+                    "tag": "td",
+                    "attributes": {
+                      "style": "text-align: center;"
+                    },
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/-/snippets/2758",
+                        "text": "https://gitlab.exherbo.org/-/snippets/2758"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "section",
+        "class": "Sh",
+        "children": [
+          {
+            "tag": "h1",
+            "class": "Sh",
+            "id": "SEE_ALSO",
+            "children": [
+              {
+                "tag": "a",
+                "class": "permalink",
+                "href": "#SEE_ALSO",
+                "text": "SEE ALSO"
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "class": "Pp",
+            "children": [
+              {
+                "tag": "a",
+                "href": "/man/syd.2.en",
+                "text": "syd(2)"
+              },
+              ", ",
+              {
+                "tag": "a",
+                "href": "/man/syd.5.en",
+                "text": "syd(5)"
+              },
+              ", ",
+              {
+                "tag": "a",
+                "href": "/man/syd.7.en",
+                "text": "syd(7)"
+              },
+              ", ",
+              {
+                "tag": "a",
+                "href": "/man/syd-lock.1.en",
+                "text": "syd-lock(1)"
+              },
+              ", ",
+              {
+                "tag": "a",
+                "href": "/man/syd-ls.1.en",
+                "text": "syd-ls(1)"
+              }
+            ]
+          },
+          {
+            "tag": "ul",
+            "class": "Bl-bullet",
+            "children": [
+              {
+                "tag": "li",
+                "children": [
+                  "<b>syd</b> homepage: ",
+                  {
+                    "tag": "a",
+                    "href": "https://sydbox.exherbo.org/",
+                    "text": "https://sydbox.exherbo.org/"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>libsyd</b> homepage: ",
+                  {
+                    "tag": "a",
+                    "href": "https://libsyd.exherbo.org/",
+                    "text": "https://libsyd.exherbo.org/"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>pandora</b> homepage: ",
+                  {
+                    "tag": "a",
+                    "href": "https://lib.rs/pandora_box",
+                    "text": "https://lib.rs/pandora_box"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>paludis</b> homepage: ",
+                  {
+                    "tag": "a",
+                    "href": "http://paludis.exherbo.org/",
+                    "text": "http://paludis.exherbo.org/"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>Landlock</b> homepage: ",
+                  {
+                    "tag": "a",
+                    "href": "https://landlock.io",
+                    "text": "https://landlock.io"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>Path</b> wiki: ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/Path_(computing",
+                    "text": "https://en.wikipedia.org/wiki/Path_(computing"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>Unix domain socket</b> wiki:\n      ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/Unix_domain_socket",
+                    "text": "https://en.wikipedia.org/wiki/Unix_domain_socket"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>IPv4</b> wiki: ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/IPv4",
+                    "text": "https://en.wikipedia.org/wiki/IPv4"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>IPv6</b> wiki: ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/IPv6",
+                    "text": "https://en.wikipedia.org/wiki/IPv6"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>TOCTOU</b> wiki:\n      ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use",
+                    "text": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>VFS</b> wiki: ",
+                  {
+                    "tag": "a",
+                    "href": "https://en.wikipedia.org/wiki/Virtual_file_system",
+                    "text": "https://en.wikipedia.org/wiki/Virtual_file_system"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>ipnetwork</b> documentation: ",
+                  {
+                    "tag": "a",
+                    "href": "https://docs.rs/ipnetwork",
+                    "text": "https://docs.rs/ipnetwork"
+                  }
+                ]
+              },
+              {
+                "tag": "li",
+                "children": [
+                  "<b>Enabling Logging</b>:\n      ",
+                  {
+                    "tag": "a",
+                    "href": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging",
+                    "text": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "section",
+        "class": "Sh",
+        "children": [
+          {
+            "tag": "h1",
+            "class": "Sh",
+            "id": "AUTHORS",
+            "children": [
+              {
+                "tag": "a",
+                "class": "permalink",
+                "href": "#AUTHORS",
+                "text": "AUTHORS"
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "class": "Pp",
+            "children": [
+              "Maintained by Ali Polatel. Up-to-date sources can be found at ",
+              {
+                "tag": "a",
+                "href": "https://gitlab.exherbo.org/sydbox/sydbox.git",
+                "text": "https://gitlab.exherbo.org/sydbox/sydbox.git"
+              },
+              " and bugs/patches can be\n    submitted to ",
+              {
+                "tag": "a",
+                "href": "https://gitlab.exherbo.org/groups/sydbox/-/issues",
+                "text": "https://gitlab.exherbo.org/groups/sydbox/-/issues"
+              },
+              ". Discuss in\n    #sydbox on Libera Chat or in #sydbox:mailstation.de on Matrix."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "header": {
+    "tag": "div",
+    "children": []
+  },
+  "main": {
+    "tag": "main",
+    "children": [
+      {
+        "tag": "article",
+        "children": [
+          {
+            "tag": "section",
+            "class": "Sh",
+            "children": [
+              {
+                "tag": "h1",
+                "class": "Sh",
+                "id": "LOGGING",
+                "children": [
+                  {
+                    "tag": "a",
+                    "class": "permalink",
+                    "href": "#LOGGING",
+                    "text": "LOGGING"
+                  }
+                ]
+              },
+              {
+                "tag": "p",
+                "class": "Pp",
+                "text": "The following log levels are supported:"
+              },
+              {
+                "tag": "table",
+                "class": "tbl",
+                "attributes": {
+                  "border": "1",
+                  "style": "border-style: solid;"
+                },
+                "children": [
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "children": [
+                          {
+                            "tag": "b",
+                            "text": "error"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "td",
+                        "text": "Error messages, these are always printed."
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "children": [
+                          {
+                            "tag": "b",
+                            "text": "warn"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "td",
+                        "text": "Warning messages, these are always printed."
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "children": [
+                          {
+                            "tag": "b",
+                            "text": "info"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "td",
+                        "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "children": [
+                          {
+                            "tag": "b",
+                            "text": "msg"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "td",
+                        "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "children": [
+                          {
+                            "tag": "b",
+                            "text": "tip"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "td",
+                        "text": "Informational messages on how to configure the sandbox"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "section",
+            "class": "Sh",
+            "children": [
+              {
+                "tag": "h1",
+                "class": "Sh",
+                "id": "EXIT_CODES",
+                "children": [
+                  {
+                    "tag": "a",
+                    "class": "permalink",
+                    "href": "#EXIT_CODES",
+                    "text": "EXIT CODES"
+                  }
+                ]
+              },
+              {
+                "tag": "p",
+                "class": "Pp",
+                "text": "Syd exits with the same exit code as the sandbox process itself. If the sandbox process exits with a signal, Syd exits with 128 plus the value of the signal. In case there was an error in spawning or waiting for the sandbox process, Syd exits with <b>errno</b> indicating the error condition. E.g. <b>syd</b> <b>true</b> returns <b>0</b>, <b>syd false</b> returns <b>1</b>, and <b>syd -- syd true</b> returns <b>16</b> which stands for <b>EBUSY</b> which means <b>Device or resource busy</b> indicating there is already a secure computing filter loaded."
+              }
+            ]
+          },
+          {
+            "tag": "section",
+            "class": "Sh",
+            "children": [
+              {
+                "tag": "h1",
+                "class": "Sh",
+                "id": "BENCHMARKS",
+                "children": [
+                  {
+                    "tag": "a",
+                    "class": "permalink",
+                    "href": "#BENCHMARKS",
+                    "text": "BENCHMARKS"
+                  }
+                ]
+              },
+              {
+                "tag": "p",
+                "class": "Pp",
+                "text": "The table below lists the benchmark runs we ran for Syd:"
+              },
+              {
+                "tag": "table",
+                "class": "tbl",
+                "attributes": {
+                  "border": "1",
+                  "style": "border-style: solid;"
+                },
+                "children": [
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "1: compile kernel"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "sydbox-{1,3}"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2534",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2534"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "2: compile kernel"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "sydbox-{1,3}"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2536",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2536"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "3: unpack compressed tarball"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "sydbox-{1,3}, Gentoo sandbox"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2537",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2537"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "4: compile kernel"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "sydbox-{1,3}, Gentoo sandbox"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2594",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2594"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "5: compile kernel in a Podman container"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "syd-oci, crun, runc, youki, gvisor"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2613",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2613"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "6: compile kernel in a Podman container"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "syd-oci, crun, runc, youki, gvisor"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2622",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2622"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "tr",
+                    "children": [
+                      {
+                        "tag": "td",
+                        "text": "7: run sqlite-bench"
+                      },
+                      {
+                        "tag": "td",
+                        "text": "no-syd, syd, syd+crypt"
+                      },
+                      {
+                        "tag": "td",
+                        "attributes": {
+                          "style": "text-align: center;"
+                        },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "https://gitlab.exherbo.org/-/snippets/2758",
+                            "text": "https://gitlab.exherbo.org/-/snippets/2758"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "section",
+            "class": "Sh",
+            "children": [
+              {
+                "tag": "h1",
+                "class": "Sh",
+                "id": "SEE_ALSO",
+                "children": [
+                  {
+                    "tag": "a",
+                    "class": "permalink",
+                    "href": "#SEE_ALSO",
+                    "text": "SEE ALSO"
+                  }
+                ]
+              },
+              {
+                "tag": "p",
+                "class": "Pp",
+                "children": [
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.2.en",
+                    "text": "syd(2)"
+                  },
+                  ", ",
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.5.en",
+                    "text": "syd(5)"
+                  },
+                  ", ",
+                  {
+                    "tag": "a",
+                    "href": "/man/syd.7.en",
+                    "text": "syd(7)"
+                  },
+                  ", ",
+                  {
+                    "tag": "a",
+                    "href": "/man/syd-lock.1.en",
+                    "text": "syd-lock(1)"
+                  },
+                  ", ",
+                  {
+                    "tag": "a",
+                    "href": "/man/syd-ls.1.en",
+                    "text": "syd-ls(1)"
+                  }
+                ]
+              },
+              {
+                "tag": "ul",
+                "class": "Bl-bullet",
+                "children": [
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>syd</b> homepage: ",
+                      {
+                        "tag": "a",
+                        "href": "https://sydbox.exherbo.org/",
+                        "text": "https://sydbox.exherbo.org/"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>libsyd</b> homepage: ",
+                      {
+                        "tag": "a",
+                        "href": "https://libsyd.exherbo.org/",
+                        "text": "https://libsyd.exherbo.org/"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>pandora</b> homepage: ",
+                      {
+                        "tag": "a",
+                        "href": "https://lib.rs/pandora_box",
+                        "text": "https://lib.rs/pandora_box"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>paludis</b> homepage: ",
+                      {
+                        "tag": "a",
+                        "href": "http://paludis.exherbo.org/",
+                        "text": "http://paludis.exherbo.org/"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>Landlock</b> homepage: ",
+                      {
+                        "tag": "a",
+                        "href": "https://landlock.io",
+                        "text": "https://landlock.io"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>Path</b> wiki: ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/Path_(computing",
+                        "text": "https://en.wikipedia.org/wiki/Path_(computing"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>Unix domain socket</b> wiki:\n      ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/Unix_domain_socket",
+                        "text": "https://en.wikipedia.org/wiki/Unix_domain_socket"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>IPv4</b> wiki: ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/IPv4",
+                        "text": "https://en.wikipedia.org/wiki/IPv4"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>IPv6</b> wiki: ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/IPv6",
+                        "text": "https://en.wikipedia.org/wiki/IPv6"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>TOCTOU</b> wiki:\n      ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use",
+                        "text": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>VFS</b> wiki: ",
+                      {
+                        "tag": "a",
+                        "href": "https://en.wikipedia.org/wiki/Virtual_file_system",
+                        "text": "https://en.wikipedia.org/wiki/Virtual_file_system"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>ipnetwork</b> documentation: ",
+                      {
+                        "tag": "a",
+                        "href": "https://docs.rs/ipnetwork",
+                        "text": "https://docs.rs/ipnetwork"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      "<b>Enabling Logging</b>:\n      ",
+                      {
+                        "tag": "a",
+                        "href": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging",
+                        "text": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "section",
+            "class": "Sh",
+            "children": [
+              {
+                "tag": "h1",
+                "class": "Sh",
+                "id": "AUTHORS",
+                "children": [
+                  {
+                    "tag": "a",
+                    "class": "permalink",
+                    "href": "#AUTHORS",
+                    "text": "AUTHORS"
+                  }
+                ]
+              },
+              {
+                "tag": "p",
+                "class": "Pp",
+                "children": [
+                  "Maintained by Ali Polatel. Up-to-date sources can be found at ",
+                  {
+                    "tag": "a",
+                    "href": "https://gitlab.exherbo.org/sydbox/sydbox.git",
+                    "text": "https://gitlab.exherbo.org/sydbox/sydbox.git"
+                  },
+                  " and bugs/patches can be\n    submitted to ",
+                  {
+                    "tag": "a",
+                    "href": "https://gitlab.exherbo.org/groups/sydbox/-/issues",
+                    "text": "https://gitlab.exherbo.org/groups/sydbox/-/issues"
+                  },
+                  ". Discuss in\n    #sydbox on Libera Chat or in #sydbox:mailstation.de on Matrix."
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "aside",
+        "id": "sidebar",
+        "children": [
+          {
+            "tag": "section",
+            "class": "search",
+            "children": [
+              {
+                "tag": "form",
+                "action": "/search",
+                "class": "search direct-search",
+                "role": "search",
+                "children": [
+                  {
+                    "tag": "input",
+                    "type": "search",
+                    "placeholder": "Search manual page",
+                    "name": "q",
+                    "value": ""
+                  },
+                  {
+                    "tag": "input",
+                    "type": "submit",
+                    "name": "go",
+                    "value": "Go"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "section",
+            "class": "package-info",
+            "children": [
+              {
+                "tag": "p",
+                "text": "Package information:"
+              },
+              {
+                "tag": "dl",
+                "children": [
+                  {
+                    "tag": "dt",
+                    "text": "Package name:"
+                  },
+                  {
+                    "tag": "dd",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://www.archlinux.org/packages/extra/x86_64/syd/",
+                        "text": "extra/syd"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "dt",
+                    "text": "Version:"
+                  },
+                  {
+                    "tag": "dd",
+                    "text": "3.45.2-3"
+                  },
+                  {
+                    "tag": "dt",
+                    "text": "Upstream:"
+                  },
+                  {
+                    "tag": "dd",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "https://gitlab.exherbo.org/sydbox/sydbox",
+                        "text": "https://gitlab.exherbo.org/sydbox/sydbox"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "dt",
+                    "text": "Licenses:"
+                  },
+                  {
+                    "tag": "dd",
+                    "text": "GPL-3.0-only"
+                  },
+                  {
+                    "tag": "dt",
+                    "text": "Manuals:"
+                  },
+                  {
+                    "tag": "dd",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "/listing/extra/syd/",
+                        "text": "/listing/extra/syd/"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "details",
+            "children": [
+              {
+                "tag": "summary",
+                "text": "Table of contents"
+              },
+              {
+                "tag": "nav",
+                "class": "toc",
+                "children": [
+                  {
+                    "tag": "ul",
+                    "children": [
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#NAME",
+                            "text": "NAME"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#SYNOPSIS",
+                            "text": "SYNOPSIS"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#DESCRIPTION",
+                            "text": "DESCRIPTION"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#OPTIONS",
+                            "text": "OPTIONS"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#INVOCATION",
+                            "text": "INVOCATION"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#ENVIRONMENT",
+                            "text": "ENVIRONMENT"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#LOGGING",
+                            "text": "LOGGING"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#EXIT_CODES",
+                            "text": "EXIT CODES"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#BENCHMARKS",
+                            "text": "BENCHMARKS"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#SEE_ALSO",
+                            "text": "SEE ALSO"
+                          }
+                        ]
+                      },
+                      {
+                        "tag": "li",
+                        "children": [
+                          {
+                            "tag": "a",
+                            "href": "#AUTHORS",
+                            "text": "AUTHORS"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "nav",
+            "class": "other-sections",
+            "children": [
+              {
+                "tag": "p",
+                "text": "In other sections:"
+              },
+              {
+                "tag": "ul",
+                "children": [
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "/man/syd.2.en",
+                        "text": "syd(2)"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "/man/syd.5.en",
+                        "text": "syd(5)"
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "li",
+                    "children": [
+                      {
+                        "tag": "a",
+                        "href": "/man/syd.7.en",
+                        "text": "syd(7)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "nav",
+            "class": "other-formats",
+            "children": [
+              {
+                "tag": "p",
+                "text": "Other formats:\n        "
+              },
+              {
+                "tag": "a",
+                "href": "/man/syd.1.en.txt",
+                "text": "txt"
+              },
+              ", \n        ",
+              {
+                "tag": "a",
+                "href": "/man/syd.1.en.raw",
+                "text": "raw"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer_section": {
+    "tag": "footer",
+    "children": [
+      {
+        "tag": "p",
+        "children": [
+          "Powered by ",
+          {
+            "tag": "a",
+            "href": "https://gitlab.archlinux.org/archlinux/archmanweb",
+            "text": "archmanweb"
+          },
+          ",\n               using ",
+          {
+            "tag": "a",
+            "href": "https://mandoc.bsd.lv/",
+            "text": "mandoc"
+          },
+          " for the conversion of manual pages.\n            "
+        ]
+      },
+      {
+        "tag": "p",
+        "children": [
+          "The website is available under the terms of the ",
+          {
+            "tag": "a",
+            "href": "https://www.gnu.org/licenses/gpl-3.0.en.html",
+            "text": "GPL-3.0"
+          },
+          "\n               license, except for the contents of the manual pages, which have their own license\n               specified in the corresponding Arch Linux package.\n            "
+        ]
+      }
+    ]
+  },
+  "html_doctype": "<!DOCTYPE html>",
+  "html_lang": "en",
+  "html_children": [
+    {
+      "tag": "head",
+      "children": [
+        {
+          "tag": "meta",
+          "charset": "utf-8"
+        },
+        {
+          "tag": "title",
+          "text": "syd(1) - Arch Linux man pages"
+        },
+        {
+          "tag": "link",
+          "rel": "stylesheet",
+          "type": "text/css",
+          "href": "/static/style.css"
+        }
+      ]
+    },
+    {
+      "tag": "body",
+      "children": [
+        {
+          "tag": "header",
+          "children": [
+            {
+              "tag": "a",
+              "href": "/",
+              "class": "logo",
+              "children": [
+                {
+                  "tag": "img",
+                  "src": "/static/archlinux.png",
+                  "alt": "Arch Linux"
+                }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "header-title",
+              "children": [
+                {
+                  "tag": "h1",
+                  "children": [
+                    "syd(1)"
+                  ]
+                },
+                {
+                  "tag": "p",
+                  "text": "Miscellaneous informational messages"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "main",
+          "children": [
+            {
+              "tag": "article",
+              "children": [
+                {
+                  "tag": "section",
+                  "class": "Sh",
+                  "children": [
+                    {
+                      "tag": "h1",
+                      "class": "Sh",
+                      "id": "LOGGING",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "class": "permalink",
+                          "href": "#LOGGING",
+                          "text": "LOGGING"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "p",
+                      "class": "Pp",
+                      "text": "The following log levels are supported:"
+                    },
+                    {
+                      "tag": "table",
+                      "class": "tbl",
+                      "attributes": {
+                        "border": "1",
+                        "style": "border-style: solid;"
+                      },
+                      "children": [
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "children": [
+                                {
+                                  "tag": "b",
+                                  "text": "error"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "td",
+                              "text": "Error messages, these are always printed."
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "children": [
+                                {
+                                  "tag": "b",
+                                  "text": "warn"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "td",
+                              "text": "Warning messages, these are always printed."
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "children": [
+                                {
+                                  "tag": "b",
+                                  "text": "info"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "td",
+                              "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "children": [
+                                {
+                                  "tag": "b",
+                                  "text": "msg"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "td",
+                              "text": "Miscellaneous informational messages, mostly used with the <b>info</b> log level"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "children": [
+                                {
+                                  "tag": "b",
+                                  "text": "tip"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "td",
+                              "text": "Informational messages on how to configure the sandbox"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "section",
+                  "class": "Sh",
+                  "children": [
+                    {
+                      "tag": "h1",
+                      "class": "Sh",
+                      "id": "EXIT_CODES",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "class": "permalink",
+                          "href": "#EXIT_CODES",
+                          "text": "EXIT CODES"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "p",
+                      "class": "Pp",
+                      "text": "Syd exits with the same exit code as the sandbox process itself. If the sandbox process exits with a signal, Syd exits with 128 plus the value of the signal. In case there was an error in spawning or waiting for the sandbox process, Syd exits with <b>errno</b> indicating the error condition. E.g. <b>syd</b> <b>true</b> returns <b>0</b>, <b>syd false</b> returns <b>1</b>, and <b>syd -- syd true</b> returns <b>16</b> which stands for <b>EBUSY</b> which means <b>Device or resource busy</b> indicating there is already a secure computing filter loaded."
+                    }
+                  ]
+                },
+                {
+                  "tag": "section",
+                  "class": "Sh",
+                  "children": [
+                    {
+                      "tag": "h1",
+                      "class": "Sh",
+                      "id": "BENCHMARKS",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "class": "permalink",
+                          "href": "#BENCHMARKS",
+                          "text": "BENCHMARKS"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "p",
+                      "class": "Pp",
+                      "text": "The table below lists the benchmark runs we ran for Syd:"
+                    },
+                    {
+                      "tag": "table",
+                      "class": "tbl",
+                      "attributes": {
+                        "border": "1",
+                        "style": "border-style: solid;"
+                      },
+                      "children": [
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "1: compile kernel"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "sydbox-{1,3}"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2534",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2534"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "2: compile kernel"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "sydbox-{1,3}"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2536",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2536"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "3: unpack compressed tarball"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "sydbox-{1,3}, Gentoo sandbox"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2537",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2537"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "4: compile kernel"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "sydbox-{1,3}, Gentoo sandbox"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2594",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2594"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "5: compile kernel in a Podman container"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "syd-oci, crun, runc, youki, gvisor"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2613",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2613"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "6: compile kernel in a Podman container"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "syd-oci, crun, runc, youki, gvisor"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2622",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2622"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "tr",
+                          "children": [
+                            {
+                              "tag": "td",
+                              "text": "7: run sqlite-bench"
+                            },
+                            {
+                              "tag": "td",
+                              "text": "no-syd, syd, syd+crypt"
+                            },
+                            {
+                              "tag": "td",
+                              "attributes": {
+                                "style": "text-align: center;"
+                              },
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "https://gitlab.exherbo.org/-/snippets/2758",
+                                  "text": "https://gitlab.exherbo.org/-/snippets/2758"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "section",
+                  "class": "Sh",
+                  "children": [
+                    {
+                      "tag": "h1",
+                      "class": "Sh",
+                      "id": "SEE_ALSO",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "class": "permalink",
+                          "href": "#SEE_ALSO",
+                          "text": "SEE ALSO"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "p",
+                      "class": "Pp",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "href": "/man/syd.2.en",
+                          "text": "syd(2)"
+                        },
+                        ", ",
+                        {
+                          "tag": "a",
+                          "href": "/man/syd.5.en",
+                          "text": "syd(5)"
+                        },
+                        ", ",
+                        {
+                          "tag": "a",
+                          "href": "/man/syd.7.en",
+                          "text": "syd(7)"
+                        },
+                        ", ",
+                        {
+                          "tag": "a",
+                          "href": "/man/syd-lock.1.en",
+                          "text": "syd-lock(1)"
+                        },
+                        ", ",
+                        {
+                          "tag": "a",
+                          "href": "/man/syd-ls.1.en",
+                          "text": "syd-ls(1)"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "ul",
+                      "class": "Bl-bullet",
+                      "children": [
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>syd</b> homepage: ",
+                            {
+                              "tag": "a",
+                              "href": "https://sydbox.exherbo.org/",
+                              "text": "https://sydbox.exherbo.org/"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>libsyd</b> homepage: ",
+                            {
+                              "tag": "a",
+                              "href": "https://libsyd.exherbo.org/",
+                              "text": "https://libsyd.exherbo.org/"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>pandora</b> homepage: ",
+                            {
+                              "tag": "a",
+                              "href": "https://lib.rs/pandora_box",
+                              "text": "https://lib.rs/pandora_box"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>paludis</b> homepage: ",
+                            {
+                              "tag": "a",
+                              "href": "http://paludis.exherbo.org/",
+                              "text": "http://paludis.exherbo.org/"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>Landlock</b> homepage: ",
+                            {
+                              "tag": "a",
+                              "href": "https://landlock.io",
+                              "text": "https://landlock.io"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>Path</b> wiki: ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/Path_(computing",
+                              "text": "https://en.wikipedia.org/wiki/Path_(computing"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>Unix domain socket</b> wiki:\n      ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/Unix_domain_socket",
+                              "text": "https://en.wikipedia.org/wiki/Unix_domain_socket"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>IPv4</b> wiki: ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/IPv4",
+                              "text": "https://en.wikipedia.org/wiki/IPv4"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>IPv6</b> wiki: ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/IPv6",
+                              "text": "https://en.wikipedia.org/wiki/IPv6"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>TOCTOU</b> wiki:\n      ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use",
+                              "text": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>VFS</b> wiki: ",
+                            {
+                              "tag": "a",
+                              "href": "https://en.wikipedia.org/wiki/Virtual_file_system",
+                              "text": "https://en.wikipedia.org/wiki/Virtual_file_system"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>ipnetwork</b> documentation: ",
+                            {
+                              "tag": "a",
+                              "href": "https://docs.rs/ipnetwork",
+                              "text": "https://docs.rs/ipnetwork"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            "<b>Enabling Logging</b>:\n      ",
+                            {
+                              "tag": "a",
+                              "href": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging",
+                              "text": "https://docs.rs/env_logger/latest/env_logger/#enabling-logging"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "section",
+                  "class": "Sh",
+                  "children": [
+                    {
+                      "tag": "h1",
+                      "class": "Sh",
+                      "id": "AUTHORS",
+                      "children": [
+                        {
+                          "tag": "a",
+                          "class": "permalink",
+                          "href": "#AUTHORS",
+                          "text": "AUTHORS"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "p",
+                      "class": "Pp",
+                      "children": [
+                        "Maintained by Ali Polatel. Up-to-date sources can be found at ",
+                        {
+                          "tag": "a",
+                          "href": "https://gitlab.exherbo.org/sydbox/sydbox.git",
+                          "text": "https://gitlab.exherbo.org/sydbox/sydbox.git"
+                        },
+                        " and bugs/patches can be\n    submitted to ",
+                        {
+                          "tag": "a",
+                          "href": "https://gitlab.exherbo.org/groups/sydbox/-/issues",
+                          "text": "https://gitlab.exherbo.org/groups/sydbox/-/issues"
+                        },
+                        ". Discuss in\n    #sydbox on Libera Chat or in #sydbox:mailstation.de on Matrix."
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "aside",
+              "id": "sidebar",
+              "children": [
+                {
+                  "tag": "section",
+                  "class": "search",
+                  "children": [
+                    {
+                      "tag": "form",
+                      "action": "/search",
+                      "class": "search direct-search",
+                      "role": "search",
+                      "children": [
+                        {
+                          "tag": "input",
+                          "type": "search",
+                          "placeholder": "Search manual page",
+                          "name": "q",
+                          "value": ""
+                        },
+                        {
+                          "tag": "input",
+                          "type": "submit",
+                          "name": "go",
+                          "value": "Go"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "section",
+                  "class": "package-info",
+                  "children": [
+                    {
+                      "tag": "p",
+                      "text": "Package information:"
+                    },
+                    {
+                      "tag": "dl",
+                      "children": [
+                        {
+                          "tag": "dt",
+                          "text": "Package name:"
+                        },
+                        {
+                          "tag": "dd",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "https://www.archlinux.org/packages/extra/x86_64/syd/",
+                              "text": "extra/syd"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "dt",
+                          "text": "Version:"
+                        },
+                        {
+                          "tag": "dd",
+                          "text": "3.45.2-3"
+                        },
+                        {
+                          "tag": "dt",
+                          "text": "Upstream:"
+                        },
+                        {
+                          "tag": "dd",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "https://gitlab.exherbo.org/sydbox/sydbox",
+                              "text": "https://gitlab.exherbo.org/sydbox/sydbox"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "dt",
+                          "text": "Licenses:"
+                        },
+                        {
+                          "tag": "dd",
+                          "text": "GPL-3.0-only"
+                        },
+                        {
+                          "tag": "dt",
+                          "text": "Manuals:"
+                        },
+                        {
+                          "tag": "dd",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "/listing/extra/syd/",
+                              "text": "/listing/extra/syd/"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "details",
+                  "children": [
+                    {
+                      "tag": "summary",
+                      "text": "Table of contents"
+                    },
+                    {
+                      "tag": "nav",
+                      "class": "toc",
+                      "children": [
+                        {
+                          "tag": "ul",
+                          "children": [
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#NAME",
+                                  "text": "NAME"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#SYNOPSIS",
+                                  "text": "SYNOPSIS"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#DESCRIPTION",
+                                  "text": "DESCRIPTION"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#OPTIONS",
+                                  "text": "OPTIONS"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#INVOCATION",
+                                  "text": "INVOCATION"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#ENVIRONMENT",
+                                  "text": "ENVIRONMENT"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#LOGGING",
+                                  "text": "LOGGING"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#EXIT_CODES",
+                                  "text": "EXIT CODES"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#BENCHMARKS",
+                                  "text": "BENCHMARKS"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#SEE_ALSO",
+                                  "text": "SEE ALSO"
+                                }
+                              ]
+                            },
+                            {
+                              "tag": "li",
+                              "children": [
+                                {
+                                  "tag": "a",
+                                  "href": "#AUTHORS",
+                                  "text": "AUTHORS"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "nav",
+                  "class": "other-sections",
+                  "children": [
+                    {
+                      "tag": "p",
+                      "text": "In other sections:"
+                    },
+                    {
+                      "tag": "ul",
+                      "children": [
+                        {
+                          "tag": "li",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "/man/syd.2.en",
+                              "text": "syd(2)"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "/man/syd.5.en",
+                              "text": "syd(5)"
+                            }
+                          ]
+                        },
+                        {
+                          "tag": "li",
+                          "children": [
+                            {
+                              "tag": "a",
+                              "href": "/man/syd.7.en",
+                              "text": "syd(7)"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "tag": "nav",
+                  "class": "other-formats",
+                  "children": [
+                    {
+                      "tag": "p",
+                      "text": "Other formats:\n        "
+                    },
+                    {
+                      "tag": "a",
+                      "href": "/man/syd.1.en.txt",
+                      "text": "txt"
+                    },
+                    ", \n        ",
+                    {
+                      "tag": "a",
+                      "href": "/man/syd.1.en.raw",
+                      "text": "raw"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "footer",
+          "children": [
+            {
+              "tag": "p",
+              "children": [
+                "Powered by ",
+                {
+                  "tag": "a",
+                  "href": "https://gitlab.archlinux.org/archlinux/archmanweb",
+                  "text": "archmanweb"
+                },
+                ",\n               using ",
+                {
+                  "tag": "a",
+                  "href": "https://mandoc.bsd.lv/",
+                  "text": "mandoc"
+                },
+                " for the conversion of manual pages.\n            "
+              ]
+            },
+            {
+              "tag": "p",
+              "children": [
+                "The website is available under the terms of the ",
+                {
+                  "tag": "a",
+                  "href": "https://www.gnu.org/licenses/gpl-3.0.en.html",
+                  "text": "GPL-3.0"
+                },
+                "\n               license, except for the contents of the manual pages, which have their own license\n               specified in the corresponding Arch Linux package.\n            "
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

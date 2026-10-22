@@ -1,0 +1,356 @@
+IT code
+    إذا استمر البحث في شجرة أنماط كبيرة جدًا لفترة طويلة جدًا، كما هو الحال في
+    نفس الظروف عند عدم استخدام JIT، ولكن تفاصيل ما يتم حسابه بالضبط ليست هي نفسها. خطأ PCRE_ERROR_RECURSIONLIMIT لا يتم إرجاعه أبدًا بواسطة تنفيذ JIT.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SAVING_AND_RESTORING_COMPILED_PATTERNS'><a class='permalink' href='#SAVING_AND_RESTORING_COMPILED_PATTERNS'>حفظ واستعادة الأنماط المترجمة</a></h1>
+<p class="Pp">الكود الذي يتم إنشاؤه بواسطة مترجم JIT خاص
+    بالبنية (architecture-specific)، وهو أيضًا يعتمد على الموضع (position dependent). لهذه الأسباب، لا يمكن حفظه (في ملف أو قاعدة بيانات) واستعادته لاحقًا مثل البايت كود (bytecode) والبيانات الأخرى لنمط مترجم. حفظ واستعادة الأنماط المترجمة ليس شيئًا يفعله الكثير من الناس. يتم تقديم المزيد من التفاصيل حول هذه الميزة في وثائق <b>pcreprecompile</b>. يجب أن يكون من الممكن تشغيل <b>pcre_study()</b> على نمط محفوظ ومستعاد، وبالتالي إعادة إنشاء بيانات JIT، ولكن نظرًا لأن ترجمة JIT تستخدم موارد كبيرة، فمن المحتمل ألا يكون ذلك جديرًا بالاهتمام؛ قد يكون من الأفضل إعادة ترجمة النمط الأصلي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CONTROLLING_THE_JIT_STACK'><a class='permalink' href='#CONTROLLING_THE_JIT_STACK'>التحكم في مكدس JIT</a></h1>
+<p class="Pp">عندما يعمل كود JIT المترجم، فإنه يحتاج إلى كتلة من الذاكرة لاستخدامها كمكدس. افتراضيًا، يستخدم 32K على مكدس الجهاز (machine stack). ومع ذلك، تتطلب بعض الأنماط الكبيرة أو المعقدة أكثر من ذلك. يتم إعطاء الخطأ PCRE_ERROR_JIT_STACKLIMIT عندما لا يكون هناك مكدس كافٍ. يتم توفير ثلاث دوال لإدارة كتل الذاكرة لاستخدامها كمكدسات JIT. هناك المزيد من المناقشات حول استخدام مكدسات JIT في القسم المعنون "أسئلة متكررة حول مكدس JIT" أدناه.</p>
+<p class="Pp">تقوم الدالة <b>pcre_jit_stack_alloc()</b> بإنشاء مكدس JIT. وسيطاتها هي حجم بدء وحجم أقصى، وتقوم بإرجاع مؤشر إلى بنية غامضة من النوع <b>pcre_jit_stack</b>، أو NULL إذا كان هناك خطأ. يمكن استخدام الدالة <b>pcre_jit_stack_free()</b> لتحرير مكدس لم يعد مطلوبًا. (للمهتمين تقنيًا: يتم تخصيص مساحة العنوان بواسطة mmap أو VirtualAlloc.)</p>
+<p class="Pp">يستخدم JIT ذاكرة أقل بكثير للتكرار (recursion) من الكود التفسيري، وحجم مكدس أقصى يتراوح من 512K إلى 1M يجب أن يكون أكثر من كافٍ لأي نمط.</p>
+<p class="Pp">تقوم الدالة <b>pcre_assign_jit_stack()</b> بتحديد المكدس الذي يجب أن يستخدمه كود JIT. وسيطاتها هي كما يلي:</p>
+<p class="Pp">
+  <br/>
+   pcre_extra *extra
+  <br/>
+   pcre_jit_callback callback
+  <br/>
+   void *data</p>
+<p class="Pp">يجب أن يكون الوسيط <i>extra</i> نتيجة دراسة نمط باستخدام PCRE_STUDY_JIT_COMPILE وما إلى ذلك. هناك ثلاث حالات لقيم الخيارات الأخرى:</p>
+<p class="Pp">
+  <br/>
+   (1) إذا كان <i>callback</i> هو NULL وكان <i>data</i> هو NULL، يتم استخدام كتلة داخلية بحجم 32K
+  <br/>
+   على مكدس الجهاز.</p>
+<p class="Pp">
+  <br/>
+   (2) إذا كان <i>callback</i> هو NULL وكان <i>data</i> ليس NULL، فيجب أن يكون <i>data</i>
+  <br/>
+   مكدس JIT صالحًا، نتيجة استدعاء <b>pcre_jit_stack_alloc()</b>.</p>
+<p class="Pp">
+  <br/>
+   (3) إذا كان <i>callback</i> ليس NULL، فيجب أن يشير إلى دالة يتم
+  <br/>
+   استدعاؤها مع <i>data</i> كوسيط في بداية المطابقة، لتهيئة
+  <br/>
+   مكدس JIT. إذا كانت القيمة المرجعة من دالة الـ callback
+  <br/>
+   هي NULL، يتم استخدام مكدس 32K الداخلي؛ وإلا، يجب أن تكون
+  <br/>
+   القيمة المرجعة مكدس JIT صالحًا، نتيجة استدعاء
+  <br/>
+   <b>pcre_jit_stack_alloc()</b>.</p>
+<p class="Pp">يتم اتباع دالة الـ callback في كل مرة يكون فيها كود JIT على وشك التشغيل؛ لا يتم اتباعها عند استدعاء <b>pcre_exec()</b> بخيارات غير متوافقة مع تنفيذ JIT. لذلك، يمكن استخدام دالة الـ callback لتحديد ما إذا كانت عملية المطابقة قد تم تنفيذها بواسطة JIT أو بواسطة المفسر.</p>
+<p class="Pp">يمكنك استخدام نفس مكدس JIT بأمان لأكثر من نمط واحد (إما عن طريق التعيين المباشر أو عن طريق الـ callback)، طالما أن جميع الأنماط تتم مطابقتها بشكل متسلسل في نفس السلسلة (thread). في تطبيق متعدد السلاسل (multithreaded application)، إذا لم تحدد مكدس JIT، أو إذا قمت بتعيين NULL أو إرجاعه من دالة الـ callback، فإن ذلك آمن للسلاسل، لأن كل سلسلة لها مكدس جهاز خاص بها. ومع ذلك، إذا قمت بتعيين أو إرجاع مكدس JIT غير NULL، فيجب أن يكون هذا مكدسًا مختلفًا لكل سلسلة لضمان سلامة السلاسل.</p>
+<p class="Pp">بالمعنى الدقيق للكلمة، يُسمح بأكثر من ذلك. يمكنك تعيين نفس المكدس غير NULL لعدد غير محدود من الأنماط طالما أنها لا تستخدم للمطابقة بواسطة سلاسل متعددة في نفس الوقت. على سبيل المثال، يمكنك تعيين نفس المكدس لجميع الأنماط المترجمة، واستخدام قفل عالمي (global mutex) في الـ callback للانتظار حتى يصبح المكدس متاحًا للاستخدام. ومع ذلك، هذا حل غير فعال، وغير مستحسن.</p>
+<p class="Pp">هذا اقتراح لكيفية عمل برنامج متعدد السلاسل يحتاج إلى إعداد مكدسات JIT غير افتراضية:</p>
+<p class="Pp">
+  <br/>
+   أثناء تهيئة السلسلة
+  <br/>
+   thread_local_var = pcre_jit_stack_alloc(...)</p>
+<p class="Pp">
+  <br/>
+   أثناء خروج السلسلة
+  <br/>
+   pcre_jit_stack_free(thread_local_var)</p>
+<p class="Pp">
+  <br/>
+   استخدام دالة callback بسطر واحد
+  <br/>
+   return thread_local_var</p>
+<p class="Pp">جميع الدوال الموصوفة في هذا القسم لا تفعل شيئًا إذا كان JIT غير متاح، و <b>pcre_assign_jit_stack()</b> لا تفعل شيئًا ما لم يكن الوسيط <i>extra</i> غير NULL ويشير إلى كتلة <b>pcre_extra</b> وهي نتيجة دراسة ناجحة باستخدام PCRE_STUDY_JIT_COMPILE وما إلى ذلك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='JIT_STACK_FAQ'><a class='permalink' href='#JIT_STACK_FAQ'>أسئلة متكررة حول مكدس JIT</a></h1>
+<p class="Pp">(1) لماذا نحتاج إلى مكدسات JIT؟</p>
+<p class="Pp">PCRE (و JIT) هو محرك متكرر (recursive)، يعتمد على العمق أولاً (depth-first)، لذا فهو يحتاج إلى مكدس حيث يتم دفع البيانات المحلية للعقدة الحالية قبل فحص العقد الفرعية. تخصيص مكدس جهاز حقيقي (real machine stack) على بعض المنصات صعب. على سبيل المثال، تحتاج سلسلة المكدس إلى التحديث في كل مرة إذا قمنا بتوسيع المكدس على PowerPC. على الرغم من أن ذلك ممكن، إلا أن الحمل الزائد لوقت التحديث يقلل من الأداء. لذلك نقوم بالتكرار في الذاكرة.</p>
+<p class="Pp">(2) لماذا لا نخصص ببساطة كتل من الذاكرة باستخدام <b>malloc()</b>؟</p>
+<p class="Pp">أنظمة التشغيل الحديثة لديها ميزة رائعة: يمكنها حجز مساحة عنوان (address space) بدلاً من تخصيص الذاكرة. يمكننا تخصيص صفحات ذاكرة بأمان داخل مساحة العنوان هذه، بحيث يمكن للمكدس أن ينمو دون نقل بيانات الذاكرة (هذا مهم بسبب المؤشرات). وبالتالي يمكننا تخصيص مساحة عنوان بحجم 1 ميجابايت، واستخدام صفحة ذاكرة واحدة فقط (عادة 4K) إذا كان ذلك كافياً. ومع ذلك، لا يزال بإمكاننا النمو حتى 1 ميجابايت في أي وقت إذا لزم الأمر.</p>
+<p class="Pp">(3) من "يمتلك" مكدس JIT؟</p>
+<p class="Pp">مالك المكدس هو برنامج المستخدم، وليس نمط JIT المدروس أو أي شيء آخر. يجب على برنامج المستخدم التأكد من أنه إذا تم استخدام مكدس بواسطة <b>pcre_exec()</b> (أي، تم تعيينه للنمط الذي يتم تشغيله حاليًا)، فيجب عدم استخدام هذا المكدس بواسطة أي سلاسل أخرى (لتجنب الكتابة فوق نفس منطقة الذاكرة). أفضل ممارسة للبرامج متعددة السلاسل هي تخصيص مكدس لكل سلسلة، وإرجاع هذا المكدس من خلال دالة callback الخاصة بـ JIT.</p>
+<p class="Pp">(4) متى يجب تحرير مكدس JIT؟</p>
+<p class="Pp">يمكنك تحرير مكدس JIT في أي وقت، طالما أنه لن يتم استخدامه مرة أخرى بواسطة <b>pcre_exec()</b>. عند تعيين المكدس لنمط، يتم تعيين مؤشر فقط. لا يوجد عد مراجع (reference counting) أو أي سحر آخر. يمكنك تحرير الأنماط والمكدسات بأي ترتيب، وفي أي وقت. فقط <i>لا</i> تستدعي <b>pcre_exec()</b> بنمط يشير إلى مكدس تم تحريره بالفعل، لأن ذلك سيؤدي إلى خطأ SEGFAULT. (أيضًا، لا تقم بتحرير مكدس يستخدم حاليًا بواسطة <b>pcre_exec()</b> في سلسلة أخرى). يمكنك أيضًا استبدال المكدس لنمط في أي وقت. يمكنك حتى تحرير المكدس السابق قبل تعيين بديل.</p>
+<p class="Pp">(5) هل يجب علي تخصيص/تحرير مكدس في كل مرة قبل/بعد استدعاء <b>pcre_exec()</b>؟</p>
+<p class="Pp">لا، لأن ذلك مكلف للغاية من حيث الموارد. ومع ذلك، يمكنك تنفيذ بعض الأفكار الذكية التي تحرر المكدس إذا لم يتم استخدامه لمدة دقيقتين، على سبيل المثال. يمكن أن تساعد دالة callback الخاصة بـ JIT في تحقيق ذلك دون الاحتفاظ بقائمة بالأنماط المدروسة حاليًا بواسطة JIT.</p>
+<p class="Pp">(6) حسنًا، المكدس مخصص لتخصيص الذاكرة طويل الأمد. ولكن ماذا يحدث إذا تسبب نمط في تجاوز سعة المكدس (stack overflow) بمكدس بحجم 1 ميجابايت؟ هل يبقى هذا 1 ميجابايت حتى يتم تحرير المكدس؟</p>
+<p class="Pp">خاصة في الأنظمة المدمجة، قد يكون من الجيد تحرير الذاكرة في بعض الأحيان دون تحرير المكدس. لا توجد واجهة برمجة تطبيقات (API) لهذا في الوقت الحالي. ربما تكون استدعاء دالة ترجع الذاكرة المخصصة حاليًا لأي مكدس ودالة أخرى تسمح بتحرير الذاكرة (تقليص المكدس) فكرة جيدة إذا احتاج شخص ما إلى ذلك.</p>
+<p class="Pp">(7) هذا يسبب الكثير من المتاعب. أليس هناك حل أفضل لمعالجة مكدس JIT؟</p>
+<p class="Pp">لا، بفضل Windows. إذا تم استخدام خيوط POSIX (POSIX threads) في كل مكان، فيمكننا التخلص من واجهة برمجة التطبيقات المعقدة هذه.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_CODE'><a class='permalink' href='#EXAMPLE_CODE'>مثال على الكود</a></h1>
+<p class="Pp">هذا مثال أحادي السلسلة يحدد مكدس JIT دون استخدام دالة callback.</p>
+<p class="Pp">
+  <br/>
+   int rc;
+  <br/>
+   int ovector[30];
+  <br/>
+   pcre *re;
+  <br/>
+   pcre_extra *extra;
+  <br/>
+   pcre_jit_stack *jit_stack;</p>
+<p class="Pp">
+  <br/>
+   re = pcre_compile(pattern, 0, &amp;error, &amp;erroffset, NULL);
+  <br/>
+   /* تحقق من الأخطاء */
+  <br/>
+   extra = pcre_study(re, PCRE_STUDY_JIT_COMPILE, &amp;error);
+  <br/>
+   jit_stack = pcre_jit_stack_alloc(32*1024, 512*1024);
+  <br/>
+   /* تحقق من الخطأ (NULL) */
+  <br/>
+   pcre_assign_jit_stack(extra, NULL, jit_stack);
+  <br/>
+   rc = pcre_exec(re, extra, subject, length, 0, 0, ovector, 30);
+  <br/>
+   /* تحقق من النتائج */
+  <br/>
+   pcre_free(re);
+  <br/>
+   pcre_free_study(extra);
+  <br/>
+   pcre_jit_stack_free(jit_stack);</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='JIT_FAST_PATH_API'><a class='permalink' href='#JIT_FAST_PATH_API'>واجهة برمجة التطبيقات لمسار JIT السريع (Fast Path API)</a></h1>
+<p class="Pp">نظرًا لأن واجهة برمجة التطبيقات الموصوفة أعلاه تعود إلى التنفيذ المفسر (interpreted execution) عندما لا يكون JIT متاحًا، فهي مناسبة للبرامج المكتوبة للاستخدام العام في العديد من البيئات. ومع ذلك، فإن استدعاء JIT عبر <b>pcre_exec()</b> له تأثير على الأداء. البرامج المكتوبة للاستخدام حيث يُعرف أن JIT متاح، وتحتاج إلى أفضل أداء ممكن، يمكنها بدلاً من ذلك استخدام واجهة برمجة تطبيقات "مسار سريع" (fast path) لاستدعاء تنفيذ JIT مباشرة بدلاً من استدعاء <b>pcre_exec()</b> (بشكل واضح فقط للأنماط التي تمت دراستها بنجاح بواسطة JIT).</p>
+<p class="Pp">الدالة ذات المسار السريع تسمى <b>pcre_jit_exec()</b>، وهي تأخذ نفس الوسائط تمامًا مثل <b>pcre_exec()</b>، بالإضافة إلى وسيط إضافي يجب أن يشير إلى مكدس JIT. ترتيبات مكدس JIT الموصوفة أعلاه لا تنطبق. القيم المرجعة هي نفسها كما في <b>pcre_exec()</b>.</p>
+<p class="Pp">عند استدعاء <b>pcre_exec()</b>، بالإضافة إلى الاختبار للخيارات غير الصالحة، يتم إجراء عدد من فحوصات السلامة الأخرى على الوسائط. على سبيل المثال، إذا كان مؤشر الموضوع (subject pointer) NULL، أو كان طوله سالبًا، يتم إعطاء خطأ فوري. أيضًا، ما لم يتم تعيين PCRE_NO_UTF[8|16|32]، يتم اختبار سلسلة الموضوع UTF للصلاحية. من أجل السرعة، لا تحدث هذه الاختبارات على مسار JIT السريع، وإذا تم تمرير بيانات غير صالحة، تكون النتيجة غير محددة.</p>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <title>pcrejit(3) — PCRE JIT Compiler Support</title>
+        <link rel="stylesheet" href="/man.css" type="text/css" />
+        <link rel="stylesheet" href="/page.css" type="text/css" />
+        <link rel="stylesheet" href="/nav.css" type="text/css" />
+        <link rel="stylesheet" href="/sidebar.css" type="text/css" />
+        <link rel="stylesheet" href="/foot.css" type="text/css" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pcrejit(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/pcre/">pcre</a></p>
+<p class="lic">التراخيص: BSD</p>
+
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id='JIT_FAST_PATH_API'><a class='permalink' href='#JIT_FAST_PATH_API'>JIT FAST PATH API</a></h1>
+<p class="Pp">Bypassing the sanity checks and the <b>pcre_exec()</b> wrapping
+    can give speedups of more than 10%.</p>
+<p class="Pp">Note that the <b>pcre_jit_exec()</b> function is not available in
+    versions of PCRE before 8.32 (released in November 2012). If you need to
+    support versions that old you must either use the slower <b>pcre_exec()</b>,
+    or switch between the two codepaths by checking the values of PCRE_MAJOR and
+    PCRE_MINOR.</p>
+<p class="Pp">Due to an unfortunate implementation oversight, even in versions
+    8.32 and later there will be no <b>pcre_jit_exec()</b> stub function defined
+    when PCRE is compiled with --disable-jit, which is the default, and there's
+    no way to detect whether PCRE was compiled with --enable-jit via a
+  macro.</p>
+<p class="Pp">If you need to support versions older than 8.32, or versions that
+    may not build with --enable-jit, you must either use the slower
+    <b>pcre_exec()</b>, or switch between the two codepaths by checking the
+    values of PCRE_MAJOR and PCRE_MINOR.</p>
+<p class="Pp">Switching between the two by checking the version assumes that all
+    the versions being targeted are built with --enable-jit. To also support
+    builds that may use --disable-jit either <b>pcre_exec()</b> must be used, or
+    a compile-time check for JIT via <b>pcre_config()</b> (which assumes the
+    runtime environment will be the same), or as the Git project decided to do,
+    simply assume that <b>pcre_jit_exec()</b> is present in 8.32 or later unless
+    a compile-time flag is provided, see the &quot;grep: un-break building with
+    PCRE &gt;= 8.32 without --enable-jit&quot; commit in git.git for an example
+    of that.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/pcreapi.3.en'>pcreapi(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<pre>Philip Hazel (FAQ by Zoltan Herczeg)
+University Computing Service
+Cambridge CB2 3QH, England.</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REVISION'><a class='permalink' href='#REVISION'>REVISION</a></h1>
+<pre>Last updated: 05 July 2017
+Copyright (c) 1997-2017 University of Cambridge.</pre>
+</section>
+</article>
+<aside id="sidebar">
+<section class="search">
+<form action="/search" class="search direct-search" role="search">
+<input type="search" placeholder="Search manual page" name="q" value="" />
+<input type="submit" name="go" value="Go" />
+</form>
+</section>
+<section class="package-info">
+<p>Package information:</p>
+<dl>
+<dt>Package name:</dt>
+<dd><a href="https://www.archlinux.org/packages/core/x86_64/pcre/">core/pcre</a></dd>
+<dt>Version:</dt>
+<dd>8.45-4</dd>
+<dt>Upstream:</dt>
+<dd><a href="https://www.pcre.org/">https://www.pcre.org/</a></dd>
+<dt>Licenses:</dt>
+<dd>BSD</dd>
+<dt>Manuals:</dt>
+<dd><a href="/listing/core/pcre/">/listing/core/pcre/</a></dd>
+</dl>
+</section>
+<details>
+<summary>Table of contents</summary>
+<nav class="toc">
+<ul>
+<li><a href="#NAME">NAME</a></li>
+<li><a href="#PCRE_JUST-IN-TIME_COMPILER_SUPPORT">PCRE JUST-IN-TIME COMPILER SUPPORT</a></li>
+<li><a href="#8-BIT,_16-BIT_AND_32-BIT_SUPPORT">8-BIT, 16-BIT AND 32-BIT SUPPORT</a></li>
+<li><a href="#AVAILABILITY_OF_JIT_SUPPORT">AVAILABILITY OF JIT SUPPORT</a></li>
+<li><a href="#SIMPLE_USE_OF_JIT">SIMPLE USE OF JIT</a></li>
+<li><a href="#UNSUPPORTED_OPTIONS_AND_PATTERN_ITEMS">UNSUPPORTED OPTIONS AND PATTERN ITEMS</a></li>
+<li><a href="#RETURN_VALUES_FROM_JIT_EXECUTION">RETURN VALUES FROM JIT EXECUTION</a></li>
+<li><a href="#SAVING_AND_RESTORING_COMPILED_PATTERNS">SAVING AND RESTORING COMPILED PATTERNS</a></li>
+<li><a href="#CONTROLLING_THE_JIT_STACK">CONTROLLING THE JIT STACK</a></li>
+<li><a href="#JIT_STACK_FAQ">JIT STACK FAQ</a></li>
+<li><a href="#EXAMPLE_CODE">EXAMPLE CODE</a></li>
+<li><a href="#JIT_FAST_PATH_API">JIT FAST PATH API</a></li>
+<li><a href="#SEE_ALSO">SEE ALSO</a></li>
+<li><a href="#AUTHOR">AUTHOR</a></li>
+<li><a href="#REVISION">REVISION</a></li>
+</ul>
+</nav>
+</details>
+<nav class="other-formats">
+<p>Other formats:
+<a href="/man/pcrejit.3.en.txt">txt</a>,
+<a href="/man/pcrejit.3.en.raw">raw</a>
+</p>
+</nav>
+</aside>
+</main>
+<footer>
+
+<p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+license, except for the contents of the manual pages, which have their own license
+specified in the corresponding Arch Linux package.
+</p>
+</footer>
+</body>
+</html>
+```
+
+```html
+<!DOCTYPE html>
+<html lang="ar">
+    <head>
+        <meta charset="utf-8" />
+        <title>pcrejit(3) — دعم مترجم PCRE JIT</title>
+        <link rel="stylesheet" href="/man.css" type="text/css" />
+        <link rel="stylesheet" href="/page.css" type="text/css" />
+        <link rel="stylesheet" href="/nav.css" type="text/css" />
+        <link rel="stylesheet" href="/sidebar.css" type="text/css" />
+        <link rel="stylesheet" href="/foot.css" type="text/css" />
+    </head>
+    <body>
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id='JIT_FAST_PATH_API'><a class='permalink' href='#JIT_FAST_PATH_API'>واجهة برمجة تطبيقات JIT للمسار السريع</a></h1>
+<p class="Pp">تجاوز فحوصات السلامة والتغليف <b>pcre_exec()</b> يمكن أن يعطي تسريعًا يزيد عن 10٪.</p>
+<p class="Pp">لاحظ أن الدالة <b>pcre_jit_exec()</b> غير متوفرة في إصدارات PCRE قبل 8.32 (صدرت في نوفمبر 2012). إذا كنت بحاجة إلى دعم إصدارات قديمة، فيجب عليك إما استخدام <b>pcre_exec()</b> الأبطأ، أو التبديل بين مساري الترميز عن طريق التحقق من قيم PCRE_MAJOR و PCRE_MINOR.</p>
+<p class="Pp">نظرًا لخطأ مؤسف في التنفيذ، حتى في الإصدارات 8.32 والإصدارات الأحدث، لن يتم تعريف دالة وهمية <b>pcre_jit_exec()</b> عند تجميع PCRE باستخدام --disable-jit، وهو الإعداد الافتراضي، ولا توجد طريقة لاكتشاف ما إذا كان PCRE قد تم تجميعه باستخدام --enable-jit عبر ماكرو.</p>
+<p class="Pp">إذا كنت بحاجة إلى دعم إصدارات أقدم من 8.32، أو إصدارات قد لا يتم بناؤها باستخدام --enable-jit، فيجب عليك إما استخدام <b>pcre_exec()</b> الأبطأ، أو التبديل بين مساري الترميز عن طريق التحقق من قيم PCRE_MAJOR و PCRE_MINOR.</p>
+<p class="Pp">التبديل بين الاثنين عن طريق التحقق من الإصدار يفترض أن جميع الإصدارات المستهدفة تم بناؤها باستخدام --enable-jit. لدعم البناءات التي قد تستخدم --disable-jit أيضًا، يجب استخدام <b>pcre_exec()</b>، أو فحص وقت التجميع لوجود JIT عبر <b>pcre_config()</b> (الذي يفترض أن بيئة التشغيل ستكون هي نفسها)، أو كما قرر مشروع Git القيام به، ببساطة افتراض أن <b>pcre_jit_exec()</b> موجود في 8.32 أو أحدث ما لم يتم توفير علامة وقت التجميع، راجع التزام "grep: un-break building with PCRE &gt;= 8.32 without --enable-jit" في git.git كمثال على ذلك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/pcreapi.3.en'>pcreapi(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<pre>Philip Hazel (FAQ by Zoltan Herczeg)
+University Computing Service
+Cambridge CB2 3QH, England.</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REVISION'><a class='permalink' href='#REVISION'>المراجعة</a></h1>
+<pre>Last updated: 05 July 2017
+Copyright (c) 1997-2017 University of Cambridge.</pre>
+</section>
+</article>
+<aside id="sidebar">
+<section class="search">
+<form action="/search" class="search direct-search" role="search">
+<input type="search" placeholder="البحث في صفحة الدليل" name="q" value="" />
+<input type="submit" name="go" value="Go" />
+</form>
+</section>
+<section class="package-info">
+<p>معلومات الحزمة:</p>
+<dl>
+<dt>اسم الحزمة:</dt>
+<dd><a href="https://www.archlinux.org/packages/core/x86_64/pcre/">core/pcre</a></dd>
+<dt>الإصدار:</dt>
+<dd>8.45-4</dd>
+<dt>المصدر الأصلي:</dt>
+<dd><a href="https://www.pcre.org/">https://www.pcre.org/</a></dd>
+<dt>التراخيص:</dt>
+<dd>BSD</dd>
+<dt>الأدلة:</dt>
+<dd><a href="/listing/core/pcre/">/listing/core/pcre/</a></dd>
+</dl>
+</section>
+<details>
+<summary>جدول المحتويات</summary>
+<nav class="toc">
+<ul>
+<li><a href="#NAME">الاسم</a></li>
+<li><a href="#PCRE_JUST-IN-TIME_COMPILER_SUPPORT">دعم مترجم PCRE في الوقت المناسب (JIT)</a></li>
+<li><a href="#8-BIT,_16-BIT_AND_32-BIT_SUPPORT">دعم 8 بت، 16 بت، و 32 بت</a></li>
+<li><a href="#AVAILABILITY_OF_JIT_SUPPORT">توفر دعم JIT</a></li>
+<li><a href="#SIMPLE_USE_OF_JIT">الاستخدام البسيط لـ JIT</a></li>
+<li><a href="#UNSUPPORTED_OPTIONS_AND_PATTERN_ITEMS">الخيارات وعناصر النمط غير المدعومة</a></li>
+<li><a href="#RETURN_VALUES_FROM_JIT_EXECUTION">قيم الإرجاع من تنفيذ JIT</a></li>
+<li><a href="#SAVING_AND_RESTORING_COMPILED_PATTERNS">حفظ واستعادة الأنماط المترجمة</a></li>
+<li><a href="#CONTROLLING_THE_JIT_STACK">التحكم في مكدس JIT</a></li>
+<li><a href="#JIT_STACK_FAQ">الأسئلة الشائعة حول مكدس JIT</a></li>
+<li><a href="#EXAMPLE_CODE">مثال على الكود</a></li>
+<li><a href="#JIT_FAST_PATH_API">واجهة برمجة تطبيقات JIT للمسار السريع</a></li>
+<li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+<li><a href="#AUTHOR">المؤلف</a></li>
+<li><a href="#REVISION">المراجعة</a></li>
+</ul>
+</nav>
+</details>
+<nav class="other-formats">
+<p>تنسيقات أخرى:
+<a href="/man/pcrejit.3.en.txt">txt</a>,
+<a href="/man/pcrejit.3.en.raw">raw</a>
+</p>
+</nav>
+</aside>
+</main>
+<footer>
+
+<p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+المحدد في حزمة Arch Linux المقابلة.
+</p>
+</footer>
+</body>
+</html>

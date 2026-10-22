@@ -1,0 +1,324 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">apparmor.d(5)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "AppArmor Policy Syntax",
+  "sections": [
+    {
+      "heading": "Rules",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "AppArmor can set and control the resource limits associated with a profile as described in the setrlimit(2) man page."
+        },
+        {
+          "type": "paragraph",
+          "text": "The AppArmor rlimit controls allow setting of limits and restricting changes of them and these actions can be audited. Enforcement of the set limits is handled by the standard kernel enforcement mechanism for rlimits and will not result in an audited apparmor message if the limit is enforced."
+        },
+        {
+          "type": "paragraph",
+          "text": "If a profile does not have an rlimit rule associated with a given rlimit then the rlimit is left alone and regular access, including changing the limit, is allowed. However if the profile sets an rlimit then the current limit is checked and if greater than the limit specified in the rule it will be changed to the specified limit."
+        },
+        {
+          "type": "paragraph",
+          "text": "AppArmor rlimit rules control the hard limit of an application and ensure that if the hard limit is lowered that the soft limit does not exceed the hard limit value."
+        },
+        {
+          "type": "paragraph",
+          "text": "Eg."
+        },
+        {
+          "type": "code",
+          "text": "set rlimit data <= 100M,\nset rlimit nproc <= 10,\nset rlimit nice <= 5,"
+        }
+      ]
+    },
+    {
+      "heading": "Variables",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "AppArmor's policy language allows embedding variables into file rules to enable easier configuration for some common (and pervasive) setups. Variables may have multiple values assigned, but any variable assignments must be made before the start of the profile."
+        },
+        {
+          "type": "paragraph",
+          "text": "The parser will automatically expand variables to include all values that they have been assigned; it is an error to reference a variable without setting at least one value. You can use empty quotes (\" \") to explicitly add an empty value."
+        },
+        {
+          "type": "paragraph",
+          "text": "At the time of this writing, the following variables are defined in the provided AppArmor policy:"
+        },
+        {
+          "type": "code",
+          "text": "@{HOME}\n@{HOMEDIRS}\n@{multiarch}\n@{pid}\n@{pids}\n@{PROC}\n@{securityfs}\n@{apparmorfs}\n@{sys}\n@{tid}\n@{run}\n@{XDG_DESKTOP_DIR}\n@{XDG_DOWNLOAD_DIR}\n@{XDG_TEMPLATES_DIR}\n@{XDG_PUBLICSHARE_DIR}\n@{XDG_DOCUMENTS_DIR}\n@{XDG_MUSIC_DIR}\n@{XDG_PICTURES_DIR}\n@{XDG_VIDEOS_DIR}"
+        },
+        {
+          "type": "paragraph",
+          "text": "These are defined in files in /etc/apparmor.d/tunables and are used in many of the abstractions described later."
+        },
+        {
+          "type": "paragraph",
+          "text": "You may also add files in /etc/apparmor.d/tunables/home.d for site-specific customization of @{HOMEDIRS}, /etc/apparmor.d/tunables/multiarch.d for @{multiarch} and /etc/apparmor.d/tunables/xdg-user-dirs.d for @{XDG_*}."
+        },
+        {
+          "type": "paragraph",
+          "text": "The special @{profile_name} variable is set to the profile name and may be used in all policy."
+        },
+        {
+          "type": "paragraph",
+          "text": "Notes on variable expansion and the / character"
+        },
+        {
+          "type": "paragraph",
+          "text": "It is important to note that how AppArmor performs variable expansion depends on the context where a variable is used. When a variable is expanded it can result in a string with multiple path characters next to each other, in a way that is not evident when looking at policy."
+        },
+        {
+          "type": "paragraph",
+          "text": "Eg."
+        },
+        {
+          "type": "indent",
+          "content": [
+            {
+              "type": "paragraph",
+              "text": "Given the following variable definition and rule"
+            },
+            {
+              "type": "code",
+              "text": "@{HOME}=/home/*/ file rw @{HOME}/*,"
+            },
+            {
+              "type": "paragraph",
+              "text": "The variable expansion results in a rule of"
+            },
+            {
+              "type": "code",
+              "text": "file rw /home/*//*."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "When this occurs in a context where a path is expected, AppArmor will canonicalize the path by collapsing consecutive / characters into a single character. For the above example, this would be"
+        },
+        {
+          "type": "code",
+          "text": "file rw /home/*/*,"
+        },
+        {
+          "type": "paragraph",
+          "text": "There is one exception to this rule, when the consecutive / characters are at the beginning of a path, this indicates a posix namespace and the characters will not be collapsed."
+        },
+        {
+          "type": "paragraph",
+          "text": "Eg."
+        },
+        {
+          "type": "indent",
+          "content": [
+            {
+              "type": "code",
+              "text": "@{HOME}=/home/*/ file rw /@{HOME}/\*,"
+            },
+            {
+              "type": "paragraph",
+              "text": "will result in an expansion of"
+            },
+            {
+              "type": "code",
+              "text": "file rw //home/*//*,"
+            },
+            {
+              "type": "paragraph",
+              "text": "which is collapsed to"
+            },
+            {
+              "type": "code",
+              "text": "file rw //home/*/*,"
+            },
+            {
+              "type": "paragraph",
+              "text": "Note: that the leading // in the above example is not collapsed to a single /. However the second // (that was also seen in the first example) is collapsed."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Alias rules",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "AppArmor also provides alias rules for remapping paths for site-specific layouts. They are an alternative form of path rewriting to using variables, and are done after variable resolution. Alias rules must occur within the preamble of the profile. System-wide aliases are found in /etc/apparmor.d/tunables/alias, which is included by /etc/apparmor.d/tunables/global. /etc/apparmor.d/tunables/global is typically included at the beginning of an AppArmor profile."
+        }
+      ]
+    },
+    {
+      "heading": "Globbing (AARE)",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "File resources and other parameters accepting an AARE may be specified with a globbing syntax similar to that used by popular shells, such as csh(1), bash(1), zsh(1)."
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "*",
+              "description": "can substitute for any number of characters, excepting '/'"
+            },
+            {
+              "term": "**",
+              "description": "can substitute for any number of characters, including '/'"
+            },
+            {
+              "term": "?",
+              "description": "can substitute for any single character excepting '/'"
+            },
+            {
+              "term": "[abc]",
+              "description": "will substitute for the single character a, b, or c"
+            },
+            {
+              "term": "[a-c]",
+              "description": "will substitute for the single character a, b, or c"
+            },
+            {
+              "term": "[^a-c]",
+              "description": "will substitute for any single character not matching a, b or c"
+            },
+            {
+              "term": "{ab,cd}",
+              "description": "will expand to one rule to match ab, one rule to match cd\nCan also include variables."
+            },
+            {
+              "term": "@variable",
+              "description": "will expand to all values assigned to the given variable."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "When AppArmor looks up a directory the pathname being looked up will end with a slash (e.g., /var/tmp/); otherwise it will not end with a slash. Only rules that match a trailing slash will match directories. Some examples, none matching the /tmp/ directory itself, are:"
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "/tmp/*",
+              "description": "Files directly in /tmp."
+            },
+            {
+              "term": "/tmp/*/",
+              "description": "Directories directly in /tmp."
+            },
+            {
+              "term": "/tmp/**",
+              "description": "Files and directories anywhere underneath /tmp."
+            },
+            {
+              "term": "/tmp/**/",
+              "description": "Directories anywhere underneath /tmp."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Rule Qualifiers",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "There are several rule qualifiers that can be applied to permission rules. Rule qualifiers can modify the rule and/or permissions within the rule."
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "priority",
+              "description": "Specifies the priority of the rule. Currently the allowed range is -1000 to 1000 with the default priority of rule is 0. Rules with higher priority are given preferences and will completely override permissions of lower priority rules where they overlap. When rules partially overlap the permissions of the higher priority rule will completely override lower priority rules within in overlap. Within a given priority level rules that overlap will accumulate permissions in the standard apparmor fashion."
+            },
+            {
+              "term": "allow",
+              "description": "Specifies that permissions requests that match the rule are allowed. This is the default value for rules and does not need to be specified. Conflicts with the deny qualifier."
+            },
+            {
+              "term": "audit",
+              "description": "Specifies that permissions requests that match the rule should be recorded to the audit log."
+            },
+            {
+              "term": "deny",
+              "description": "Specifies that permissions requests that match the rule should be denied without logging. Can be combined with 'audit' to enable logging. Conflicts with the allow qualifier."
+            },
+            {
+              "term": "owner",
+              "description": "Specifies that the task must have the same euid/fsuid as the object being referenced by the permission check."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "Qualifier Blocks"
+        },
+        {
+          "type": "paragraph",
+          "text": "Rule Qualifiers can be applied to multiple rules at a time by grouping the rules into a rule block."
+        },
+        {
+          "type": "code",
+          "text": "audit {\n   /foo r,\n   network,\n}"
+        }
+      ]
+    },
+    {
+      "heading": "#include mechanism",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "AppArmor provides an easy abstraction mechanism to group common access requirements; this abstraction is an extremely flexible way to grant site-specific rights and makes writing new AppArmor profiles very simple by assembling the needed building blocks for any given program."
+        },
+        {
+          "type": "paragraph",
+          "text": "The use of '#include' is modelled directly after cpp(1); its use will replace the '#include' statement with the specified file's contents. The leading '#' is optional, and the '#include' keyword can be followed by an option conditional 'if exists' that specifies profile compilation should continue if the specified file or directory is not found."
+        },
+        {
+          "type": "paragraph",
+          "text": "#include \"/absolute/path\" specifies that /absolute/path should be used. #include \"relative/path\" specifies that relative/path should be used, where the path is relative to the current working directory. #include <magic/path> is the most common usage; it will load magic/path relative to a directory specified to apparmor_parser(8). /etc/apparmor.d/ is the AppArmor default."
+        },
+        {
+          "type": "paragraph",
+          "text": "The supplied AppArmor profiles follow several conventions; the abstractions stored in /etc/apparmor.d/abstractions/ are some large clusters that are used in most profiles. What follows are short descriptions of how some of the abstractions are used."
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "term": "abstractions/audio",
+              "description": "Includes accesses to device files used for audio applications."
+            },
+            {
+              "term": "abstractions/authentication",
+              "description": "Includes access to files and services typically necessary for services that perform user authentication."
+            },
+            {
+              "term": "abstractions/base",
+              "description": "Includes files that should be readable and writable in all profiles."
+            },
+            {
+              "term": "abstractions/bash",
+              "description": "Includes many files used by bash; useful for interactive shells and programs that call system(3)."
+            },
+            {
+              "term": "abstractions/consoles",
+              "description": "Includes read and write access to the device files controlling the virtual console, sshd(8), xterm(1), etc. This abstraction is needed for many programs that interact with users."
+            },
+            {
+              "term": "abstractions/fonts",
+              "description": "Includes read access to font files."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Test2__Manual__Anatomy__Event.3perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+<section class="Ss">
+<h2 class="Ss" id='CUSTOM_FACETS'><a class='permalink' href='#CUSTOM_FACETS'>FACETAS PERSONALIZADAS</a></h2>
+<p class="Pp">Puedes escribir tipos de facetas personalizadas, simplemente añade un nuevo key a la hash y poblalo. La regla general es que cualquier código que vea las facetas debe ignorar las que no entiende.</p>
+<p class="Pp">Opcionalmente puedes crear una paquete para documentar tus facetas personalizadas. El paquete debe ser un objeto correcto y puede tener métodos adicionales para ayudar a trabajar con tu faceta.</p>
+<pre>package Test2::EventFacet::MyFacet;
+use parent 'Test2::EventFacet';
+sub facet_key { 'myfacet' }
+sub is_list { 0 }
+1;</pre>
+<p class="Pp">Tu paquete de faceta debe estar siempre bajo el espacio de nombre Test2::EventFacet:: si quieres que los herramientas lo encuentren automáticamente. El último parte del nombre del espacio debe ser el nombre no plural de tu faceta, con solo la primera palabra mayúscula.</p>
+<dl class="Bl-tag">
+  <dt>$string = $facet_class-&gt;facet_key</dt>
+  <dd>El key de tu faceta debería ser el mismo que el último apartado del espacio de nombre, pero en minúsculas. Puedes append 's' al key si tu faceta es de tipo lista.</dd>
+  <dt>$bool = $facet_class-&gt;is_list</dt>
+  <dd>True si un evento debe poner estas facetas en una lista:
+        <pre>{ myfacet =&gt; [{}, {}] }
+</pre>
+    <p class="Pp">False si un evento solo puede tener una de esta tipo de faceta a la vez:</p>
+        <pre>{ myfacet =&gt; {} }
+</pre>
+  </dd>
+</dl>
+<p class="Pp"><i>EJEMPLOS</i></p>
+<p class="Pp">El faceta assert no es de tipo lista, por lo que su implementación sería así:</p>
+<pre>package Test2::EventFacet::Assert;
+sub facet_key { 'assert' }
+sub is_list { 0 }</pre>
+<p class="Pp">El faceta amnesty es de tipo lista, pero no necesita 's' appendido para ser plural:</p>
+<pre>package Test2::EventFacet::Amnesty;
+sub facet_key { 'amnesty' }
+sub is_list { 1 }</pre>
+<p class="Pp">El faceta error es de tipo lista, y append 's' hace plural de error. Esto significa que el nombre del paquete es '::Error', pero el key es 'errors'.</p>
+<pre>package Test2::EventFacet::Error;
+sub facet_key { 'errors' }
+sub is_list { 1 }</pre>
+<p class="Pp"><b>Nota2:</b> En la práctica, los más herramientas ignoran los paquetes de faceta, y trabajan con los datos de la faceta directamente en su estructura. Esto es por diseño y recomendado. Los datos de la faceta están diseñados para ser serializados frecuentemente y pasados alrededor. Cuando se trate de facetas, los datos son importantes, clases y métodos no lo son.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_OLD_API'><a class='permalink' href='#THE_OLD_API'>LA API ANTIGUA</a></h1>
+<p class="Pp">La API antigua simplemente era un conjunto de métodos que debías implementar:</p>
+<dl class="Bl-tag">
+  <dt>$bool = $e-&gt;causes_fail</dt>
+  <dd>Devuelve true si este evento debe resultar en una falla de prueba. En general, debería ser false.</dd>
+  <dt>$bool = $e-&gt;increments_count</dt>
+  <dd>Debes devolver true si este evento debe provocar un incremento en el contador de pruebas.</dd>
+  <dt>$e-&gt;callback($hub)</dt>
+  <dd>Si tu evento necesita tener efectos adicionales sobre el Test2::Hub, puedes sobrescribir este método.
+    <p class="Pp">Este método se llama <b>ANTES</b> de que el evento sea pasado al formateador.</p>
+  </dd>
+  <dt>$num = $e-&gt;nested</dt>
+  <dd>Si este evento está dentro de otros eventos, debe ser el nivel de nesting. (Esto es principalmente para subpruebas)</dd>
+  <dt>$bool = $e-&gt;global</dt>
+  <dd>Establece este a true si tu evento es global, es decir, todos los hilos y procesos deben verlo, sea cuando o donde se genere. Esto no es algo común, pero se usa para salir de pruebas con bail-out y skip_all.</dd>
+  <dt>$code = $e-&gt;terminate</dt>
+  <dd>Este se llama <b>DESPUÉS</b> de que el evento haya sido pasado al formateador. Debería normalmente devolver undef, pero solo cambia si el evento debe hacer que la prueba se termine inmediatamente.
+    <p class="Pp">Si quieres que el evento cause que la prueba se termine, deberías devolver el código de salida aquí. El código de salida de 0 significa exito, cualquier otro número significa falla.</p>
+    <p class="Pp">Este se usa por Test2::Event::Plan para salir con 0 cuando el plan es 'skip_all'. También se usa por Test2::Event:Bail para forzar la prueba a terminar con una falla.</p>
+    <p class="Pp">Este se llama después de que el evento haya sido enviado al formateador para asegurar que el evento sea visto y entendido.</p>
+  </dd>
+  <dt>$msg = $e-&gt;summary</dt>
+  <dd>Esto se utiliza como una resumen humano de evento. Deberías tener un resumen idealmente una línea, pero puedes usar múltiples si es necesario. Esto se utiliza para consumo humano. No necesitas hacerlo fácil para máquinas.</p>
+  <dd>El por defecto es simplemente devolver el nombre del paquete del evento.</p>
+  </dd>
+  <dt>($count, $directive, $reason) = $e-&gt;<b>sets_plan()</b></dt>
+  <dd>Verifica si este evento establece el plan de prueba. Devolverá una lista vacía si no lo hace. Si lo hace, devolverá una lista de 1 a 3 elementos en orden: Cuenta de pruebas esperada, Directiva, razón de la directiva.</dd>
+  <dt>$bool = $e-&gt;diagnostics</dt>
+  <dd>True si el evento contiene información de diagnóstico. Esto es útil porque un harness no verbose puede elegir ocultar eventos no en este categoría. Algunos formateadores pueden elegir enviar estos a STDERR en lugar de STDOUT para asegurar que se vean.</dd>
+  <dt>$bool = $e-&gt;no_display</dt>
+  <dd>False por defecto. Este devolverá true en eventos que no deben mostrarse por formateadores.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>VER TAMBIÉN</a></h1>
+<p class="Pp">Test2::Manual - Índice principal de la guía.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SOURCE'><a class='permalink' href='#SOURCE'>FUENTE</a></h1>
+<p class="Pp">El repositorio de código fuente de Test2-Manual se puede encontrar en <a href='https://github.com/Test-More/test-more/'>https://github.com/Test-More/test-more/</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MAINTAINERS'><a class='permalink' href='#MAINTAINERS'>MANTENEDORES</a></h1>
+<dl class="Bl-tag">
+  <dt id="Chad"><a class="permalink" href="#Chad">Chad Granum
+    &lt;exodist@cpan.org&gt;</a></dt>
+  <dd></dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>AUTORES</a></h1>
+<dl class="Bl-tag">
+  <dt id="Chad~2"><a class="permalink" href="#Chad~2">Chad Granum
+    &lt;exodist@cpan.org&gt;</a></dt>
+  <dd></dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>COPYRIGHT</a></h1>
+<p class="Pp">Copyright Chad Granum &lt;exodist@cpan.org&gt;.</p>
+<p class="Pp">Este programa es software libre; puedes redistribuirlo y/o modificarlo bajo los mismos términos que Perl mismo.</p>
+<p class="Pp">Ve <a href='http://dev.perl.org/licenses/'>http://dev.perl.org/licenses/</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Buscar página de manuales" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Información del paquete:</p>
+    <dl>
+        <dt>Nombre del paquete:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>Version:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>Licencias:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>Manuales:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Contenido de índice</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NOMBRE</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPCIÓN</a></li>
+        
+            <li><a href="#HISTORY">HISTORIA</a></li>
+        
+            <li><a href="#THE_EVENT_OBJECT">EL OBJETO EVENTO</a></li>
+        
+            <li><a href="#THE_FACET_API">LA API DE FACETAS</a></li>
+        
+            <li><a href="#THE_OLD_API">LA API ANTIGUA</a></li>
+        
+            <li><a href="#SEE_ALSO">VER TAMBIÉN</a></li>
+        
+            <li><a href="#SOURCE">FUENTE</a></li>
+        
+            <li><a href="#MAINTAINERS">MANTENEDORES</a></li>
+        
+            <li><a href="#AUTHORS">AUTORES</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details> 
+
+<nav class="other-formats">
+    <p>Otras formas de formato:
+        
+            <a href="/man/Test2::Manual::Anatomy::Event.3perl.es.txt">txt</a>, 
+        
+            <a href="/man/Test2::Manual::Anatomy::Event.3perl.es.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            <p>Este sitio está disponible bajo los términos de la licencia <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>, excepto para el contenido de las páginas de manuales, que tienen sus propias licencias especificadas en los correspondientes paquetes de Arch Linux.</p>
+            
+        </footer>
+    </body>
+</html>

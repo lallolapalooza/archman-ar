@@ -1,0 +1,297 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">shmop(2)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+<link rel="stylesheet" href="basic.css">
+ shown below exchange a string using a shared
+    memory segment. Further details about the programs are given below. First,
+    we show a shell session demonstrating their use.</p>
+<p class="Pp">In one terminal window, we run the &quot;reader&quot; program,
+    which creates a System V shared memory segment and a System V semaphore set.
+    The program prints out the IDs of the created objects, and then waits for
+    the semaphore to change value.</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./svshm_string_read</b>;
+shmid = 1114194
+semid = 15</pre>
+<p class="Pp">In another terminal window, we run the &quot;writer&quot; program.
+    The &quot;writer&quot; program takes three command-line arguments: the IDs
+    of the shared memory segment and semaphore set created by the
+    &quot;reader&quot;, and a string. It attaches the existing shared memory
+    segment, copies the string to the shared memory, and modifies the semaphore
+    value.</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./svshm_string_write 1114194 15 'Hello, world'</b>;</pre>
+<p class="Pp">Returning to the terminal where the &quot;reader&quot; is running,
+    we see that the program has ceased waiting on the semaphore and has printed
+    the string that was copied into the shared memory segment by the writer:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>Hello, world</pre>
+<section class="Ss">
+<h2 class="Ss" id='Program_source:_svshm_string.h'><a class='permalink' href='#Program_source:_svshm_string.h'>مصدر البرنامج: svshm_string.h</a></h2>
+<p class="Pp">The following header file is included by the &quot;reader&quot;
+    and &quot;writer&quot; programs:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>/* svshm_string.h
+   Licensed under GNU General Public License v2 or later.
+*/
+#ifndef SVSHM_STRING_H
+#define SVSHM_STRING_H
+#include &lt;err.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/sem.h&gt;
+union semun {                   /* Used in calls to semctl() */
+    int                 val;
+    struct semid_ds     *buf;
+    unsigned short      *array;
+#if defined(__linux__)
+    struct seminfo      *__buf;
+#endif
+};
+#define MEM_SIZE 4096
+#endif  // include guard</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Program_source:_svshm_string_read.c'><a class='permalink' href='#Program_source:_svshm_string_read.c'>مصدر البرنامج: svshm_string_read.c</a></h2>
+<p class="Pp">The &quot;reader&quot; program creates a shared memory segment and
+    a semaphore set containing one semaphore. It then attaches the shared memory
+    object into its address space and initializes the semaphore value to 1.
+    Finally, the program waits for the semaphore value to become 0, and
+    afterwards prints the string that has been copied into the shared memory
+    segment by the &quot;writer&quot;.</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>/* svshm_string_read.c
+   Licensed under GNU General Public License v2 or later.
+*/
+#include &lt;err.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/ipc.h&gt;
+#include &lt;sys/sem.h&gt;
+#include &lt;sys/shm.h&gt;
+#include &quot;svshm_string.h&quot;
+int
+main(void)
+{
+    int            semid, shmid;
+    char           *addr;
+    union semun    arg, dummy;
+    struct sembuf  sop;
+    /* Create shared memory and semaphore set containing one
+       semaphore.  */
+    shmid = shmget(IPC_PRIVATE, MEM_SIZE, IPC_CREAT | 0600);
+    if (shmid == -1)
+        err(EXIT_FAILURE, &quot;shmget&quot;);
+    semid = semget(IPC_PRIVATE, 1, IPC_CREAT | 0600);
+    if (semid == -1)
+        err(EXIT_FAILURE, &quot;semget&quot;);
+    /* Attach shared memory into our address space.  */
+    addr = shmat(shmid, NULL, SHM_RDONLY);
+    if (addr == (void *) -1)
+        err(EXIT_FAILURE, &quot;shmat&quot;);
+    /* Initialize semaphore 0 in set with value 1.  */
+    arg.val = 1;
+    if (semctl(semid, 0, SETVAL, arg) == -1)
+        err(EXIT_FAILURE, &quot;semctl&quot;);
+    printf(&quot;shmid = %d\n&quot;, shmid);
+    printf(&quot;semid = %d\n&quot;, semid);
+    /* Wait for semaphore value to become 0.  */
+    sop.sem_num = 0;
+    sop.sem_op = 0;
+    sop.sem_flg = 0;
+    if (semop(semid, &amp;sop, 1) == -1)
+        err(EXIT_FAILURE, &quot;semop&quot;);
+    /* Print the string from shared memory.  */
+    printf(&quot;%s\n&quot;, addr);
+    /* Remove shared memory and semaphore set.  */
+    if (shmctl(shmid, IPC_RMID, NULL) == -1)
+        err(EXIT_FAILURE, &quot;shmctl&quot;);
+    if (semctl(semid, 0, IPC_RMID, dummy) == -1)
+        err(EXIT_FAILURE, &quot;semctl&quot;);
+    exit(EXIT_SUCCESS);
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Program_source:_svshm_string_write.c'><a class='permalink' href='#Program_source:_svshm_string_write.c'>مصدر البرنامج: svshm_string_write.c</a></h2>
+<p class="Pp">The writer program takes three command-line arguments: the IDs of
+    the shared memory segment and semaphore set that have already been created
+    by the &quot;reader&quot;, and a string. It attaches the shared memory
+    segment into its address space, and then decrements the semaphore value to 0
+    in order to inform the &quot;reader&quot; that it can now examine the
+    contents of the shared memory.</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>/* svshm_string_write.c
+   Licensed under GNU General Public License v2 or later.
+*/
+#include &lt;err.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/sem.h&gt;
+#include &lt;sys/shm.h&gt;
+#include &quot;svshm_string.h&quot;
+int
+main(int argc, char *argv[])
+{
+    int            semid, shmid;
+    char           *addr;
+    size_t         size;
+    struct sembuf  sop;
+    if (argc != 4) {
+        fprintf(stderr, &quot;Usage: %s shmid semid string\n&quot;, argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    size = strlen(argv[3]) + 1;  /* +1 to include trailing '\0' */
+    if (size &gt; MEM_SIZE) {
+        fprintf(stderr, &quot;String is too big!\n&quot;);
+        exit(EXIT_FAILURE);
+    }
+    /* Get object IDs from command-line.  */
+    shmid = atoi(argv[1]);
+    semid = atoi(argv[2]);
+    /* Attach shared memory into our address space and copy string
+       (including trailing null byte) into memory.  */
+    addr = shmat(shmid, NULL, 0);
+    if (addr == (void *) -1)
+        err(EXIT_FAILURE, &quot;shmat&quot;);
+    memcpy(addr, argv[3], size);
+    /* Decrement semaphore to 0.  */
+    sop.sem_num = 0;
+    sop.sem_op = -1;
+    sop.sem_flg = 0;
+    if (semop(semid, &amp;sop, 1) == -1)
+        err(EXIT_FAILURE, &quot;semop&quot;);
+    exit(EXIT_SUCCESS);
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/brk.2.en'>brk(2)</a>, <a href='/man/mmap.2.en'>mmap(2)</a>, <a href='/man/shmctl.2.en'>shmctl(2)</a>, <a href='/man/shmget.2.en'>shmget(2)</a>,
+    <a href='/man/capabilities.7.en'>capabilities(7)</a>, <a href='/man/shm_overview.7.en'>shm_overview(7)</a>, <a href='/man/sysvipc.7.en'>sysvipc(7)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-29</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>Version:</dt>
+        <dd>6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#LIBRARY">LIBRARY</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#RETURN_VALUE">RETURN VALUE</a></li>
+        
+            <li><a href="#ERRORS">ERRORS</a></li>
+        
+            <li><a href="#STANDARDS">STANDARDS</a></li>
+        
+            <li><a href="#HISTORY">HISTORY</a></li>
+        
+            <li><a href="#NOTES">NOTES</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>In other languages:</p>
+    <ul>
+    
+        <li><a href="/man/shmop.2.de">de</a></li>
+    
+        <li><a href="/man/shmop.2.fr">fr</a></li>
+    
+        <li><a href="/man/shmop.2.pl">pl</a></li>
+    
+        <li><a href="/man/shmop.2.ru">ru</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/shmop.2.en.txt">txt</a>, 
+        
+            <a href="/man/shmop.2.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

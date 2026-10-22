@@ -1,0 +1,114 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">gl_size_of_history(3)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "file_structure": {
+    "section": [
+      {
+        "heading": {
+          "title": "INACTIVITY TIMEOUTS",
+          "id": "INACTIVITY_TIMEOUTS"
+        },
+        "content": [
+          {
+            "code": "int\n_inactivity_timeout(GetLine *gl, GlTimeoutFn *callback,\n                     void *data, unsigned long sec,\n                     unsigned long nsec);"
+          },
+          {
+            "paragraph": "The timeout is specified in the form of an integral number of seconds and an integral number of nanoseconds, via the <b>sec</b> and <b>nsec</b> arguments respectively. Subsequently, whenever no activity is seen for this time period, the function specified via the <b>callback</b> argument is called. The <b>data</b> argument of <b>gl_inactivity_timeout()</b> is passed verbatim to this callback function whenever it is invoked, and can thus be used to pass arbitrary application-specific information to the callback. The following macro is provided in <b>libtecla.h</b> for applications to use to declare and prototype timeout callback functions."
+          },
+          {
+            "code": "#define GL_TIMEOUT_FN(fn) \\\n               GlAfterTimeout (fn)(GetLine *gl, void *data)"
+          },
+          {
+            "paragraph": "On returning, the application's callback is expected to return one of the following enumerators to tell <b>gl_get_line()</b> how to procede after the timeout has been handled by the callback."
+          },
+          {
+            "code": "  GLTO_ABORT    -  Tell gl_get_line() to abort. When\n                   this happens, <b>gl_get_line()</b> will\n                   return <b>NULL</b>, and a following call\n                   to <b>gl_return_status()</b> will return\n                   <b>GLR_TIMEOUT</b>. Note that if the\n                   application needs <b>errno</b> always to\n                   have a meaningful value when\n                   <b>gl_get_line()</b> returns <b>NULL</b>,\n                   the callback function should set\n                   <b>errno</b> appropriately.\n  GLTO_REFRESH  -  Redraw the input line, then continue\n                   waiting for input. You should return\n                   this value if your callback wrote to the\n                   terminal without having first called\n                   <b>gl_normal_io(gl)</b>.\n  GLTO_CONTINUE -  In normal blocking-I/O mode, continue to\n                   wait for input, without redrawing the\n                   user's input line.\n                   In non-blocking server I/O mode (see\n                   gl_io_mode(3)), cause <b>gl_get_line()</b>\n                   to act as though I/O blocked. This means\n                   that <b>gl_get_line()</b> will immediately\n                   return <b>NULL</b>, and a following call\n                   to <b>gl_return_status()</b> will return\n                   <b>GLR_BLOCKED</b>."
+          },
+          {
+            "paragraph": "Note that before calling the callback, <b>gl_get_line()</b> blocks most signals, and leaves its own signal handlers installed, so if you need to catch a particular signal you will need to both temporarily install your own signal handler, and unblock the signal. Be sure to re-block the signal (if it was originally blocked) and reinstate the original signal handler, if any, before returning."
+          },
+          {
+            "paragraph": "If the callback function needs to read or write to the terminal, it should ideally first call <b>gl_normal_io(gl)</b> to temporarily suspend line editing. This will restore the terminal to canonical, blocking-I/O, mode, and move the cursor to the start of a new terminal line. Later, when the callback returns, <b>gl_get_line()</b> will notice that <b>gl_normal_io()</b> was called, redisplay the input line and resume editing. Note that in this case the return values, <b>GLTO_REFRESH</b> and <b>GLTO_CONTINUE</b> are equivalent."
+          },
+          {
+            "paragraph": "To support cases where the callback function calls a third-party function which occasionally and unpredictably writes to the terminal, the automatic conversion of \"0 to \"0 is re-enabled before the callback function is called. If the callack knows that the third-party function wrote to the terminal, it should then return the <b>GLTO_REFRESH</b> return value, to tell <b>gl_get_line()</b> to redisplay the input line."
+          },
+          {
+            "paragraph": "Note that although the timeout argument includes a nano-second component, few computer clocks presently have resolutions that are finer than a few milliseconds, so asking for less than a few milliseconds is equivalent to requesting zero seconds on a lot of systems. If this would be a problem, you should base your timeout selection on the actual resolution of the host clock (eg. by calling <b>sysconf(_SC_CLK_TCK)</b>)."
+          },
+          {
+            "paragraph": "To turn off timeouts, simply call <b>gl_inactivity_timeout()</b> with a <b>callback</b> argument of <b>0</b>. The <b>data</b> argument is ignored in this case."
+          }
+        ]
+      },
+      {
+        "heading": {
+          "title": "SIGNAL HANDLING DEFAULTS",
+          "id": "SIGNAL_HANDLING_DEFAULTS"
+        },
+        "content": [
+          {
+            "paragraph": "By default, the <b>gl_get_line()</b> function intercepts a number of signals. This is particularly important for signals which would by default terminate the process, since the terminal needs to be restored to a usable state before this happens. In this section, the signals that are trapped by default, and how <b>gl_get_line()</b> responds to them, is described. Changing these defaults is the topic of the following section."
+          },
+          {
+            "paragraph": "When the following subset of signals are caught, <b>gl_get_line()</b> first restores the terminal settings and signal handling to how they were before <b>gl_get_line()</b> was called, resends the signal, to allow the calling application's signal handlers to handle it, then if the process still exists, <b>gl_get_line()</b> returns <b>NULL</b> and sets <b>errno</b> as specified below."
+          },
+          {
+            "code": " SIGINT  -  This signal is generated both by the keyboard\n            interrupt key (usually ^C), and the keyboard\n            break key.\n            errno=EINTR\n SIGHUP  -  This signal is generated when the controlling\n            terminal exits.\n            errno=ENOTTY\n SIGPIPE -  This signal is generated when a program attempts\n            to write to a pipe who's remote end isn't being\n            read by any process. This can happen for example\n            if you have called <b>gl_change_terminal()</b> to\n            redirect output to a pipe hidden under a pseudo\n            terminal.\n            errno=EPIPE\n SIGQUIT -  This signal is generated by the keyboard quit\n            key (usually ^\\).\n            errno=EINTR\n SIGABRT -  This signal is generated by the standard C,\n            abort() function. By default it both\n            terminates the process and generates a core\n            dump.\n            errno=EINTR\n SIGTERM -  This is the default signal that the UN*X\n            kill command sends to processes.\n            errno=EINTR"
+          },
+          {
+            "paragraph": "Note that in the case of all of the above signals, POSIX mandates that by default the process is terminated, with the addition of a core dump in the case of the <b>SIGQUIT</b> signal. In other words, if the calling application doesn't override the default handler by supplying its own signal handler, receipt of the corresponding signal will terminate the application before <b>gl_get_line()</b> returns."
+          },
+          {
+            "paragraph": "If gl_get_line() aborts with errno set to EINTR, you can find out what signal caused it to abort, by calling the following function."
+          },
+          {
+            "code": "  int gl_last_signal(const GetLine *gl);"
+          },
+          {
+            "paragraph": "This returns the numeric code (eg. <b>SIGINT</b>) of the last signal that was received during the most recent call to <b>gl_get_line()</b>, or <b>-1</b> if no signals were received."
+          },
+          {
+            "paragraph": "On systems that support it, when a SIGWINCH (window change) signal is received, <b>gl_get_line()</b> queries the terminal to find out its new size, redraws the current input line to accomodate the new size, then returns to waiting for keyboard input from the user. Unlike other signals, this signal isn't resent to the application."
+          },
+          {
+            "paragraph": "Finally, the following signals cause <b>gl_get_line()</b> to first restore the terminal and signal environment to that which prevailed before <b>gl_get_line()</b> was called, then resend the signal to the application. If the process still exists after the signal has been delivered, then <b>gl_get_line()</b> then re-establishes its own signal handlers, switches the terminal back to raw mode, redisplays the input line, and goes back to awaiting terminal input from the user."
+          },
+          {
+            "code": " SIGCONT    -  This signal is generated when a suspended\n               process is resumed.\n SIGPOLL    -  On SVR4 systems, this signal notifies the\n               process of an asynchronous I/O event. Note\n               that under 4.3+BSD, SIGIO and SIGPOLL are\n               the same. On other systems, SIGIO is ignored\n               by default, so <b>gl_get_line()</b> doesn't\n               trap it by default.\n SIGPWR     -  This signal is generated when a power failure\n               occurs (presumably when the system is on a\n               UPS).\n SIGALRM    -  This signal is generated when a timer\n               expires.\n SIGUSR1    -  An application specific signal.\n SIGUSR2    -  Another application specific signal.\n SIGVTALRM  -  This signal is generated when a virtual\n               timer expires (see man setitimer(2)).\n SIGXCPU    -  This signal is generated when a process\n               exceeds its soft CPU time limit.\n SIGXFSZ    -  This signal is generated when a process\n               exceeds its soft file-size limit.\n SIGTSTP    -  This signal is generated by the terminal\n               suspend key, which is usually ^Z, or the\n               delayed terminal suspend key, which is\n               usually ^Y.\n SIGTTIN    -  This signal is generated if the program\n               attempts to read from the terminal while the\n               program is running in the background.\n SIGTTOU    -  This signal is generated if the program\n               attempts to write to the terminal while the\n               program is running in the background."
+          },
+          {
+            "paragraph": "Obviously not all of the above signals are supported on all systems, so code to support them is conditionally compiled into the tecla library."
+          },
+          {
+            "paragraph": "Note that if <b>SIGKILL</b> or <b>SIGPOLL</b>, which by definition can't be caught, or any of the hardware generated exception signals, such as <b>SIGSEGV</b>, <b>SIGBUS</b> and <b>SIGFPE</b>, are received and unhandled while <b>gl_get_line()</b> has the terminal in raw mode, the program will be terminated without the terminal having been restored to a usable state. In practice, job-control shells usually reset the terminal settings when a process relinquishes the controlling terminal, so this is only a problem with older shells."
+          }
+        ]
+      },
+      {
+        "heading": {
+          "title": "CUSTOMIZED SIGNAL HANDLING",
+          "id": "CUSTOMIZED_SIGNAL_HANDLING"
+        },
+        "content": [
+          {
+            "paragraph": "The previous section listed the signals that <b>gl_get_line()</b> traps by default, and described how it responds to them. This section describes how to both add and remove signals from the list of trapped signals, and how to specify how <b>gl_get_line()</b> should respond to a given signal."
+          },
+          {
+            "paragraph": "If you don't need <b>gl_get_line()</b> to do anything in response to a signal that it normally traps, you can tell to <b>gl_get_line()</b> to ignore that signal by calling <b>gl_ignore_signal()</b>."
+          },
+          {
+            "code": "  int gl_ignore_signal(GetLine *gl, int signo);"
+          },
+          {
+            "paragraph": "The <b>signo</b> argument is the number of the signal (eg. <b>SIGINT</b>) that you want to have ignored. If the specified signal isn't currently one of those being trapped, this function does nothing."
+          },
+          {
+            "paragraph": "The <b>gl_trap_signal()</b> function allows you to either add a new signal to the list that <b>gl_get_line()</b> traps, or modify how it re"
+          }
+        ]
+      }
+    ]
+  }
+}

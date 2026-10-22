@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FUTEX_LOCK_PI(2const) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">FUTEX_LOCK_PI.2const</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">FUTEX_LOCK_PI(2const)</td>
+    <td class="head-vol"></td>
+    <td class="head-rtitle">FUTEX_LOCK_PI(2const)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">FUTEX_LOCK_PI - قفل futex الوراثة الأولوية</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIBRARY'><a class='permalink' href='#LIBRARY'>المكتبة</a></h1>
+<p class="Pp">مكتبة C القياسية (<i>libc</i>, <i>-lc</i>)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre><b>#include &lt;linux/futex.h&gt;</b>  /* تعريف الثوابت <b>FUTEX_*</b> */
+<b>#include &lt;sys/syscall.h&gt;</b>  /* تعريف الثوابت <b>SYS_*</b> */
+<b>#include &lt;unistd.h&gt;</b></pre>
+<pre><b>long syscall(SYS_futex, uint32_t *</b><i>uaddr</i><b>, FUTEX_LOCK_PI, 0,</b>
+<b>             const struct timespec *</b><i>timeout</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يتم استخدام هذا التشغيل بعد محاولة الحصول على القفل عبر تعليمات
+    وضع المستخدم الذرية فشلت لأن كلمة futex لها قيمة غير صفرية - على وجه
+    التحديد، لأنها احتوت على معرف مؤشر الترابط (TID) الخاص بمالك القفل (خاص
+    بمساحة اسم PID).</p>
+<p class="Pp">يقوم التشغيل بفحص قيمة futex في العنوان <i>uaddr</i>. إذا كانت
+    القيمة 0، تحاول النواة ضبط قيمة futex بشكل ذري إلى TID الخاص بالمستدعي.
+    إذا كانت قيمة كلمة futex غير صفرية، تقوم النواة تلقائيًا بضبط بت
+    <b>FUTEX_WAITERS</b>، والذي يشير إلى مالك futex أنه لا يمكنه فتح القفل في
+    وضع المستخدم بشكل ذري عن طريق ضبط قيمة futex إلى 0. بعد ذلك، تقوم
+    النواة بما يلي:</p>
+<dl class="Bl-tag">
+  <dt>(1)</dt>
+  <dd>تحاول العثور على مؤشر الترابط المرتبط بمعرف المالك.</dd>
+  <dt>(2)</dt>
+  <dd>تنشئ أو تعيد استخدام حالة النواة نيابة عن المالك. (إذا كان هذا هو
+      المنتظر الأول، فلا توجد حالة نواة لهذا futex، لذلك يتم إنشاء حالة
+      النواة عن طريق قفل RT-mutex ويصبح مالك futex هو مالك RT-mutex. إذا
+      كانت هناك منتظرون موجودون، يتم إعادة استخدام الحالة الموجودة.)</dd>
+  <dt>(3)</dt>
+  <dd>تربط المنتظر بـ futex (أي، يتم وضع المنتظر في قائمة منتظري RT-mutex).</dd>
+</dl>
+<p class="Pp">إذا كان هناك أكثر من منتظر واحد، فإن وضع المنتظر في قائمة الانتظار
+    يكون بترتيب الأولوية التنازلية. (للحصول على معلومات حول ترتيب الأولوية،
+    راجع مناقشة سياسات الجدولة <b>SCHED_DEADLINE</b> و <b>SCHED_FIFO</b> و
+    <b>SCHED_RR</b> في <a href='/man/sched.7.en'>sched(7)</a>.) يرث المالك إما
+    عرض النطاق الترددي لوحدة المعالجة المركزية للمنتظر (إذا تم جدولة المنتظر
+    ضمن سياسة <b>SCHED_DEADLINE</b>) أو أولوية المنتظر (إذا تم جدولة المنتظر
+    ضمن سياسة <b>SCHED_RR</b> أو <b>SCHED_FIFO</b>). يتبع هذا الإرث سلسلة
+    القفل في حالة القفل المتداخل ويقوم بالكشف عن الجمود.</p>
+<p class="Pp">يوفر الوسيط <i>timeout</i> مهلة لمحاولة القفل. إذا كان
+    <i>timeout</i> ليس NULL، فإن البنية التي يشير إليها تحدد مهلة مطلقة.
+    إذا كان <i>timeout</i> هو NULL، فسيتم حظر التشغيل إلى أجل غير مسمى.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">عند حدوث خطأ، يتم إرجاع -1، ويتم تعيين <i>errno</i> للإشارة إلى
+    الخطأ.</p>
+<p class="Pp">عند النجاح، تُرجع <b>FUTEX_LOCK_PI</b> القيمة 0 إذا تم قفل
+    futex بنجاح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERRORS'><a class='permalink' href='#ERRORS'>الأخطاء</a></h1>
+<p class="Pp">راجع <a href='/man/futex.2.en'>futex(2)</a>.</p>
+<dl class="Bl-tag">
+  <dt id="EAGAIN"><a class="permalink" href="#EAGAIN"><b>EAGAIN</b></a></dt>
+  <dd>معرف مؤشر الترابط الخاص بمالك futex في <i>uaddr</i> على وشك الإنهاء،
+      ولكنه لم يتعامل مع تنظيف الحالة الداخلية بعد. حاول مرة أخرى.</dd>
+  <dt id="EDEADLK"><a class="permalink" href="#EDEADLK"><b>EDEADLK</b></a></dt>
+  <dd>كلمة futex في <i>uaddr</i> مقفلة بالفعل بواسطة المستدعي.</dd>
+  <dt id="EFAULT"><a class="permalink" href="#EFAULT"><b>EFAULT</b></a></dt>
+  <dd><i>timeout</i> لم يشير إلى عنوان صالح في مساحة المستخدم.</dd>
+  <dt id="EINVAL"><a class="permalink" href="#EINVAL"><b>EINVAL</b></a></dt>
+  <dd>الوسيط <i>timeout</i> المقدم كان غير صالح (<i>tv_sec</i> كان أقل من
+      صفر، أو <i>tv_nsec</i> لم يكن أقل من 1,000,000,000).</dd>
+  <dt id="EINVAL~2"><a class="permalink" href="#EINVAL~2"><b>EINVAL</b></a></dt>
+  <dd>اكتشفت النواة عدم اتساق بين حالة مساحة المستخدم في <i>uaddr</i> وحالة
+      النواة. يشير هذا إما إلى تلف الحالة أو أن النواة وجدت منتظرًا على
+      <i>uaddr</i> ينتظر عبر <b>FUTEX_WAIT</b>(2const) أو
+      <b>FUTEX_WAIT_BITSET</b>(2const).</dd>
+  <dt id="ENOMEM"><a class="permalink" href="#ENOMEM"><b>ENOMEM</b></a></dt>
+  <dd>لم تتمكن النواة من تخصيص ذاكرة للاحتفاظ بمعلومات الحالة.</dd>
+  <dt id="ENOSYS"><a class="permalink" href="#ENOSYS"><b>ENOSYS</b></a></dt>
+  <dd>حدد فحص وقت التشغيل أن التشغيل غير متاح. عمليات PI-futex غير
+      مطبقة على جميع البنيات وغير مدعومة على بعض أنواع وحدات المعالجة
+      المركزية.</dd>
+  <dt id="EPERM"><a class="permalink" href="#EPERM"><b>EPERM</b></a></dt>
+  <dd>لا يُسمح للمستدعي بربط نفسه بـ futex في <i>uaddr</i>. (قد يكون هذا
+      ناجمًا عن تلف الحالة في مساحة المستخدم.)</dd>
+  <dt id="ESRCH"><a class="permalink" href="#ESRCH"><b>ESRCH</b></a></dt>
+  <dd>معرف مؤشر الترابط في كلمة futex في <i>uaddr</i> غير موجود.</dd>
+  <dt id="ETIMEDOUT"><a class="permalink" href="#ETIMEDOUT"><b>ETIMEDOUT</b></a></dt>
+  <dd>انتهت المهلة قبل اكتمال التشغيل.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STANDARDS'><a class='permalink' href='#STANDARDS'>المعايير</a></h1>
+<p class="Pp">Linux.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp">Linux 2.6.18.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CAVEATS'><a class='permalink' href='#CAVEATS'>تحذيرات</a></h1>
+<p class="Pp">بخلاف عمليات <a href='/man/futex.2.en'>futex(2)</a> الأخرى، يتم قياس
+    المهلة مقابل ساعة <b>CLOCK_REALTIME</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/futex.2.en'>futex(2)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-05</td>
+    <td class="foot-os">صفحات دليل Linux 6.16</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>6.16-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#LIBRARY">المكتبة</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#ERRORS">الأخطاء</a></li>
+        
+            <li><a href="#STANDARDS">المعايير</a></li>
+        
+            <li><a href="#HISTORY">التاريخ</a></li>
+        
+            <li><a href="#CAVEATS">تحذيرات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/FUTEX_LOCK_PI.2const.en.txt">txt</a>, 
+        
+            <a href="/man/FUTEX_LOCK_PI.2const.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

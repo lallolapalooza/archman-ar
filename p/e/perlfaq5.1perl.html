@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perlfaq5(1perl) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlfaq5.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERLFAQ5(1perl)</td>
+    <td class="head-vol">Perl Programmers Reference Guide</td>
+    <td class="head-rtitle">PERLFAQ5(1perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">perlfaq5 - Files and Formats</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSION'><a class='permalink' href='#VERSION'>VERSION</a></h1>
+<p class="Pp">version 5.20250619</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">This section deals with I/O and the &quot;f&quot; issues: filehandles, flushing, formats, and footers.</p>
+<section class="Ss">
+<h2 class="Ss" id='How_do_I_flush/unbuffer_an_output_filehandle?_Why_must_I_do_this?'><a class='permalink' href='#How_do_I_flush/unbuffer_an_output_filehandle?_Why_must_I_do_this?'>How   do I flush/unbuffer an output filehandle? Why must I do this?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">You might like to read Mark Jason Dominus's &quot;Suffering From
+    Buffering&quot; at <a href='http://perl.plover.com/FAQs/Buffering.html'>http://perl.plover.com/FAQs/Buffering.html</a> .</p>
+<p class="Pp">Perl normally buffers output so it doesn't make a system call for
+    every bit of output. By saving up output, it makes fewer expensive system
+    calls. For instance, in this little bit of code, you want to print a dot to
+    the screen for every line you process to watch the progress of your program.
+    Instead of seeing a dot for every line, Perl buffers the output and you have
+    a long wait before you see a row of 50 dots all at once:</p>
+<pre># long wait, then row of dots all at once
+while( &lt;&gt; ) {
+    print &quot;.&quot;;
+    print &quot;\n&quot; unless ++$count % 50;
+    #... expensive line processing operations
+}</pre>
+<p class="Pp">To get around this, you have to unbuffer the output filehandle, in
+    this case, <span class="Li">&quot;STDOUT&quot;</span>. You can set the
+    special variable <span class="Li">$|</span> to a true value (mnemonic:
+    making your filehandles &quot;piping hot&quot;):</p>
+<pre>$|++;
+# dot shown immediately
+while( &lt;&gt; ) {
+    print &quot;.&quot;;
+    print &quot;\n&quot; unless ++$count % 50;
+    #... expensive line processing operations
+}</pre>
+<p class="Pp">The <span class="Li">$|</span> is one of the per-filehandle
+    special variables, so each filehandle has its own copy of its value. If you
+    want to merge standard output and standard error for instance, you have to
+    unbuffer each (although STDERR might be unbuffered by default):</p>
+<pre>{
+    my $previous_default = select(STDOUT);  # save previous default
+    $|++;                                   # autoflush STDOUT
+    select(STDERR);
+    $|++;                                   # autoflush STDERR, to be sure
+    select($previous_default);              # restore previous default
+}
+# now should alternate . and +
+while( 1 ) {
+    sleep 1;
+    print STDOUT &quot;.&quot;;
+    print STDERR &quot;+&quot;;
+    print STDOUT &quot;\n&quot; unless ++$count % 25;
+}</pre>
+<p class="Pp">Besides the <span class="Li">$|</span> special variable, you can
+    use <span class="Li">&quot;binmode&quot;</span> to give your filehandle a
+    <span class="Li">&quot;:unix&quot;</span> layer, which is unbuffered:</p>
+<pre>binmode( STDOUT, &quot;:unix&quot; );
+while( 1 ) {
+    sleep 1;
+    print &quot;.&quot;;
+    print &quot;\n&quot; unless ++$count % 50;
+}</pre>
+<p class="Pp">For more information on output layers, see the entries for
+    <span class="Li">&quot;binmode&quot;</span> and open in perlfunc, and the
+    PerlIO module documentation.</p>
+<p class="Pp">If you are using IO::Handle or one of its subclasses, you can call
+    the <span class="Li">&quot;autoflush&quot;</span> method to change the
+    settings of the filehandle:</p>
+<pre>use IO::Handle;
+open my( $io_fh ), &quot;&gt;&quot;, &quot;output.txt&quot;;
+$io_fh-&gt;autoflush(1);</pre>
+<p class="Pp">The IO::Handle objects also have a
+    <span class="Li">&quot;flush&quot;</span> method. You can flush the buffer
+    any time you want without auto-buffering</p>
+<pre>$io_fh-&gt;flush;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='How_do_I_change,_delete,_or_insert_a_line_in_a_file,_or_append_to_the_beginning_of_a_file?'><a class='permalink' href='#How_do_I_change,_delete,_or_insert_a_line_in_a_file,_or_append_to_the_beginning_of_a_file?'>How   do I change, delete, or insert a line in a file, or append to the beginning of   a file?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">The basic idea of inserting, changing, or deleting a line from a
+    text file involves reading and printing the file to the point you want to
+    make the change, making the change, then reading and printing the rest of
+    the file. Perl doesn't provide random access to lines (especially since the
+    record input separator, <span class="Li">$/</span>, is mutable), although
+    modules such as Tie::File can fake it.</p>
+<p class="Pp">A Perl program to do these tasks takes the basic form of opening a
+    file, printing its lines, then closing the file:</p>
+<pre>open my $in,  '&lt;',  $file      or die &quot;Can't read old file: $!&quot;;
+open my $out, '&gt;', &quot;$file.new&quot; or die &quot;Can't write new file: $!&quot;;
+while( &lt;$in&gt; ) {
+        print $out $_;
+}
+close $out;</pre>
+<p class="Pp">Within that basic form, add the parts that you need to insert,
+    change, or delete lines.</p>
+<p class="Pp">To prepend lines to the beginning, print those lines before you
+    enter the loop that prints the existing lines.</p>
+<pre>open my $in,  '&lt;',  $file      or die &quot;Can't read old file: $!&quot;;
+open my $out, '&gt;', &quot;$file.new&quot; or die &quot;Can't write new file: $!&quot;;
+print $out &quot;# Add this line to the top\n&quot;; # &lt;--- HERE'S THE MAGIC
+while( &lt;$in&gt; ) {
+        print $out $_;
+}
+close $out;</pre>
+<p class="Pp">To change existing lines, insert the code to modify the lines
+    inside the <span class="Li">&quot;while&quot;</span> loop. In this case, the
+    code finds all lowercased versions of &quot;perl&quot; and uppercases them.
+    This happens for every line, so be sure that you're supposed to do that on
+    every line!</p>
+<pre>open my $in,  '&lt;',  $file      or die &quot;Can't read old file: $!&quot;;
+open my $out, '&gt;', &quot;$file.new&quot; or die &quot;Can't write new file: $!&quot;;
+print $out &quot;# Add this line to the top\n&quot;;
+while( &lt;$in&gt; ) {
+    s/\b(perl)\b/Perl/g;
+    print $out $_;
+}
+close $out;</pre>
+<p class="Pp">To change only a particular line, the input line number,
+    <span class="Li">$.</span>, is useful. First read and print the lines up to
+    the one you want to change. Next, read the single line you want to change,
+    change it, and print it. After that, read the rest of the lines and print
+    those:</p>
+<pre>while( &lt;$in&gt; ) { # print the lines before the change
+    print $out $_;
+    last if $. == 4; # line number before change
+}
+my $line = &lt;$in&gt;;
+$line =~ s/\b(perl)\b/Perl/g;
+print $out $line;
+while( &lt;$in&gt; ) { # print the rest of the lines
+    print $out $_;
+}</pre>
+<p class="Pp">To skip lines, use the looping controls. The
+    <span class="Li">&quot;next&quot;</span> in this example skips comment
+    lines, and the <span class="Li">&quot;last&quot;</span> stops all processing
+    once it encounters either <span class="Li">&quot;__END__&quot;</span> or
+    <span class="Li">&quot;__DATA__&quot;</span>.</p>
+<pre>while( &lt;$in&gt; ) {
+    next if /^\s+#/;             # skip comment lines
+    last if /^__(END|DATA)__$/;  # stop at end of code marker
+    print $out $_;
+}</pre>
+<p class="Pp">Do the same sort of thing to delete a particular line by using
+    <span class="Li">&quot;next&quot;</span> to skip the lines you don't want to
+    show up in the output. This example skips every fifth line:</p>
+<pre>while( &lt;$in&gt; ) {
+    next unless $. % 5;
+    print $out $_;
+}</pre>
+<p class="Pp">If, for some odd reason, you really want to see the whole file at
+    once rather than processing line-by-line, you can slurp it in (as long as
+    you can fit the whole thing in memory!):</p>
+<pre>open my $in,  '&lt;',  $file      or die &quot;Can't read old file: $!&quot;;
+open my $out, '&gt;', &quot;$file.new&quot; or die &quot;Can't write new file: $!&quot;;
+my $content = do { local $/; &lt;$in&gt; }; # slurp!
+    # do your magic here
+print $out $content;</pre>
+<p class="Pp">Modules such as Path::Tiny and Tie::File can help with that too.
+    If you can, however, avoid reading the entire file at once. Perl won't give
+    that memory back to the operating system until the process finishes.</p>
+<p class="Pp">You can also use Perl one-liners to modify a file in-place. The
+    following changes all 'Fred' to 'Barney' in <i>inFile.txt</i>, overwriting
+    the file with the new contents. With the
+    <span class="Li">&quot;-p&quot;</span> switch, Perl wraps a
+    <span class="Li">&quot;while&quot;</span> loop around the code you specify
+    with <span class="Li">&quot;-e&quot;</span>, and
+    <span class="Li">&quot;-i&quot;</span> turns on in-place editing. The
+    current line is in <span class="Li">$_</span>. With
+    <span class="Li">&quot;-p&quot;</span>, Perl automatically prints the value
+    of <span class="Li">$_</span> at the end of the loop. See perlrun for more
+    details.</p>
+<pre>perl -pi -e 's/Fred/Barney/' inFile.txt</pre>
+<p class="Pp">To make a backup of
+    <span class="Li">&quot;inFile.txt&quot;</span>, give
+    <span class="Li">&quot;-i&quot;</span> a file extension to add:</p>
+<pre>perl -pi.bak -e 's/Fred/Barney/' inFile.txt</pre>
+<p class="Pp">To change only the fifth line, you can add a test checking
+    <span class="Li">$.</span>, the input line number, then only perform the
+    operation when the test passes:</p>
+<pre>perl -pi -e 's/
+</pre>
+
+</section>
+</div>
+</section>
+            </article>
+        </main>
+    </body>
+</html>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_add_or_delete_lines_from_a_file?"><a class="permalink" href="#How_do_I_add_or_delete_lines_from_a_file?">كيف يمكنني إضافة أو حذف أسطر من ملف؟</a></h2>
+<p class="Pp">(ساهم بها باريان دي فوي)</p>
+<p class="Pp">يمكنك استخدام خيار Perl <span class="Li">&quot;-i&quot;</span> الذي يقوم بتعديل الملفات في مكانها. يمكنك استخدامه مع خيار <span class="Li">&quot;-p&quot;</span> الذي يمر عبر سطر في كل مرة، أو مع خيار <span class="Li">&quot;-n&quot;</span> الذي لا يطبع السطر بنفسه.</p>
+<p class="Pp">لإضافة سطر بعد سطر معين، يمكنك طباعة السطر الجديد بعد طباعة <span class="Li">$_</span>:</p>
+<pre>perl -pi -e 'print $_; print &quot;Put after fifth line\n&quot; if $. == 5' inFile.txt</pre>
+<p class="Pp">لإضافة أسطر قبل سطر معين، يمكنك إضافة سطر (أو أسطر!) قبل أن تطبع Perl <span class="Li">$_</span>:</p>
+<pre>perl -pi -e 'print &quot;Put before third line\n&quot; if $. == 3' inFile.txt</pre>
+<p class="Pp">يمكنك حتى إضافة سطر إلى بداية ملف، حيث يتم طباعة السطر الحالي في نهاية الحلقة:</p>
+<pre>perl -pi -e 'print &quot;Put before first line\n&quot; if $. == 1' inFile.txt</pre>
+<p class="Pp">لإدراج سطر بعد سطر موجود بالفعل في الملف، استخدم المفتاح <span class="Li">&quot;-n&quot;</span>. إنه يشبه <span class="Li">&quot;-p&quot;</span> باستثناء أنه لا يطبع <span class="Li">$_</span> في نهاية الحلقة، لذلك عليك القيام بذلك بنفسك. في هذه الحالة، اطبع <span class="Li">$_</span> أولاً، ثم اطبع السطر الذي تريد إضافته.</p>
+<pre>perl -ni -e 'print; print &quot;Put after fifth line\n&quot; if $. == 5' inFile.txt</pre>
+<p class="Pp">لحذف الأسطر، اطبع فقط الأسطر التي تريدها.</p>
+<pre>perl -ni -e 'print if /d/' inFile.txt</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_count_the_number_of_lines_in_a_file?"><a class="permalink" href="#How_do_I_count_the_number_of_lines_in_a_file?">كيف أحسب عدد الأسطر في ملف؟</a></h2>
+<p class="Pp">(ساهم بها باريان دي فوي)</p>
+<p class="Pp">مفاهيمياً، أسهل طريقة لعد الأسطر في ملف هي ببساطة قراءتها وعدها:</p>
+<pre>my $count = 0;
+while( &lt;$fh&gt; ) { $count++; }</pre>
+<p class="Pp">لا تحتاج حقاً إلى عدها بنفسك، لأن Perl تفعل ذلك بالفعل باستخدام المتغير <span class="Li">$.</span>، وهو رقم السطر الحالي من مقبض الملف الأخير الذي تم قراءته:</p>
+<pre>1 while( &lt;$fh&gt; );
+my $count = $.;</pre>
+<p class="Pp">إذا كنت تريد استخدام <span class="Li">$.</span>، يمكنك تقليصه إلى سطر واحد بسيط، مثل أحد هذه:</p>
+<pre>% perl -lne '} print $.; {'    file
+% perl -lne 'END { print $. }' file</pre>
+<p class="Pp">يمكن أن تكون هذه غير فعالة إلى حد ما. إذا لم تكن سريعة بما يكفي لك، يمكنك ببساطة قراءة أجزاء من البيانات وعد عدد الأسطر الجديدة:</p>
+<pre>my $lines = 0;
+open my($fh), '&lt;:raw', $filename or die &quot;Can't open $filename: $!&quot;;
+while( sysread $fh, $buffer, 4096 ) {
+    $lines += ( $buffer =~ tr/\n// );
+}
+close $fh;</pre>
+<p class="Pp">ومع ذلك، هذا لا يعمل إذا لم يكن فاصل نهاية السطر سطرًا جديدًا. يمكنك تغيير <span class="Li">&quot;tr///&quot;</span> إلى <span class="Li">&quot;s///&quot;</span> حتى تتمكن من عد عدد المرات التي يظهر فيها فاصل السجل المدخل، <span class="Li">$/</span>:</p>
+<pre>my $lines = 0;
+open my($fh), '&lt;:raw', $filename or die &quot;Can't open $filename: $!&quot;;
+while( sysread $fh, $buffer, 4096 ) {
+    $lines += ( $buffer =~ s|$/||g );
+}
+close $fh;</pre>
+<p class="Pp">إذا لم تمانع في استخدام أمر خارجي، فإن الأمر <span class="Li">&quot;wc&quot;</span> هو الأسرع عادةً، حتى مع الحمل الزائد الإضافي بين العمليات. تأكد من أن لديك اسم ملف غير ملوث على أي حال:</p>
+<pre>#!perl -T
+$ENV{PATH} = undef;
+my $lines;
+if( $filename =~ /^([0-9a-z_.]+)\z/ ) {
+    $lines = `/usr/bin/wc -l $1`;
+    chomp $lines;
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_delete_the_last_N_lines_from_a_file?"><a class="permalink" href="#How_do_I_delete_the_last_N_lines_from_a_file?">كيف أحذف آخر N أسطر من ملف؟</a></h2>
+<p class="Pp">(ساهم بها باريان دي فوي)</p>
+<p class="Pp">الحل المفاهيمي الأسهل هو عد الأسطر في الملف ثم البدء من البداية وطباعة عدد الأسطر (ناقص آخر N) إلى ملف جديد.</p>
+<p class="Pp">في معظم الأحيان، يكون السؤال الحقيقي هو كيف يمكنك حذف آخر N أسطر دون إجراء أكثر من مرور واحد على الملف، أو كيفية القيام بذلك دون الكثير من النسخ. المفهوم السهل هو الواقع الصعب عندما قد يكون لديك ملايين الأسطر في ملفك.</p>
+<p class="Pp">إحدى الحيل هي استخدام File::ReadBackwards، والذي يبدأ من نهاية الملف. توفر هذه الوحدة كائنًا يلتف حول مقبض الملف الحقيقي لجعله من السهل عليك التحرك في الملف. بمجرد الوصول إلى النقطة التي تحتاجها، يمكنك الحصول على مقبض الملف الفعلي والعمل معه كالمعتاد. في هذه الحالة، تحصل على موضع الملف في نهاية آخر سطر تريد الاحتفاظ به وتقليم الملف إلى تلك النقطة:</p>
+<pre>use File::ReadBackwards;
+my $filename = 'test.txt';
+my $Lines_to_truncate = 2;
+my $bw = File::ReadBackwards-&gt;new( $filename )
+    or die &quot;Could not read backwards in [$filename]: $!&quot;;
+my $lines_from_end = 0;
+until( $bw-&gt;eof or $lines_from_end == $Lines_to_truncate ) {
+    print &quot;Got: &quot;, $bw-&gt;readline;
+    $lines_from_end++;
+}
+truncate( $filename, $bw-&gt;tell );</pre>
+<p class="Pp">تتمتع وحدة File::ReadBackwards أيضًا بميزة تعيين فاصل سجل الإدخال إلى تعبير عادي.</p>
+<p class="Pp">يمكنك أيضًا استخدام وحدة Tie::File التي تتيح لك الوصول إلى الأسطر من خلال مصفوفة مرتبطة. يمكنك استخدام عمليات المصفوفة العادية لتعديل ملفك، بما في ذلك تعيين الفهرس الأخير واستخدام <span class="Li">&quot;splice&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_can_I_use_Perl&apos;s_&amp;quot;-i&amp;quot;_option_from_within_a_program?"><a class="permalink" href="#How_can_I_use_Perl&apos;s_&amp;quot;-i&amp;quot;_option_from_within_a_program?">كيف يمكنني استخدام خيار Perl &quot;-i&quot; من داخل برنامج؟</a></h2>
+<p class="Pp"><span class="Li">&quot;-i&quot;</span> يضبط قيمة المتغير <span class="Li">$^I</span> الخاص بـ Perl، والذي يؤثر بدوره على سلوك <span class="Li">&quot;&lt;&gt;&quot;</span>؛ راجع perlrun لمزيد من التفاصيل. من خلال تعديل المتغيرات المناسبة مباشرة، يمكنك الحصول على نفس السلوك داخل برنامج أكبر. على سبيل المثال:</p>
+<pre># ...
+{
+    local($^I, @ARGV) = ('.orig', glob(&quot;*.c&quot;));
+    while (&lt;&gt;) {
+        if ($. == 1) {
+            print &quot;This line should appear at the top of each file\n&quot;;
+        }
+        s/\b(p)earl\b/${1}erl/i;        # Correct typos, preserving case
+        print;
+        close ARGV if eof;              # Reset $.
+    }
+}</pre>
+<p class="Pp">تقوم هذه الكتلة بتعديل جميع ملفات <span class="Li">&quot;.c&quot;</span> في الدليل الحالي، تاركةً نسخة احتياطية من البيانات الأصلية من كل ملف في ملف <span class="Li">&quot;.c.orig&quot;</span> جديد.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_can_I_copy_a_file?"><a class="permalink" href="#How_can_I_copy_a_file?">كيف يمكنني نسخ ملف؟</a></h2>
+<p class="Pp">(ساهم بها باريان دي فوي)</p>
+<p class="Pp">استخدم وحدة File::Copy. تأتي مع Perl ويمكنها إجراء نسخ حقيقي عبر أنظمة الملفات، وتقوم بسحرها بطريقة محمولة.</p>
+<pre>use File::Copy;
+copy( $original, $new_copy ) or die &quot;Copy failed: $!&quot;;</pre>
+<p class="Pp">إذا لم تتمكن من استخدام File::Copy، فسيتعين عليك القيام بالعمل بنفسك: افتح الملف الأصلي، وافتح ملف الوجهة، ثم اطبع إلى ملف الوجهة أثناء قراءة الملف الأصلي. يجب عليك أيضًا تذكر نسخ الأذونات والمالك والمجموعة إلى الملف الجديد.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_make_a_temporary_file_name?"><a class="permalink" href="#How_do_I_make_a_temporary_file_name?">كيف أنشئ اسم ملف مؤقت؟</a></h2>
+<p class="Pp">إذا لم تكن بحاجة إلى معرفة اسم الملف، يمكنك استخدام <span class="Li">open()</span> مع <span class="Li">&quot;undef&quot;</span> بدلاً من اسم الملف. في Perl 5.8 أو أحدث، تنشئ الدالة <span class="Li">open()</span> ملفًا مؤقتًا مجهولاً:</p>
+<pre>open my $tmp, '+&gt;', undef or die $!;</pre>
+<p class="Pp">بخلاف ذلك، يمكنك استخدام وحدة File::Temp.</p>
+<pre>use File::Temp qw/ tempfile tempdir /;
+my $dir = tempdir( CLEANUP =&gt; 1 );
+($fh, $filename) = tempfile( DIR =&gt; $dir );
+# or if you don't need to know the filename
+my $fh = tempfile( DIR =&gt; $dir );</pre>
+<p class="Pp">كانت File::Temp وحدة قياسية منذ Perl 5.6.1. إذا لم يكن لديك إصدار Perl حديث بما يكفي مثبتًا، فاستخدم طريقة الفئة <span class="Li">&quot;new_tmpfile&quot;</span> من وحدة IO::File للحصول على مقبض ملف مفتوح للقراءة والكتابة. استخدمها إذا لم تكن بحاجة إلى معرفة اسم الملف:</p>
+<pre>use IO::File;
+my $fh = IO::File-&gt;new_tmpfile()
+    or die &quot;Unable to make new temporary file: $!&quot;;</pre>
+<p class="Pp">إذا كنت ملتزمًا بإنشاء ملف مؤقت يدويًا، فاستخدم معرف العملية و/أو قيمة الوقت الحالي. إذا كنت بحاجة إلى العديد من الملفات المؤقتة في عملية واحدة، فاستخدم عدادًا:</p>
+<pre>BEGIN {
+    use Fcntl;
+    use File::Spec;
+    my $temp_dir  = File::Spec-&gt;tmpdir();
+    my $file_base = sprintf &quot;%d-%d-0000&quot;, $$, time;
+    my $base_name = File::Spec-&gt;catfile($temp_dir, $file_base);
+    sub temp_file {
+        my $fh;
+        my $count = 0;
+        until( defined(fileno($fh)) || $count++ &gt; 100 ) {
+            $base_name =~ s/-(\d+)$/&quot;-&quot; . (1 + $1)/e;
+            # O_EXCL is required for security reasons.
+            sysopen $fh, $base_name, O_WRONLY|O_EXCL|O_CREAT;
+        }
+        if( defined fileno($fh) ) {
+            return ($fh, $base_name);
+        }
+        else {
+            return ();
+        }
+    }
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_can_I_manipulate_fixed-record-length_files?"><a class="permalink" href="#How_can_I_manipulate_fixed-record-length_files?">كيف يمكنني التعامل مع ملفات ذات طول سجل ثابت؟</a></h2>
+<p class="Pp">الطريقة الأكثر كفاءة هي استخدام <b>pack()</b> و <b>unpack()</b>. هذا أسرع من استخدام <b>substr()</b> عند أخذ العديد من السلاسل. إنه أبطأ لبضع سلاسل فقط.</p>
+<p class="Pp">إليك عينة من التعليمات البرمجية لتقسيم وإعادة تجميع أسطر إدخال ذات تنسيق ثابت، في هذه الحالة من مخرجات أمر ps العادي، بتنسيق Berkeley:</p>
+<pre># sample input line:
+#   15158 p5  T      0:00 perl /home/tchrist/scripts/now-what
+my $PS_T = 'A6 A4 A7 A5 A*';
+open my $ps, '-|', 'ps';
+print scalar &lt;$ps&gt;;
+my @fields = qw( pid tt stat time command );
+while (&lt;$ps&gt;) {
+    my %process;
+    @process{@fields} = unpack($PS_T, $_);
+    for my $field ( @fields ) {
+        print &quot;$field: &lt;$process{$field}&gt;\n&quot;;
+    }
+    print 'line=', pack($PS_T, @process{@fields} ), &quot;\n&quot;;
+}</pre>
+<p class="Pp">لقد استخدمنا شريحة تجزئة للتعامل بسهولة مع حقول كل صف. تخزين المفاتيح في مصفوفة يجعل من السهل العمل عليها كمجموعة أو التكرار عليها باستخدام <span class="Li">&quot;for&quot;</span>. كما أنه يتجنب تلويث البرنامج بالمتغيرات العامة واستخدام المراجع الرمزية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_can_I_make_a_filehandle_local_to_a_subroutine?_How_do_I_pass_filehandles_between_subroutines?_How_do_I_make_an_array_of_filehandles?"><a class="permalink" href="#How_can_I_make_a_filehandle_local_to_a_subroutine?_How_do_I_pass_filehandles_between_subroutines?_How_do_I_make_an_array_of_filehandles?">كيف يمكنني جعل مقبض ملف محليًا لدالة فرعية؟ كيف أمرر مقابض الملفات بين الدوال الفرعية؟ كيف أنشئ مصفوفة من مقابض الملفات؟</a></h2>
+<p class="Pp">اعتبارًا من perl5.6، تقوم <span class="Li">open()</span> بإنشاء مقابض ملفات ودلائل تلقائيًا كمرجع إذا قمت بتمرير متغير كمي غير مهيأ إليه. يمكنك بعد ذلك تمرير هذه المراجع تمامًا مثل أي كمية أخرى، واستخدامها بدلاً من المقابض المسماة.</p>
+<pre>open my    $fh, $file_name;
+open local $fh, $file_name;
+print $fh &quot;Hello World!\n&quot;;
+process_file( $fh );</pre>
+<p class="Pp">إذا أردت، يمكنك تخزين هذه المقابض في مصفوفة أو تجزئة. إذا قمت بالوصول إليها مباشرة، فهي ليست كميات بسيطة وتحتاج إلى إعطاء <span class="Li">&quot;pr</span></p>
+</section>
+<p class="Pp">استخدم عامل &lt;&gt; (<span class="Li">glob()</span>)،
+    الموثق في perlfunc. الإصدارات الأقدم من Perl 5.6 تتطلب أن يكون لديك shell مثبتة تفهم علامة الـ tilde. الإصدارات الأحدث من Perl لديها هذه الميزة مدمجة. وحدة File::KGlob (متاحة من CPAN) توفر وظائف glob أكثر قابلية للنقل.</p>
+<p class="Pp">داخل Perl، يمكنك استخدام هذا مباشرة:</p>
+<pre>$filename =~ s{
+  ^ ~             # ابحث عن علامة tilde في البداية
+  (               # احفظ هذا في $1
+      [^/]        # حرف غير مائل
+            *     # مكرر 0 أو أكثر من المرات (0 يعني أنا)
+  )
+}{
+  $1
+      ? (getpwnam($1))[7]
+      : ( $ENV{HOME} || $ENV{LOGDIR} )
+}ex;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='عندما_أفتح_ملفًا_للقراءة-الكتابة،_لماذا_يمحوه؟'><a class='permalink' href='#When_I_open_a_file_read-write,_why_does_it_wipe_it_out?'>عندما أفتح ملفًا للقراءة-الكتابة، لماذا يمحوه؟</a></h2>
+<p class="Pp">لأنك تستخدم شيئًا مثل هذا، والذي يقتطع الملف *ثم* يمنحك حق الوصول للقراءة والكتابة:</p>
+<pre>open my $fh, '+&gt;', '/path/name'; # خاطئ (دائمًا تقريبًا)</pre>
+<p class="Pp">عفوًا. يجب عليك بدلاً من ذلك استخدام هذا، والذي سيفشل إذا لم يكن الملف موجودًا:</p>
+<pre>open my $fh, '+&lt;', '/path/name'; # افتح للتحديث</pre>
+<p class="Pp">استخدام "&gt;" دائمًا ما يمسح أو ينشئ. استخدام "&lt;" لا يفعل أيًا منهما. "+" لا يغير هذا.</p>
+<p class="Pp">هذه أمثلة لأنواع عديدة من فتح الملفات. تلك التي تستخدم <span class="Li">"sysopen"</span> تفترض جميعها أنك قمت بسحب الثوابت من Fcntl:</p>
+<pre>use Fcntl;</pre>
+<p class="Pp">لفتح ملف للقراءة:</p>
+<pre>open my $fh, '&lt;', $path                               or die $!;
+sysopen my $fh, $path, O_RDONLY                       or die $!;</pre>
+<p class="Pp">لفتح ملف للكتابة، أنشئ ملفًا جديدًا إذا لزم الأمر أو امسح الملف القديم:</p>
+<pre>open my $fh, '&gt;', $path                               or die $!;
+sysopen my $fh, $path, O_WRONLY|O_TRUNC|O_CREAT       or die $!;
+sysopen my $fh, $path, O_WRONLY|O_TRUNC|O_CREAT, 0666 or die $!;</pre>
+<p class="Pp">لفتح ملف للكتابة، أنشئ ملفًا جديدًا، يجب ألا يكون الملف موجودًا:</p>
+<pre>sysopen my $fh, $path, O_WRONLY|O_EXCL|O_CREAT        or die $!;
+sysopen my $fh, $path, O_WRONLY|O_EXCL|O_CREAT, 0666  or die $!;</pre>
+<p class="Pp">لفتح ملف للإلحاق، أنشئ إذا لزم الأمر:</p>
+<pre>open my $fh, '&gt;&gt;', $path                              or die $!;
+sysopen my $fh, $path, O_WRONLY|O_APPEND|O_CREAT      or die $!;
+sysopen my $fh, $path, O_WRONLY|O_APPEND|O_CREAT, 0666 or die $!;</pre>
+<p class="Pp">لفتح ملف للإلحاق، يجب أن يكون الملف موجودًا:</p>
+<pre>sysopen my $fh, $path, O_WRONLY|O_APPEND              or die $!;</pre>
+<p class="Pp">لفتح ملف للتحديث، يجب أن يكون الملف موجودًا:</p>
+<pre>open my $fh, '+&lt;', $path                              or die $!;
+sysopen my $fh, $path, O_RDWR                         or die $!;</pre>
+<p class="Pp">لفتح ملف للتحديث، أنشئ ملفًا إذا لزم الأمر:</p>
+<pre>sysopen my $fh, $path, O_RDWR|O_CREAT                 or die $!;
+sysopen my $fh, $path, O_RDWR|O_CREAT, 0666           or die $!;</pre>
+<p class="Pp">لفتح ملف للتحديث، يجب ألا يكون الملف موجودًا:</p>
+<pre>sysopen my $fh, $path, O_RDWR|O_EXCL|O_CREAT          or die $!;
+sysopen my $fh, $path, O_RDWR|O_EXCL|O_CREAT, 0666    or die $!;</pre>
+<p class="Pp">لفتح ملف دون حظر، مع الإنشاء إذا لزم الأمر:</p>
+<pre>sysopen my $fh, '/foo/somefile', O_WRONLY|O_NDELAY|O_CREAT
+    or die &quot;can't open /foo/somefile: $!&quot;;</pre>
+<p class="Pp">كن حذرًا لأن إنشاء أو حذف الملفات ليس عملية ذرية على NFS. هذا يعني أن عمليتين قد تنشئان أو تزيلان نفس الملف بنجاح! لذلك، O_EXCL ليس حصريًا كما قد ترغب.</p>
+<p class="Pp">انظر أيضًا perlopentut.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='لماذا_أحصل_أحيانًا_على_&amp;quot;قائمة_الوسائط_طويلة_جدًا&amp;quot;_عندما_أستخدم_&amp;lt;*&amp;gt;؟'><a class='permalink' href='#Why_do_I_sometimes_get_an_&amp;quot;Argument_list_too_long&amp;quot;_when_I_use_&amp;lt;*&amp;gt;?'>لماذا أحصل أحيانًا على "قائمة الوسائط طويلة جدًا" عندما أستخدم &lt;*&gt;؟</a></h2>
+<p class="Pp">يقوم عامل <span class="Li">"&lt;&gt;"</span> بإجراء عملية توسيع (globbing) (انظر أعلاه). في إصدارات Perl الأقدم من v5.6.0، يقوم عامل <a href='/man/csh.1.en'>csh(1)</a> الداخلي بإنشاء عملية جديدة (fork) لإجراء التوسيع الفعلي، ولكن csh لا يمكنه التعامل مع أكثر من 127 عنصرًا وبالتالي يعطي رسالة الخطأ <span class="Li">"Argument list too long"</span>. الأشخاص الذين قاموا بتثبيت tcsh بدلاً من csh لن يواجهوا هذه المشكلة، ولكن قد يتفاجأ مستخدموهم بها.</p>
+<p class="Pp">للتغلب على ذلك، إما الترقية إلى Perl v5.6.0 أو أحدث، أو قم بالتوسيع بنفسك باستخدام <b>readdir()</b> والأنماط، أو استخدم وحدة مثل File::Glob، وهي وحدة لا تستخدم shell لإجراء التوسيع.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='كيف_يمكنني_فتح_ملف_مسمى_بـ_&amp;quot;&amp;gt;&amp;quot;_في_البداية_أو_مسافات_لاحقة؟'><a class='permalink' href='#How_can_I_open_a_file_named_with_a_leading_&amp;quot;&amp;gt;&amp;quot;_or_trailing_blanks?'>كيف يمكنني فتح ملف مسمى بـ ">" في البداية أو مسافات لاحقة؟</a></h2>
+<p class="Pp">(ساهم بها Brian McCauley)</p>
+<p class="Pp">الشكل الخاص المكون من وسيطين لوظيفة <b>open()</b> في Perl يتجاهل المسافات اللاحقة في أسماء الملفات ويستنتج الوضع من أحرف معينة في البداية (أو "|" في النهاية). في الإصدارات الأقدم من Perl، كان هذا هو الشكل الوحيد لوظيفة <b>open()</b> وبالتالي فهو سائد في الأكواد والكتب القديمة.</p>
+<p class="Pp">ما لم يكن لديك سبب محدد لاستخدام الشكل المكون من وسيطين، فيجب عليك استخدام الشكل المكون من ثلاثة وسائط لوظيفة <b>open()</b>، والذي لا يعامل أي أحرف في اسم الملف على أنها خاصة.</p>
+<pre>open my $fh, "&lt;", "  file  ";  # اسم الملف هو "   file   "
+open my $fh, "&gt;", "&gt;file";     # اسم الملف هو ">file"</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='كيف_يمكنني_إعادة_تسمية_ملف_بشكل_موثوق؟'><a class='permalink' href='#How_can_I_reliably_rename_a_file?'>كيف يمكنني إعادة تسمية ملف بشكل موثوق؟</a></h2>
+<p class="Pp">إذا كان نظام التشغيل الخاص بك يدعم أداة <a href='/man/mv.1.en'>mv(1)</a> المناسبة أو ما يعادلها وظيفيًا، فإن هذا يعمل:</p>
+<pre>rename($old, $new) or system(&quot;mv&quot;, $old, $new);</pre>
+<p class="Pp">قد يكون استخدام وحدة File::Copy أكثر قابلية للنقل. ما عليك سوى نسخ الملف إلى الاسم الجديد (مع التحقق من قيم الإرجاع)، ثم حذف القديم. هذا ليس نفس معنى <span class="Li">rename()</span> حقًا، والذي يحافظ على البيانات الوصفية مثل الأذونات، والطوابع الزمنية، ومعلومات inode، وما إلى ذلك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='كيف_يمكنني_قفل_ملف؟'><a class='permalink' href='#How_can_I_lock_a_file?'>كيف يمكنني قفل ملف؟</a></h2>
+<p class="Pp">وظيفة <b>flock()</b> المدمجة في Perl (انظر perlfunc للتفاصيل) ستستدعي <a href='/man/flock.2.en'>flock(2)</a> إذا كان موجودًا، <a href='/man/fcntl.2.en'>fcntl(2)</a> إذا لم يكن موجودًا (في إصدار Perl 5.004 وما بعده)، و <a href='/man/lockf.3.en'>lockf(3)</a> إذا لم تكن أي من استدعاءات النظام السابقة موجودة. في بعض الأنظمة، قد يستخدم حتى شكلًا مختلفًا من القفل الأصلي. إليك بعض المشاكل مع <b>flock()</b> في Perl:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>ينتج خطأ فادحًا إذا لم تكن أي من استدعاءات النظام الثلاثة (أو ما يعادلها قريبًا) موجودة.</dd>
+  <dt>2.</dt>
+  <dd><a href='/man/lockf.3.en'>lockf(3)</a> لا يوفر قفلًا مشتركًا، ويتطلب أن يكون مقبض الملف مفتوحًا للكتابة (أو الإلحاق، أو القراءة/الكتابة).</dd>
+  <dt>3.</dt>
+  <dd>بعض إصدارات <b>flock()</b> لا يمكنها قفل الملفات عبر شبكة (مثل أنظمة ملفات NFS)، لذلك ستحتاج إلى فرض استخدام <a href='/man/fcntl.2.en'>fcntl(2)</a> عند بناء Perl. ولكن حتى هذا مشكوك فيه في أحسن الأحوال. انظر إدخال flock في perlfunc وملف <i>INSTALL</i> في توزيع المصدر للحصول على معلومات حول بناء Perl للقيام بذلك.
+    <p class="Pp">هناك دلالات تقليدية محتملة ولكنها غير واضحة لوظيفة flock وهي أنها تنتظر إلى أجل غير مسمى حتى يتم منح القفل، وأن أقفالها هي *استشارية بحتة*. هذه الأقفال التقديرية أكثر مرونة، ولكنها تقدم ضمانات أقل. هذا يعني أنه يمكن تعديل الملفات المقفلة باستخدام <b>flock()</b> بواسطة برامج لا تستخدم <b>flock()</b> أيضًا. السيارات التي تتوقف عند إشارات المرور تسير بشكل جيد مع بعضها البعض، ولكن ليس مع السيارات التي لا تتوقف عند إشارات المرور. انظر صفحة man perlport، أو وثائق منفذ معين، أو صفحات man المحلية الخاصة بنظامك للحصول على التفاصيل. من الأفضل افتراض السلوك التقليدي إذا كنت تكتب برامج قابلة للنقل. (إذا لم تكن كذلك، يجب عليك كما هو الحال دائمًا أن تشعر بالحرية الكاملة في الكتابة وفقًا لخصوصيات نظامك (تسمى أحيانًا "ميزات"). الالتزام الأعمى بمخاوف قابلية النقل لا ينبغي أن يعيق إنجاز عملك.)</p>
+    <p class="Pp">لمزيد من المعلومات حول قفل الملفات، انظر أيضًا "File Locking" في perlopentut إذا كان لديك (جديد للإصدار 5.6).</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss">لماذا لا يمكنني فقط فتح(FH, ">file.lock")؟</h2>
+<p class="Pp">هناك جزء شائع من الكود **لا يجب استخدامه** وهو:</p>
+<pre>sleep(3) while -e 'file.lock';    # رجاء لا تستخدم
+open my $lock, '&gt;', 'file.lock'; # هذا الكود معطل</pre>
+<p class="Pp">هذه حالة سباق كلاسيكية: تتخذ خطوتين للقيام بشيء يجب القيام به في خطوة واحدة. لهذا السبب توفر أجهزة الكمبيوتر تعليمة atomic test-and-set. نظريًا، هذا "يجب" أن يعمل:</p>
+<pre>sysopen my $fh, "file.lock", O_WRONLY|O_EXCL|O_CREAT
+    or die "can't open  file.lock: $!&quot;;</pre>
+<p class="Pp">باستثناء أنه للأسف، إنشاء الملفات (وحذفها) ليس عملية ذرية على NFS، لذا لن يعمل هذا (على الأقل ليس في كل مرة) عبر الشبكة. تم اقتراح مخططات مختلفة تتضمن <b>link()</b>، ولكن هذه تميل إلى أن تتضمن انتظارًا نشطًا، وهو أيضًا أقل من المرغوب فيه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ما_زلت_لا_أفهم_القفل._أريد_فقط_زيادة_الرقم_في_الملف._كيف_يمكنني_فعل_ذلك؟'><a class='permalink' href='#I_still_don&apos;t_get_locking._I_just_want_to_increment_the_number_in_the_file._How_can_I_do_this?'>ما زلت لا أفهم القفل. أريد فقط زيادة الرقم في الملف. كيف يمكنني فعل ذلك؟</a></h2>
+<p class="Pp">ألم يخبرك أحد أن عدادات زيارات صفحات الويب عديمة الفائدة؟ إنها لا تعد عدد الزيارات، وهي مضيعة للوقت، ولا تخدم سوى تعزيز غرور الكاتب. من الأفضل اختيار رقم عشوائي؛ فهي أكثر واقعية.</p>
+<p class="Pp">على أي حال، هذا ما يمكنك فعله إذا لم تستطع مساعدة نفسك.</p>
+<pre>use Fcntl qw(:DEFAULT :flock);
+sysopen my $fh, "numfile", O_RDWR|O_CREAT or die "can't open numfile: $!&quot;;
+flock $fh, LOCK_EX                        or die "can't flock numfile: $!&quot;;
+my $num = &lt;$fh&gt; || 0;
+seek $fh, 0, 0                            or die "can't rewind numfile: $!&quot;;
+truncate $fh, 0                           or die "can't truncate numfile: $!&quot;;
+(print $fh $num+1, &quot;\n&quot;)                  or die "can't write numfile: $!&quot;;
+close $fh                                 or die "can't close numfile: $!&quot;;</pre>
+<p class="Pp">إليك عداد زيارات ويب أفضل بكثير:</p>
+<pre>$hits = int( (time() - 850_000_000) / rand(1_000) );</pre>
+<p class="Pp">إذا لم يعجب عدد الزيارات أصدقاءك، فقد يعجبهم الكود. :-)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='كل_ما_أريده_هو_المساع'>كل ما أريده هو المساع</h2>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_read_a_single_character_from_the_terminal?"><a class="permalink" href="#How_do_I_read_a_single_character_from_the_terminal?">How do I read a single character from the terminal?</a></h2>
+<p class="Pp">The first thing you should do is investigate the <code class="Li">Term::ReadKey</code> extension from CPAN. As previously stated, it now even has limited support for non-portable systems (read: non-open systems, closed, proprietary, non-POSIX, non-Unix, etc.).</p>
+<p class="Pp">Here's how to do it:</p>
+<pre>use Term::ReadKey;
+open my $tty, '&lt;', '/dev/tty';
+print "Gimme a char: ";
+ReadMode "raw";
+my $key = ReadKey 0, $tty;
+ReadMode "normal";
+printf "\nYou said %s, char number %03d\n",
+    $key, ord $key;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_can_I_tell_whether_there's_a_character_waiting_on_a_filehandle?"><a class="permalink" href="#How_can_I_tell_whether_there's_a_character_waiting_on_a_filehandle?">How can I tell whether there's a character waiting on a filehandle?</a></h2>
+<p class="Pp">The very first thing you should do is look into getting the <code class="Li">Term::ReadKey</code> extension from CPAN. As we mentioned earlier, it now even has limited support for non-portable (read: not open systems, closed, proprietary, not POSIX, not Unix, etc.) systems.</p>
+<p class="Pp">You should also check out the Frequently Asked Questions list in comp.unix.* for things like this: the answer is essentially the same. It's very system-dependent. Here's one solution that works on BSD systems:</p>
+<pre>sub key_ready {
+    my($rin, $nfd);
+    vec($rin, fileno(STDIN), 1) = 1;
+    return $nfd = select($rin,undef,undef,0);
+}</pre>
+<p class="Pp">If you want to find out how many characters are waiting, there's also the <code class="Li">FIONREAD</code> ioctl call to be looked at. The <i>h2ph</i> tool that comes with Perl tries to convert C include files to Perl code, which can be <span class="Li">"require"</span>d. <code class="Li">FIONREAD</code> ends up defined as a function in the <i>sys/ioctl.ph</i> file:</p>
+<pre>require './sys/ioctl.ph';
+$size = pack("L", 0);
+ioctl(FH, FIONREAD(), $size) or die "Couldn't call ioctl: $!\n";
+$size = unpack("L", $size);</pre>
+<p class="Pp">If <i>h2ph</i> wasn't installed or doesn't work for you, you can <i>grep</i> the include files by hand:</p>
+<pre>% grep FIONREAD /usr/include/*/*
+/usr/include/asm/ioctls.h:#define FIONREAD      0x541B</pre>
+<p class="Pp">Or write a small C program using the editor of champions:</p>
+<pre>% cat &gt; fionread.c
+#include &lt;sys/ioctl.h&gt;
+main() {
+    printf("%#08x\n", FIONREAD);
+}
+^D
+% cc -o fionread fionread.c
+% ./fionread
+0x4004667f</pre>
+<p class="Pp">And then hard-code it, leaving porting as an exercise to your successor.</p>
+<pre>$FIONREAD = 0x4004667f;         # XXX: opsys dependent
+$size = pack("L", 0);
+ioctl(FH, $FIONREAD, $size)     or die "Couldn't call ioctl: $!\n";
+$size = unpack("L", $size);</pre>
+<p class="Pp"><code class="Li">FIONREAD</code> requires a filehandle connected to a stream, meaning that sockets, pipes, and tty devices work, but <i>not</i> files.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_do_a_&quot;tail_-f&quot;_in_perl?"><a class="permalink" href="#How_do_I_do_a_&quot;tail_-f&quot;_in_perl?">How do I do a "tail -f" in perl?</a></h2>
+<p class="Pp">First try</p>
+<pre>seek($gw_fh, 0, 1);</pre>
+<p class="Pp">The statement <span class="Li">"seek($gw_fh, 0, 1)"</span> doesn't change the current position, but it does clear the end-of-file condition on the handle, so that the next <span class="Li">"&lt;$gw_fh&gt;"</span> makes Perl try again to read something.</p>
+<p class="Pp">If that doesn't work (it relies on features of your stdio implementation), then you need something more like this:</p>
+<pre>for (;;) {
+  for ($curpos = tell($gw_fh); &lt;$gw_fh&gt;; $curpos =tell($gw_fh)) {
+    # search for some stuff and put it into files
+  }
+  # sleep for a while
+  seek($gw_fh, $curpos, 0);  # seek to where we had been
+}</pre>
+<p class="Pp">If this still doesn't work, look into the <span class="Li">"clearerr"</span> method from <code class="Li">IO::Handle</code>, which resets the error and end-of-file states on the handle.</p>
+<p class="Pp">There's also a <code class="Li">File::Tail</code> module from CPAN.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_&lt;b&gt;dup()&lt;/b&gt;_a_filehandle_in_Perl?"><a class="permalink" href="#How_do_I_&lt;b&gt;dup()&lt;/b&gt;_a_filehandle_in_Perl?">How do I <b>dup()</b> a filehandle in Perl?</a></h2>
+<p class="Pp">If you check "open" in perlfunc, you'll see that several of the ways to call <b>open()</b> should do the trick. For example:</p>
+<pre>open my $log, '&gt;&gt;', '/foo/logfile';
+open STDERR, '&gt;&amp;', $log;</pre>
+<p class="Pp">Or even with a literal numeric descriptor:</p>
+<pre>my $fd = $ENV{MHCONTEXTFD};
+open $mhcontext, "&lt;&amp;=$fd";  # like fdopen(3S)</pre>
+<p class="Pp">Note that "<code class="Li">&lt;&amp;STDIN</code>" makes a copy, but "<code class="Li">&lt;&amp;=STDIN</code>" makes an alias. That means if you close an aliased handle, all aliases become inaccessible. This is not true with a copied one.</p>
+<p class="Pp">Error checking, as always, has been left as an exercise for the reader.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_close_a_file_descriptor_by_number?"><a class="permalink" href="#How_do_I_close_a_file_descriptor_by_number?">How do I close a file descriptor by number?</a></h2>
+<p class="Pp">If, for some reason, you have a file descriptor instead of a filehandle (perhaps you used <span class="Li">"POSIX::open"</span>), you can use the <code class="Li">close()</code> function from the POSIX module:</p>
+<pre>use POSIX ();
+POSIX::close( $fd );</pre>
+<p class="Pp">This should rarely be necessary, as the Perl <code class="Li">close()</code> function is to be used for things that Perl opened itself, even if it was a dup of a numeric descriptor as with <span class="Li">"MHCONTEXT"</span> above. But if you really have to, you may be able to do this:</p>
+<pre>require './sys/syscall.ph';
+my $rc = syscall(SYS_close(), $fd + 0);  # must force numeric
+die "can't sysclose $fd: $!" if $rc == -1;</pre>
+<p class="Pp">Or, just use the fdopen(3S) feature of <code class="Li">open()</code>:</p>
+<pre>{
+    open my $fh, "&lt;&amp;=$fd" or die "Cannot reopen fd=$fd: $!\n";
+    close $fh;
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss">Why can't I use "C:\temp\foo" in DOS paths? Why doesn't `C:\temp\foo.exe` work?</h2>
+<p class="Pp">Whoops! You just put a tab and a formfeed into that filename! Remember that within double quoted strings ("like\this"), the backslash is an escape character. The full list of these is in "Quote and Quote-like Operators" in perlop. Unsurprisingly, you don't have a file called "c:(tab)emp(formfeed)oo" or "c:(tab)emp(formfeed)oo.exe" on your legacy DOS filesystem.</p>
+<p class="Pp">Either single-quote your strings, or (preferably) use forward slashes. Since all DOS and Windows versions since something like MS-DOS 2.0 or so have treated <span class="Li">"/"</span> and <span class="Li">"\"</span> the same in a path, you might as well use the one that doesn't clash with Perl--or the POSIX shell, ANSI C and C++, awk, Tcl, Java, or Python, just to mention a few. POSIX paths are more portable, too.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Why_doesn't_glob(&quot;*.*&quot;)_get_all_the_files?"><a class="permalink" href="#Why_doesn't_glob(&quot;*.*&quot;)_get_all_the_files?">Why doesn't glob("*.*") get all the files?</a></h2>
+<p class="Pp">Because even on non-Unix ports, Perl's glob function follows standard Unix globbing semantics. You'll need <code class="Li">glob("*")</code> to get all (non-hidden) files. This makes <b>glob()</b> portable even to legacy systems. Your port may include proprietary globbing functions as well. Check its documentation for details.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Why_does_Perl_let_me_delete_read-only_files?_Why_does_&quot;-i&quot;_clobber_protected_files?_Isn't_this_a_bug_in_Perl?"><a class="permalink" href="#Why_does_Perl_let_me_delete_read-only_files?_Why_does_&quot;-i&quot;_clobber_protected_files?_Isn't_this_a_bug_in_Perl?">Why does Perl let me delete read-only files? Why does "-i" clobber protected files? Isn't this a bug in Perl?</a></h2>
+<p class="Pp">This is elaborately and painstakingly described in the <i>file-dir-perms</i> article in the "Far More Than You Ever Wanted To Know" collection in <a href="http://www.cpan.org/misc/olddoc/FMTEYEWTK.tgz">http://www.cpan.org/misc/olddoc/FMTEYEWTK.tgz</a> .</p>
+<p class="Pp">The executive summary: learn how your filesystem works. The permissions on a file say what can happen to the data in that file. The permissions on a directory say what can happen to the list of files in that directory. If you delete a file, you're removing its name from the directory (so the operation depends on the permissions of the directory, not of the file). If you try to write to the file, the permissions of the file govern whether you're allowed to.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_select_a_random_line_from_a_file?"><a class="permalink" href="#How_do_I_select_a_random_line_from_a_file?">How do I select a random line from a file?</a></h2>
+<p class="Pp">Short of loading the file into a database or pre-indexing the lines in the file, there are a couple of things that you can do.</p>
+<p class="Pp">Here's a reservoir-sampling algorithm from the Camel Book:</p>
+<pre>srand;
+rand($.) &lt; 1 &amp;&amp; ($line = $_) while &lt;&gt;;</pre>
+<p class="Pp">This has a significant advantage in space over reading the whole file in. You can find a proof of this method in <i>The Art of Computer</i> <i>Programming</i>, Volume 2, Section 3.4.2, by Donald E. Knuth.</p>
+<p class="Pp">You can use the <code class="Li">File::Random</code> module which provides a function for that algorithm:</p>
+<pre>use File::Random qw/random_line/;
+my $line = random_line($filename);</pre>
+<p class="Pp">Another way is to use the <code class="Li">Tie::File</code> module, which treats the entire file as an array. Simply access a random array element.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Why_do_I_get_weird_spaces_when_I_print_an_array_of_lines?"><a class="permalink" href="#Why_do_I_get_weird_spaces_when_I_print_an_array_of_lines?">Why do I get weird spaces when I print an array of lines?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">If you are seeing spaces between the elements of your array when you print the array, you are probably interpolating the array in double quotes:</p>
+<pre>my @animals = qw(camel llama alpaca vicuna);
+print "animals are: @animals\n";</pre>
+<p class="Pp">It's the double quotes, not the <span class="Li">"print"</span>, doing this. Whenever you interpolate an array in a double quote context, Perl joins the elements with spaces (or whatever is in <span class="Li">$&quot;</span>, which is a space by default):</p>
+<pre>animals are: camel llama alpaca vicuna</pre>
+<p class="Pp">This is different than printing the array without the interpolation:</p>
+<pre>my @animals = qw(camel llama alpaca vicuna);
+print "animals are: ", @animals, "\n";</pre>
+<p class="Pp">Now the output doesn't have the spaces between the elements because the elements of <span class="Li">@animals</span> simply become part of the list to <span class="Li">"print"</span>:</p>
+<pre>animals are: camelllamaalpacavicuna</pre>
+<p class="Pp">You might notice this when each of the elements of <span class="Li">@array</span> end with a newline. You expect to print one element per line, but notice that every line after the first is indented:</p>
+<pre>this is a line
+ this is another line
+ this is the third line</pre>
+<p class="Pp">That extra space comes from the interpolation of the array. If you don't want to put anything between your array elem</p>
+</section>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>perlfaq5 - Perl FAQ: File and Directory Handling</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" integrity="sha384-dp9uYlhF+Yy09d7v0/bF5nQGv36nXjSsf/j4jD6rS0L5n6mI4Sg02n9fW/h4d5t7g==" crossorigin="anonymous">
+    <style type="text/css">
+        /*rtl:ignore*/
+        .search input[type="search"] {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    
+    <main>
+        <article>
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">perlfaq5 - Perl FAQ: File and Directory Handling</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="VERSION"><a class="permalink" href="#VERSION">VERSION</a></h1>
+<p class="Pp">This document describes Perl version 5.42.0.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">This document covers the frequently asked questions about file and
+    directory handling in Perl.</p>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_read_a_file_into_an_array_or_a_scalar?"><a class="permalink" href="#How_do_I_read_a_file_into_an_array_or_a_scalar?">How
+    do I read a file into an array or a scalar?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">You can read a file into an array (where each element of the array
+    is a line from the file) using the <span class="Li">&quot;&lt;&gt;&quot;</span>
+    diamond operator in list context:</p>
+<pre>my @lines = &lt;$fh&gt;;</pre>
+<p class="Pp">Or, if you want to read from all files named on the command line:</p>
+<pre>my @lines = &lt;&gt;;</pre>
+<p class="Pp">This reads the entire file into memory. If the file is very large,
+    you might want to process it line by line instead:</p>
+<pre>while (my $line = &lt;$fh&gt;) {
+    # process $line
+}</pre>
+<p class="Pp">To read a file into a scalar (where the scalar contains the entire
+    file contents), use the diamond operator in scalar context:</p>
+<pre>my $contents = &lt;$fh&gt;;</pre>
+<p class="Pp">Or, from all files named on the command line:</p>
+<pre>my $contents = &lt;&gt;;</pre>
+<p class="Pp">To make sure that you read the entire file, you can set the input
+    record separator variable (<span class="Li">$</span><span
+    class="Li">RS</span>) to an undefined value:</p>
+<pre>my $contents = do { local $RS; &lt;$fh&gt; };</pre>
+<p class="Pp">This is also useful if you want to read the entire file into a
+    scalar, and you want to avoid reading all of the files named on the command
+    line at once.</p>
+<p class="Pp">You can send the array to print without quotes. You can send it to
+    print without them:</p>
+<pre>print @lines;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_traverse_a_directory_tree?"><a class="permalink" href="#How_do_I_traverse_a_directory_tree?">How
+    do I traverse a directory tree?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">The File::Find module, which comes with Perl, does all of the hard
+    work to traverse a directory structure. You simply call the
+    <span class="Li">"find"</span> subroutine with a callback subroutine and the
+    directories you want to traverse:</p>
+<pre>use File::Find;
+find( \&wanted, @directories );
+sub wanted {
+    # full path in $File::Find::name
+    # just filename in $_
+    ... do whatever you want to do ...
+}</pre>
+<p class="Pp">The File::Find::Closures, which you can download from CPAN,
+    provides many ready-to-use subroutines that you can use with File::Find.</p>
+<p class="Pp">The File::Finder, which you can download from CPAN, can help you
+    create the callback subroutine using something closer to the syntax of the
+    <span class="Li">"find"</span> command-line utility:</p>
+<pre>use File::Find;
+use File::Finder;
+my $deep_dirs = File::Finder-&gt;depth-&gt;type('d')-&gt;ls-&gt;exec('rmdir','{}');
+find( $deep_dirs-&gt;as_options, @places );</pre>
+<p class="Pp">The File::Find::Rule module, which you can download from CPAN, has
+    a similar interface, but does the traversal for you too:</p>
+<pre>use File::Find::Rule;
+my @files = File::Find::Rule-&gt;file()
+                         -&gt;name( '*.pm' )
+                         -&gt;in( @INC );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_delete_a_directory_tree?"><a class="permalink" href="#How_do_I_delete_a_directory_tree?">How
+    do I delete a directory tree?</a></h2>
+<p class="Pp">(contributed by brian d foy)</p>
+<p class="Pp">If you have an empty directory, you can use Perl's built-in
+    <span class="Li">"rmdir"</span>. If the directory is not empty
+    (so, with files or subdirectories), you either have to empty it yourself (a
+    lot of work) or use a module to help you.</p>
+<p class="Pp">The File::Path module, which comes with Perl, has a
+    <span class="Li">"remove_tree"</span> which can take care of all
+    of the hard work for you:</p>
+<pre>use File::Path qw(remove_tree);
+remove_tree( @directories );</pre>
+<p class="Pp">The File::Path module also has a legacy interface to the older
+    <span class="Li">"rmtree"</span> subroutine.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="How_do_I_copy_an_entire_directory?"><a class="permalink" href="#How_do_I_copy_an_entire_directory?">How
+    do I copy an entire directory?</a></h2>
+<p class="Pp">(contributed by Shlomi Fish)</p>
+<p class="Pp">To do the equivalent of <span class="Li">"cp -R"</span>
+    (i.e. copy an entire directory tree recursively) in portable Perl, you'll
+    either need to write something yourself or find a good CPAN module such as
+    File::Copy::Recursive.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR_AND_COPYRIGHT"><a class="permalink" href="#AUTHOR_AND_COPYRIGHT">AUTHOR
+    AND COPYRIGHT</a></h1>
+<p class="Pp">Copyright (c) 1997-2010 Tom Christiansen, Nathan Torkington, and
+    other authors as noted. All rights reserved.</p>
+<p class="Pp">This documentation is free; you can redistribute it and/or modify
+    it under the same terms as Perl itself.</p>
+<p class="Pp">Irrespective of its distribution, all code examples here are in
+    the public domain. You are permitted and encouraged to use this code and any
+    derivatives thereof in your own programs for fun or for profit as you see
+    fit. A simple comment in the code giving credit to the FAQ would be
+    courteous but is not required.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>Version:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#VERSION">VERSION</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#AUTHOR_AND_COPYRIGHT">AUTHOR AND COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/perlfaq5.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlfaq5.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

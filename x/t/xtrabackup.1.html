@@ -1,0 +1,1964 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">xtrabackup(1)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='INCREMENTAL_BACKUPS'><a class='permalink' href='#INCREMENTAL_BACKUPS'>النسخ الاحتياطي التدريجي</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Preparing_Incremental_Backups'><a class='permalink' href='#Preparing_Incremental_Backups'>تحضير النسخ الاحتياطي التدريجي</a></h2>
+<p class="Pp">بعد إجراء النسخ الاحتياطي الأساسي، يمكنك التقدم من خلال النسخ الاحتياطي التدريجي.
+    يتم تطبيق دلتا النسخة الاحتياطي التدريجي على النسخة الاحتياطي الأساسية، مما يؤدي إلى
+    التدحرج بالبيانات إلى النقطة الزمنية للنسخة الاحتياطي التدريجي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>xtrabackup --prepare --target-dir=/data/backups/base \
+--incremental-dir=/data/backups/inc1</pre>
+</div>
+</div>
+<p class="Pp">في هذا المثال، ستكون نتيجة مجلد النسخة الاحتياطي الأساسية
+    مطابقة للنسخة الاحتياطي الأساسية.</p>
+<p class="Pp">إعداد النسخة الاحتياطي التدريجي الثاني هو عملية مماثلة:
+    قم بتطبيق دلتا النسخ الاحتياطي الأساسية (المعدلة)، وستقوم بتدوير بياناتها
+    إلى الأمام في الوقت المناسب للنسخة الاحتياطي التدريجي الثاني:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>xtrabackup --prepare --target-dir=/data/backups/base \
+--incremental-dir=/data/backups/inc2</pre>
+</div>
+</div>
+<p class="Pp"><b>ملاحظة:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">يجب استخدام <b>--apply-log-only</b> عند دمج جميع
+  النسخ الاحتياطي التدريجي باستثناء الأخير. لهذا السبب لا يحتوي السطر السابق على
+  الخيار <b>--apply-log-only</b>. حتى لو تم استخدام <b>--apply-log-only</b>
+  في الخطوة الأخيرة، فسيظل النسخ الاحتياطي متسقًا ولكن في هذه الحالة سيقوم
+  الخادم بتنفيذ مرحلة التراجع.</div>
+</div>
+<p class="Pp">إذا كنت ترغب في تجنب الإشعار بأن <i>InnoDB</i> لم يتم إيقافه بشكل طبيعي،
+    عندما تقوم بتطبيق دلتا المطلوبة على النسخة الاحتياطي الأساسية، يمكنك تشغيل
+    <b>--prepare</b> مرة أخرى دون تعطيل مرحلة التراجع.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Restoring_Incremental_Backups'><a class='permalink' href='#Restoring_Incremental_Backups'>استعادة النسخ الاحتياطي التدريجي</a></h2>
+<p class="Pp">بعد تحضير النسخ الاحتياطي التدريجي، يحتوي المجلد الأساسي على نفس البيانات
+    مثل النسخة الاحتياطي الكامل. لاستعادة هذه النسخة الاحتياطي، يمكنك استخدام هذا
+    الأمر: <b>xtrabackup --copy-back --target-dir=BASE-DIR</b></p>
+<p class="Pp">قد تحتاج إلى تغيير الملكية كما هو مفصل في
+    restoring_a_backup.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Incremental_Streaming_Backups_Using_xbstream'><a class='permalink' href='#Incremental_Streaming_Backups_Using_xbstream'>النسخ الاحتياطي التدريجي المتدفق باستخدام xbstream</a></h2>
+<p class="Pp">يمكن إجراء النسخ الاحتياطي التدريجي المتدفق باستخدام خيار البث
+    <i>xbstream</i>. حاليًا، يتم تجميع النسخ الاحتياطي بتنسيق <b>xbstream</b>
+    مخصص. مع هذه الميزة، تحتاج إلى إجراء نسخة احتياطي أساسية أيضًا. إجراء نسخة
+    احتياطي أساسية.INDENT 0.0</p>
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --target-dir=/data/backups</pre>
+</div>
+<br/>
+<br/>
+إجراء نسخة احتياطي محلية.INDENT 0.0
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --incremental-lsn=LSN-number --stream=xbstream --target-dir=./ &gt; incremental.xbstream</pre>
+</div>
+<br/>
+<br/>
+فك النسخة الاحتياطي.INDENT 0.0
+<div class="Bd-indent">
+<pre>$ xbstream -x &lt; incremental.xbstream</pre>
+</div>
+<br/>
+<br/>
+إجراء نسخة احتياطي محلية وتدفقها إلى الخادم البعيد وفكها.INDENT 0.0
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --incremental-lsn=LSN-number --stream=xbstream --target-dir=./
+$ ssh user@hostname &quot; cat - | xbstream -x -C &gt; /backup-dir/&quot;</pre>
+</div>
+<br/>
+<br/>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Partial_Backups'><a class='permalink' href='#Partial_Backups'>النسخ الاحتياطي الجزئي</a></h2>
+<p class="Pp">يدعم <i>xtrabackup</i> إجراء نسخ احتياطي جزئي عندما يكون الخيار
+    innodb_file_per_table ممكّنًا. هناك ثلاث طرق لإنشاء نسخ احتياطي جزئي:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>مطابقة أسماء الجداول بتعبير نمطي</dd>
+  <dt>2.</dt>
+  <dd>توفير قائمة بأسماء الجداول في ملف</dd>
+  <dt>3.</dt>
+  <dd>توفير قائمة بقواعد البيانات</dd>
+</dl>
+</div>
+<p class="Pp"><b>تحذير:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">لا تقم بنسخ النسخة الاحتياطي المعدة مرة أخرى.
+<p class="Pp">يجب استعادة النسخ الاحتياطي الجزئي عن طريق استيراد الجداول،
+    وليس باستخدام الخيار <i>--copy-back</i>. لا يُنصح بتشغيل النسخ الاحتياطي
+    التدريجي بعد تشغيل نسخة احتياطي جزئي.</p>
+<p class="Pp">على الرغم من وجود بعض السيناريوهات التي يمكن فيها إجراء الاستعادة
+    عن طريق نسخ الملفات مرة أخرى، فقد يؤدي ذلك إلى عدم تناسق قاعدة البيانات في
+    العديد من الحالات وليس طريقة موصى بها للقيام بذلك.</p>
+</div>
+</div>
+<p class="Pp">لأغراض صفحة الدليل هذه، سنفترض أن هناك قاعدة بيانات تسمى
+    <b>test</b> تحتوي على جداول تسمى <b>t1</b> و <b>t2</b>.</p>
+<p class="Pp"><b>تحذير:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">إذا تم حذف أي من الجداول المطابقة أو المدرجة أثناء
+  النسخ الاحتياطي، فسيفشل <i>xtrabackup</i>.</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Creating_Partial_Backups'><a class='permalink' href='#Creating_Partial_Backups'>إنشاء النسخ الاحتياطي الجزئي</a></h2>
+<p class="Pp">هناك طرق متعددة لتحديد الجزء الذي يتم نسخه احتياطيًا من إجمالي
+    البيانات:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>استخدم الخيار <b>--tables</b> لسرد أسماء الجداول</li>
+  <li>استخدم الخيار <b>--tables-file</b> لسرد الجداول في ملف</li>
+  <li>استخدم الخيار <b>--databases</b> لسرد قواعد البيانات</li>
+  <li>استخدم الخيار <b>--databases-file</b> لسرد قواعد البيانات</li>
+</ul>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">خيار <i>--tables</i></h2>
+<p class="Pp">تتضمن الطريقة الأولى خيار <i>--tables</i> الخاص بـ xtrabackup.
+    قيمة الخيار هي تعبير نمطي تتم مطابقته مقابل اسم قاعدة البيانات الكامل واسم
+    الجدول باستخدام تنسيق <b>databasename.tablename</b>.</p>
+<p class="Pp">لنسخ الجداول الموجودة في قاعدة البيانات <b>test</b> فقط، استخدم
+    الأمر التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --datadir=/var/lib/mysql --target-dir=/data/backups/ \
+--tables=&quot;^test[.].*&quot;</pre>
+</div>
+</div>
+<p class="Pp">لنسخ الجدول <b>test.t1</b> فقط، استخدم الأمر التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --datadir=/var/lib/mysql --target-dir=/data/backups/ \
+--tables=&quot;^test[.]t1&quot;</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">خيار <i>--tables-file</i></h2>
+<p class="Pp">يحدد الخيار <b>--tables-file</b> ملفًا يمكن أن يحتوي على أسماء
+    جداول متعددة، اسم جدول واحد في كل سطر في الملف. سيتم عمل نسخة احتياطي للجداول
+    المسماة في الملف فقط. تتم مطابقة الأسماء بشكل دقيق، حساسة لحالة الأحرف،
+    بدون أي مطابقة نمط أو تعبير نمطي. يجب أن تكون أسماء الجداول كاملة التحديد
+    بتنسيق <b>databasename.tablename</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ echo &quot;mydatabase.mytable&quot; &gt; /tmp/tables.txt
+$ xtrabackup --backup --tables-file=/tmp/tables.txt</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">خيارا <i>--databases</i> و <i>--databases-file</i></h2>
+<p class="Pp">يقبل الخيار ` --databases` قائمة مفصولة بمسافات من قواعد البيانات
+    والجداول التي سيتم عمل نسخة احتياطي لها بتنسيق <b>databasename[.tablename]</b>.
+    بالإضافة إلى هذه القائمة، تأكد من تحديد قواعد البيانات <b>mysql</b> و
+    <b>sys</b> و</p>
+<p class="Pp"><b>performance_schema</b>. هذه القواعد البيانات مطلوبة عند
+    استعادة قواعد البيانات باستخدام <i>xtrabackup --copy-back</i>.</p>
+<p class="Pp"><b>ملاحظة:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">قد تتم أيضًا إضافة الجداول التي تمت معالجتها أثناء خطوة
+    --prepare إلى النسخة الاحتياطي حتى لو لم يتم إدراجها صراحةً بواسطة المعلمة
+    إذا تم إنشاؤها بعد بدء النسخة الاحتياطي.</div>
+</div>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --databases='mysql sys performance_schema test ...'</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">خيار <b>--databases-file</b></h2>
+<p class="Pp">يحدد الخيار <i>--databases-file</i> ملفًا يمكن أن يحتوي على
+    قواعد بيانات وجداول متعددة بتنسيق <b>databasename[.tablename]</b>، اسم
+    عنصر واحد في كل سطر في الملف. تتم مطابقة الأسماء بشكل دقيق، حساسة لحالة
+    الأحرف، بدون أي مطابقة نمط أو تعبير نمطي.</p>
+<p class="Pp"><b>ملاحظة:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">قد تتم أيضًا إضافة الجداول التي تمت معالجتها أثناء خطوة
+    --prepare إلى النسخة الاحتياطي حتى لو لم يتم إدراجها صراحةً بواسطة المعلمة
+    إذا تم إنشاؤها بعد بدء النسخة الاحتياطي.</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Preparing_Partial_Backups'><a class='permalink' href='#Preparing_Partial_Backups'>تحضير النسخ الاحتياطي الجزئي</a></h2>
+<p class="Pp">الإجراء مشابه لاستعادة الجداول الفردية: قم بتطبيق السجلات واستخدم
+    الخيار <i>--export</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --prepare --export --target-dir=/path/to/partial/backup</pre>
+</div>
+</div>
+<p class="Pp">عند استخدام الخيار <i>--prepare</i> على نسخة احتياطي جزئي، سترى
+    تحذيرات حول الجداول التي لا توجد. هذا لأن هذه الجداول موجودة في قاموس البيانات
+    داخل InnoDB، ولكن ملفات .ibd المقابلة لها غير موجودة. لم يتم نسخها إلى
+    مجلد النسخة الاحتياطي. سيتم إزالة هذه الجداول من قاموس البيانات، وعندما تقوم
+    باستعادة النسخة الاحتياطي وتشغيل InnoDB، لن تكون موجودة ولن تسبب أي أخطاء
+    أو تحذيرات ليتم طباعتها في ملف السجل.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">تعذر العثور على أي ملف مرتبط بمعرف مساحة الجدول: 5
+<p class="Pp">استخدم --innodb-directories للعثور على ملفات مساحة الجدول.
+    إذا فشل ذلك، فاستخدم --innodb-force-recovery=1 لتجاهل هذا ولخسارة جميع
+    التغييرات بشكل دائم على مساحة (مساحات) الجدول المفقودة.</p>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Restoring_Partial_Backups'><a class='permalink' href='#Restoring_Partial_Backups'>استعادة النسخ الاحتياطي الجزئي</a></h2>
+<p class="Pp">يجب أن يتم الاستعادة عن طريق استعادة الجداول الفردية في النسخة
+    الاحتياطي الجزئي إلى الخادم.</p>
+<p class="Pp">يمكن أيضًا القيام بذلك عن طريق نسخ النسخة الاحتياطي المعدة مرة
+    أخرى إلى datadir "نظيف" (في هذه الحالة، تأكد من تضمين قاعدة البيانات
+    <b>mysql</b>) إلى datadir الذي تنقل النسخة الاحتياطي إليه. يمكن إنشاء قاعدة
+    بيانات نظام باستخدام ما يلي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ sudo mysql --initialize --user=mysql</pre>
+</div>
+</div>
+<p class="Pp">بمجرد تشغيل الخادم، قد ترى mysql يشكو من مساحات جداول مفقودة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>2021-07-19T12:42:11.077200Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 4, name 'test1/t1', file './d2/test1.ibd' is missing!
+2021-07-19T12:42:11.077300Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 4, name 'test1/t1', file './d2/test1.ibd' is missing!</pre>
+</div>
+</div>
+<p class="Pp">لتنظيف قاعدة البيانات اليتيمة من قاموس البيانات، يجب عليك إنشاء
+    مجلد قاعدة البيانات المفقود يدويًا ثم <b>DROP</b> (حذف) قاعدة البيانات هذه
+    من الخادم.</p>
+<p class="Pp">مثال على إنشاء قاعدة البيانات المفقودة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ mkdir /var/lib/mysql/test1/d2</pre>
+</div>
+</div>
+<p class="Pp">مثال على حذف قاعدة البيانات من الخادم:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>mysql&gt; DROP DATABASE d2;
+Query OK, 2 rows affected (0.5 sec)</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ADVANCED_FEATURES'><a class='permalink' href='#ADVANCED_FEATURES'>الميزات المتقدمة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Analyzing_Table_Statistics'><a class='permalink' href='#Analyzing_Table_Statistics'>تحليل إحصائيات الجداول</a></h2>
+<p class="Pp">يمكن لبرنامج <i>xtrabackup</i> تحليل ملفات بيانات InnoDB في وضع القراءة
+    فقط لتقديم إحصائيات عنها. للقيام بذلك، يجب عليك استخدام الخيار
+    <b>--stats</b>. يمكنك دمجه مع الخيار <b>--tables</b> للحد من الملفات التي
+    سيتم فحصها. كما أنه يستخدم الخيار <b>--use-memory</b>.</p>
+<p class="Pp">يمكنك إجراء التحليل على خادم قيد التشغيل، مع احتمال وجود أخطاء
+    بسبب تغيير البيانات أثناء التحليل. أو، يمكنك تحليل نسخة احتياطي من قاعدة
+    البيانات. في كلتا الحالتين، لاستخدام ميزة الإحصائيات، تحتاج إلى نسخة نظيفة
+    من قاعدة البيانات بما في ذلك ملفات السجل ذات الحجم الصحيح.</p>
+</section>
+</section>
+نعم،
+    لذلك تحتاج إلى التنفيذ باستخدام <b>--prepare</b> مرتين لاستخدام هذه الوظيفة
+    على نسخة احتياطية. </p>
+<p class="Pp">قد تبدو نتيجة التشغيل على نسخة احتياطية كما يلي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>&lt;INDEX STATISTICS&gt;
+  table: test/table1, index: PRIMARY, space id: 12, root page 3
+  estimated statistics in dictionary:
+    key vals: 25265338, leaf pages 497839, size pages 498304
+  real statistics:
+     level 2 pages: pages=1, data=5395 bytes, data/pages=32%
+     level 1 pages: pages=415, data=6471907 bytes, data/pages=95%
+        leaf pages: recs=25958413, pages=497839, data=7492026403 bytes, data/pages=91%</pre>
+</div>
+</div>
+<p class="Pp">يمكن تفسير ذلك على النحو التالي:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يُظهر السطر الأول ببساطة اسم الجدول والفهرس ومعرفاته الداخلية. إذا رأيت فهرسًا باسم <b>GEN_CLUST_INDEX</b>، فهذا هو الفهرس المجمع للجدول، والذي تم إنشاؤه تلقائيًا لأنك لم تقم بإنشاء <b>PRIMARY KEY</b> صراحةً.</li>
+  <li>المعلومات الإحصائية المقدرة في القاموس تشبه البيانات التي يتم جمعها عبر <b>ANALYZE TABLE</b> داخل <i>InnoDB</i> ليتم تخزينها كإحصائيات تقديرية للكاردينالية وتمريرها إلى مُحسن الاستعلام.</li>
+  <li>معلومات الإحصاءات الحقيقية هي نتيجة مسح صفحات البيانات وحساب معلومات دقيقة حول الفهرس.</li>
+  <li><b>The level &lt;X&gt; pages</b>: يعني الإخراج أن السطر يعرض معلومات حول الصفحات في هذا المستوى في شجرة الفهرس. كلما زادت قيمة <b>&lt;X&gt;</b>، كلما ابتعدت عن صفحات الأوراق، وهي المستوى 0. السطر الأول هو صفحة الجذر.</li>
+  <li>يُظهر إخراج <b>leaf pages</b> صفحات الأوراق، بالطبع. هذا هو المكان الذي يتم فيه تخزين بيانات الجدول.</li>
+  <li>يُظهر إخراج <b>external pages</b> (غير معروض) الصفحات الخارجية الكبيرة التي تحتوي على قيم طويلة جدًا بحيث لا تتناسب مع الصف نفسه، مثل قيم <b>BLOB</b> و <b>TEXT</b> الطويلة.</li>
+  <li><b>recs</b> هو العدد الفعلي للسجلات (الصفوف) في صفحات الأوراق.</li>
+  <li><b>pages</b> هو عدد الصفحات.</li>
+  <li><b>data</b> هو الحجم الإجمالي للبيانات في الصفحات، بالبايت.</li>
+  <li><b>data/pages</b> يتم حسابه كـ (<b>data</b> / (<b>pages</b> * <b>PAGE_SIZE</b>)) * 100%. لن يصل أبدًا إلى 100% بسبب المساحة المحجوزة لرؤوس وتذييلات الصفحات.</li>
+</ul>
+</div>
+<p class="Pp">تم نشر مثال أكثر تفصيلاً في <i>منشور</i> مدونة أداء MySQL.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Script_to_Format_Output'><a class='permalink' href='#Script_to_Format_Output'>برنامج نصي لتنسيق الإخراج</a></h2>
+<p class="Pp">يمكن استخدام البرنامج النصي التالي لتلخيص وترتيب إخراج معلومات الإحصاءات:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>tabulate-xtrabackup-stats.pl
+#!/usr/bin/env perl
+use strict;
+use warnings FATAL =&gt; 'all';
+my $script_version = &quot;0.1&quot;;
+my $PG_SIZE = 16_384; # InnoDB defaults to 16k pages, change if needed.
+my ($cur_idx, $cur_tbl);
+my (%idx_stats, %tbl_stats);
+my ($max_tbl_len, $max_idx_len) = (0, 0);
+while ( my $line = &lt;&gt; ) {
+   if ( my ($t, $i) = $line =~ m/table: (.*), index: (.*), space id:/ ) {
+      $t =~ s!/!.!;
+      $cur_tbl = $t;
+      $cur_idx = $i;
+      if ( length($i) &gt; $max_idx_len ) {
+         $max_idx_len = length($i);
+      }
+      if ( length($t) &gt; $max_tbl_len ) {
+         $max_tbl_len = length($t);
+      }
+   }
+   elsif ( my ($kv, $lp, $sp) = $line =~ m/key vals: (\d+), \D*(\d+), \D*(\d+)/ ) {
+      @{$idx_stats{$cur_tbl}-&gt;{$cur_idx}}{qw(est_kv est_lp est_sp)} = ($kv, $lp, $sp);
+      $tbl_stats{$cur_tbl}-&gt;{est_kv} += $kv;
+      $tbl_stats{$cur_tbl}-&gt;{est_lp} += $lp;
+      $tbl_stats{$cur_tbl}-&gt;{est_sp} += $sp;
+   }
+   elsif ( my ($l, $pages, $bytes) = $line =~ m/(?:level (\d+)|leaf) pages:.*pages=(\d+), data=(\d+) bytes/ ) {
+      $l ||= 0;
+      $idx_stats{$cur_tbl}-&gt;{$cur_idx}-&gt;{real_pages} += $pages;
+      $idx_stats{$cur_tbl}-&gt;{$cur_idx}-&gt;{real_bytes} += $bytes;
+      $tbl_stats{$cur_tbl}-&gt;{real_pages} += $pages;
+      $tbl_stats{$cur_tbl}-&gt;{real_bytes} += $bytes;
+   }
+}
+my $hdr_fmt = &quot;%${max_tbl_len}s %${max_idx_len}s %9s %10s %10s\n&quot;;
+my @headers = qw(TABLE INDEX TOT_PAGES FREE_PAGES PCT_FULL);
+printf $hdr_fmt, @headers;
+my $row_fmt = &quot;%${max_tbl_len}s %${max_idx_len}s %9d %10d %9.1f%%\n&quot;;
+foreach my $t ( sort keys %tbl_stats ) {
+   my $tbl = $tbl_stats{$t};
+   printf $row_fmt, $t, &quot;&quot;, $tbl-&gt;{est_sp}, $tbl-&gt;{est_sp} - $tbl-&gt;{real_pages},
+      $tbl-&gt;{real_bytes} / ($tbl-&gt;{real_pages} * $PG_SIZE) * 100;
+   foreach my $i ( sort keys %{$idx_stats{$t}} ) {
+      my $idx = $idx_stats{$t}-&gt;{$i};
+      printf $row_fmt, $t, $i, $idx-&gt;{est_sp}, $idx-&gt;{est_sp} - $idx-&gt;{real_pages},
+         $idx-&gt;{real_bytes} / ($idx-&gt;{real_pages} * $PG_SIZE) * 100;
+   }
+}</pre>
+</div>
+</div>
+Sample Script Output
+<p class="Pp">سيظهر إخراج برنامج Perl النصي أعلاه، عند تشغيله مقابل العينة المعروضة في منشور المدونة المذكور سابقًا، كما يلي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>          TABLE           INDEX TOT_PAGES FREE_PAGES   PCT_FULL
+art.link_out104                    832383      38561      86.8%
+art.link_out104         PRIMARY    498304         49      91.9%
+art.link_out104       domain_id     49600       6230      76.9%
+art.link_out104     domain_id_2     26495       3339      89.1%
+art.link_out104 from_message_id     28160        142      96.3%
+art.link_out104    from_site_id     38848       4874      79.4%
+art.link_out104   revert_domain    153984      19276      71.4%
+art.link_out104    site_message     36992       4651      83.4%</pre>
+</div>
+</div>
+<p class="Pp">الأعمدة هي الجدول والفهرس، متبوعة بالعدد الإجمالي للصفحات في هذا الفهرس، وعدد الصفحات غير المشغولة فعليًا بالبيانات، وعدد بايتات البيانات الفعلية كنسبة مئوية من الحجم الإجمالي لصفحات البيانات الفعلية. السطر الأول في الإخراج أعلاه، حيث يكون عمود <b>INDEX</b> فارغًا، هو ملخص للجدول بأكمله.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Working_with_Binary_Logs'><a class='permalink' href='#Working_with_Binary_Logs'>العمل مع سجلات التغيير</a></h2>
+<p class="Pp">يتكامل ثنائي <b>xtrabackup</b> مع <b>log_status table</b>. يمكّن هذا التكامل <b>xtrabackup</b> من طباعة موضع سجل التغيير المقابل للنسخة الاحتياطية، حتى تتمكن من استخدام موضع سجل التغيير هذا لتوفير نسخة طبق الأصل جديدة أو إجراء استعادة في نقطة زمنية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Finding_the_Binary_Log_Position'><a class='permalink' href='#Finding_the_Binary_Log_Position'>العثور على موضع سجل التغيير</a></h2>
+<p class="Pp">يمكنك العثور على موضع سجل التغيير المقابل لنسخة احتياطية بعد أخذ النسخة الاحتياطية. إذا كانت نسختك الاحتياطية من خادم تم تمكين تسجيل التغيير فيه، فإن <b>xtrabackup</b> ينشئ ملفًا باسم <b>xtrabackup_binlog_info</b> في الدليل المستهدف. يحتوي هذا الملف على اسم ملف سجل التغيير وموضعه في النقطة الدقيقة التي تم فيها أخذ النسخة الاحتياطية.</p>
+<p class="Pp">الإخراج مشابه لما يلي أثناء مرحلة النسخ الاحتياطي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>210715 14:14:59 Backup created in directory '/backup/'
+MySQL binlog position: filename 'binlog.000002', position '156'
+. . .
+210715 14:15:00 completed OK!</pre>
+</div>
+</div>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">اعتبارًا من Percona XtraBackup 8.0.26-18.0، لم يعد xtrabackup ينشئ ملف <b>xtrabackup_binlog_pos_innodb</b>. يرجع هذا التغيير إلى أن MySQL و Percona Server لم يعودا يحدّثان معلومات سجل التغيير في قسم نظام المعاملات العام لـ <b>ibdata</b>. يجب عليك الاعتماد على <b>xtrabackup_binlog_info</b> بغض النظر عن محرك التخزين المستخدم.</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">استعادة نقطة زمنية</h2>
+<p class="Pp">لإجراء استعادة في نقطة زمنية من نسخة احتياطية <b>xtrabackup</b>، يجب عليك إعداد واستعادة النسخة الاحتياطية، ثم إعادة تشغيل سجلات التغيير من النقطة الموضحة في ملف <b>xtrabackup_binlog_info</b>.</p>
+<p class="Pp">يمكن العثور على إجراء أكثر تفصيلاً هنا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Setting_Up_a_New_Replication_Replica'><a class='permalink' href='#Setting_Up_a_New_Replication_Replica'>إعداد نسخة طبق الأصل جديدة من النسخ المتماثل</a></h2>
+<p class="Pp">لإعداد نسخة طبق الأصل جديدة، يجب عليك إعداد النسخة الاحتياطية، واستعادتها إلى دليل بيانات النسخة طبق الأصل الجديدة. إذا كنت تستخدم الإصدار 8.0.22 أو أقدم، في أمر <b>CHANGE MASTER TO</b> الخاص بك، استخدم اسم ملف سجل التغيير والموضع الموضحين في ملف <b>xtrabackup_binlog_info</b> لبدء النسخ المتماثل.</p>
+<p class="Pp">إذا كنت تستخدم الإصدار 8.0.23 أو أحدث، فاستخدم
+    <i>CHANGE_REPLICATION_SOURCE_TO والخيارات المناسبة</i>.
+    <b>CHANGE_MASTER_TO</b> تم إهماله.</p>
+<p class="Pp">يمكن العثور على إجراء أكثر تفصيلاً في
+    ../howtos/setting_up_replication.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Restoring_Individual_Tables'><a class='permalink' href='#Restoring_Individual_Tables'>استعادة جداول فردية</a></h2>
+<p class="Pp">يمكن لـ <i>Percona XtraBackup</i> تصدير جدول موجود في ملف <i>.ibd</i> الخاص به. باستخدام <i>Percona XtraBackup</i>، يمكنك تصدير جداول فردية من أي قاعدة بيانات <i>InnoDB</i>، واستيرادها إلى <i>Percona Server for MySQL</i> مع <i>XtraDB</i> أو <i>MySQL</i> 8.0. المصدر لا يجب أن يكون <i>XtraDB</i> أو <i>MySQL</i> 8.0، ولكن الوجهة يجب أن تكون كذلك. هذه الطريقة تعمل فقط على ملفات <i>.ibd</i> الفردية.</p>
+<p class="Pp">يقوم المثال التالي بتصدير واستيراد الجدول التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>CREATE TABLE export_test (
+a int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Exporting_the_Table'><a class='permalink' href='#Exporting_the_Table'>تصدير الجدول</a></h2>
+<p class="Pp">تم إنشاء الجدول في وضع <i>innodb_file_per_table</i>، لذلك بعد أخذ نسخة احتياطية كالمعتاد باستخدام الخيار <i>--backup</i>، يوجد ملف <i>.ibd</i> في الدليل المستهدف:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ find /data/backups/mysql/ -name export_test.*
+/data/backups/mysql/test/export_test.ibd</pre>
+</div>
+</div>
+<p class="Pp">عند إعداد النسخة الاحتياطية، أضف الخيار <i>--export</i> إلى الأمر. إليك مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --prepare --export --target-dir=/data/backups/mysql/</pre>
+</div>
+</div>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">إذا قمت باستعادة جدول مساحة اسم InnoDB مشفرة، أضف ملف keyring:
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --prepare --export --target-dir=/tmp/table \
+--keyring-file-data=/var/lib/mysql-keyring/keyring</pre>
+</div>
+</div>
+</div>
+</div>
+<p class="Pp">الآن يجب أن ترى ملف <i>.exp</i> في الدليل المستهدف:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ find /data/backups/mysql/ -name export_test.*
+/data/backups/mysql/test/export_test.exp
+/data/backups/mysql/test/export_test.ibd
+/data/backups/mysql/test/export_test.cfg</pre>
+</div>
+</div>
+<p class="Pp">هذه الملفات الثلاثة هي الملفات الوحيدة المطلوبة لاستيراد الجدول إلى خادم يعمل <i>Percona Server for MySQL</i> مع <i>XtraDB</i> أو <i>MySQL</i> 8.0. في حالة استخدام الخادم لـ <i>تشفير مساحات اسم InnoDB</i>، يتم إضافة ملف <i>.cfp</i> إضافي يحتوي على مفتاح النقل ومفتاح مساحة الاسم المشفر.</p>
+<p class="Pp"><b>NOTE:</b></p>
+<div class="Bd-indent">
+<div clas{
+  "body": [
+    {
+      "type": "section",
+      "id": "metadata-files",
+      "class": "Ss",
+      "content": [
+        {
+          "type": "div",
+          "class": "Bd-indent",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": "يحتوي ملف البيانات الوصفية <i>.cfg</i> على تفريغ قاموس <i>InnoDB</i> بتنسيق خاص. هذا التنسيق مختلف عن تنسيق <i>.exp</i> المستخدم في <i>XtraDB</i> لنفس الغرض. ملف <i>.cfg</i> غير مطلوب لاستيراد مساحة جدول إلى <i>MySQL</i> 8.0 أو <i>Percona Server for MySQL</i> 8.0."
+            },
+            {
+              "type": "paragraph",
+              "content": "يتم استيراد مساحة الجدول بنجاح حتى لو كان الجدول من خادم آخر، ولكن <i>InnoDB</i> يقوم بالتحقق من المخطط إذا كان ملف <i>.cfg</i> المقابل موجودًا في نفس الدليل."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "Importing_the_Table",
+      "class": "Ss",
+      "content": [
+        {
+          "type": "h2",
+          "class": "Ss",
+          "id": "Importing_the_Table",
+          "content": [
+            {
+              "type": "a",
+              "class": "permalink",
+              "href": "#Importing_the_Table",
+              "content": "استيراد الجدول"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "على الخادم الوجهة الذي يعمل عليه <i>Percona Server for MySQL</i> مع <i>XtraDB</i> وخيار <i>innodb_import_table_from_xtrabackup</i> ممكّن، أو <i>MySQL</i> 8.0، قم بإنشاء جدول بنفس الهيكل، ثم قم بتنفيذ الخطوات التالية:"
+        },
+        {
+          "type": "div",
+          "class": "Bd-indent",
+          "content": [
+            {
+              "type": "dl",
+              "class": "Bl-tag",
+              "content": [
+                {
+                  "type": "dt",
+                  "content": "1."
+                },
+                {
+                  "type": "dd",
+                  "content": "قم بتشغيل الأمر <b>ALTER TABLE test.export_test DISCARD TABLESPACE;</b>. إذا رأيت الخطأ التالي، فقم بتمكين <i>innodb_file_per_table</i> وأنشئ الجدول مرة أخرى."
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "div",
+                  "class": "Bd-indent",
+                  "content": [
+                    {
+                      "type": "dl",
+                      "class": "Bl-tag",
+                      "content": [
+                        {
+                          "type": "dt",
+                          "id": "Error",
+                          "content": [
+                            {
+                              "type": "a",
+                              "class": "permalink",
+                              "href": "#Error",
+                              "content": "خطأ"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "dd",
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "content": "ERROR 1030 (HY000): Got error -1 from storage engine"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "dl",
+              "class": "Bl-tag",
+              "content": [
+                {
+                  "type": "dt",
+                  "content": "2."
+                },
+                {
+                  "type": "dd",
+                  "content": "انسخ الملفات المصدرة إلى الدليل الفرعي <b>test/</b> في دليل بيانات الخادم الوجهة"
+                },
+                {
+                  "type": "dt",
+                  "content": "3."
+                },
+                {
+                  "type": "dd",
+                  "content": "قم بتشغيل <b>ALTER TABLE test.export_test IMPORT TABLESPACE;</b>"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "تم استيراد الجدول، ويمكنك تشغيل <b>SELECT</b> لرؤية البيانات المستوردة."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "LRU_dump_backup",
+      "class": "Ss",
+      "content": [
+        {
+          "type": "h2",
+          "class": "Ss",
+          "id": "LRU_dump_backup",
+          "content": [
+            {
+              "type": "a",
+              "class": "permalink",
+              "href": "#LRU_dump_backup",
+              "content": "نسخ احتياطي لتفريغ LRU"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "يتضمن <i>Percona XtraBackup</i> تفريغًا محفوظًا لمجمع المخزن المؤقت في النسخة الاحتياطية لتقليل وقت الإحماء. يقوم باستعادة حالة مجمع المخزن المؤقت من ملف <b>ib_buffer_pool</b> بعد إعادة التشغيل. يكتشف <i>Percona XtraBackup</i> ملف <b>ib_buffer_pool</b> ويقوم بنسخه احتياطيًا تلقائيًا. [صورة]"
+        },
+        {
+          "type": "paragraph",
+          "content": "إذا كان خيار استعادة المخزن المؤقت ممكّنًا في <b>my.cnf</b>، فسيكون مجمع المخزن المؤقت في حالة دافئة بعد استعادة النسخة الاحتياطية."
+        },
+        {
+          "type": "paragraph",
+          "content": "انظر أيضًا:"
+        },
+        {
+          "type": "div",
+          "class": "Bd-indent",
+          "content": [
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "div",
+                  "class": "Bd-indent",
+                  "content": [
+                    {
+                      "type": "dl",
+                      "class": "Bl-tag",
+                      "content": [
+                        {
+                          "type": "dt",
+                          "id": "MySQL",
+                          "content": [
+                            {
+                              "type": "a",
+                              "class": "permalink",
+                              "href": "#MySQL",
+                              "content": "<b>وثائق <i>MySQL</i>: حفظ واستعادة حالة مجمع المخزن المؤقت</b>"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "dd",
+                          "content": [
+                            {
+                              "type": "a",
+                              "href": "https://dev.mysql.com/doc/refman/8.0/en/innodb-preload-buffer-pool.html",
+                              "content": "https://dev.mysql.com/doc/refman/8.0/en/innodb-preload-buffer-pool.html"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "Streaming_Backups",
+      "class": "Ss",
+      "content": [
+        {
+          "type": "h2",
+          "class": "Ss",
+          "id": "Streaming_Backups",
+          "content": [
+            {
+              "type": "a",
+              "class": "permalink",
+              "href": "#Streaming_Backups",
+              "content": "النسخ الاحتياطي التدفق"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "يدعم <b>Percona XtraBackup</b> وضع التدفق. يرسل وضع التدفق نسخة احتياطية إلى <b>STDOUT</b> بتنسيق <i>xbstream</i> بدلاً من نسخ الملفات إلى دليل النسخ الاحتياطي."
+        },
+        {
+          "type": "paragraph",
+          "content": "تسمح لك هذه الطريقة باستخدام برامج أخرى لتصفية مخرجات النسخة الاحتياطية، مما يوفر مرونة أكبر لتخزين النسخة الاحتياطية. على سبيل المثال، يتم تحقيق الضغط عن طريق توجيه المخرجات إلى أداة ضغط. تتمثل إحدى فوائد النسخ الاحتياطي التدفق واستخدام أنابيب Unix في أنه يمكن تشفير النسخ الاحتياطية تلقائيًا."
+        },
+        {
+          "type": "paragraph",
+          "content": "لاستخدام ميزة التدفق، يجب عليك استخدام <b>--stream</b>، مع توفير تنسيق التدفق (<b>xbstream</b>) ومكان تخزين الملفات المؤقتة:"
+        },
+        {
+          "type": "div",
+          "class": "Bd-indent",
+          "content": [
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "pre",
+                  "content": "$ xtrabackup --stream=xbstream --target-dir=/tmp"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "يستخدم <i>xtrabackup</i> <i>xbstream</i> لتدفق جميع ملفات البيانات إلى <b>STDOUT</b>، بتنسيق <b>xbstream</b> خاص. بعد الانتهاء من تدفق جميع ملفات البيانات إلى <b>STDOUT</b>، يقوم بإيقاف <i>xtrabackup</i> ويدفق ملف السجل المحفوظ أيضًا."
+        },
+        {
+          "type": "paragraph",
+          "content": "انظر أيضًا:"
+        },
+        {
+          "type": "div",
+          "class": "Bd-indent",
+          "content": [
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "div",
+                  "class": "Bd-indent",
+                  "content": [
+                    {
+                      "type": "dl",
+                      "class": "Bl-tag",
+                      "content": [
+                        {
+                          "type": "dt",
+                          "id": "More",
+                          "content": [
+                            {
+                              "type": "a",
+                              "class": "permalink",
+                              "href": "#More",
+                              "content": "<b>مزيد من المعلومات حول <i>xbstream</i></b>"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "dd",
+                          "content": "xbstream_binary"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": "عند تمكين الضغط، يقوم <i>xtrabackup</i> بضغط بيانات الإخراج، باستثناء الملفات الوصفية وغير <i>InnoDB</i> التي لا يتم ضغطها، باستخدام خوارزمية الضغط المحددة. الخوارزمية الوحيدة المدعومة حاليًا هي <b>quicklz</b>. الملفات الناتجة لها تنسيق أرشيف <b>qpress</b>، أي أن كل ملف *.qp ينتجه xtrabackup هو في الأساس أرشيف qpress أحادي الملف ويمكن استخراجه وفك ضغطه بواسطة <i>أداة أرشفة ملفات qpress</i> المتوفرة من مستودعات برامج Percona."
+        },
+        {
+          "type": "paragraph",
+          "content": "باستخدام <i>xbstream</i> كخيار تدفق، يمكن نسخ النسخ الاحتياطية وضغطها بالتوازي. يمكن لهذا الخيار تحسين سرعة عملية النسخ الاحتياطي بشكل كبير. في حالة ضغط النسخ الاحتياطية وتشفيرها، يجب فك تشفيرها قبل فك ضغطها."
+        },
+        {
+          "type": "table",
+          "class": "tbl",
+          "style": "border-top-style: solid;",
+          "rows": [
+            {
+              "cells": [
+                "المهمة",
+                "الأمر"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "تدفق النسخة الاحتياطية إلى أرشيف باسم <b>backup.xbstream</b>",
+                "<b>xtrabackup --backup --stream=xbstream --target-dir=./ &gt; backup.xbstream</b>"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "تدفق النسخة الاحتياطية إلى أرشيف <i> مضغوط</i> باسم <b>backup.xbstream</b>",
+                "<b>xtrabackup --backup --stream=xbstream --compress --target-dir=./ &gt; backup.xbstream</b>"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "تشفير النسخة الاحتياطية",
+                "$ xtrabackup --backup --stream=xbstream ./ &gt; backup.xbstream gzip - | openssl des3 -salt -k \"password\" &gt; backup.xbstream.gz.des3"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "فك ضغط النسخة الاحتياطية إلى الدليل الحالي",
+                "<b>xbstream -x &lt; backup.xbstream</b>"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "إرسال النسخة الاحتياطية مضغوطة مباشرة إلى مضيف آخر وفك ضغطها",
+                "<b>xtrabackup --backup --compress --stream=xbstream --target-dir=./ | ssh user@otherhost \"xbstream -x\"</b>"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "إرسال النسخة الاحتياطية إلى خادم آخر باستخدام <b>netcat</b>.",
+                "على المضيف الوجهة: 0.0 3.5 $ nc -l 9999 | cat - &gt; /data/backups/backup.xbstream 168u 168u على المضيف المصدر: 0.0 3.5 $ xtrabackup --backup --stream=xbstream ./ | nc desthost 9999 168u 168u"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            }
+          ]
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "table",
+          "class": "tbl",
+          "style": "border-top-style: solid;",
+          "rows": [
+            {
+              "cells": [
+                "إرسال النسخة الاحتياطية إلى خادم آخر باستخدام سطر واحد:",
+                "$ ssh <i>user@desthost</i> \"( nc -l 9999 &gt; /data/backups/backup.xbstream &amp; )\" &amp;&amp; xtrabackup --backup --stream=xbstream ./ | nc desthost 9999"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "تقييد معدل النقل إلى 10 ميجابايت/ثانية باستخدام أداة <b>pipe viewer</b> [1]",
+                "$ xtrabackup --backup --stream=xbstream ./ | pv -q -L10m ssh <i>user@desthost</i> \"cat - &gt; /data/backups/backup.xbstream\""
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            },
+            {
+              "cells": [
+                "التحقق من سلامة النسخة الاحتياطية أثناء التدفق:",
+                "على المضيف الوجهة: 0.0 3.5 $ nc -l 9999 | tee &gt;(sha1sum &gt; destination_checksum) &gt; /data/backups/backup.xbstream 168u 168u على المضيف المصدر: 0.0 3.5 $ xtrabackup --backup --stream=xbstream ./ | tee &gt;(sha1sum &gt; source_checksum) | nc desthost 9999 168u 168u قارن ملخصات التدقيق على المضيف المصدر: 0.0 3.5 $ cat source_checksum 65e4f916a49c1f216e0887ce54cf59bf3934dbad - 168u 168u قارن ملخصات التدقيق على المضيف الوجهة: 0.0 3.5 $ cat destination_checksum 65e4f916a49c1f216e0887ce54cf59bf3934dbad - 168u 168u"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            }
+          ]
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "br"
+        },
+        {
+          "type": "table",
+          "class": "tbl",
+          "style": "border-top-style: solid;",
+          "rows": [
+            {
+              "cells": [
+                "ضغط متوازي مع نسخ احتياطي متوازي",
+                "<b>xtrabackup --backup --compress --compress-threads=8 --stream=xbstream --parallel=4 --target-dir=./ &gt; backup.xbstream</b>"
+              ],
+              "style": "border-left-style: solid; border-bottom-style: solid;"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "footnotes": [
+    {
+      "type": "section",
+      "id": "FOOTNOTES",
+      "class": "Sh",
+      "content": [
+        {
+          "type": "h1",
+          "class": "Sh",
+          "id": "FOOTNOTES",
+          "content": [
+            {
+              "type": "a",
+              "class": "permalink",
+              "href": "#FOOTNOTES",
+              "content": "ملاحظات"
+            }
+          ]
+        },
+        {
+          "type": "dl",
+          "class": "Bl-tag",
+          "content": [
+            {
+              "type": "dt",
+              "content": "[1]"
+            },
+            {
+              "type": "dd",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": "قم بالتثبيت من <i>الموقع الرسمي</i> أو من حزمة التوزيع (<b>apt install pv</b>)"
+                },
+                {
+                  "type": "paragraph",
+                  "content": "لاحظ أن النسخة الاحتياطية المتدفقة ستحتاج إلى تجهيز قبل الاستعادة. وضع التدفق لا يقوم بتجهيز النسخة الاحتياطية."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "Encrypting_Backups",
+          "class": "Ss",
+          "content": [
+            {
+              "type": "h2",
+              "class": "Ss",
+              "id": "Encrypting_Backups",
+              "content": [
+                {
+                  "type": "a",
+                  "class": "permalink",
+                  "href": "#Encrypting_Backups",
+                  "content": "تشفير النسخ الاحتياطية"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": "يدعم <i>Percona XtraBackup</i> تشفير وفك تشفير النسخ الاحتياطية المحلية والتدفق باستخدام خيار <i>xbstream</i> لإضافة طبقة أخرى من الحماية. يتم تطبيق التشفير باستخدام مكتبة <b>libgcrypt</b> من GnuPG."
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "Creating_Encrypted_Backups",
+          "class": "Ss",
+          "content": [
+            {
+              "type": "h2",
+              "class": "Ss",
+              "id": "Creating_Encrypted_Backups",
+              "content": [
+                {
+                  "type": "a",
+                  "class": "permalink",
+                  "href": "#Creating_Encrypted_Backups",
+                  "content": "إنشاء نسخ احتياطية مشفرة"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": "لإنشاء نسخة احتياطية مشفرة، يجب تحديد الخيارات التالية (الخياران <b>--encrypt-key</b> و <b>--encrypt-key-file</b> متعارضان، أي يجب توفير أحدهما فقط):"
+            },
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "ul",
+                  "class": "Bl-bullet",
+                  "content": [
+                    {
+                      "type": "li",
+                      "content": "<b>--encrypt</b>"
+                    },
+                    {
+                      "type": "li",
+                      "content": ":option:` --encrypt-key`"
+                    },
+                    {
+                      "type": "li",
+                      "content": ":option:` --encrypt-key-file`"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": "يمكن استخدام كل من الخيار <b>--encrypt-key</b> والخيار <b>--encrypt-key-file</b> لتحديد مفتاح التشفير. يمكن إنشاء مفتاح تشفير باستخدام أمر مثل <b>openssl rand -base64 32</b>"
+            },
+            {
+              "type": "paragraph",
+              "content": "يجب أن يبدو ناتج هذا الأمر كما يلي:"
+            },
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "div",
+                  "class": "Bd-indent",
+                  "content": [
+                    {
+                      "type": "pre",
+                      "content": "U2FsdGVkX19VPN7VM+lwNI0fePhjgnhgqmDBqbF3Bvs="
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "content": "يمكن بعد ذلك استخدام هذه القيمة كمفتاح تشفير"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "class": "Ss",
+          "content": [
+            {
+              "type": "h2",
+              "class": "Ss",
+              "content": "الخيار <b>--encrypt-key</b>"
+            },
+            {
+              "type": "paragraph",
+              "content": "مثال على أمر <i>xtrabackup</i> باستخدام <b>--encrypt-key</b> يجب أن يبدو كما يلي:"
+            },
+            {
+              "type": "div",
+              "class": "Bd-indent",
+              "content": [
+                {
+                  "type": "div",
+                  "class": "Bd-indent"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+tes and store the results with you backup
+  set.</p>
+<p class="Pp">For the necessary privileges, see pxb.privilege.
+    PERCONA_SCHEMA.XTRABACKUP_HISTORY table</p>
+<p class="Pp">This table contains the information about the previous server
+    backups. Information about the backups will only be written if the backup
+    was taken with <b>--history</b> option.</p>
+<table class="tbl" style="border-top-style: solid;">
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">Column Name</td>
+    <td style="border-right-style: solid;">Description</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">uuid</td>
+    <td style="border-right-style: solid;">Unique backup id</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">name</td>
+    <td style="border-right-style: solid;">User provided name of backup series.
+      There may be multiple entries with the same name used to identify related
+      backups in a series.</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">tool_name</td>
+    <td style="border-right-style: solid;">Name of tool used to take backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">tool_command</td>
+    <td style="border-right-style: solid;">Exact command line given to the tool
+      with --password and --encryption_key obfuscated</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">tool_version</td>
+    <td style="border-right-style: solid;">Version of tool used to take
+      backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">ibbackup_version</td>
+    <td style="border-right-style: solid;">Version of the xtrabackup binary used
+      to take backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">server_version</td>
+    <td style="border-right-style: solid;">Server version on which backup was
+      taken</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">start_time</td>
+    <td style="border-right-style: solid;">Time at the start of the backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">end_time</td>
+    <td style="border-right-style: solid;">Time at the end of the backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">lock_time</td>
+    <td style="border-right-style: solid;">Amount of time, in seconds, spent
+      calling and holding locks for <b>FLUSH TABLES WITH READ LOCK</b></td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">binlog_pos</td>
+    <td style="border-right-style: solid;">Binlog file and position at end of
+      <b>FLUSH TABLES WITH READ LOCK</b></td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">innodb_from_lsn</td>
+    <td style="border-right-style: solid;">LSN at beginning of backup which can
+      be used to determine prior backups</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">innodb_to_lsn</td>
+    <td style="border-right-style: solid;">LSN at end of backup which can be
+      used as the starting lsn for the next incremental</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">partial</td>
+    <td style="border-right-style: solid;">Is this a partial backup, if <b>N</b>
+      that means that it's the full backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">incremental</td>
+    <td style="border-right-style: solid;">Is this an incremental backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">format</td>
+    <td style="border-right-style: solid;">Description of result format
+      (<b>xbstream</b>)</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">compact</td>
+    <td style="border-right-style: solid;">Is this a compact backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">compressed</td>
+    <td style="border-right-style: solid;">Is this a compressed backup</td>
+  </tr>
+  <tr style="border-left-style: solid; border-bottom-style: solid;">
+    <td style="border-right-style: solid;">encrypted</td>
+    <td style="border-right-style: solid;">Is this an encrypted backup</td>
+  </tr>
+  Limitations.INDENT 0.0
+</table>
+<ul class="Bl-bullet">
+  <li><b>--history</b> option must be specified only on the command line and not
+      within a configuration file in order to be effective.</li>
+  <li><b>--incremental-history-name</b> and <b>--incremental-history-uuid</b>
+      options must be specified only on the command line and not within a
+      configuration file in order to be effective.</li>
+</ul>
+<br/>
+<br/>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='IMPLEMENTATION'><a class='permalink' href='#IMPLEMENTATION'>IMPLEMENTATION</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Implementation_Details'><a class='permalink' href='#Implementation_Details'>Implementation   Details</a></h2>
+<p class="Pp">This page contains notes on various internal aspects of the
+    <i>xtrabackup</i> tool's operation.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='File_Permissions'><a class='permalink' href='#File_Permissions'>File   Permissions</a></h2>
+<p class="Pp"><i>xtrabackup</i> opens the source data files in read-write mode,
+    although it does not modify the files. This means that you must run
+    <i>xtrabackup</i> as a user who has permission to write the data files. The
+    reason for opening the files in read-write mode is that <i>xtrabackup</i>
+    uses the embedded <i>InnoDB</i> libraries to open and read the files, and
+    <i>InnoDB</i> opens them in read-write mode because it normally assumes it
+    is going to write to them.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Tuning_the_OS_Buffers'><a class='permalink' href='#Tuning_the_OS_Buffers'>Tuning   the OS Buffers</a></h2>
+<p class="Pp">Because <i>xtrabackup</i> reads large amounts of data from the
+    filesystem, it uses <b>posix_fadvise()</b> where possible, to instruct the
+    operating system not to try to cache the blocks it reads from disk. Without
+    this hint, the operating system would prefer to cache the blocks, assuming
+    that <b>xtrabackup</b> is likely to need them again, which is not the case.
+    Caching such large files can place pressure on the operating system's
+    virtual memory and cause other processes, such as the database server, to be
+    swapped out. The <b>xtrabackup</b> tool avoids this with the following hint
+    on both the source and destination files:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>posix_fadvise(file, 0, 0, POSIX_FADV_DONTNEED)</pre>
+</div>
+</div>
+<p class="Pp">In addition, xtrabackup asks the operating system to perform more
+    aggressive read-ahead optimizations on the source files:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>posix_fadvise(file, 0, 0, POSIX_FADV_SEQUENTIAL)</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Copying_Data_Files'><a class='permalink' href='#Copying_Data_Files'>Copying   Data Files</a></h2>
+<p class="Pp">When copying the data files to the target directory,
+    <i>xtrabackup</i> reads and writes 1 MB of data at a time. This is not
+    configurable. When copying the log file, <i>xtrabackup</i> reads and writes
+    512 bytes at a time. This is also not possible to configure, and matches
+    InnoDB's behavior (workaround exists in <i>Percona Server for MySQL</i>
+    because it has an option to tune <b>innodb_log_block_size</b> for
+    <i>XtraDB</i>, and in that case <i>Percona XtraBackup</i> will match the
+    tuning).</p>
+<p class="Pp">After reading from the files, <b>xtrabackup</b> iterates over the
+    1MB buffer a page at a time, and checks for page corruption on each page
+    with InnoDB's <b>buf_page_is_corrupted()</b> function. If the page is
+    corrupt, it re-reads and retries up to 10 times for each page. It skips this
+    check on the doublewrite buffer.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><i>xtrabackup</i> Exit Codes</h2>
+<p class="Pp">The <i>xtrabackup</i> binary exits with the traditional success
+    value of 0 after a backup when no error occurs. If an error occurs during
+    the backup, the exit value is 1.</p>
+<p class="Pp">In certain cases, the exit value can be something other than 0 or
+    1, due to the command-line option code included from the <i>MySQL</i>
+    libraries. An unknown command-line option, for example, will cause an exit
+    code of 255.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REFERENCES'><a class='permalink' href='#REFERENCES'>REFERENCES</a></h1>
+<section class="Ss">
+<h2 class="Ss">The <b>xtrabackup</b> Option Reference</h2>
+<p class="Pp">This page documents all of the command-line options for the
+    <b>xtrabackup</b> binary.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Modes_of_operation'><a class='permalink' href='#Modes_of_operation'>Modes   of operation</a></h2>
+<p class="Pp">You invoke <i>xtrabackup</i> in one of the following modes:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><i>--backup</i> mode to make a backup in a target directory</li>
+  <li><i>--prepare</i> mode to restore data from a backup (created in
+      <i>--backup</i> mode)</li>
+  <li><i>--copy-back</i> to copy data from a backup to the location that
+      contained the original data; to move data instead of copying use the
+      alternate <i>--move-back</i> mode.</li>
+  <li><i>--stats</i> mode to scan the specified data files and print out index
+      statistics.</li>
+</ul>
+</div>
+<p class="Pp">When you intend to run <i>xtrabackup</i> in any of these modes,
+    use the following syntax:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup [--defaults-file=#] --backup|--prepare|--copy-back|--stats [OPTIONS]</pre>
+</div>
+</div>
+<p class="Pp">For example, the <i>--prepare</i> mode is applied as follows:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --prepare --target-dir=/data/backup/mysql/</pre>
+</div>
+</div>
+<p class="Pp">For all modes, the default options are read from the
+    <b>xtrabackup</b> and <b>mysqld</b> configuration groups from the following
+    files in the given order:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd><b>/etc/my.cnf</b></dd>
+  <dt>2.</dt>
+  <dd><b>/etc/mysql/my.cnf</b></dd>
+  <dt>3.</dt>
+  <dd><b>/usr/etc/my.cnf</b></dd>
+  <dt>4.</dt>
+  <dd><b>~/.my.cnf</b>.</dd>
+</dl>
+</div>
+<p class="Pp">As the first parameter to <i>xtrabackup</i> (in place of the
+    <i>--defaults-file</i>, you may supply one of the following:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><i>--print-defaults</i> to have <i>xtrabackup</i> print the argument list
+      and exit.</li>
+  <li><i>--no-defaults</i> to forbid reading options from any file but the login
+      file.</li>
+  <li><i>--defaults-file</i> to read the default options from the given
+    file.</li>
+  <li><i>--defaults-extra-file</i> to read the specified additional file after
+      the global files have b
+ <li><i>--defaults-group-suffix</i> لقراءة مجموعات التكوين باللاحقة المحددة. يتم إنشاء اسم المجموعة الفعال عن طريق ربط مجموعات التكوين الافتراضية (<b>xtrabackup</b> و <b>mysqld</b>) باللاحقة المحددة.</li>
+  <li><i>--login-path</i> لقراءة المسار المحدد من ملف تسجيل الدخول.</li>
+</ul>
+</div>
+خيارات InnoDB
+<p class="Pp">هناك مجموعة كبيرة من خيارات InnoDB التي يتم قراءتها عادةً من ملف التكوين <b>my.cnf</b>، بحيث يقوم <i>xtrabackup</i> بتشغيل InnoDB المضمن لديه بنفس تكوين الخادم الحالي لديك. لا تحتاج عادةً إلى تحديدها بشكل صريح. هذه الخيارات لها نفس السلوك في InnoDB و XtraDB. انظر <i>--innodb-miscellaneous</i> لمزيد من المعلومات.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Options'><a class='permalink' href='#Options'>الخيارات</a></h2>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="apply"><a class="permalink" href="#apply"><b>--apply-log-only</b></a></dt>
+  <dd>يتسبب هذا الخيار في إجراء مرحلة إعادة التسجيل فقط عند إعداد نسخة احتياطية. وهو أمر مهم جدًا للنسخ الاحتياطي التزايدي.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="backup"><a class="permalink" href="#backup"><b>--backup</b></a></dt>
+  <dd>قم بعمل نسخة احتياطية وضعها في <i>--target-dir</i>. انظر إنشاء نسخة احتياطية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--backup-lock-timeout</b></dt>
+  <dd>الوقت المستغرق بالثواني لمحاولات الحصول على أقفال البيانات الوصفية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--backup-lock-retry-count</b></dt>
+  <dd>عدد المحاولات للحصول على أقفال البيانات الوصفية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--backup-locks</b></dt>
+  <dd>يتحكم هذا الخيار فيما إذا كان سيتم استخدام أقفال النسخ الاحتياطي بدلاً من <b>FLUSH TABLES WITH READ LOCK</b> في مرحلة النسخ الاحتياطي. لا يكون لهذا الخيار تأثير عندما لا يدعم الخادم أقفال النسخ الاحتياطي. هذا الخيار ممكّن افتراضيًا، قم بتعطيله باستخدام <i>--no-backup-locks</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="check"><a class="permalink" href="#check"><b>--check-privileges</b></a></dt>
+  <dd>يقوم هذا الخيار بالتحقق مما إذا كان <i>Percona XtraBackup</i> لديه جميع الامتيازات المطلوبة. إذا كان هناك امتياز مفقود مطلوب للعملية الحالية، فسيتم إنهاؤه وطباعة رسالة خطأ. إذا كان الامتياز المفقود غير مطلوب للعملية الحالية، ولكنه قد يكون ضروريًا لعملية XtraBackup أخرى، فلن يتم إنهاء العملية وسيتم طباعة تحذير.</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>xtrabackup: Error: missing required privilege LOCK TABLES on *.*
+xtrabackup: Warning: missing required privilege REPLICATION CLIENT on *.*</pre>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="close"><a class="permalink" href="#close"><b>--close-files</b></a></dt>
+  <dd>لا تبقِ الملفات مفتوحة. عندما يقوم <i>xtrabackup</i> بفتح مساحة جدول، فإنه عادةً لا يغلق مقبض الملف الخاص به للتعامل مع عمليات DDL بشكل صحيح. ومع ذلك، إذا كان عدد مساحات الجداول كبيرًا جدًا ولا يمكن أن يتناسب مع أي حد، فهناك خيار لإغلاق مقابض الملفات بمجرد عدم الوصول إليها. <i>Percona XtraBackup</i> يمكن أن ينتج نسخًا احتياطية غير متناسقة مع تمكين هذا الخيار. استخدمه على مسؤوليتك الخاصة.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="compress"><a class="permalink" href="#compress"><b>--compress</b></a></dt>
+  <dd>يخبر هذا الخيار <i>xtrabackup</i> بضغط جميع بيانات الإخراج، بما في ذلك ملف سجل المعاملات وملفات البيانات الوصفية، باستخدام إما خوارزمية الضغط <b>quicklz</b> أو <b>lz4</b>. يتم اختيار <b>quicklz</b> افتراضيًا.
+    <p class="Pp">عند استخدام <b>--compress=quicklz</b> أو <b>--compress</b>، تكون الملفات الناتجة بتنسيق أرشيف qpress، أي أن كل ملف <b>*.qp</b> ينتجه <i>xtrabackup</i> هو في الأساس أرشيف qpress أحادي الملف ويمكن استخراجه وفك ضغطه بواسطة أداة أرشفة الملفات <i>qpress</i>.</p>
+    <p class="Pp">ينتج <b>--compress=lz4</b> ملفات <b>*.lz4</b>. يمكنك استخراج محتويات هذه الملفات باستخدام برنامج مثل <b>lz4</b>.</p>
+    <p class="Pp"><b>انظر أيضاً:</b></p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="QuickLZ"><a class="permalink" href="#QuickLZ"><b>QuickLZ</b></a></dt>
+  <dd><a href='http://www.quicklz.com'>http://www.quicklz.com</a></dd>
+  <dt id="LZ4"><a class="permalink" href="#LZ4"><b>LZ4</b></a></dt>
+  <dd><a href='https://lz4.github.io/lz4/'>https://lz4.github.io/lz4/</a></dd>
+</dl>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--compress-chunk-size=#</b></dt>
+  <dd>حجم مخزن العمل (المخازن) لخيوط الضغط بالبايت. القيمة الافتراضية هي 64 كيلوبايت.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--compress-threads=#</b></dt>
+  <dd>يحدد هذا الخيار عدد خيوط العمل التي يستخدمها <i>xtrabackup</i> لضغط البيانات المتوازي. يبلغ هذا الخيار افتراضيًا <b>1</b>. يمكن استخدام الضغط المتوازي (<i>--compress-threads</i>) مع نسخ الملفات المتوازي (<i>--parallel</i>). على سبيل المثال، <b>--parallel=4 --compress --compress-threads=2</b> سينشئ 4 خيوط I/O ستقوم بقراءة البيانات وتوجيهها إلى خيطين ضغط.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="copy"><a class="permalink" href="#copy"><b>--copy-back</b></a></dt>
+  <dd>انسخ جميع الملفات الموجودة في نسخة احتياطية سابقة من دليل النسخ الاحتياطي إلى مواقعها الأصلية. لن يقوم هذا الخيار بنسخ الملفات الموجودة ما لم يتم تحديد الخيار <i>--force-non-empty-directories</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="core"><a class="permalink" href="#core"><b>--core-file</b></a></dt>
+  <dd>اكتب ملف core عند الإشارات المميتة.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="databases=_"><a class="permalink" href="#databases=_"><b>--databases=#</b></a></dt>
+  <dd>يحدد هذا الخيار قائمة بقواعد البيانات والجداول التي يجب نسخها احتياطيًا. يقبل الخيار قائمة بالشكل
+      <b>&quot;databasename1[.table_name1]</b> <b>databasename2[.table_name2] . . .&quot;</b>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="databases"><a class="permalink" href="#databases"><b>--databases-exclude=name</b></a></dt>
+  <dd>استبعاد قواعد البيانات بناءً على الاسم، يعمل بنفس طريقة <i>--databases</i>، ولكن يتم استبعاد الأسماء المطابقة من النسخ الاحتياطي. لاحظ أن هذا الخيار له أولوية أعلى من <i>--databases</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="databases~2"><a class="permalink" href="#databases~2"><b>--databases-file=#</b></a></dt>
+  <dd>يحدد هذا الخيار المسار إلى الملف الذي يحتوي على قائمة بقواعد البيانات والجداول التي يجب نسخها احتياطيًا. يمكن أن يحتوي الملف على عناصر القائمة بالشكل <b>databasename1[.table_name1]</b>، عنصر واحد في كل سطر.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="datadir=DIRECTORY"><a class="permalink" href="#datadir=DIRECTORY"><b>--datadir=DIRECTORY</b></a></dt>
+  <dd>دليل المصدر للنسخة الاحتياطية. يجب أن يكون هذا هو نفس datadir لخادم <i>MySQL</i> الخاص بك، لذلك يجب قراءته من <b>my.cnf</b> إذا كان موجودًا؛ وإلا يجب عليك تحديده في سطر الأوامر.
+    <p class="Pp">عند دمجه مع الخيار <i>--copy-back</i> أو <i>--move-back</i>، يشير <i>--datadir</i> إلى دليل الوجهة.</p>
+    <p class="Pp">بمجرد الاتصال بالخادم، لتنفيذ نسخة احتياطية، ستحتاج إلى أذونات <b>READ</b> و <b>EXECUTE</b> على مستوى نظام الملفات في datadir الخاص بالخادم.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="debug"><a class="permalink" href="#debug"><b>--debug-sleep-before-unlock=#</b></a></dt>
+  <dd>هذا خيار مخصص لتصحيح الأخطاء ويستخدمه جناح اختبار <i>xtrabackup</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="debug~2"><a class="permalink" href="#debug~2"><b>--debug-sync=name</b></a></dt>
+  <dd>نقطة مزامنة تصحيح الأخطاء. يستخدم هذا الخيار فقط من قبل جناح اختبار <i>xtrabackup</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="decompress"><a class="permalink" href="#decompress"><b>--decompress</b></a></dt>
+  <dd>فك ضغط جميع الملفات ذات الامتداد <b>.qp</b> في نسخة احتياطية تم إنشاؤها سابقًا باستخدام الخيار <i>--compress</i>. سيسمح الخيار <i>--parallel</i> بفك تشفير ملفات متعددة في وقت واحد. لفك الضغط، يجب تثبيت أداة qpress وتكون متاحة ضمن المسار. <i>Percona XtraBackup</i> لا يحذف الملفات المضغوطة تلقائيًا. لتنظيف دليل النسخ الاحتياطي، يجب على المستخدمين استخدام الخيار <i>--remove-original</i>.
+    <p class="Pp">يمكن استخدام الخيار <i>--decompress</i> مع <i>xbstream</i> لفك ضغط ملفات qpress الفردية.</p>
+    <p class="Pp">إذا استخدمت خوارزمية الضغط <b>lz4</b> لضغط الملفات (<b>--compress=lz4</b>)، فقم بتغيير معلمة <i>--decompress</i> وفقًا لذلك: <b>--decompress=lz4</b>.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--decompress-threads=#</b></dt>
+  <dd>إجبار <i>xbstream</i> على استخدام العدد المحدد من الخيوط لفك الضغط.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="decrypt=ENCRYPTION"><a class="permalink" href="#decrypt=ENCRYPTION"><b>--decrypt=ENCRYPTION-ALGORITHM</b></a></dt>
+  <dd>فك تشفير جميع الملفات ذات الامتداد <b>.xbcrypt</b> في نسخة احتياطية تم إنشاؤها سابقًا باستخدام الخيار <i>--encrypt</i>. سيسمح الخيار <i>--parallel</i> بفك تشفير ملفات متعددة في وقت واحد. <i>Percona XtraBackup</i> لا يحذف الملفات المشفرة تلقائيًا. لتنظيف دليل النسخ الاحتياطي، يجب على المستخدمين استخدام الخيار <i>--remove-original</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="defaults"><a class="permalink" href="#defaults"><b>--defaults-extra-file=[MY.CNF]</b></a></dt>
+  <dd>اقرأ هذا الملف بعد قراءة الملفات العامة. يجب تقديمه كأول خيار في سطر الأوامر.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="defaults~2"><a class="permalink" href="#defaults~2"><b>--defaults-file=[MY.CNF]</b></a></dt>
+  <dd>اقرأ خيارات افتراضية فقط من الملف المحدد. يجب تقديمه كأول خيار في سطر الأوامر. يجب أن يكون ملفًا حقيقيًا؛ لا يمكن أن يكون رابطًا رمزيًا.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="defaults~3"><a class="permalink" href="#defaults~3"><b>--defaults-group=GROUP-NAME</b></a></dt>
+  <dd>هذا الخيار مخصص لتعيين المجموعة التي يجب قراءتها من ملف التكوين. يستخدمه <i>xtrabackup</i> إذا استخدمت الخيار <i>--defaults-group</i>. إنه مطلوب لنشر <b>mysqld_multi</b>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="defaults~4"><a class="permalink" href="#defaults~4"><b>--defaults-group-suffix=#</b></a></dt>
+  <dd>يقرأ أيضًا المجموعات مع concat(group, suffix).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="dump"><a class="permalink" href="#dump"><b>--dump-innodb-buffer-pool</b></a></dt>
+  <dd>يتحكم هذا الخيار فيما إذا كان يجب إجراء تفريغ جديد لمحتوى مجمع الذاكرة المؤقتة أم لا.
+    <p class="Pp">مع <b>--dump-innodb-buffer-pool</b>، يقوم <i>xtrabackup</i> بتقديم طلب إلى الخادم لبدء مجمع الذاكرة المؤقتة.</p>
+</dl>
+</div>
+        (يستغرق بعض الوقت لإكماله ويتم إجراؤه في الخلفية) في بداية النسخ الاحتياطي شريطة أن يشير متغير الحالة <b>innodb_buffer_pool_dump_status</b> إلى اكتمال التفريغ.</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ xtrabackup --backup --dump-innodb-buffer-pool --target-dir=/home/user/backup</pre>
+</div>
+</div>
+<p class="Pp">افتراضيًا، يتم تعيين هذا الخيار على <i>إيقاف</i>.</p>
+<p class="Pp">إذا كان <b>innodb_buffer_pool_dump_status</b> يشير إلى أن هناك تفريغًا قيد التشغيل لمجمع التخزين المؤقت، فإن <i>xtrabackup</i> ينتظر اكتمال التفريغ باستخدام قيمة <i>--dump-innodb-buffer-pool-timeout</i>.</p>
+<p class="Pp">يخزن الملف <b>ib_buffer_pool</b> معرفات مساحات الجداول ومعرفات الصفحات المستخدمة لتسخين مجمع التخزين المؤقت في وقت مبكر.</p>
+<p class="Pp"><b>راجع أيضًا:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="MySQL~2"><a class="permalink" href="#MySQL~2"><b><i>وثائق MySQL</i>: حفظ واستعادة حالة مجمع التخزين المؤقت</b></a></dt>
+  <dd><a href='https://dev.mysql.com/doc/refman/5.7/en/innodb-preload-buffer-pool.html'>https://dev.mysql.com/doc/refman/5.7/en/innodb-preload-buffer-pool.html</a></dd>
+</dl>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="dump~2"><a class="permalink" href="#dump~2"><b>--dump-innodb-buffer-pool-timeout</b></a></dt>
+  <dd>يحتوي هذا الخيار على عدد الثواني التي يجب أن يراقب فيها <i>xtrabackup</i> قيمة <b>innodb_buffer_pool_dump_status</b> لتحديد ما إذا كان تفريغ مجمع التخزين المؤقت قد اكتمل.
+    <p class="Pp">يتم استخدام هذا الخيار مع <i>--dump-innodb-buffer-pool</i>. افتراضيًا، يتم تعيينه على <i>10</i> ثوانٍ.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="dump~3"><a class="permalink" href="#dump~3"><b>--dump-innodb-buffer-pool-pct</b></a></dt>
+  <dd>يحتوي هذا الخيار على نسبة الصفحات الأكثر استخدامًا مؤخرًا في مجمع التخزين المؤقت التي سيتم تفريغها.
+    <p class="Pp">يكون هذا الخيار فعالاً إذا تم تعيين الخيار <i>--dump-innodb-buffer-pool</i> على <i>تشغيل</i>. إذا كان هذا الخيار يحتوي على قيمة، فإن <i>xtrabackup</i> يقوم بتعيين متغير النظام <i>MySQL</i> <b>innodb_buffer_pool_dump_pct</b>. بمجرد اكتمال تفريغ مجمع التخزين المؤقت أو إيقافه (انظر <i>--dump-innodb-buffer-pool-timeout</i>)، تتم استعادة قيمة متغير نظام <i>MySQL</i>.</p>
+    <p class="Pp"><b>راجع أيضًا:</b></p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Changing"><a class="permalink" href="#Changing"><b>تغيير مهلة تفريغ مجمع التخزين المؤقت</b></a></dt>
+  <dd><i>--dump-innodb-buffer-pool-timeout</i></dd>
+  <dt id="MySQL~3"><a class="permalink" href="#MySQL~3"><b><i>وثائق MySQL</i>: متغير النظام innodb_buffer_pool_dump_pct</b></a></dt>
+  <dd><a href='https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_buffer_pool_dump_pct'>https://dev.mysql.com/doc/refman/8.0/en/innodb-parameters.html#sysvar_innodb_buffer_pool_dump_pct</a></dd>
+</dl>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="encrypt=ENCRYPTION_ALGORITHM"><a class="permalink" href="#encrypt=ENCRYPTION_ALGORITHM"><b>--encrypt=ENCRYPTION_ALGORITHM</b></a></dt>
+  <dd>يوجّه هذا الخيار xtrabackup إلى تشفير نسخ النسخ الاحتياطي لملفات بيانات InnoDB باستخدام الخوارزمية المحددة في ENCRYPTION_ALGORITHM. الخوارزميات المدعومة حاليًا هي: <b>AES128</b>، <b>AES192</b>، و <b>AES256</b></dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="encrypt"><a class="permalink" href="#encrypt"><b>--encrypt-key=ENCRYPTION_KEY</b></a></dt>
+  <dd>مفتاح تشفير بطول مناسب للاستخدام. لا يُنصح باستخدام هذا الخيار حيث يوجد وصول غير متحكم فيه إلى الجهاز، حيث يمكن عرض سطر الأوامر وبالتالي المفتاح كجزء من معلومات العملية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="encrypt~2"><a class="permalink" href="#encrypt~2"><b>--encrypt-key-file=ENCRYPTION_KEY_FILE</b></a></dt>
+  <dd>اسم ملف يمكن قراءة المفتاح الخام بالطول المناسب منه. يجب أن يكون الملف ملفًا ثنائيًا (أو نصيًا) بسيطًا يحتوي على المفتاح المراد استخدامه بالضبط.
+    <p class="Pp">يتم تمريره مباشرة إلى عملية xtrabackup الفرعية. انظر وثائق <b>xtrabackup</b> لمزيد من التفاصيل.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="encrypt~3"><a class="permalink" href="#encrypt~3"><b>--encrypt-threads=#</b></a></dt>
+  <dd>يحدد هذا الخيار عدد خيوط العمل التي سيتم استخدامها للتشفير/فك التشفير المتوازي. انظر وثائق <b>xtrabackup</b> لمزيد من التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="encrypt~4"><a class="permalink" href="#encrypt~4"><b>--encrypt-chunk-size=#</b></a></dt>
+  <dd>يحدد هذا الخيار حجم المخزن المؤقت التشغيلي الداخلي لكل خيط تشفير، مقاسًا بالبايت. يتم تمريره مباشرة إلى عملية xtrabackup الفرعية. انظر وثائق <b>xtrabackup</b> لمزيد من التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="export"><a class="permalink" href="#export"><b>--export</b></a></dt>
+  <dd>إنشاء الملفات اللازمة لتصدير الجداول. انظر استعادة الجداول الفردية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="extra"><a class="permalink" href="#extra"><b>--extra-lsndir=DIRECTORY</b></a></dt>
+  <dd>(لـ --backup): حفظ نسخة إضافية من ملفات <b>xtrabackup_checkpoints</b> و <b>xtrabackup_info</b> في هذا الدليل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="force"><a class="permalink" href="#force"><b>--force-non-empty-directories</b></a></dt>
+  <dd>عند تحديده، يجعل الخيار <i>--copy-back</i> و <i>--move-back</i> نقل الملفات إلى أدلة غير فارغة. لن يتم الكتابة فوق الملفات الموجودة. إذا كانت الملفات التي تحتاج إلى نسخ/نقل من دليل النسخ الاحتياطي موجودة بالفعل في دليل الوجهة، فسيظل يفشل بخطأ.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="ftwrl"><a class="permalink" href="#ftwrl"><b>--ftwrl-wait-timeout=SECONDS</b></a></dt>
+  <dd>يحدد هذا الخيار الوقت بالثواني الذي يجب أن ينتظره xtrabackup للاستعلامات التي قد تحظر <b>FLUSH TABLES WITH READ LOCK</b> قبل تشغيله. إذا كانت لا تزال هناك مثل هذه الاستعلامات عند انتهاء المهلة، فإن xtrabackup ينتهي بخطأ. الافتراضي هو <b>0</b>، وفي هذه الحالة لا ينتظر اكتمال الاستعلامات ويبدأ <b>FLUSH TABLES WITH READ LOCK</b> فورًا. حيثما كان مدعومًا، سيستخدم <i>xtrabackup</i> تلقائيًا <i>أقفال النسخ الاحتياطي</i> كبديل خفيف لـ <b>FLUSH TABLES WITH READ LOCK</b> لنسخ بيانات غير InnoDB لتجنب حظر استعلامات DML التي تعدل جداول InnoDB.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="ftwrl~2"><a class="permalink" href="#ftwrl~2"><b>--ftwrl-wait-threshold=SECONDS</b></a></dt>
+  <dd>يحدد هذا الخيار عتبة وقت تشغيل الاستعلام التي يستخدمها xtrabackup للكشف عن الاستعلامات طويلة الأمد بقيمة غير صفرية لـ <i>--ftwrl-wait-timeout</i>. لا يبدأ <b>FLUSH TABLES WITH READ LOCK</b> حتى توجد مثل هذه الاستعلامات طويلة الأمد. ليس لهذا الخيار أي تأثير إذا كانت <i>--ftwrl-wait-timeout</i> تساوي <b>0</b>. القيمة الافتراضية هي <b>60</b> ثانية. حيثما كان مدعومًا، سيستخدم xtrabackup تلقائيًا <i>أقفال النسخ الاحتياطي</i> كبديل خفيف لـ <b>FLUSH TABLES WITH READ LOCK</b> لنسخ بيانات غير InnoDB لتجنب حظر استعلامات DML التي تعدل جداول InnoDB.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="ftwrl~3"><a class="permalink" href="#ftwrl~3"><b>--ftwrl-wait-query-type=all|update</b></a></dt>
+  <dd>يحدد هذا الخيار أنواع الاستعلامات التي يُسمح بإكمالها قبل أن يصدر xtrabackup القفل العام. الافتراضي هو <b>all</b>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="galera"><a class="permalink" href="#galera"><b>--galera-info</b></a></dt>
+  <dd>ينشئ هذا الخيار الملف <b>xtrabackup_galera_info</b> الذي يحتوي على حالة العقدة المحلية في وقت النسخ الاحتياطي. يجب استخدام الخيار عند إجراء نسخ احتياطي لـ <i>Percona XtraDB Cluster</i>. ليس له أي تأثير عند استخدام أقفال النسخ الاحتياطي لإنشاء النسخ الاحتياطي.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="generate"><a class="permalink" href="#generate"><b>--generate-new-master-key</b></a></dt>
+  <dd>إنشاء مفتاح رئيسي جديد عند إجراء نسخ احتياطي.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="generate~2"><a class="permalink" href="#generate~2"><b>--generate-transition-key</b></a></dt>
+  <dd>يحتاج <i>xtrabackup</i> إلى الوصول إلى نفس ملف مفتاح التشفير أو خادم vault أثناء <i>التحضير</i> و <i>النسخ الاحتياطي</i>، ولكنه لا ينبغي أن يعتمد على ما إذا كانت مفاتيح الخادم قد تم مسحها.
+    <p class="Pp">يقوم <i>--generate-transition-key</i> بإنشاء مفتاح انتقال وإضافته إلى مخزن المفاتيح ليستخدمه <i>xtrabackup</i> إذا لم يتم العثور على المفتاح الرئيسي المستخدم للتشفير لأنه تم تدويره ومسحه.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="get"><a class="permalink" href="#get"><b>--get-server-public-key</b></a></dt>
+  <dd>الحصول على المفتاح العام للخادم.
+    <p class="Pp"><b>راجع أيضًا:</b></p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent"><i>وثائق MySQL</i>: خيار --get-server-public-key
+<div class="Bd-indent">
+<div class="Bd-indent"><a href='https://dev.mysql.com/doc/refman/5.7/en/connection-options.html#option_general_get-server-public-key'>https://dev.mysql.com/doc/refman/5.7/en/connection-options.html#option_general_get-server-public-key</a></div>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="help"><a class="permalink" href="#help"><b>--help</b></a></dt>
+  <dd>عند التشغيل بهذا الخيار أو بدون أي خيارات، يعرض <i>xtrabackup</i> معلومات حول كيفية تشغيل البرنامج على سطر الأوامر جنبًا إلى جنب مع جميع الخيارات والمتغيرات المدعومة مع القيم الافتراضية حيثما كان ذلك مناسبًا.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="history=NAME"><a class="permalink" href="#history=NAME"><b>--history=NAME</b></a></dt>
+  <dd>يمكّن هذا الخيار تتبع سجل النسخ الاحتياطي في الجدول <b>PERCONA_SCHEMA.xtrabackup_history</b>. يمكن تحديد اسم سلسلة سجل اختياري سيتم وضعه مع سجل السجل للنسخ الاحتياطي الحالي الذي يتم أخذه.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="host=HOST"><a class="permalink" href="#host=HOST"><b>--host=HOST</b></a></dt>
+  <dd>يقبل هذا الخيار وسيطة نصية تحدد المضيف الذي سيتم استخدامه عند الاتصال بخادم قاعدة البيانات باستخدام TCP/IP. يتم تمريره إلى عملية mysql الفرعية دون تغيير. انظر <b>mysql --help</b> للحصول على التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="incremental"><a class="permalink" href="#incremental"><b>--incremental</b></a></dt>
+  <dd>يخبر هذا الخيار <i>xtrabackup</i> بإنشاء نسخة احتياطية تدريجية. يتم تمريره إلى عملية <i>xtrabackup</i> الفرعية. عند تحديد هذا الخيار، يمكن أيضًا تقديم <i>--incremental-lsn</i> أو <i>--incremental-basedir</i>. إذا لم يتم تقديم أي من الخيارين، يتم تمرير الخيار <i>--incremental-basedir</i> إلى <b>xtrabackup</b> افتراضيًا، ويتم تعيينه على أول دليل نسخ احتياطي مختوم بالوقت في دليل قاعدة النسخ الاحتياطي.
+    <p class="Pp"><b>راجع أيضًا:</b></p>
+  </dd>
+</dl>
+<
+/b></a></dt>
+  <dd>هذا الخيار يعطل التحقق من الإصدار. إذا لم تقم بتمرير هذا الخيار،
+      يتم تمكين التحقق التلقائي من الإصدار ضمنيًا عندما يتم تشغيل <i>xtrabackup</i>
+      في وضع <b>--backup</b>. لتعطيل التحقق من الإصدار، يجب عليك تمرير
+      الخيار <b>--no-version-check</b> بشكل صريح عند استدعاء
+      <i>xtrabackup</i>.
+    <p class="Pp">عند تمكين التحقق التلقائي من الإصدار، يقوم <i>xtrabackup</i>
+        بإجراء تحقق من الإصدار مقابل الخادم في مرحلة النسخ الاحتياطي بعد
+        إنشاء اتصال بالخادم. يرسل <i>xtrabackup</i> المعلومات التالية إلى
+        الخادم:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>نوع MySQL وإصداره</li>
+  <li>اسم نظام التشغيل</li>
+  <li>إصدار Percona Toolkit</li>
+  <li>إصدار Perl</li>
+</ul>
+</div>
+<p class="Pp">لكل معلومة معرف فريد. هذه قيمة تجزئة MD5 تستخدمها Percona Toolkit
+    للحصول على إحصائيات حول كيفية استخدامها. هذا UUID عشوائي؛ لا يتم جمع أو تخزين
+    أي معلومات للعميل.</p>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="open"><a class="permalink" href="#open"><b>--open-files-limit=#</b></a></dt>
+  <dd>الحد الأقصى لعدد واصفات الملفات لحجزها باستخدام setrlimit().</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="parallel=_"><a class="permalink" href="#parallel=_"><b>--parallel=#</b></a></dt>
+  <dd>يحدد هذا الخيار عدد الخيوط (threads) لاستخدامها لنسخ ملفات بيانات متعددة
+      بشكل متزامن عند إنشاء نسخة احتياطية. القيمة الافتراضية هي 1 (أي، لا يوجد
+      نقل متزامن). في <i>Percona XtraBackup</i> 2.3.10 والأحدث، يمكن استخدام
+      هذا الخيار مع الخيار <i>--copy-back</i> لنسخ ملفات بيانات المستخدم بشكل
+      متزامن (يتم نسخ سجلات التراجع (redo logs) ومساحات الجداول (tablespaces)
+      في الخيط الرئيسي).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="password=PASSWORD"><a class="permalink" href="#password=PASSWORD"><b>--password=PASSWORD</b></a></dt>
+  <dd>يحدد هذا الخيار كلمة المرور لاستخدامها عند الاتصال بقاعدة البيانات.
+      يقبل وسيطة نصية. انظر <b>mysql --help</b> للحصول على التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="plugin"><a class="permalink" href="#plugin"><b>--plugin-load</b></a></dt>
+  <dd>قائمة الإضافات (plugins) المراد تحميلها.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="port=PORT"><a class="permalink" href="#port=PORT"><b>--port=PORT</b></a></dt>
+  <dd>يقبل هذا الخيار وسيطة نصية تحدد المنفذ (port) المراد استخدامه عند
+      الاتصال بخادم قاعدة البيانات عبر TCP/IP. يتم تمريره إلى العملية الفرعية
+      <b>mysql</b> دون تغيير. انظر <b>mysql --help</b> للحصول على
+      التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="prepare"><a class="permalink" href="#prepare"><b>--prepare</b></a></dt>
+  <dd>يجعل <b>xtrabackup</b> يقوم بالاستعادة (recovery) لنسخة احتياطية تم
+      إنشاؤها باستخدام <i>--backup</i>، بحيث تكون جاهزة للاستخدام. انظر
+      إعداد النسخ الاحتياطي (preparing a backup).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="print"><a class="permalink" href="#print"><b>--print-defaults</b></a></dt>
+  <dd>يطبع قائمة وسائط البرنامج ويخرج. يجب أن يتم إعطاؤه كأول خيار على سطر
+      الأوامر.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="print~2"><a class="permalink" href="#print~2"><b>--print-param</b></a></dt>
+  <dd>يجعل <b>xtrabackup</b> يطبع المعلمات التي يمكن استخدامها لنسخ ملفات
+      البيانات مرة أخرى إلى مواقعها الأصلية لاستعادتها.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="read"><a class="permalink" href="#read"><b>--read-buffer-size</b></a></dt>
+  <dd>يضبط حجم مخزن قراءة ملف البيانات، القيمة المعطاة يتم توسيعها إلى حجم
+      الصفحة (page size). الافتراضي هو 10 ميجابايت.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rebuild"><a class="permalink" href="#rebuild"><b>--rebuild-indexes</b></a></dt>
+  <dd>يعيد بناء الفهارس (indexes) في نسخة احتياطية مضغوطة. هذا الخيار له تأثير
+      فقط عندما يتم توفير الخيارين <i>--prepare</i> و <i>--rebuild-threads</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rebuild~2"><a class="permalink" href="#rebuild~2"><b>--rebuild-threads=#</b></a></dt>
+  <dd>يستخدم العدد المحدد من الخيوط (threads) لإعادة بناء الفهارس في نسخة
+      احتياطية مضغوطة. هذا الخيار له تأثير فقط مع الخيارين <i>--prepare</i>
+      و <i>--rebuild-indexes</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="remove"><a class="permalink" href="#remove"><b>--remove-original</b></a></dt>
+  <dd>تم تنفيذه في <i>Percona XtraBackup</i> 2.4.6، هذا الخيار عند تحديده
+      سيقوم بإزالة ملفات <b>.qp</b> و <b>.xbcrypt</b> و <b>.qp.xbcrypt</b>
+      بعد فك التشفير وفك الضغط.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rocksdb"><a class="permalink" href="#rocksdb"><b>--rocksdb-datadir</b></a></dt>
+  <dd>دليل بيانات RocksDB.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rocksdb~2"><a class="permalink" href="#rocksdb~2"><b>--rocksdb-wal-dir</b></a></dt>
+  <dd>دليل WAL الخاص بـ RocksDB.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rocksdb~3"><a class="permalink" href="#rocksdb~3"><b>--rocksdb-checkpoint-max-age</b></a></dt>
+  <dd>لا يمكن أن يكون نقطة التحقق (checkpoint) أقدم من هذا العدد من الثواني
+      عند اكتمال النسخ الاحتياطي.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rocksdb~4"><a class="permalink" href="#rocksdb~4"><b>--rocksdb-checkpoint-max-count</b></a></dt>
+  <dd>يكمل النسخ الاحتياطي حتى لو لم يتم استيفاء متطلبات عمر نقطة التحقق بعد
+      هذا العدد من نقاط التحقق.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rollback"><a class="permalink" href="#rollback"><b>--rollback-prepared-trx</b></a></dt>
+  <dd>فرض تراجع المعاملات (transactions) المستعدة (prepared).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="rsync"><a class="permalink" href="#rsync"><b>--rsync</b></a></dt>
+  <dd>يستخدم أداة <b>rsync</b> لتحسين عمليات نقل الملفات المحلية. عند تحديد
+      هذا الخيار، يستخدم <i>xtrabackup</i> <b>rsync</b> لنسخ جميع الملفات غير
+      الـ InnoDB بدلاً من إنشاء عملية <b>cp</b> منفصلة لكل ملف، مما يمكن أن يكون
+      أسرع بكثير للخوادم التي تحتوي على عدد كبير من قواعد البيانات أو الجداول.
+      لا يمكن استخدام هذا الخيار مع <i>--stream</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="safe"><a class="permalink" href="#safe"><b>--safe-slave-backup</b></a></dt>
+  <dd>عند تحديده، سيقوم xtrabackup بإيقاف خيط SQL للنسخ المتماثل (replica SQL
+      thread) قبل تشغيل <b>FLUSH TABLES WITH READ LOCK</b> والانتظار لبدء النسخ
+      الاحتياطي حتى يصبح <b>Slave_open_temp_tables</b> في <b>SHOW STATUS</b>
+      صفرًا. إذا لم تكن هناك جداول مؤقتة مفتوحة، سيتم إجراء النسخ الاحتياطي،
+      وإلا سيتم تشغيل وإيقاف خيط SQL حتى لا تكون هناك جداول مؤقتة مفتوحة. سيفشل
+      النسخ الاحتياطي إذا لم يصبح <b>Slave_open_temp_tables</b> صفرًا بعد
+      <i>--safe-slave-backup-timeout</i> ثانية. سيتم إعادة تشغيل خيط SQL للنسخ
+      المتماثل عند الانتهاء من النسخ الاحتياطي. تم تنفيذ هذا الخيار للتعامل مع
+      <i>جداول النسخ المتماثل المؤقتة</i> (replicating temporary tables)
+      وليس ضروريًا مع النسخ المتماثل القائم على الصفوف (Row-Based-Replication).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="safe~2"><a class="permalink" href="#safe~2"><b>--safe-slave-backup-timeout=SECONDS</b></a></dt>
+  <dd>كم عدد الثواني التي يجب أن ينتظرها <i>--safe-slave-backup</i> حتى يصبح
+      <b>Slave_open_temp_tables</b> صفرًا. الافتراضي هو 300 ثانية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="secure"><a class="permalink" href="#secure"><b>--secure-auth</b></a></dt>
+  <dd>رفض اتصال العميل بالخادم إذا كان يستخدم بروتوكولًا قديمًا (قبل 4.1.1).
+      (ممكن افتراضيًا؛ استخدم --skip-secure-auth لتعطيله.)</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="server"><a class="permalink" href="#server"><b>--server-id=#</b></a></dt>
+  <dd>مثيل الخادم الذي يتم عمل نسخة احتياطية له.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="server~2"><a class="permalink" href="#server~2"><b>--server-public-key-path</b></a></dt>
+  <dd>مسار الملف لمفتاح RSA العام للخادم بتنسيق PEM.
+    <p class="Pp"><b>انظر أيضًا:</b></p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="MySQL~4"><a class="permalink" href="#MySQL~4"><b><i>وثائق MySQL</i>: خيار --server-public-key-path</b></a></dt>
+  <dd><a href='https://dev.mysql.com/doc/refman/8.0/en/connection-options.html#option_general_server-public-key-path'>https://dev.mysql.com/doc/refman/8.0/en/connection-options.html#option_general_server-public-key-path</a></dd>
+</dl>
+</div>
+</div>
+</div>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="skip"><a class="permalink" href="#skip"><b>--skip-tables-compatibility-check</b></a></dt>
+  <dd>انظر <i>--tables-compatibility-check</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="slave"><a class="permalink" href="#slave"><b>--slave-info</b></a></dt>
+  <dd>هذا الخيار مفيد عند عمل نسخة احتياطية لخادم نسخة متماثلة (replica).
+      يطبع موقع السجل الثنائي (binary log position) للخادم المصدر. كما يكتب
+      إحداثيات السجل الثنائي إلى ملف <b>xtrabackup_slave_info</b> كأمر
+      <b>CHANGE MASTER</b>. يمكن إعداد نسخة متماثلة جديدة لهذا المصدر عن طريق
+      بدء خادم نسخة متماثلة على هذه النسخة الاحتياطية وإصدار أمر <b>CHANGE
+      MASTER</b> باستخدام موقع السجل الثنائي المحفوظ في ملف
+      <b>xtrabackup_slave_info</b>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="socket"><a class="permalink" href="#socket"><b>--socket</b></a></dt>
+  <dd>يقبل هذا الخيار وسيطة نصية تحدد المقبس (socket) المراد استخدامه عند
+      الاتصال بخادم قاعدة البيانات المحلي باستخدام مقبس UNIX domain. يتم تمريره
+      إلى العملية الفرعية mysql دون تغيير. انظر <b>mysql --help</b> للحصول
+      على التفاصيل.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="ssl"><a class="permalink" href="#ssl"><b>--ssl</b></a></dt>
+  <dd>تمكين الاتصال الآمن. يمكن العثور على مزيد من المعلومات في وثائق خادم MySQL
+      <i>--ssl</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-ca</b></dt>
+  <dd>مسار الملف الذي يحتوي على قائمة مصادر الشهادات الموثوقة لـ SSL. يمكن
+      العثور على مزيد من المعلومات في وثائق خادم MySQL <i>--ssl-ca</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-capath</b></dt>
+  <dd>مسار الدليل الذي يحتوي على شهادات مصادر SSL الموثوقة بتنسيق PEM. يمكن
+      العثور على مزيد من المعلومات في وثائق خادم MySQL <i>--ssl-capath</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-cert</b></dt>
+  <dd>مسار الملف الذي يحتوي على شهادة X509 بتنسيق PEM. يمكن العثور على مزيد من
+      المعلومات في وثائق خادم MySQL <i>--ssl-cert</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-cipher</b></dt>
+  <dd>قائمة الشفرات المسموح بها لاستخدامها في تشفير الاتصال. يمكن العثور على
+      مزيد من المعلومات في وثائق خادم MySQL <i>--ssl-cipher</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-crl</b></dt>
+  <dd>مسار الملف الذي يحتوي على قوائم إلغاء شهادات SSL. يمكن العثور على مزيد
+      من المعلومات في وثائق خادم MySQL <i>--ssl-crl</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b>--ssl-crlpath</b></dt>
+  <dd>مسار الدليل الذي يحتوي على ملفات قوائم إلغاء الشهادات. يمكن العثور على
+      مزيد من المعلومات في وثائق خادم MySQL <i>--ssl-crlpath</i>.</dd>
+</dl>

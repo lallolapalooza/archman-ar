@@ -1,0 +1,289 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Net__SMTP.3perl</h1>
+<link rel="stylesheet" href="basic.css">
+<div class="manual-content">
+
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<pre><span class="kw">use</span> Net::SMTP;
+<span class="kw">my</span> $smtp = Net::SMTP-&gt;<span class="kw">new</span>('mailhost');
+<span class="kw">if</span> ($smtp) {
+  <span class="kw">my</span> $response = $smtp-&gt;mail($from_addr);
+  <span class="kw">if</span> ($response) {
+    <span class="kw">my</span> @recipients = ($to_addr1, $to_addr2);
+    <span class="kw">if</span> ($smtp-&gt;to(@recipients)) {
+      $smtp-&gt;data();
+      $smtp-&gt;datasend($message_body);
+      $smtp-&gt;dataend();
+    }
+  }
+  $smtp-&gt;quit;
+}
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">Net::SMTP is a class for sending mail using the SMTP protocol.</p>
+<p class="Pp">It is built on top of Net::Cmd, and inherits its methods.</p>
+<dl class="Bl-tag">
+  <dt id="new($host[,%options])"><a class="permalink" href="#new($host[,%options])">new($host[,%options])</a></dt>
+  <dd>Create a new Net::SMTP object. Connect to the SMTP server specified by
+      <span class="Li">$host</span>. The hostname may be specified in dotted-decimal
+      form or as a hostname. If no port is specified then the default SMTP port
+      (25) will be used. The port number can be specified by appending
+      <span class="Li">&quot;:&lt;port&gt;&quot;</span> to the hostname.
+    <p class="Pp">The following <span class="Li">%options</span> are supported:</p>
+    <dl class="Bl-tag">
+      <dt>Debug</dt>
+      <dd>Set to true to enable debugging output.</dd>
+      <dt>Host</dt>
+      <dd>The hostname of the mail server.</dd>
+      <dt>Port</dt>
+      <dd>The port number to connect to.</dd>
+      <dt>Timeout</dt>
+      <dd>The timeout for network operations.</dd>
+      <dt>RaiseError</dt>
+      <dd>If true, errors will be raised as exceptions.</dd>
+      <dt>Hello</dt>
+      <dd>The HELO/EHLO string to send to the server. Defaults to the local
+          hostname.</dd>
+      <dt>LocalAddr</dt>
+      <dd>The local IP address to use for the connection.</dd>
+      <dt>LocalPort</dt>
+      <dd>The local port to use for the connection.</dd>
+      <dt>SSL</dt>
+      <dd>If true, the connection will be upgraded to SSL/TLS using STARTTLS.
+          Requires IO::Socket::SSL.</dd>
+    </dl>
+  </dd>
+  <dt id="domain()"><a class="permalink" href="#domain()">domain()</a></dt>
+  <dd>Returns the domain name of the remote SMTP server.</dd>
+  <dt id="mail($address[, $address[, ...]][, %options])"><a class="permalink" href="#mail($address[, $address[, ...]][, %options])">mail($address[, $address[, ...]][, %options])</a></dt>
+  <dd>Notify the server that the current message is being sent from the given
+      address. This is typically the sender's email address. The address should
+      be in the format <span class="Li">&lt;user@domain.com&gt;</span>.
+    <p class="Pp">This method can also accept an optional hash of options. The
+        following options are supported:</p>
+        <dl class="Bl-tag">
+          <dt>From</dt>
+          <dd>The sender's email address.</dd>
+          <dt>SIZE</dt>
+          <dd>The size of the message in octets. This is used for the SIZE
+              extension.</dd>
+        </dl>
+        <p class="Pp">The <span class="Li">From</span> option is equivalent to passing
+            the address as the first argument.</p>
+        <pre> $smtp-&gt;mail('sender@example.com');
+ $smtp-&gt;mail({ From =&gt; 'sender@example.com' });
+ $smtp-&gt;mail('sender@example.com', { SIZE =&gt; 1024 });
+</pre>
+    <p class="Pp">If the sender address is specified as multiple arguments, the
+        first argument is the sender address and the rest are treated as
+        <span class="Li">options</span>.</p>
+        <pre>$smtp-&gt;mail($sender, $option1 =&gt; $value1, $option2 =&gt; $value2);
+</pre>
+  </dd>
+  <dt id="reset()"><a class="permalink" href="#reset()">reset()</a></dt>
+  <dd>Reset the status of the server. This may be called after a message has
+      been initiated, but before any data has been sent, to cancel the sending
+      of the message.</dd>
+  <dt>&quot;recipient($address[, $address[, ...]][, %options])&quot;</dt>
+  <dd>Notify the server that the current message should be sent to all of the
+      addresses given. Each address is sent as a separate command to the server.
+      Should the sending of any address result in a failure then the process is
+      aborted and a <i>false</i> value is returned. It is up to the user to call
+      <span class="Li">&quot;reset&quot;</span> if they so desire.
+    <p class="Pp">The <span class="Li">&quot;recipient&quot;</span> method can
+        also pass additional case-sensitive <span class="Li">%options</span> as
+        an anonymous hash using key and value pairs. Possible options are:</p>
+        <pre>Notify  =&gt; ['NEVER'] or ['SUCCESS','FAILURE','DELAY']  (see below)
+ORcpt   =&gt; &lt;ORCPT&gt;
+SkipBad =&gt; 1        (to ignore bad addresses)
+</pre>
+    <p class="Pp">If <span class="Li">&quot;SkipBad&quot;</span> is true the
+        <span class="Li">&quot;recipient&quot;</span> will not return an error
+        when a bad address is encountered and it will return an array of
+        addresses that did succeed.</p>
+        <pre>$smtp-&gt;recipient($recipient1,$recipient2);  # Good
+$smtp-&gt;recipient($recipient1,$recipient2, { SkipBad =&gt; 1 });  # Good
+$smtp-&gt;recipient($recipient1,$recipient2, { Notify =&gt; ['FAILURE','DELAY'], SkipBad =&gt; 1 });  # Good
+@goodrecips=$smtp-&gt;recipient(@recipients, { Notify =&gt; ['FAILURE'], SkipBad =&gt; 1 });  # Good
+$smtp-&gt;recipient(&quot;$recipient,$recipient2&quot;); # BAD
+</pre>
+    <p class="Pp">Notify is used to request Delivery Status Notifications
+        (DSNs), but your SMTP/ESMTP service may not respect this request
+        depending upon its version and your site's SMTP configuration.</p>
+    <p class="Pp">Leaving out the Notify option usually defaults an SMTP service
+        to its default behavior equivalent to ['FAILURE'] notifications only,
+        but again this may be dependent upon your site's SMTP configuration.</p>
+    <p class="Pp">The NEVER keyword must appear by itself if used within the
+        Notify option and &quot;requests that a DSN not be returned to the
+        sender under any conditions.&quot;</p>
+        <pre>{Notify =&gt; ['NEVER']}
+$smtp-&gt;recipient(@recipients, { Notify =&gt; ['NEVER'], SkipBad =&gt; 1 });  # Good
+</pre>
+    <p class="Pp">You may use any combination of these three values
+        'SUCCESS','FAILURE','DELAY' in the anonymous array reference as defined
+        by RFC3461 (see <a href='https://www.ietf.org/rfc/rfc3461.txt'>https://www.ietf.org/rfc/rfc3461.txt</a> for more
+        information. Note: quotations in this topic from same.).</p>
+    <p class="Pp">A Notify parameter of 'SUCCESS' or 'FAILURE' &quot;requests
+        that a DSN be issued on successful delivery or delivery failure,
+        respectively.&quot;</p>
+    <p class="Pp">A Notify parameter of 'DELAY' &quot;indicates the sender's
+        willingness to receive delayed DSNs. Delayed DSNs may be issued if
+        delivery of a message has been delayed for an unusual amount of time (as
+        determined by the Message Transfer Agent (MTA) at which the message is
+        delayed), but the final delivery status (whether successful or failure)
+        cannot be determined. The absence of the DELAY keyword in a NOTIFY
+        parameter requests that a &quot;delayed&quot; DSN NOT be issued under
+        any conditions.&quot;</p>
+        <pre>{Notify =&gt; ['SUCCESS','FAILURE','DELAY']}
+$smtp-&gt;recipient(@recipients, { Notify =&gt; ['FAILURE','DELAY'], SkipBad =&gt; 1 });  # Good
+</pre>
+    <p class="Pp">ORcpt is also part of the SMTP DSN extension according to
+        RFC3461. It is used to pass along the original recipient that the mail
+        was first sent to. The machine that generates a DSN will use this
+        address to inform the sender, because he can't know if recipients get
+        rewritten by mail servers. It is expected to be in a format as required
+        by RFC3461, xtext-encoded.</p>
+  </dd>
+  <dt>&quot;to($address[, $address[, ...]])&quot;</dt>
+  <dd></dd>
+  <dt>&quot;cc($address[, $address[, ...]])&quot;</dt>
+  <dd></dd>
+  <dt>&quot;bcc($address[, $address[, ...]])&quot;</dt>
+  <dd>Synonyms for <span class="Li">&quot;recipient&quot;</span>.</dd>
+  <dt id="data(_$data_)"><a class="permalink" href="#data(_$data_)">data([$data])</a></dt>
+  <dd>Initiate the sending of the data from the current message.
+    <p class="Pp"><span class="Li">$data</span> may be a reference to a list or
+        a list and must be encoded by the caller to octets of whatever encoding
+        is required, e.g. by using the Encode module's
+        <span class="Li">encode()</span> function.</p>
+    <p class="Pp">If specified the contents of <span class="Li">$data</span> and
+        a termination string <span class="Li">&quot;.\r\n&quot;</span> is sent
+        to the server. The result will be true if the data was accepted.</p>
+    <p class="Pp">If <span class="Li">$data</span> is not specified then the
+        result will indicate that the server wishes the data to be sent. The
+        data must then be sent using the
+        <span class="Li">&quot;datasend&quot;</span> and
+        <span class="Li">&quot;dataend&quot;</span> methods described in
+        Net::Cmd.</p>
+  </dd>
+  <dt id="bdat($data)"><a class="permalink" href="#bdat($data)">bdat($data)</a></dt>
+  <dd></dd>
+  <dt id="bdatlast($data)"><a class="permalink" href="#bdatlast($data)">bdatlast($data)</a></dt>
+  <dd>Use the alternate <span class="Li">$data</span> command &quot;BDAT&quot;
+      of the data chunking service extension defined in RFC1830 for efficiently
+      sending large MIME messages.</dd>
+  <dt id="expand($address)"><a class="permalink" href="#expand($address)">expand($address)</a></dt>
+  <dd>Request the server to expand the given address Returns an array which
+      contains the text read from the server.</dd>
+  <dt id="verify($address)"><a class="permalink" href="#verify($address)">verify($address)</a></dt>
+  <dd>Verify that <span class="Li">$address</span> is a legitimate mailing
+      address.
+    <p class="Pp">Most sites usually disable this feature in their SMTP service
+        configuration. Use &quot;Debug =&gt; 1&quot; option under <b>new()</b>
+        to see if disabled.</p>
+  </dd>
+  <dt id="help(_$subject_)"><a class="permalink" href="#help(_$subject_)">help([$subject])</a></dt>
+  <dd>Request help text from the server. Returns the text or undef upon
+    failure</dd>
+  <dt id="quit()"><a class="permalink" href="#quit()">quit()</a></dt>
+  <dd>Send the QUIT command to the remote SMTP server and close the socket
+      connection.</dd>
+  <dt id="can_inet6()"><a class="permalink" href="#can_inet6()">can_inet6()</a></dt>
+  <dd>Returns whether we can use IPv6.</dd>
+  <dt id="can_ssl()"><a class="permalink" href="#can_ssl()">can_ssl()</a></dt>
+  <dd>Returns whether we can use SSL.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Addresses'><a class='permalink' href='#Addresses'>Addresses</a></h2>
+<p class="Pp">Net::SMTP attempts to DWIM with addresses that are passed. For
+    example an application might extract The From: line from an email and pass
+    that to <b>mail()</b>. While this may work, it is not recommended. The
+    application should really use a module like Mail::Address to extract the
+    mail address and pass that.</p>
+<p class="Pp">If <span class="Li">&quot;ExactAddresses&quot;</span> is passed to
+    the constructor, then addresses should be a valid rfc2821-quoted address,
+    although Net::SMTP will accept the address surrounded by angle brackets.</p>
+<pre>funny user@domain      WRONG
+&quot;funny user&quot;@domain    RIGHT, recommended
+&lt;&quot;funny user&quot;@domain&gt;  OK</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>
+<p class="Pp">This example prints the mail domain name of the SMTP server known
+    as mailhost:</p>
+<pre>#!/usr/local/bin/perl -w
+use Net::SMTP;
+$smtp = Net::SMTP-&gt;new('mailhost');
+print $smtp-&gt;domain,&quot;\n&quot;;
+$smtp-&gt;quit;</pre>
+<p class="Pp">This example sends a small message to the postmaster at the SMTP
+    server known as mailhost:</p>
+<pre>#!/usr/local/bin/perl -w
+use Net::SMTP;
+my $smtp = Net::SMTP-&gt;new('mailhost');
+$smtp-&gt;mail($ENV{USER});
+if ($smtp-&gt;to('postmaster')) {
+ $smtp-&gt;data();
+ $smtp-&gt;datasend(&quot;To: postmaster\n&quot;);
+ $smtp-&gt;datasend(&quot;\n&quot;);
+ $smtp-&gt;datasend(&quot;A simple test message\n&quot;);
+ $smtp-&gt;dataend();
+} else {
+ print &quot;Error: &quot;, $smtp-&gt;message();
+}
+$smtp-&gt;quit;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXPORTS'><a class='permalink' href='#EXPORTS'>EXPORTS</a></h1>
+<p class="Pp"><i>None</i>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='KNOWN_BUGS'><a class='permalink' href='#KNOWN_BUGS'>KNOWN BUGS</a></h1>
+<p class="Pp">See
+    &lt;<a href='https://rt.cpan.org/Dist/Display.html?Status=Active'>https://rt.cpan.org/Dist/Display.html?Status=Active</a>&amp;Queue=libnet&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp">Net::Cmd, IO::Socket::SSL.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Graham Barr &lt;gbarr@pobox.com &lt;mailto:gbarr@pobox.com&gt;&gt;.</p>
+<p class="Pp">Steve Hay &lt;shay@cpan.org &lt;mailto:shay@cpan.org&gt;&gt; is
+    now maintaining libnet as of version 1.22_02.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>COPYRIGHT</a></h1>
+<p class="Pp">Copyright (C) 1995-2004 Graham Barr. All rights reserved.</p>
+<p class="Pp">Copyright (C) 2013-2016, 2020 Steve Hay. All rights reserved.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENCE'><a class='permalink' href='#LICENCE'>LICENCE</a></h1>
+<p class="Pp">This module is free software; you can redistribute it and/or
+    modify it under the same terms as Perl itself, i.e. under the terms of
+    either the GNU General Public License or the Artistic License, as specified
+    in the <i>LICENCE</i> file.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSION'><a class='permalink' href='#VERSION'>VERSION</a></h1>
+<p class="Pp">Version 3.15</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DATE'><a class='permalink' href='#DATE'>DATE</a></h1>
+<p class="Pp">20 March 2023</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>HISTORY</a></h1>
+<p class="Pp">See the <i>Changes</i> file.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>

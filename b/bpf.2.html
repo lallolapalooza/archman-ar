@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>bpf(2) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+        <link rel="alternate" href="/man/bpf.2.fr" hreflang="fr">
+    
+        <link rel="alternate" href="/man/bpf.2.ru" hreflang="ru">
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">bpf(2)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">bpf(2)</td>
+    <td class="head-vol">دليل استدعاءات النظام</td>
+    <td class="head-rtitle">bpf(2)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">bpf - تنفيذ أمر على خريطة أو برنامج eBPF ممتد</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>النبذة</a></h1>
+<pre><b>#include &lt;linux/bpf.h&gt;</b></pre>
+<pre><b>int bpf(int </b><i>cmd</i><b>, union bpf_attr *</b><i>attr</i><b>, unsigned int </b><i>size</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يقوم استدعاء النظام <b>bpf</b>() بتنفيذ مجموعة من العمليات المتعلقة بمرشحات حزم بيركلي الموسعة (eBPF). eBPF ممتد مشابه لـ BPF الأصلي ("الكلاسيكي") (cBPF) المستخدم لتصفية حزم الشبكة. بالنسبة لبرامج cBPF و eBPF، يقوم النواة بتحليل البرامج بشكل ثابت قبل تحميلها، لضمان أنها لا تضر بالنظام قيد التشغيل.</p>
+<p class="Pp">يمتد eBPF على cBPF بعدة طرق، بما في ذلك القدرة على استدعاء مجموعة ثابتة من وظائف المساعدة داخل النواة (عبر امتداد معامل <b>BPF_CALL</b> الذي يوفره eBPF) والوصول إلى هياكل البيانات المشتركة مثل خرائط eBPF.</p>
+<section class="Ss">
+<h2 class="Ss" id='Extended_BPF_Design/Architecture'><a class='permalink' href='#Extended_BPF_Design/Architecture'>تصميم/هندسة eBPF الموسعة</a></h2>
+<p class="Pp">خرائط eBPF هي هياكل بيانات عامة لتخزين أنواع مختلفة من البيانات. تُعامل أنواع البيانات بشكل عام ككتل ثنائية، لذا يحدد المستخدم ببساطة حجم المفتاح وحجم القيمة عند إنشاء الخريطة. بمعنى آخر، يمكن أن يكون للمفتاح/القيمة لخريطة معينة بنية اعتباطية.</p>
+<p class="Pp">يمكن لعملية المستخدم إنشاء خرائط متعددة (مع أزواج مفاتيح/قيم عبارة عن بيانات ثنائية مبهمة) والوصول إليها عبر واصفات الملفات. يمكن لبرامج eBPF المختلفة الوصول إلى نفس الخرائط بالتوازي. يعود الأمر لعملية المستخدم وبرنامج eBPF لتحديد ما سيتم تخزينه داخل الخرائط.</p>
+<p class="Pp">هناك نوع خريطة خاص واحد، يسمى مصفوفة البرامج. يخزن هذا النوع من الخرائط واصفات الملفات التي تشير إلى برامج eBPF أخرى. عند إجراء بحث في الخريطة، يتم إعادة توجيه تدفق البرنامج في مكانه إلى بداية برنامج eBPF آخر ولا يعود إلى البرنامج المتصل. يبلغ حد التداخل 32، بحيث لا يمكن إنشاء حلقات لا نهائية. في وقت التشغيل، يمكن تعديل واصفات الملفات التي تشير إليها الخريطة، بحيث يمكن تغيير وظائف البرنامج بناءً على متطلبات محددة. يجب أن تكون جميع البرامج المشار إليها في خريطة مصفوفة البرامج قد تم تحميلها مسبقًا في النواة عبر <b>bpf</b>(). إذا فشل بحث الخريطة، يستمر البرنامج الحالي في التنفيذ. انظر <b>BPF_MAP_TYPE_PROG_ARRAY</b> أدناه لمزيد من التفاصيل.</p>
+<p class="Pp">بشكل عام، يتم تحميل برامج eBPF بواسطة عملية المستخدم ويتم إلغاء تحميلها تلقائيًا عند خروج العملية. في بعض الحالات، على سبيل المثال، <a href='/man/tc-bpf.8.en'>tc-bpf(8)</a>، يستمر البرنامج في البقاء في النواة حتى بعد خروج العملية التي حملت البرنامج. في هذه الحالة، يحتفظ نظام tc بمرجع لبرنامج eBPF بعد إغلاق واصف الملف بواسطة عملية المستخدم. وبالتالي، فإن ما إذا كان برنامج معين يستمر في البقاء في النواة يعتمد على كيفية إرفاقه لاحقًا بنظام فرعي معين للنواة بعد تحميله عبر <b>bpf</b>().</p>
+<p class="Pp">كل برنامج eBPF هو مجموعة من التعليمات التي يمكن تشغيلها بأمان حتى اكتمالها. يحدد المدقق الموجود داخل النواة بشكل ثابت أن برنامج eBPF ينتهي وأنه آمن للتنفيذ. أثناء التحقق، تزيد النواة عدد المراجع لجميع الخرائط التي يستخدمها برنامج eBPF، بحيث لا يمكن إزالة الخرائط المرفقة حتى يتم إلغاء تحميل البرنامج.</p>
+<p class="Pp">يمكن ربط برامج eBPF بأحداث مختلفة. يمكن أن تكون هذه الأحداث وصول حزم الشبكة، وأحداث التتبع، وأحداث التصنيف بواسطة صفوف انتظار الشبكة (لبرامج eBPF المرفقة بمصنف <a href='/man/tc.8.en'>tc(8)</a>)، وأنواع أخرى قد تضاف في المستقبل. يقوم حدث جديد بتشغيل تنفيذ برنامج eBPF، والذي قد يخزن معلومات حول الحدث في خرائط eBPF. بالإضافة إلى تخزين البيانات، يمكن لبرامج eBPF استدعاء مجموعة ثابتة من وظائف المساعدة داخل النواة.</p>
+<p class="Pp">يمكن ربط نفس برنامج eBPF بأحداث متعددة ويمكن لبرامج eBPF مختلفة الوصول إلى نفس الخريطة:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>تتبع     تتبع    تتبع    حزمة      حزمة     حزمة
+الحدث A  الحدث B  الحدث C  على eth0  على eth1  على eth2
+ |           |         |          |         |        ^
+ |           |         |          |         v        |
+ --&gt; تتبع &lt;--  تتبع     مقبس     tc داخل   tc خارج
+      prog_1      prog_2    prog_3   المصنف    الإجراء
+      |  |          |         |        prog_4      prog_5
+   |-----  -----|  |------|        map_3        |           |
+   map_1      map_2                           --| map_4 |--</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Arguments'><a class='permalink' href='#Arguments'>الوسائط</a></h2>
+<p class="Pp">يتم تحديد العملية التي سيتم تنفيذها بواسطة استدعاء النظام <b>bpf</b>() بواسطة الوسيط <i>cmd</i>. تأخذ كل عملية وسيطًا مصاحبًا، يتم توفيره عبر <i>attr</i>، وهو مؤشر إلى اتحاد من النوع <i>bpf_attr</i> (انظر أدناه). يجب مسح الحقول غير المستخدمة والحشو إلى الصفر قبل الاستدعاء. الوسيط <i>size</i> هو حجم الاتحاد الذي يشير إليه <i>attr</i>.</p>
+<p class="Pp">القيمة المقدمة في <i>cmd</i> هي واحدة مما يلي:</p>
+<dl class="Bl-tag">
+  <dt id="BPF_MAP_CREATE"><a class="permalink" href="#BPF_MAP_CREATE"><b>BPF_MAP_CREATE</b></a></dt>
+  <dd>إنشاء خريطة وإرجاع واصف ملف يشير إلى الخريطة. يتم تمكين علامة الملف close-on-exec (انظر <a href='/man/fcntl.2.en'>fcntl(2)</a>) تلقائيًا لواصف الملف الجديد.</dd>
+  <dt id="BPF_MAP_LOOKUP_ELEM"><a class="permalink" href="#BPF_MAP_LOOKUP_ELEM"><b>BPF_MAP_LOOKUP_ELEM</b></a></dt>
+  <dd>البحث عن عنصر بواسطة مفتاح في خريطة محددة وإرجاع قيمته.</dd>
+  <dt id="BPF_MAP_UPDATE_ELEM"><a class="permalink" href="#BPF_MAP_UPDATE_ELEM"><b>BPF_MAP_UPDATE_ELEM</b></a></dt>
+  <dd>إنشاء أو تحديث عنصر (زوج مفتاح/قيمة) في خريطة محددة.</dd>
+  <dt id="BPF_MAP_DELETE_ELEM"><a class="permalink" href="#BPF_MAP_DELETE_ELEM"><b>BPF_MAP_DELETE_ELEM</b></a></dt>
+  <dd>البحث وحذف عنصر بواسطة مفتاح في خريطة محددة.</dd>
+  <dt id="BPF_MAP_GET_NEXT_KEY"><a class="permalink" href="#BPF_MAP_GET_NEXT_KEY"><b>BPF_MAP_GET_NEXT_KEY</b></a></dt>
+  <dd>البحث عن عنصر بواسطة مفتاح في خريطة محددة وإرجاع مفتاح العنصر التالي.</dd>
+  <dt id="BPF_PROG_LOAD"><a class="permalink" href="#BPF_PROG_LOAD"><b>BPF_PROG_LOAD</b></a></dt>
+  <dd>التحقق من صحة وتحميل برنامج eBPF، وإرجاع واصف ملف جديد مرتبط بالبرنامج. يتم تمكين علامة الملف close-on-exec (انظر <a href='/man/fcntl.2.en'>fcntl(2)</a>) تلقائيًا لواصف الملف الجديد.</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>يتكون الاتحاد <i>bpf_attr</i> من هياكل مجهولة مختلفة تستخدمها أوامر <b>bpf</b>() المختلفة:</dd>
+</dl>
+<p class="Pp">
+  <br/>
+</p>
+<pre>union bpf_attr {
+    struct {    /* تستخدم بواسطة BPF_MAP_CREATE */
+        __u32         map_type;
+        __u32         key_size;    /* حجم المفتاح بالبايت */
+        __u32         value_size;  /* حجم القيمة بالبايت */
+        __u32         max_entries; /* الحد الأقصى لعدد الإدخالات
+                                      في خريطة */
+    };
+    struct {    /* تستخدم بواسطة أوامر BPF_MAP_*_ELEM و BPF_MAP_GET_NEXT_KEY
+                   */
+        __u32         map_fd;
+        __aligned_u64 key;
+        union {
+            __aligned_u64 value;
+            __aligned_u64 next_key;
+        };
+        __u64         flags;
+    };
+    struct {    /* تستخدم بواسطة BPF_PROG_LOAD */
+        __u32         prog_type;
+        __u32         insn_cnt;
+        __aligned_u64 insns;      /* 'const struct bpf_insn *' */
+        __aligned_u64 license;    /* 'const char *' */
+        __u32         log_level;  /* مستوى تفصيل المدقق */
+        __u32         log_size;   /* حجم مخزن المستخدم المؤقت */
+        __aligned_u64 log_buf;    /* المخزن المؤقت 'char *' المقدم من المستخدم
+                                     */
+        __u32         kern_version;
+                                  /* تم التحقق منه عندما prog_type=kprobe
+                                     (منذ Linux 4.1) */
+    };
+} __attribute__((aligned(8)));</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='eBPF_maps'><a class='permalink' href='#eBPF_maps'>خرائط eBPF</a></h2>
+<p class="Pp">الخرائط هي هياكل بيانات عامة لتخزين أنواع مختلفة من البيانات. تسمح بمشاركة البيانات بين برامج نواة eBPF، وأيضًا بين تطبيقات النواة والمستخدم.</p>
+<p class="Pp">كل نوع خريطة له السمات التالية:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>النوع</dd>
+  <dt>&#x2022;</dt>
+  <dd>الحد الأقصى لعدد العناصر</dd>
+  <dt>&#x2022;</dt>
+  <dd>حجم المفتاح بالبايت</dd>
+  <dt>&#x2022;</dt>
+  <dd>حجم القيمة بالبايت</dd>
+</dl>
+<p class="Pp">توضح دوال التغليف التالية كيفية استخدام أوامر <b>bpf</b>() المختلفة للوصول إلى الخرائط. تستخدم الدوال الوسيط <i>cmd</i> لاستدعاء عمليات مختلفة.</p>
+<dl class="Bl-tag">
+  <dt id="BPF_MAP_CREATE~2"><a class="permalink" href="#BPF_MAP_CREATE~2"><b>BPF_MAP_CREATE</b></a></dt>
+</dl>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            <p>Arch Linux, Linux is a registered trademark of Linus Torvalds</p>
+            <p>Copyright © 2006-2024 Arch Linux</p>
+        </footer>
+    </body>
+</html>

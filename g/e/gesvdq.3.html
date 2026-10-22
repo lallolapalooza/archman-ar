@@ -1,0 +1,696 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">gesvdq(3)</h1>
+<link rel="stylesheet" href="basic.css">
+      SUBROUTINE SGESVDQ( JOBU, JOBV, JOBA, M, N, A, LDA, S, U, LDU, V, LDV,
+     $                    NUMRANK, IWORK, LIWORK, WORK, LWORK, RWORK, LRWORK,
+     $                    INFO )
+!
+!     .. Scalar Arguments ..
+      CHARACTER          JOBA, JOBV, JOBU
+      INTEGER            INFO, LDA, LDAA, LDAS, LDB, LDC, LDV, LDU, LIWORK,
+     $                   LRWORK, LWORK, M, N, NUMRANK
+!     ..
+!     .. Array Arguments ..
+      INTEGER            IWORK( * )
+      REAL               A( LDA, * ), RWORK( * ), S( * ), U( LDU, * ),
+     $                   V( LDV, * ), WORK( * )
+!     ..
+!
+!     .. Parameters ..
+      INTEGER            MAXDIM, NMAX, ONE, ZERO
+      PARAMETER          MAXDIM = 128, NMAX = 128, ONE = 1, ZERO = 0
+!     ..
+!     .. Intrinsic Functions ..
+      INTRINSIC          MAX, MIN
+!     ..
+!
+!     Purpose:
+!     =======
+!     SGESVDQ computes the singular value decomposition (SVD) of a real
+!     M-by-N matrix A.
+!
+!     The SVD is written as A = U * S * V**T, where S is an M-by-N diagonal
+!     matrix with non-negative diagonal entries s(i) (the singular values)
+!     sorted in descending order, U is an M-by-M orthogonal matrix, and V is
+!     an N-by-N orthogonal matrix.
+!
+!     SGESVDQ is a wrapper around the LAPACK routine SGESDD. The difference
+!     is that SGESVDQ computes the singular values and vectors through a
+!     rank-revealing QR factorization first. This enables an early exit in
+!     case of rank deficiency and potentially improves accuracy.
+!
+!     Arguments:
+!     =========
+!
+!     JOBU    (input) CHARACTER*1
+!             Specifies whether to compute the left singular vectors (U).
+!             = 'A': all M columns of U are returned in U.
+!             = 'S': the first N columns of U are returned in U.
+!             = 'U': the first MIN(M,N) columns of U are returned in U.
+!             = 'N': no columns of U are returned.
+!             = 'F': U is an M-by-M unitary matrix that can be used to restore
+!                    the left singular vectors from the initial pivoted QR
+!                    factorization of A. See the description of U.
+!
+!     JOBV    (input) CHARACTER*1
+!             Specifies whether to compute the right singular vectors (V).
+!             = 'A': all N columns of V are returned in V.
+!             = 'S': the first N columns of V are returned in V.
+!             = 'N': no columns of V are returned.
+!             = 'F': V is an N-by-N orthogonal matrix that can be used to restore
+!                    the right singular vectors from the initial pivoted QR
+!                    factorization of A. See the description of V.
+!
+!     JOBA    (input) CHARACTER*1
+!             Specifies the algorithm to be used for rank determination.
+!             = 'E': Use the rank-revealing QR factorization to determine the
+!                    numerical rank.
+!             = 'N': Use the standard SVD decomposition to determine the
+!                    numerical rank.
+!
+!     M       (input) INTEGER
+!             The number of rows of the matrix A. M >= 0.
+!
+!     N       (input) INTEGER
+!             The number of columns of the matrix A. N >= 0.
+!
+!     A       (input/output) REAL array, dimension (LDA, N)
+!             On entry, the M-by-N matrix A.
+!             On exit, if JOBU = 'A' and JOBA = 'E', A is overwritten by
+!             the M-by-M unitary matrix U.
+!             On exit, if JOBV = 'A' and JOBA = 'E', A is overwritten by
+!             the N-by-N unitary matrix V.
+!             On exit, if JOBU = 'A', JOBV = 'A' and JOBA = 'E', A is
+!             overwritten by the product U * V.
+!             On exit, if JOBA = 'N', the algorithm is expected to return A
+!             unmodified.
+!
+!     LDA     (input) INTEGER
+!             The leading dimension of the array A. LDA >= max(1, M).
+!
+!     S       (output) REAL array, dimension (min(M,N))
+!             On exit, S contains the singular values of A, sorted in
+!             descending order. The singular values are the diagonal entries
+!             of the conceptual diagonal matrix S, formed by S.
+!
+!     U       (output) REAL array, dimension (LDU, M) if JOBU = 'A'
+!                                          (LDU, N) if JOBU = 'S' or 'U'
+!                                          (LDU, N) if JOBU = 'F'
+!                                          (LDU, 1) if JOBU = 'N'
+!             On exit,
+!             if JOBU = 'A', U contains the M-by-M unitary matrix U.
+!             if JOBU = 'S', U contains the first N columns of U.
+!             if JOBU = 'U', U contains the first MIN(M,N) columns of U.
+!             if JOBU = 'F', U contains an M-by-N orthogonal matrix that can be
+!                    used to restore the left singular vectors from the initial
+!                    pivoted QR factorization of A. See the description of U
+!                    in the references.
+!             if JOBU = 'N', U is not accessed.
+!
+!     LDU     (input) INTEGER
+!             The leading dimension of the array U.
+!             If JOBU = 'A', LDU >= max(1, M).
+!             If JOBU = 'S', 'U', 'R', LDU >= max(1, M).
+!             If JOBU = 'F', LDU >= max(1, N).
+!             Otherwise, LDU >= 1.
+!
+!     V       (output) REAL array, dimension (LDV, N) if JOBV = 'A'
+!                                          (LDV, N) if JOBV = 'S' or 'U'
+!                                          (LDV, N) if JOBV = 'F'
+!                                          (LDV, 1) if JOBV = 'N'
+!             On exit,
+!             if JOBV = 'A', V contains the N-by-N unitary matrix V.
+!             if JOBV = 'S', V contains the first N columns of V.
+!             if JOBV = 'F', V contains an N-by-N orthogonal matrix that can be
+!                    used to restore the right singular vectors from the initial
+!                    pivoted QR factorization of A. See the description of V
+!                    in the references.
+!             if JOBV = 'N', V is not accessed.
+!
+!     LDV     (input) INTEGER
+!             The leading dimension of the array V.
+!             If JOBV = 'A', 'V', 'R', LDV >= max(1, N).
+!             Otherwise, LDV >= 1.
+!
+!     NUMRANK (output) INTEGER
+!             NUMRANK is the numerical rank first determined after the rank
+!             revealing QR factorization, following the strategy specified by the
+!             value of JOBA. If JOBV = 'R' and JOBU = 'R', only NUMRANK
+!             leading singular values and vectors are then requested in the call
+!             of SGESVD. The final value of NUMRANK might be further reduced if
+!             some singular values are computed as zeros.
+!
+!     IWORK   (workspace) INTEGER array, dimension (LIWORK)
+!             On exit, IWORK(1:N) contains column pivoting permutation of the
+!             rank revealing QR factorization.
+!             If JOBP = 'P', IWORK(N+1:N+M-1) contains the indices of the sequence
+!             of row swaps used in row pivoting. These can be used to restore the
+!             left singular vectors in the case JOBU = 'F'.
+!
+!             If LIWORK, LWORK, or LRWORK = -1, then on exit, if INFO = 0,
+!             IWORK(1) returns the minimal LIWORK.
+!
+!     LIWORK  (input) INTEGER
+!             The dimension of the array IWORK.
+!             LIWORK >= N + M - 1,     if JOBP = 'P' and JOBA .NE. 'E';
+!             LIWORK >= N              if JOBP = 'N' and JOBA .NE. 'E';
+!             LIWORK >= N + M - 1 + N, if JOBP = 'P' and JOBA = 'E';
+!             LIWORK >= N + N          if JOBP = 'N' and JOBA = 'E'.
+!
+!             If LIWORK = -1, then a workspace query is assumed; the routine
+!             only calculates and returns the optimal and minimal sizes
+!             for the WORK, IWORK, and RWORK arrays, and no error
+!             message related to LWORK is issued by XERBLA.
+!
+!     WORK    (workspace) REAL array, dimension (LWORK)
+!             On exit, if, on entry, LWORK.NE.-1, WORK(1:N) contains parameters
+!             needed to recover the Q factor from the QR factorization computed by
+!             SGEQP3.
+!
+!             If LIWORK, LWORK, or LRWORK = -1, then on exit, if INFO = 0,
+!             WORK(1) returns the optimal LWORK, and
+!             WORK(2) returns the minimal LWORK.
+!
+!     LWORK   (input) INTEGER
+!             The dimension of the array WORK. It is determined as follows:
+!             Let  LWQP3 = 3*N+1,  LWCON = 3*N, and let
+!             LWORQ = { MAX( N, 1 ),  if JOBU = 'R', 'S', or 'U'
+!                     { MAX( M, 1 ),  if JOBU = 'A'
+!             LWSVD = MAX( 5*N, 1 )
+!             LWLQF = MAX( N/2, 1 ), LWSVD2 = MAX( 5*(N/2), 1 ), LWORLQ = MAX( N, 1 ),
+!             LWQRF = MAX( N/2, 1 ), LWORQ2 = MAX( N, 1 )
+!             Then the minimal value of LWORK is:
+!             = MAX( N + LWQP3, LWSVD )        if only the singular values are needed;
+!             = MAX( N + LWQP3, LWCON, LWSVD ) if only the singular values are needed,
+!                                      and a scaled condition estimate requested;
+!
+!             = N + MAX( LWQP3, LWSVD, LWORQ ) if the singular values and the left
+!                                      singular vectors are requested;
+!             = N + MAX( LWQP3, LWCON, LWSVD, LWORQ ) if the singular values and the left
+!                                      singular vectors are requested, and also
+!                                      a scaled condition estimate requested;
+!
+!             = N + MAX( LWQP3, LWSVD )        if the singular values and the right
+!                                      singular vectors are requested;
+!             = N + MAX( LWQP3, LWCON, LWSVD ) if the singular values and the right
+!                                      singular vectors are requested, and also
+!                                      a scaled condition etimate requested;
+!
+!             = N + MAX( LWQP3, LWSVD, LWORQ ) if the full SVD is requested with JOBV = 'R';
+!                                      independent of JOBR;
+!             = N + MAX( LWQP3, LWCON, LWSVD, LWORQ ) if the full SVD is requested,
+!                                      JOBV = 'R' and, also a scaled condition
+!                                      estimate requested; independent of JOBR;
+!             = MAX( N + MAX( LWQP3, LWSVD, LWORQ ),
+!            N + MAX( LWQP3, N/2+LWLQF, N/2+LWSVD2, N/2+LWORLQ, LWORQ) ) if the
+!                            full SVD is requested with JOBV = 'A' or 'V', and
+!                            JOBR ='N'
+!             = MAX( N + MAX( LWQP3, LWCON, LWSVD, LWORQ ),
+!            N + MAX( LWQP3, LWCON, N/2+LWLQF, N/2+LWSVD2, N/2+LWORLQ, LWORQ ) )
+!                            if the full SVD is requested with JOBV = 'A' or 'V', and
+!                            JOBR ='N', and also a scaled condition number estimate
+!                            requested.
+!             = MAX( N + MAX( LWQP3, LWSVD, LWORQ ),
+!            N + MAX( LWQP3, N/2+LWQRF, N/2+LWSVD2, N/2+LWORQ2, LWORQ ) ) if the
+!                            full SVD is requested with JOBV = 'A', 'V', and JOBR ='T'
+!             = MAX( N + MAX( LWQP3, LWCON, LWSVD, LWORQ ),
+!            N + MAX( LWQP3, LWCON, N/2+LWQRF, N/2+LWSVD2, N/2+LWORQ2, LWORQ ) )
+!                            if the full SVD is requested with JOBV = 'A' or 'V', and
+!                            JOBR ='T', and also a scaled condition number estimate
+!                            requested.
+!             Finally, LWORK must be at least two: LWORK = MAX( 2, LWORK ).
+!
+!             If LWORK = -1, then a workspace query is assumed; the routine
+!             only calculates and returns the optimal and minimal sizes
+!             for the WORK, IWORK, and RWORK arrays, and no error
+!             message related to LWORK is issued by XERBLA.
+!
+!     RWORK   (workspace) REAL array, dimension (LRWORK)
+!             On exit,
+!             1. If JOBA = 'E', RWORK(1) contains an estimate of the condition
+!             number of column scaled A. If A = C * D where D is diagonal and C
+!             has unit columns in the Euclidean norm, then, assuming full column rank,
+!             N^(-1/4) * RWORK(1) &lt;= ||pinv(C)||_2 &lt;= N^(1/4) * RWORK(1).
+!             Otherwise, RWORK(1) = -1.
+!             2. RWORK(2) contains the number of singular values computed as
+!             exact zeros in SGESVD applied to the upper triangular or trapezoidal
+!             R (from the initial QR factorization). In case of early exit (no call to
+!             SGESVD, such as in the case of zero matrix) RWORK(2) = -1.
+!
+!             If LIWORK, LWORK, or LRWORK = -1, then on exit, if INFO = 0,
+!             RWORK(1) returns the minimal LRWORK.
+!
+!     LRWORK  (input) INTEGER
+!             The dimension of the array RWORK.
+!             If JOBP ='P', then LRWORK &gt;= MAX(2, M).
+!             Otherwise, LRWORK &gt;= 2
+!
+!             If LRWORK = -1, then a workspace query is assumed; the routine
+!             only calculates and returns the optimal and minimal sizes
+!             for the WORK, IWORK, and RWORK arrays, and no error
+!             message related to LWORK is issued by XERBLA.
+!
+!     INFO    (output) INTEGER
+!             = 0:  successful exit.
+!             &lt; 0:  if INFO = -i, the i-th argument had an illegal value.
+!             &gt; 0:  if SBDSQR did not converge, INFO specifies how many superdiagonals
+!             of an intermediate bidiagonal form B (computed in SGESVD) did not
+!             converge to zero.
+!
+!     Further Details:
+!     ==============
+!
+!     1. The data movement (matrix transpose) is coded using simple nested
+!     DO-loops because BLAS and LAPACK do not provide corresponding subroutines.
+!     Those DO-loops are easily identified in this source code - by the CONTINUE
+!     statements labeled with 11**. In an optimized version of this code, the
+!     nested DO loops should be replaced with calls to an optimized subroutine.
+!     2. This code scales A by 1/SQRT(M) if the largest ABS(A(i,j)) could cause
+!     column norm overflow. This is the minial precaution and it is left to the
+!     SVD routine (CGESVD) to do its own preemptive scaling if potential over-
+!     or underflows are detected. To avoid repeated scanning of the array A,
+!     an optimal implementation would do all necessary scaling before calling
+!     CGESVD and the scaling in CGESVD can be switched off.
+!     3. Other comments related to code optimization are given in comments in the
+!     code, enclosed in [[double brackets]].
+!
+!     Bugs, examples and comments:
+!     ============================
+!      Please report all bugs and send interesting examples and/or comments to
+!      drmac@math.hr. Thank you.
+!
+!     References:
+!     ===========
+!      [1] Zlatko Drmac, Algorithm 977: A QR-Preconditioned QR SVD Method for
+!          Computing the SVD with High Accuracy. ACM Trans. Math. Softw.
+!          44(1): 11:1-11:30 (2017)
+!
+!      SIGMA library, xGESVDQ section updated February 2016.
+!      Developed and coded by Zlatko Drmac, Department of Mathematics
+!      University of Zagreb, Croatia, drmac@math.hr
+!
+!     Contributors:
+!     ============
+!      SIGMA library developers.
+!
+!     =====================================================================
+!     ..
+!     .. Local Scalars ..
+      CHARACTER          JOBQR, JOBVS
+      INTEGER            I, J, K, L, MN, MX, MXDIM, NUMRANK0, TRANSA, TRANSV,
+     $                   NB, NMP, NX, MXWRK, MRWRK, MIWRK
+      REAL               ALPHA, BETA, DUM, RM, RN, SCALE, TOL, ZERO0
+!     ..
+!     .. Local Arrays ..
+      INTEGER            PIVOT( MAXDIM )
+      REAL               TAU( MAXDIM ), WORK0( 4*MAXDIM )
+!     ..
+!     .. External Functions ..
+      LOGICAL            LSAME
+      INTEGER            ILMAX, ILMIN
+      REAL               SNAMAX, SNAMIN
+      EXTERNAL           LSAME, ILMAX, ILMIN, SNAMAX, SNAMIN
+!     ..
+!     .. External Subroutines ..
+      EXTERNAL           SGEQP3, SGESDD, SGEQRF, SGGESV, SLACPY, SLAQP2,
+     $                   SLASCL, SLASET, SORMBR, SORGFQ, SORGSV, SORMRQ,
+     $                   XERBLA
+!     ..
+!     .. Intrinsic Functions ..
+      INTRINSIC          ABS, MAX, MIN, NINT, SQRT
+!     ..
+!     .. Statement Functions ..
+      REAL               MAX(A,B), MIN(A,B)
+!     ..
+!     .. Other..
+      EQUIVALENCE (MXWRK, WORK0(1)), (MRWRK, WORK0(2)), (MIWRK, WORK0(3))
+!
+!     .. Save ..
+      SAVE               MAXDIM, NMAX
+!
+!     ..executable statement..
+!
+!     Test the input scalar arguments.
+!
+      INFO = 0
+      CALL XERBLA( 'SGESVDQ', -8, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 8 )
+      CALL XERBLA( 'SGESVDQ', -7, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 7 )
+      CALL XERBLA( 'SGESVDQ', -6, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 6 )
+      CALL XERBLA( 'SGESVDQ', -5, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 5 )
+      CALL XERBLA( 'SGESVDQ', -4, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 4 )
+      CALL XERBLA( 'SGESVDQ', -3, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 3 )
+      CALL XERBLA( 'SGESVDQ', -2, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 2 )
+      CALL XERBLA( 'SGESVDQ', -1, ZERO, ZERO, ZERO, ZERO, ZERO, ZERO,
+     $             'Unknown', 1 )
+!
+!     Handle workspace query.
+!
+      IF (LWORK.EQ.-1 .OR. LIWORK.EQ.-1 .OR. LRWORK.EQ.-1) THEN
+         CALL SGESVDQ_WORKSPACE( JOBU, JOBV, JOBA, M, N, LDA, LDU, LDV,
+     $                          LIWORK, LWORK, LRWORK )
+         WORK(1) = MAX( WORK(1), 2.0E0 )
+         RETURN
+      END IF
+!
+!     If M=0 or N=0, the decomposition is trivial.
+!
+      IF (M.EQ.0 .OR. N.EQ.0) THEN
+         IF (LSAME(JOBU, 'A')) THEN
+            CALL SLASET( 'All', M, M, ZERO, ONE, U, LDU )
+         END IF
+         IF (LSAME(JOBV, 'A')) THEN
+            CALL SLASET( 'All', N, N, ZERO, ONE, V, LDV )
+         END IF
+         IF (LSAME(JOBA, 'E')) RWORK(1) = ZERO
+         RWORK(2) = ZERO
+         INFO = 0
+         RETURN
+      END IF
+!
+!     Compute the numerical rank.
+!
+      NUMRANK0 = 0
+      IF (LSAME(JOBA, 'E')) THEN
+!
+!        Rank revealing QR factorization.
+!
+         CALL SGEQP3( M, N, A, LDA, PIVOT, TAU, WORK, LWORK, INFO )
+         IF (INFO.NE.0) RETURN
+!
+!        Copy the computed rank.
+!
+         NUMRANK0 = N
+!
+!        Estimate the condition number.
+!
+         CALL SLAQP2( M, N, A, LDA, PIVOT, TAU, WORK(N+1), WORK(2*N+1),
+     $                WORK(3*N+1), LWORK-3*N, INFO )
+         IF (INFO.NE.0) RETURN
+!
+!        Compute the rank based on the condition number estimate.
+!
+         TOL = SQRT( SNAMAX( M, N, A, LDA ) * SNAMIN( M, N, A, LDA ) )
+         DO 10 I = 1, N
+            IF (ABS(A(I,I))/TOL .LT. SNAMAX( M, N, A, LDA )) THEN
+               NUMRANK0 = I - 1
+               GO TO 20
+            END IF
+   10    CONTINUE
+         NUMRANK0 = N
+   20    CONTINUE
+!
+!        Update NUMRANK.
+!
+         NUMRANK = MIN( N, NUMRANK0 )
+!
+!        Copy the Householder vectors and the row interchanges.
+!
+         CALL SLACPY( 'All', M, N, A, LDA, WORK(4*N+1), M )
+!
+!        Restore A from the pivoted QR factorization.
+!
+         ALPHA = ONE / SQRT( REAL(M) )
+         CALL SLASCL( 'General', 0, 0, ALPHA, ONE, M, N, A, LDA, INFO )
+         CALL SORMBR( 'Q', 'R', 'N', M, N, N, WORK(4*N+1), M, TAU,
+     $                WORK(N+1), LWORK-3*N, INFO )
+         CALL SLACPY( 'All', M, N, WORK(4*N+1), M, A, LDA )
+!
+!        Set U and V based on the value of JOBU and JOBV.
+!
+         IF (LSAME(JOBU, 'F')) THEN
+            CALL SORGFQ( M, N, NUMRANK, A, LDA, TAU, WORK(N+1), LWORK-3*N,
+     $                   INFO )
+            CALL SLACPY('All', M, N, A, LDA, U, LDU)
+         ELSE IF (LSAME(JOBU, 'A')) THEN
+            CALL SORMBR('Q', 'R', 'N', M, N, N, WORK(4*N+1), M, TAU, U, LDU,
+     $                  WORK(N+1), LWORK-3*N, INFO)
+         ELSE IF (LSAME(JOBU, 'S')) THEN
+            CALL SORMBR('Q', 'R', 'N', M, MIN(M,N), MIN(M,N), WORK(4*N+1), M, TAU,
+     $                  U, LDU, WORK(N+1), LWORK-3*N, INFO)
+         END IF
+!
+!        Restore V from the pivoted QR factorization.
+!
+         IF (LSAME(JOBV, 'F')) THEN
+            CALL SORMRQ( M, N, N, NUMRANK, A, LDA, TAU, WORK(N+1), LWORK-3*N,
+     $                 INFO )
+            CALL SLACPY('All', N, N, WORK(N+1), N, V, LDV)
+         ELSE IF (LSAME(JOBV, 'A')) THEN
+            CALL SORMBR('P', 'R', 'N', N, N, N, WORK(4*N+1), M, TAU, V, LDV,
+     $                  WORK(N+1), LWORK-3*N, INFO)
+         END IF
+!
+!        Perform SVD on R.
+!
+         IF (NUMRANK .GT. 0) THEN
+            CALL SGESDD( 'N', NUMRANK, NUMRANK, A, LDA, S, U, LDU, V, LDV,
+     $                   WORK, LWORK, IWORK, RWORK, INFO )
+            IF (INFO .NE. 0) THEN
+               IF (INFO .GT. 0) INFO = INFO
+               RETURN
+            END IF
+         ELSE
+            DO 30 I = 1, MIN(M,N)
+               S(I) = ZERO
+   30       CONTINUE
+            RWORK(2) = ZERO
+         END IF
+!
+!        Update U and V if needed.
+!
+         IF (.NOT. LSAME(JOBU, 'F')) THEN
+            CALL SLACPY('All', M, NUMRANK, A, LDA, U, LDU)
+         END IF
+         IF (.NOT. LSAME(JOBV, 'F')) THEN
+            CALL SLACPY('All', N, NUMRANK, WORK(N+1), N, V, LDV)
+         END IF
+!
+!        Set NUMRANK to the actual number of singular values.
+!
+         NUMRANK = MIN(M,N)
+         DO 40 I = 1, MIN(M,N)
+            IF (S(I) .LE. 0.0) THEN
+               NUMRANK = I - 1
+               GO TO 50
+            END IF
+   40    CONTINUE
+         NUMRANK = MIN(M,N)
+   50    CONTINUE
+!
+!        Compute the scaling factor.
+!
+         SCALE = SNAMAX( M, N, A, LDA )
+         IF (SCALE .EQ. ZERO) THEN
+            RWORK(1) = ZERO
+         ELSE
+            RWORK(1) = SCALE * SQRT( REAL(N) ) / SNAMIN( M, N, A, LDA )
+         END IF
+!
+!        Compute the number of zero singular values.
+!
+         RWORK(2) = MIN(M,N) - NUMRANK
+!
+      ELSE IF (LSAME(JOBA, 'N')) THEN
+!
+!        Standard SVD decomposition.
+!
+         CALL SGESDD( JOBU, JOBV, M, N, A, LDA, S, U, LDU, V, LDV,
+     $                WORK, LWORK, IWORK, RWORK, INFO )
+         NUMRANK = MIN(M,N)
+!
+      END IF
+!
+!     End of execution.
+!
+      RETURN
+!
+!     End of SGESVDQ.
+!
+      END
+<pre>
+Developed and coded by Zlatko Drmac, Department of Mathematics
+ University of Zagreb, Croatia, drmac@math.hr
+</pre>
+</div>
+<p class="Pp"><b>Author</b></p>
+<div class="Bd-indent">
+<p class="Pp">Univ. of Tennessee</p>
+<p class="Pp">Univ. of California Berkeley</p>
+<p class="Pp">Univ. of Colorado Denver</p>
+<p class="Pp">NAG Ltd.</p>
+</div>
+<p class="Pp">Definition at line <b>412</b> of file <b>sgesvdq.f</b>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='subroutine_zgesvdq_(character_joba,_character_jobp,_character_jobr,_character_jobu,_character_jobv,_integer_m,_integer_n,_complex*16,_dimension(_lda,_*_)_a,_integer_lda,_double_precision,_dimension(_*_)_s,_complex*16,_dimension(_ldu,_*_)_u,_integer_ldu,_complex*16,_dimension(_ldv,_*_)_v,_integer_ldv,_integer_numrank,_integer,_dimension(_*_)_iwork,_integer_liwork,_complex*16,_dimension(_*_)_cwork,_integer_lcwork,_double_precision,_dimension(_*_)_rwork,_integer_lrwork,_integer_info)'><a class='permalink' href='#subroutine_zgesvdq_(character_joba,_character_jobp,_character_jobr,_character_jobu,_character_jobv,_integer_m,_integer_n,_complex*16,_dimension(_lda,_*_)_a,_integer_lda,_double_precision,_dimension(_*_)_s,_complex*16,_dimension(_ldu,_*_)_u,_integer_ldu,_complex*16,_dimension(_ldv,_*_)_v,_integer_ldv,_integer_numrank,_integer,_dimension(_*_)_iwork,_integer_liwork,_complex*16,_dimension(_*_)_cwork,_integer_lcwork,_double_precision,_dimension(_*_)_rwork,_integer_lrwork,_integer_info)'>subroutine zgesvdq (character joba, character jobp, character jobr, character jobu, character jobv, integer m, integer n, complex*16, dimension( lda, * ) a, integer lda, double precision, dimension( * ) s, complex*16, dimension( ldu, * ) u, integer ldu, complex*16, dimension( ldv, * ) v, integer ldv, integer numrank, integer, dimension( * ) iwork, integer liwork, complex*16, dimension( * ) cwork, integer lcwork, double precision, dimension( * ) rwork, integer lrwork, integer info)</a></h2>
+<p class="Pp"><b> ZGESVDQ يقوم بحساب تحليل القيم المفردة (SVD) باستخدام طريقة QR-Preconditioned QR SVD لمصفوفات GE</b></p>
+<p class="Pp"><b>الغرض:</b></p>
+<div class="Bd-indent">
+<pre>!&gt;
+!&gt; ZCGESVDQ يحسب تحليل القيم المفردة (SVD) لمصفوفة معقدة A بحجم M × N ، حيث M ≥ N. يتم كتابة SVD للمصفوفة A على النحو التالي:
+!&gt; A = U * SIGMA * V^*,
+!&gt; حيث SIGMA مصفوفة قطرية بحجم N × N ، و U مصفوفة متعامدة بحجم M × N ، و V مصفوفة وحدوية بحجم N × N. العناصر القطرية لـ SIGMA هي القيم المفردة للمصفوفة A. أعمدة U و V هي المتجهات المفردة اليسرى واليمنى للمصفوفة A على التوالي.
+!&gt; </pre>
+</div>
+<p class="Pp"><b>المعلمات</b></p>
+<div class="Bd-indent"><i>JOBA</i>
+<pre>!&gt;  JOBA is CHARACTER*1
+!&gt;  يحدد مستوى الدقة في SVD المحسوب
+!&gt;  = 'A' تتوافق الدقة المطلوبة مع وجود خطأ خلفي محدود بـ || delta A ||_F ≤ f(m,n) * EPS * || A ||_F,
+!&gt;        حيث EPS = DLAMCH('Epsilon'). هذا يسمح لـ ZGESVDQ بتقليص العامل المثلثي المحسوب
+!&gt;        في تحليل QR الذي يكشف الرتبة كلما كان الجزء المقلص أقل من عتبة
+!&gt;        من ترتيب EPS * ||A||_F. هذا مستوى تقليص جريء.
+!&gt;  = 'M' بشكل مشابه لـ 'A'، ولكن التقليص أكثر لطفًا: يُسمح به فقط عندما يكون هناك انخفاض في القطر
+!&gt;        للعامل المثلثي في تحليل QR. هذا مستوى تقليص متوسط.
+!&gt;  = 'H' دقة عالية مطلوبة. لا يتم محاولة تحديد الرتبة العددية بناءً على تحليل QR الذي يكشف الرتبة.
+!&gt;  = 'E' مثل 'H'، وبالإضافة إلى ذلك يتم تقدير عدد شرط المصفوفة A بعد قياس الأعمدة وإرجاعه في RWORK(1).
+!&gt;        N^(-1/4)*RWORK(1) ≤ ||pinv(A_scaled)||_2 ≤ N^(1/4)*RWORK(1)
+!&gt; </pre>
+<p class="Pp"><i>JOBP</i></p>
+<pre>!&gt;  JOBP is CHARACTER*1
+!&gt;  = 'P' يتم ترتيب صفوف المصفوفة A بترتيب تنازلي فيما يتعلق بـ ||A(i,:)||_\infty. هذا يعزز الدقة العددية
+!&gt;        على حساب نقل بيانات إضافي. موصى به للمتانة العددية.
+!&gt;  = 'N' لا يوجد تبديل للصفوف.
+!&gt; </pre>
+<p class="Pp"><i>JOBR</i></p>
+<pre>!&gt;          JOBR is CHARACTER*1
+!&gt;          = 'T' بعد تحليل QR المبدئي مع التبديل، يتم تطبيق ZGESVD على المرفق R**H للعامل المثلثي المحسوب R.
+!&gt;          يتضمن هذا بعض نقل البيانات الإضافي (تبديل المصفوفات). مفيد للتجارب والبحث والتطوير.
+!&gt;          = 'N' يتم إعطاء العامل المثلثي R كمدخل لـ CGESVD. قد يكون هذا مفضلًا لأنه يتضمن نقل بيانات أقل.
+!&gt; </pre>
+<p class="Pp"><i>JOBU</i></p>
+<pre>!&gt;          JOBU is CHARACTER*1
+!&gt;          = 'A' يتم حساب جميع المتجهات المفردة اليسرى M وإرجاعها في المصفوفة U. انظر وصف U.
+!&gt;          = 'S' أو 'U' يتم حساب N = min(M,N) متجه مفرد أيسر وإرجاعه في المصفوفة U. انظر وصف U.
+!&gt;          = 'R' يتم تحديد الرتبة العددية NUMRANK ويتم حساب وإرجاع NUMRANK متجه مفرد أيسر فقط في المصفوفة U.
+!&gt;          = 'F' يتم إرجاع المتجهات المفردة اليسرى N في شكل مضروب لناتج العامل Q من تحليل QR المبدئي
+!&gt;          والمتجهات المفردة اليسرى N لـ (R**H , 0)**H. إذا تم استخدام تبديل الصفوف، فإن المعلومات الضرورية
+!&gt;          حول تبديل الصفوف مخزنة في IWORK(N+1:N+M-1).
+!&gt;          = 'N' لا يتم حساب المتجهات المفردة اليسرى.
+!&gt; </pre>
+<p class="Pp"><i>JOBV</i></p>
+<pre>!&gt;          JOBV is CHARACTER*1
+!&gt;          = 'A', 'V' يتم حساب جميع المتجهات المفردة اليمنى N وإرجاعها في المصفوفة V.
+!&gt;          = 'R' يتم تحديد الرتبة العددية NUMRANK ويتم حساب وإرجاع NUMRANK متجه مفرد أيمن فقط في المصفوفة V.
+!&gt;          هذا الخيار مسموح به فقط إذا كان JOBU = 'R' أو JOBU = 'N'؛ وإلا فهو غير قانوني.
+!&gt;          = 'N' لا يتم حساب المتجهات المفردة اليمنى.
+!&gt; </pre>
+<p class="Pp"><i>M</i></p>
+<pre>!&gt;          M is INTEGER
+!&gt;          عدد صفوف المصفوفة المدخلة A. M ≥ 0.
+!&gt; </pre>
+<p class="Pp"><i>N</i></p>
+<pre>!&gt;          N is INTEGER
+!&gt;          عدد أعمدة المصفوفة المدخلة A. M ≥ N ≥ 0.
+!&gt; </pre>
+<p class="Pp"><i>A</i></p>
+<pre>!&gt;          A is COMPLEX*16 array of dimensions LDA x N
+!&gt;          عند الدخول، المصفوفة المدخلة A.
+!&gt;          عند الخروج، إذا كان JOBU .NE. 'N' أو JOBV .NE. 'N'، فإن المثلث السفلي للمصفوفة A يحتوي
+!&gt;          على متجهات هاوسهولدر كما تم تخزينها بواسطة ZGEQP3. إذا كان JOBU = 'F'، فإن متجهات هاوسهولدر
+!&gt;          هذه مع CWORK(1:N) يمكن استخدامها لاستعادة عوامل Q من تحليل QR المبدئي لـ A. انظر وصف U.
+!&gt; </pre>
+<p class="Pp"><i>LDA</i></p>
+<pre>!&gt;          LDA is INTEGER.
+!&gt;          البعد الرائد للمصفوفة A. LDA ≥ max(1,M).
+!&gt; </pre>
+<p class="Pp"><i>S</i></p>
+<pre>!&gt;          S is DOUBLE PRECISION array of dimension N.
+!&gt;          القيم المفردة للمصفوفة A، مرتبة بحيث S(i) ≥ S(i+1).
+!&gt; </pre>
+<p class="Pp"><i>U</i></p>
+<pre>!&gt;          U is COMPLEX*16 array, dimension
+!&gt;          LDU x M if JOBU = 'A'; see the description of LDU. In this case,
+!&gt;          on exit, U contains the M left singular vectors.
+!&gt;          LDU x N if JOBU = 'S', 'U', 'R' ; see the description of LDU. In this
+!&gt;          case, U contains the leading N or the leading NUMRANK left singular vectors.
+!&gt;          LDU x N if JOBU = 'F' ; see the description of LDU. In this case U
+!&gt;          contains N x N unitary matrix that can be used to form the left
+!&gt;          singular vectors.
+!&gt;          If JOBU = 'N', U is not referenced.
+!&gt; </pre>
+<p class="Pp"><i>LDU</i></p>
+<pre>!&gt;          LDU is INTEGER.
+!&gt;          The leading dimension of the array U.
+!&gt;          If JOBU = 'A', 'S', 'U', 'R',  LDU ≥ max(1,M).
+!&gt;          If JOBU = 'F',                 LDU ≥ max(1,N).
+!&gt;          Otherwise,                     LDU ≥ 1.
+!&gt; </pre>
+<p class="Pp"><i>V</i></p>
+<pre>!&gt;          V is COMPLEX*16 array, dimension
+!&gt;          LDV x N if JOBV = 'A', 'V', 'R' or if JOBA = 'E' .
+!&gt;          If JOBV = 'A', or 'V',  V contains the N-by-N unitary matrix  V**H;
+!&gt;          If JOBV = 'R', V contains the first NUMRANK rows of V**H (the right
+!&gt;          singular vectors, stored rowwise, of the NUMRANK largest singular values).
+!&gt;          If JOBV = 'N' and JOBA = 'E', V is used as a workspace.
+!&gt;          If JOBV = 'N', and JOBA.NE.'E', V is not referenced.
+!&gt; </pre>
+<p class="Pp"><i>LDV</i></p>
+<pre>!&gt;          LDV is INTEGER
+!&gt;          The leading dimension of the array V.
+!&gt;          If JOBV = 'A', 'V', 'R',  or JOBA = 'E', LDV ≥ max(1,N).
+!&gt;          Otherwise,                               LDV ≥ 1.
+!&gt; </pre>
+<p class="Pp"><i>NUMRANK</i></p>
+<pre>!&gt;          NUMRANK is INTEGER
+!&gt;          NUMRANK is the numerical rank first determined after the rank
+!&gt;          revealing QR factorization, following the strategy specified by the
+!&gt;          value of JOBA. If JOBV = 'R' and JOBU = 'R', only NUMRANK
+!&gt;          leading singular values and vectors are then requested in the call
+!&gt;          of CGESVD. The final value of NUMRANK might be further reduced if
+!&gt;          some singular values are computed as zeros.
+!&gt; </pre>
+<p class="Pp"><i>IWORK</i></p>
+<pre>!&gt;          IWORK is INTEGER array, dimension (max(1, LIWORK)).
+!&gt;          On exit, IWORK(1:N) contains column pivoting permutation of the
+!&gt;          rank revealing QR factorization.
+!&gt;          If JOBP = 'P', IWORK(N+1:N+M-1) contains the indices of the sequence
+!&gt;          of row swaps used in row pivoting. These can be used to restore the
+!&gt;          left singular vectors in the case JOBU = 'F'.
+!&gt;
+!&gt;          If LIWORK, LCWORK, or LRWORK = -1, then on exit, if INFO = 0,
+!!&gt;          IWORK(1) returns the minimal LIWORK.
+!&gt; </pre>
+<p class="Pp"><i>LIWORK</i></p>
+<pre>!&gt;          LIWORK is INTEGER
+!&gt;          The dimension of the array IWORK.
+!&gt;          LIWORK ≥ N + M - 1,  if JOBP = 'P';
+!&gt;          LIWORK ≥ N           if JOBP = 'N'.
+!&gt;
+!&gt;          If LIWORK = -1, then a workspace query is assumed; the routine
+!&gt;          only calculates and returns the optimal and minimal sizes
+!&gt;          for the CWORK, IWORK, and RWORK arrays, and no error
+!&gt;          message related to LCWORK is issued by XERBLA.
+!&gt; </pre>
+<p class="Pp"><i>CWORK</i></p>
+<pre>!&gt;          CWORK is COMPLEX*12 array, dimension (max(2, LCWORK)), used as a workspace.
+!&gt;          On exit, if, on entry, LCWORK.NE.-1, CWORK(1:N) contains parameters
+!&gt;          needed to recover the Q factor from the QR factorization computed by
+!&gt;          ZGEQP3.
+!&gt;
+!&gt;          If LIWORK, LCWORK, or LRWORK = -1, then on exit, if INFO = 0,
+!&gt;          CWORK(1) returns the optimal LCWORK, and
+!&gt;          CWORK(2) returns the minimal LCWORK.
+!&gt; </pre>
+<p class="Pp"><i>LCWORK</i></p>
+<pre>!&gt;          LCWORK is INTEGER
+!&gt;          The dimension of the array CWORK. It is determined as follows:
+!&gt;          Let  LWQP3 = N+1,  LWCON = 2*N, and let
+!&gt;          LWUNQ = { MAX( N, 1 ),  if JOBU = 'R', 'S', or 'U'
+!&gt;          { MAX( M, 1 ),  if JOBU = 'A'
+!&gt;          LWSVD = MAX( 3*N, 1 )
+!&gt;          LWLQF = MAX( N/2, 1 ), LWSVD2 = MAX( 3*(N/2), 1 ), LWUNLQ = MAX( N, 1 ),
+!&gt;          LWQRF = MAX( N/2, 1 ), LWUNQ2 = MAX( N, 1 )
+!&gt;          Then the minimal value of LCWORK is:
+!&gt; </pre>
+</div>
+</section>
+</body>
+</html>

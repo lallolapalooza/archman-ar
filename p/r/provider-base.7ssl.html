@@ -1,0 +1,110 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">provider-base(7ssl)</h1>
+<link rel="stylesheet" href="basic.css">
+provider_teardown_fn p_teardown;
+OSSL_provider_init_fn OSSL_provider_init;
+OSSL_FUNC_core_put_error *c_put_error = NULL;
+/* Provider context */
+struct prov_ctx_st {
+    OSSL_CORE_HANDLE *handle;
+};
+/* operation context for the algorithm FOO */
+struct foo_ctx_st {
+    struct prov_ctx_st *provctx;
+    int b;
+};
+static void *foo_newctx(void *provctx)
+{
+    struct foo_ctx_st *fooctx = malloc(sizeof(*fooctx));
+    if (fooctx != NULL)
+        fooctx->provctx = provctx;
+    else
+        c_put_error(provctx->handle, E_MALLOC, __FILE__, __LINE__);
+    return fooctx;
+}
+static void foo_freectx(void *fooctx)
+{
+    free(fooctx);
+}
+static int foo_init(void *vfooctx)
+{
+    struct foo_ctx_st *fooctx = vfooctx;
+    fooctx->b = 0x33;
+    return 1;
+}
+static int foo_update(void *vfooctx, unsigned char *in, size_t inl)
+{
+    struct foo_ctx_st *fooctx = vfooctx;
+    /* did you expect something serious? */
+    if (inl == 0)
+        return 1;
+    for (; inl-- > 0; in++)
+        *in ^= fooctx->b;
+    return 1;
+}
+static int foo_final(void *vfooctx)
+{
+    struct foo_ctx_st *fooctx = vfooctx;
+    fooctx->b = 0x66;
+    return 1;
+}
+static const OSSL_DISPATCH foo_fns[] = {
+    { OSSL_FUNC_BAR_NEWCTX, (void (*)(void))foo_newctx },
+    { OSSL_FUNC_BAR_FREECTX, (void (*)(void))foo_freectx },
+    { OSSL_FUNC_BAR_INIT, (void (*)(void))foo_init },
+    { OSSL_FUNC_BAR_UPDATE, (void (*)(void))foo_update },
+    { OSSL_FUNC_BAR_FINAL, (void (*)(void))foo_final },
+    OSSL_DISPATCH_END
+};
+static const OSSL_ALGORITHM bars[] = {
+    { "FOO", "provider=chumbawamba", foo_fns },
+    { NULL, NULL, NULL }
+};
+static const OSSL_ALGORITHM *p_query(void *provctx, int operation_id,
+                                     int *no_store)
+{
+    switch (operation_id) {
+    case OSSL_OP_BAR:
+        return bars;
+    }
+    return NULL;
+}
+static const OSSL_ITEM *p_reasons(void *provctx)
+{
+    return reasons;
+}
+static void p_teardown(void *provctx)
+{
+    free(provctx);
+}
+static const OSSL_DISPATCH prov_fns[] = {
+    { OSSL_FUNC_PROVIDER_TEARDOWN, (void (*)(void))p_teardown },
+    { OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))p_query },
+    { OSSL_FUNC_PROVIDER_GET_REASON_STRINGS, (void (*)(void))p_reasons },
+    OSSL_DISPATCH_END
+};
+int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
+                       const OSSL_DISPATCH *in,
+                       const OSSL_DISPATCH **out,
+                       void **provctx)
+{
+    struct prov_ctx_st *pctx = NULL;
+    for (; in->function_id != 0; in++)
+        switch (in->function_id) {
+        case OSSL_FUNC_CORE_PUT_ERROR:
+            c_put_error = OSSL_FUNC_core_put_error(in);
+            break;
+        }
+    *out = prov_fns;
+    if ((pctx = malloc(sizeof(*pctx))) == NULL) {
+        /*
+         * ALEA IACTA EST, if the core retrieves the reason table
+         * regardless, that string will be displayed, otherwise not.
+         */
+        c_put_error(handle, E_MALLOC, __FILE__, __LINE__);
+        return 0;
+    }
+    pctx->handle = handle;
+    *provctx = pctx;
+    return 1;
+}

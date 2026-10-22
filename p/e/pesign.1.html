@@ -1,0 +1,238 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pesign(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/pesign/">pesign</a></p>
+<p class="lic">التراخيص: GPL-2.0-only, GPL-3.0-only</p>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">خيارات</a></h1>
+<dl class="Nd">
+  <dt><a class="permalink" href="#--padding"><code class="Fl" id="padding">--padding</code></a>&#x2013;<a class="permalink" href="#-p"><code class="Fl" id="-p">-p</code></a></dt>
+  <dd>Pads the binary according to <b>PE 9.3</b> rules before signing or hashing.
+      This is the default.
+    <p class="Pp">Padding is recommended (and in many circumstances required)
+        even for binaries which predate the current PE spec, and is enabled by
+        default as of pesign 113.</p>
+  </dd>
+  <dt><a class="permalink" href="#--nopadding"><code class="Fl" id="nopadding">--nopadding</code></a></dt>
+  <dd>Do or do not pad the binary according to <b>PE 9.3</b> rules before
+      signing or hashing (default: <code class="Fl">--padding</code>)
+    <p class="Pp">Padding is recommended (and in many circumstances required)
+        even for binaries which predate the current PE spec, and is enabled by
+        default as of pesign 113.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">أمثلة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="Signing_with_the_certificate_and_private_key_in_individual_files"><a class="permalink" href="#Signing_with_the_certificate_and_private_key_in_individual_files">التوقيع باستخدام الشهادة والمفتاح الخاص في ملفات فردية</a></h2>
+<p class="Pp">If you have a certificate file and private key file, the following
+    steps may be used to sign a PE image:</p>
+<div class="Bd Bd-indent Li">
+<pre># Create a pkcs12 file from private key and certificate file.
+host:~$ <b>openssl pkcs12 -export -out foo_key.p12 \</b>
+<b>        -inkey signing_key.pem -in xyz_cert.x509.pem</b>
+
+# Import pkcs12 file into pesign db
+host:~$ <b>pk12util -i foo_key.p12 -d /etc/pki/pesign</b>
+
+# Do the signing
+host:~$ <b>pesign -c my-signing-cert -s \</b>
+<b>        -i foo.unsigned.efi -o foo.signed.efi</b></pre>
+</div>
+<p class="Pp">Please note that this is just an example, and that recommended
+    best practice is to always store private keys in a <i>FIPS 140-2</i>
+    Hardware Security Module (HSM), level 2 or higher.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Signing_using_an_HSM"><a class="permalink" href="#Signing_using_an_HSM">التوقيع باستخدام وحدة تخزين الأمان (HSM)</a></h2>
+<p class="Pp">If you have a key pair in your HSM and your HSM vendor provides a
+    PKCS-11 library, you can use it with NSS directly:</p>
+<div class="Bd Bd-indent Li">
+<pre># Add the HSM PKCS-11 library to the NSS database
+host:~$ <b>modutil -dbdir /etc/pki/pesign -add vendor-engine \</b>
+<b>        -libfile /usr/lib64/pkcs11/vendor-engine.so</b>
+WARNING: Performing this operation while the browser is running
+could cause corruption of your security databases. If the browser
+is currently running, you should exit browser before continuing
+this operation. Type
+'q &lt;enter&gt;' to abort, or &lt;enter&gt; to continue: <b>&lt;type enter here&gt;</b>
+
+Module &quot;vendor-engine&quot; added to database.
+
+# List the added module
+host:~$ <b>modutil -dbdir /etc/pki/pesign -list</b>
+-----------------------------------------------------------
+  1. NSS Internal PKCS #11 Module
+	   uri: pkcs11:library-manufacturer=Mozilla%20Foundation;library-description=NSS%20Internal%20Crypto%20Services;library-version=3.52
+	 slots: 2 slots attached
+	status: loaded
+
+	 slot: NSS Internal Cryptographic Services
+	token: NSS Generic Crypto Services
+	  uri: pkcs11:token=NSS%20Generic%20Crypto%20Services;manufacturer=Mozilla%20Foundation;serial=0000000000000000;model=NSS%203
+
+	 slot: NSS User Private Key and Certificate Services
+	token: NSS Certificate DB
+	  uri: pkcs11:token=NSS%20Certificate%20DB;manufacturer=Mozilla%20Foundation;serial=0000000000000000;model=NSS%203
+
+  2. opensc-pkcs11.so
+	library name: /usr/lib64/pkcs11/opensc-pkcs11.so
+	   uri: pkcs11:library-manufacturer=OpenSC%20Project;library-description=OpenSC%20smartcard%20framework;library-version=0.20
+	 slots: 1 slot attached
+	status: loaded
+
+	 slot: Generic Smart Card Reader Interface [Smart Card Reader Interf...
+	token: OpenSC Card (myorg-sb-signer)
+	  uri: pkcs11:token=OpenSC%20Card%20(myorg-sb-signer);manufacturer=OpenSC%20Project;serial=56516a130f35;model=PKCS%2315
+-----------------------------------------------------------
+
+# List certs in tokens
+host:~$ <b>certutil -d /etc/pki/pesign \</b>
+<b>        -h &quot;OpenSC Card (myorg-sb-signer)&quot; -L</b>
+Certificate Nickname                             Trust Attributes
+                                                 SSL,S/MIME,JAR/XPI
+
+Enter Password or Pin for &quot;OpenSC Card (myorg-sb-signer)&quot;: <b>&lt;type the PIN here&gt;</b>
+OpenSC Card (myorg-sb-signer):/CN=My Org's SB Signer    u,u,u
+
+# Sign with private key in HSM
+host:~$ <b>pesign -t &quot;OpenSC Card (myorg-sb-signer)&quot; \</b>
+<b>        -c &quot;OpenSC Card (myorg-sb-signer):/CN=My Org's SB Signer&quot; \</b>
+<b>        -s -i foo.unsigned.efi -o foo.efi</b></pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Signing_using_an_HSM_with_an_OpenSSL_Engine"><a class="permalink" href="#Signing_using_an_HSM_with_an_OpenSSL_Engine">التوقيع باستخدام وحدة تخزين الأمان (HSM) مع محرك OpenSSL</a></h2>
+<p class="Pp">If you have a key pair in your HSM but can't access it directly,
+    but do have access to the openssl command line tool configured with your
+    vendor's libraries, you can still use <code class="Nm">pesign</code> to sign
+    your PE binaries:</p>
+<div class="Bd Bd-indent Li">
+<pre># Import the public certificate into the NSS Database
+host:~$ <b>certutil -d /etc/pki/pesign -A -n myorg-sb-signer \</b>
+<b>        -t ,,u -i myorg-sb-signer.cer</b>
+
+# Export the PKCS-7 SignedAttributes section pesign generates
+host:~$ <b>pesign -i foo.unsigned.efi -E foo.sattrs.bin</b>
+
+# Generate a signature using OpenSSL
+host:~$ <b>openssl dgst -sha256 -sign $KEY \</b>
+<b>        --keyform ENGINE --engine $ENGINEID \</b>
+<b>        -out foo.sattrs.sig foo.sattrs.bin</b>
+
+# Import the signature with the original SignedAttributes into
+# the PE binary
+host:~$ <b>pesign -c myorg-sb-signer \</b>
+<b>        -R foo.sattrs.sig -I foo.sattrs.bin \</b>
+<b>        -i foo.unsigned.efi -o foo.efi</b></pre>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STANDARDS"><a class="permalink" href="#STANDARDS">المعايير</a></h1>
+<p class="Pp"><cite class="Rs"><span class="RsA"><b>B.
+    Kaliski</b></span><b>,</b> <i class="RsB"><b>PKCS #7: Cryptographic Message
+    Syntax v1.5</b></i><b>,</b> <i class="RsI"><b>Internet Engineering Task
+    Force</b></i><b>,</b> <span class="RsR"><b>RFC 2315</b></span><b>,</b>
+    <a class="RsU" href="https://tools.ietf.org/html/rfc2315&#x00A0;"><b>https://tools.ietf.org/html/rfc2315&#x00A0;</b></a><b>,</b>
+    <span class="RsD"><b>March 1998</b></span><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><span class="RsA"><b>K.
+    Moriarty</b></span><b>,</b> <span class="RsA"><b>M.
+    Nystr&#x00F6;m</b></span><b>,</b> <span class="RsA"><b>S.
+    Parkinson</b></span><b>,</b> <span class="RsA"><b>A.
+    Rusch</b></span><b>,</b> <b>and</b> <span class="RsA"><b>M.
+    Scott</b></span><b>,</b> <i class="RsB"><b>PKCS #12: Personal Information
+    Exchange Syntax v1.1</b></i><b>,</b> <i class="RsI"><b>Internet Engineering
+    Task Force</b></i><b>,</b> <span class="RsR"><b>RFC 7292</b></span><b>,</b>
+    <a class="RsU" href="https://tools.ietf.org/html/rfc7292&#x00A0;"><b>https://tools.ietf.org/html/rfc7292&#x00A0;</b></a><b>,</b>
+    <span class="RsD"><b>July 2014</b></span><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><span class="RsA"><b>PKCS11 Technical
+    Committee</b></span><b>,</b> <i class="RsB"><b>PKCS#11: Cryptographic Token
+    Interface Standard</b></i><b>,</b> <i class="RsI"><b>OASIS</b></i><b>,</b>
+    <a class="RsU" href="https://www.cryptsoft.com/pkcs11doc/"><b>https://www.cryptsoft.com/pkcs11doc/</b></a><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><span class="RsA"><b>M.
+    Nystr&#x00F6;m</b></span><b>,</b> <i class="RsB"><b>PKCS #15&#x2014;A
+    Cryptographic-Token Information Format Standard</b></i><b>,</b>
+    <i class="RsI"><b>RSA Laboratories</b></i><b>,</b>
+    <a class="RsU" href="https://www.usenix.org/legacy/events/smartcard99/full_papers/nystrom/nystrom.pdf&#x00A0;"><b>https://www.usenix.org/legacy/events/smartcard99/full_papers/nystrom/nystrom.pdf&#x00A0;</b></a><b>,</b>
+    <span class="RsD"><b>1999</b></span><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><i class="RsB"><b>Portable
+    Executable</b></i><b>,</b> <i class="RsI"><b>Microsoft</b></i><b>,</b>
+    <a class="RsU" href="https://docs.microsoft.com/en-us/windows/win32/debug/pe-format&#x00A0;"><b>https://docs.microsoft.com/en-us/windows/win32/debug/pe-format&#x00A0;</b></a><b>,</b>
+    <span class="RsD"><b>August 26, 2019</b></span><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><i class="RsB"><b>Windows Authenticode Portable
+    Executable Signature Format</b></i><b>,</b>
+    <i class="RsI"><b>Microsoft</b></i><b>,</b>
+    <a class="RsU" href="https://web.archive.org/web/20130518222430/http://download.microsoft.com/download/9/c/5/9c5b2167-8017-4bae-9fde-d599bac8184a/Authenticode_PE.docx&#x00A0;"><b>https://web.archive.org/web/20130518222430/http://download.microsoft.com/download/9/c/5/9c5b2167-8017-4bae-9fde-d599bac8184a/Authenticode_PE.docx&#x00A0;</b></a><b>,</b>
+    <span class="RsD"><b>March 21, 2008</b></span><b>.</b></cite></p>
+<p class="Pp"><cite class="Rs"><i class="RsB"><b>Federal Information Processing
+    Standard 140-2</b></i><b>,</b> <i class="RsI"><b>United States Department of
+    Commerce</b></i><b>,</b> <span class="RsR"><b>FIPS 140-2</b></span><b>,</b>
+    <a class="RsU" href="http://csrc.nist.gov/publications/PubsFIPS.html&#x00A0;"><b>http://csrc.nist.gov/publications/PubsFIPS.html&#x00A0;</b></a><b>,</b>
+    <span class="RsQ"><b>National Institute of Standards and
+    Technology</b></span><b>.</b></cite></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">انظر أيضًا</a></h1>
+<p class="Pp"><a class="Xr" href="/man/certutil.1.en"><b>certutil</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/efikeygen.1.en"><b>efikeygen</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/modutil.1.en"><b>modutil</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/opensc-tool.1.en"><b>opensc-tool</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/openssl.1ssl.en"><b>openssl</b><b>(</b><b>1ssl</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/openssl-dgst.1ssl.en"><b>openssl-dgst</b><b>(</b><b>1ssl</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/pesign-client.1.en"><b>pesign-client</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/pk12util.1.en"><b>pk12util</b><b>(</b><b>1</b><b>)</b></a><b>,</b>
+    <a class="Xr" href="/man/pkcs15-init.1.en"><b>pkcs15-init</b><b>(</b><b>1</b><b>)</b></a><b>,</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">المؤلفون</a></h1>
+<p class="Pp"><span class="An"><b>Peter Jones</b></span>
+  <br/>
+  <span class="An"><b>Vikas Charak </b>(examples)</span></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">June 4, 2020</td>
+    <td class="foot-os">Linux</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/pesign/">extra/pesign</a></dd>
+        <dt>Version:</dt>
+        <dd>116-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://github.com/rhboot/pesign">https://github.com/rhboot/pesign</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL-2.0-only, GPL-3.0-only</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/pesign/">/listing/extra/pesign/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+      

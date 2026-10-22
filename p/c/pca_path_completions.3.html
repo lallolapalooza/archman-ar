@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>pca_path_completions(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pca_path_completions(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">pca_lookup_file(3)</td>
+    <td class="head-vol">Library Functions Manual</td>
+    <td class="head-rtitle">pca_lookup_file(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME">NAME</h1>
+<p class="Pp">pca_lookup_file, del_PathCache, del_PcaPathConf, new_PathCache,
+    new_PcaPathConf, pca_last_error, pca_path_completions, pca_scan_path,
+    pca_set_check_fn, ppc_file_start, ppc_literal_escapes - lookup a file in a
+    list of directories</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS">SYNOPSIS</h1>
+<pre>#include &lt;libtecla.h&gt;
+PathCache *new_PathCache(void);
+PathCache *del_PathCache(PathCache *pc);
+int pca_scan_path(PathCache *pc, const char *path);
+void pca_set_check_fn(PathCache *pc, CplCheckFn *check_fn,
+                      void *data);
+char *pca_lookup_file(PathCache *pc, const char *name,
+                      int name_len, int literal);
+const char *pca_last_error(PathCache *pc);
+CPL_MATCH_FN(pca_path_completions);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+<p class="Pp">The <b>PathCache</b> object is part of the tecla library (see the
+    libtecla(3) man page).</p>
+<p class="Pp"><b>PathCache</b> objects allow an application to search for files
+    in any colon separated list of directories, such as the unix execution PATH
+    environment variable. Files in absolute directories are cached in a
+    <b>PathCache</b> object, whereas relative directories are scanned as needed.
+    Using a <b>PathCache</b> object, you can look up the full pathname of a
+    simple filename, or you can obtain a list of the possible completions of a
+    given filename prefix. By default all files in the list of directories are
+    targets for lookup and completion, but a versatile mechanism is provided for
+    only selecting specific types of files. The obvious application of this
+    facility is to provide Tab-completion and lookup of executable commands in
+    the unix PATH, so an optional callback which rejects all but executable
+    files, is provided.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AN_EXAMPLE">AN EXAMPLE</h1>
+<p class="Pp">Under UNIX, the following example program looks up and displays
+    the full pathnames of each of the command names on the command line.</p>
+<pre>  #include &lt;stdio.h&gt;
+  #include &lt;stdlib.h&gt;
+  #include &lt;libtecla.h&gt;
+  int main(int argc, char *argv[])
+  {
+    int i;
+  /*
+   * Create a cache for executable files.
+   */
+    PathCache *pc = new_PathCache();
+    if(!pc)
+      exit(1);
+  /*
+   * Scan the user's PATH for executables.
+   */
+    if(pca_scan_path(pc, getenv(&quot;PATH&quot;))) {
+      fprintf(stderr, &quot;%s\n&quot;, pca_last_error(pc));
+      exit(1);
+    }
+  /*
+   * Arrange to only report executable files.
+   */
+   pca_set_check_fn(pc, cpl_check_exe, NULL);
+  /*
+   * Lookup and display the full pathname of each of the
+   * commands listed on the command line.
+   */
+    for(i=1; i&lt;argc; i++) {
+      char *cmd = pca_lookup_file(pc, argv[i], -1, 0);
+      printf(&quot;The full pathname of '%s' is %s\n&quot;, argv[i],
+             cmd ? cmd : &quot;unknown&quot;);
+    }
+    pc = del_PathCache(pc);  /* Clean up */
+    return 0;
+  }</pre>
+<p class="Pp">The following is an example of what this does on my laptop under
+    linux:</p>
+<pre>  $ ./example less more blob
+  The full pathname of 'less' is /usr/bin/less
+  The full pathname of 'more' is /bin/more
+  The full pathname of 'blob' is unknown
+  $ </pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FUNCTION_DESCRIPTIONS">FUNCTION DESCRIPTIONS</h1>
+<p class="Pp">In order to use the facilities of this module, you must first
+    allocate a <b>PathCache</b> object by calling the <b>new_PathCache()</b>
+    constructor function.</p>
+<pre>  PathCache *new_PathCache(void)</pre>
+<p class="Pp">This function creates the resources needed to cache and lookup
+    files in a list of directories. It returns <b>NULL</b> on error.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="POPULATING_THE_CACHE">POPULATING THE CACHE</h1>
+<p class="Pp">Once you have created a cache, it needs to be populated with
+    files. To do this, call the <b>pca_scan_path()</b> function.</p>
+<pre>  int pca_scan_path(PathCache *pc, const char *path);</pre>
+<p class="Pp">Whenever this function is called, it discards the current contents
+    of the cache, then scans the list of directories specified in its
+    <b>path</b> argument for files. The <b>path</b> argument must be a string
+    containing a colon-separated list of directories, such as
+    <b>&quot;/usr/bin:/home/mcs/bin:.&quot;</b>. This can include directories
+    specified by absolute pathnames such as <b>&quot;/usr/bin&quot;</b>, as well
+    as sub-directories specified by relative pathnames such as
+    <b>&quot;.&quot;</b> or <b>&quot;bin&quot;</b>. Files in the absolute
+    directories are immediately cached in the specified <b>PathCache</b> object,
+    whereas sub-directories, whose identities obviously change whenever the
+    current working directory is changed, are marked to be scanned on the fly
+    whenever a file is looked up.</p>
+<p class="Pp">On success this function return <b>0</b>. On error it returns
+    <b>1</b>, and a description of the error can be obtained by calling
+    <b>pca_last_error(pc)</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LOOKING_UP_FILES">LOOKING UP FILES</h1>
+<p class="Pp">Once the cache has been populated with files, you can look up the
+    full pathname of a file, simply by specifying its filename to
+    <b>pca_lookup_file()</b>.</p>
+<pre>  char *pca_lookup_file(PathCache *pc, const char *name,
+                        int name_len, int literal);</pre>
+<p class="Pp">To make it possible to pass this function a filename which is
+    actually part of a longer string, the <b>name_len</b> argument can be used
+    to specify the length of the filename at the start of the <b>name[]</b>
+    argument. If you pass <b>-1</b> for this length, the length of the string
+    will be determined with <b>strlen()</b>. If the <b>name[]</b> string might
+    contain backslashes that escape the special meanings of spaces and tabs
+    within the filename, give the <b>literal</b> argument, the value <b>0</b>.
+    Otherwise, if backslashes should be treated as normal characters, pass
+    <b>1</b> for the value of the <b>literal</b> argument.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILENAME_COMPLETION">FILENAME COMPLETION</h1>
+<p class="Pp">Looking up the potential completions of a filename-prefix in the
+    filename cache, is achieved by passing the provided
+    <b>pca_path_completions()</b> callback function to the
+    <b>cpl_complete_word()</b> function (see the <a href='/man/cpl_complete_word.3.en'>cpl_complete_word(3)</a> man
+    page).</p>
+<pre>  CPL_MATCH_FN(pca_path_completions);</pre>
+<p class="Pp">This callback requires that its <b>data</b> argument be a pointer
+    to a <b>PcaPathConf</b> object. Configuration objects of this type are
+    allocated by calling <b>new_PcaPathConf()</b>.</p>
+<pre>  PcaPathConf *new_PcaPathConf(PathCache *pc);</pre>
+<p class="Pp">This function returns an object initialized with default
+    configuration parameters, which determine how the
+    <b>cpl_path_completions()</b> callback function behaves. The functions which
+    allow you to individually change these parameters are discussed below.</p>
+<p class="Pp">By default, the <b>pca_path_completions()</b> callback function
+    searches backwards for the start of the filename being completed, looking
+    for the first un-escaped space or the start of the input line. If you wish
+    to specify a different location, call <b>ppc_file_start()</b> with the index
+    at which the filename starts in the input line. Passing
+    <b>start_index=-1</b> re-enables the default behavior.</p>
+<pre>  void ppc_file_start(PcaPathConf *ppc, int start_index);</pre>
+<p class="Pp">By default, when <b>pca_path_completions()</b> looks at a filename
+    in the input line, each lone backslash in the input line is interpreted as
+    being a special character which removes any special significance of the
+    character which follows it, such as a space which should be taken as part of
+    the filename rather than delimiting the start of the filename. These
+    backslashes are thus ignored while looking for completions, and subsequently
+    added before spaces, tabs and literal backslashes in the list of
+    completions. To have unescaped backslashes treated as normal characters,
+    call <b>ppc_literal_escapes()</b> with a non-zero value in its
+    <b>literal</b> argument.</p>
+<pre>  void ppc_literal_escapes(PcaPathConf *ppc, int literal);</pre>
+<p class="Pp">When you have finished with a <b>PcaPathConf</b> variable, you can
+    pass it to the <b>del_PcaPathConf()</b> destructor function to reclaim its
+    memory.</p>
+<pre>  PcaPathConf *del_PcaPathConf(PcaPathConf *ppc);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BEING_SELECTIVE">BEING SELECTIVE</h1>
+<p class="Pp">If you are only interested in certain types or files, such as, for
+    example, executable files, or files whose names end in a particular suffix,
+    you can arrange for the file completion and lookup functions to be selective
+    in the filenames that they return. This is done by registering a callback
+    function with your <b>PathCache</b> object. Thereafter, whenever a filename
+    is found which either matches a filename being looked up, or matches a
+    prefix which is being completed, your callb
+</div>
+</section>

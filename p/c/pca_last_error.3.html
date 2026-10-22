@@ -1,0 +1,152 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pca_last_error(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libtecla/">libtecla</a></p>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='BEING_SELECTIVE'><a class='permalink' href='#BEING_SELECTIVE'>أن تكون انتقائياً</a></h1>
+<p class="Pp">قد ترغب في أن تكون انتقائياً بشأن الملفات التي يتم البحث عنها. على سبيل المثال، قد ترغب في إكمال أسماء الملفات التنفيذية فقط، أو أسماء الملفات التي يمكنك قراءتها، أو أسماء الملفات التي تنتهي بـ ".c". للقيام بذلك، يمكنك تسجيل دالة اختيار مخصصة مع كائن <b>PathCache</b>. سيتم استدعاء دالة الاختيار هذه لكل ملف مطابق يتم البحث عنه.</p>
+<p class="Pp">عندما يتم استدعاء دالة الاختيار، سيتم استدعاؤها بالمسار الكامل للملف، بالإضافة إلى أي بيانات خاصة بالتطبيق تقدمها. إذا أعادت الدالة <b>1</b>، فسيتم الإبلاغ عن اسم الملف كمطابقة، وإذا أعادت <b>0</b>، فسيتم تجاهله. يجب الإعلان عن دوال الاختيار المناسبة ونماذجها الأولية باستخدام الماكرو التالي. يتم توفير `typedef` <b>CplCheckFn</b> أيضاً في حال كنت ترغب في الإعلان عن مؤشرات لهذه الدوال.</p>
+<pre>  #define CPL_CHECK_FN(fn) int (fn)(void *data, \
+                                    const char *pathname)
+  typedef CPL_CHECK_FN(CplCheckFn);</pre>
+<p class="Pp">يتضمن تسجيل إحدى هذه الدوال استدعاء الدالة <b>pca_set_check_fn()</b>. بالإضافة إلى دالة الاختيار، التي يتم تمريرها عبر الوسيط <b>check_fn</b>، يمكنك تمرير مؤشر إلى أي شيء عبر الوسيط <b>data</b>. سيتم تمرير هذا المؤشر إلى دالة الاختيار الخاصة بك، عبر وسيط <b>data</b> الخاص بها، كلما تم استدعاؤها، لذلك يوفر هذا طريقة لتمرير بيانات خاصة بالتطبيق إلى دالة الاختيار الخاصة بك.</p>
+<pre>  void pca_set_check_fn(PathCache *pc, CplCheckFn *check_fn,
+                        void *data);</pre>
+<p class="Pp">لاحظ أن هذه الدوال الاختيارية يتم تمرير المسار الكامل لكل ملف مطابق لها، لذلك يمكن أن يعتمد القرار بشأن ما إذا كان الملف ذا أهمية على أي خاصية للملف، وليس فقط اسم الملف. على سبيل المثال، تفحص دالة الاختيار <b>cpl_check_exe()</b> المتوفرة أذونات الملف التنفيذي للملف وأذونات الدلائل الأصلية الخاصة به، وتعيد <b>1</b> فقط إذا كان لدى المستخدم إذن التنفيذ للملف. يمكن استخدام دالة الاختيار هذه بالتالي للبحث عن أسماء الأوامر أو إكمالها الموجودة في الدلائل المدرجة في متغير البيئة <b>PATH</b> الخاص بالمستخدم. يقدم مثال البرنامج الموضح سابقاً في صفحة الدليل هذه توضيحاً لذلك.</p>
+<p class="Pp">احذر من أنه إذا حاول شخص ما إكمال سلسلة فارغة، فسيتم استدعاء دالة الاختيار الخاصة بك مرة واحدة لكل ملف في ذاكرة التخزين المؤقت، والتي يمكن أن يصل عددها إلى الآلاف. إذا كانت دالة الاختيار الخاصة بك تقوم بأي شيء مستهلك للوقت، فقد يؤدي ذلك إلى تأخير غير مقبول للمستخدم، لذلك يجب أن تكون دوال الاختيار قصيرة.</p>
+<p class="Pp">لتحسين الأداء، كلما تم استدعاء إحدى هذه الدوال الاختيارية، يتم تخزين الاختيار الذي تقوم به مؤقتاً، وفي المرة التالية التي يتم فيها البحث عن الملف المقابل، بدلاً من استدعاء دالة الاختيار مرة أخرى، يتم استخدام السجل المخزن مؤقتاً لما إذا كان قد تم قبوله أو رفضه. وبالتالي، إذا حاول شخص ما إكمال سلسلة فارغة، وضغط على علامة التبويب للمرة الثانية عندما لا يبدو أن شيئاً يحدث، فستكون هناك فترة تأخير طويلة واحدة فقط، حيث ستعمل الدورة الثانية بالكامل من القرارات المخزنة مؤقتاً للملفات. يتم التخلص من هذه القرارات المخزنة مؤقتاً كلما تم استدعاء <b>pca_scan_path()</b>، وكلما تم استدعاء <b>pca_set_check_fn()</b> مع تغييرات في وسائط دالة الاختيار أو البيانات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERROR_HANDLING'><a class='permalink' href='#ERROR_HANDLING'>معالجة الأخطاء</a></h1>
+<p class="Pp">إذا أبلغت <b>pca_scan_path()</b> عن حدوث خطأ عن طريق إعادة <b>1</b>، يمكنك الحصول على وصف موجز للخطأ عن طريق استدعاء <b>pca_last_error(pc)</b>. هذا يعيد سلسلة داخلية تحتوي على رسالة خطأ.</p>
+<pre>  const char *pca_last_error(PathCache *pc);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CLEANING_UP'><a class='permalink' href='#CLEANING_UP'>التنظيف</a></h1>
+<p class="Pp">بمجرد الانتهاء من استخدام كائن <b>PathCache</b>، يمكنك استعادة موارده عن طريق تمريره إلى دالة الهدم <b>del_PathCache()</b>. هذا يأخذ مؤشراً إلى أحد هذه الكائنات، ويعيد دائماً <b>NULL</b>.</p>
+<pre>  PathCache *del_PathCache(PathCache *pc);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THREAD_SAFETY'><a class='permalink' href='#THREAD_SAFETY'>السلامة للخيوط (Thread Safety)</a></h1>
+<p class="Pp">في البرامج متعددة الخيوط، يجب عليك استخدام الإصدار <b>libtecla_r.a</b> من المكتبة. هذا يستخدم دوال POSIX القابلة لإعادة الدخول حيثما أمكن (لذلك اللاحقة <b>_r</b>)، ويعطل الميزات التي تعتمد على دوال النظام غير القابلة لإعادة الدخول. في حالة هذه الوحدة، فإن الميزة الوحيدة المعطلة هي إكمال اسم المستخدم في تعبيرات <b>~username/</b>، في <b>cpl_path_completions()</b>.</p>
+<p class="Pp">باستخدام الإصدار <b>libtecla_r.a</b> من المكتبة، من الآمن استخدام مرافق هذه الوحدة في خيوط متعددة، بشرط أن يستخدم كل خيط كائن <b>PathCache</b> مخصص بشكل منفصل. بمعنى آخر، إذا أراد خيطان إجراء عمليات بحث عن المسار، فيجب على كل منهما استدعاء <b>new_PathCache()</b> لتخصيص ذاكرة تخزين مؤقت خاصة به.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILES'><a class='permalink' href='#FILES'>الملفات</a></h1>
+<pre>libtecla.a    -    مكتبة tecla
+libtecla.h    -    ملف رأس tecla.</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<pre>libtecla(3), gl_get_line(3), ef_expand_file(3),
+cpl_complete_word(3)</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">مارتن شيبرد (mcs@astro.caltech.edu)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libtecla/">extra/libtecla</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.6.3-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="http://www.astro.caltech.edu/~mcs/tecla/">http://www.astro.caltech.edu/~mcs/tecla/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>مخصص: X11</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/libtecla/">/listing/extra/libtecla/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#AN_EXAMPLE">مثال</a></li>
+        
+            <li><a href="#FUNCTION_DESCRIPTIONS">أوصاف الدوال</a></li>
+        
+            <li><a href="#POPULATING_THE_CACHE">ملء الذاكرة المؤقتة</a></li>
+        
+            <li><a href="#LOOKING_UP_FILES">البحث عن الملفات</a></li>
+        
+            <li><a href="#FILENAME_COMPLETION">إكمال أسماء الملفات</a></li>
+        
+            <li><a href="#BEING_SELECTIVE">أن تكون انتقائياً</a></li>
+        
+            <li><a href="#ERROR_HANDLING">معالجة الأخطاء</a></li>
+        
+            <li><a href="#CLEANING_UP">التنظيف</a></li>
+        
+            <li><a href="#THREAD_SAFETY">السلامة للخيوط</a></li>
+        
+            <li><a href="#FILES">الملفات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/pca_last_error.3.en.txt">txt</a>, 
+        
+            <a href="/man/pca_last_error.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

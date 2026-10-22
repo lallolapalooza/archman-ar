@@ -1,0 +1,263 @@
+{
+  "title": "msgsnd, msgrcv - System V message queue operations",
+  "sections": [
+    {
+      "heading": "NAME",
+      "content": "msgsnd, msgrcv - System V message queue operations"
+    },
+    {
+      "heading": "SYNOPSIS",
+      "content": "int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);\nint msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp, int msgflg);"
+    },
+    {
+      "heading": "DESCRIPTION",
+      "content": "The msgsnd() function appends a copy of the message pointed to by msgp to the message queue indicated by msqid.\n\nThe structure pointed to by msgp must consist of a long integer message type, followed by the message text. The structure is defined as:\n\nstruct msgbuf {\n    long mtype;\n    char mtext[1];\n};\n\nThe value of mtype must be greater than 0. msgsz specifies the length of the message text in bytes (i.e., the length of the mtext array). The argument msgp points to a buffer containing the message to be sent. The argument msgsz is the length of the message text in bytes; this must be less than or equal to the system limit MSGMAX and less than or equal to the remaining capacity of the queue, unless the calling process has the CAP_IPC_OWNER capability. The argument msgflg specifies the action to take if the message cannot be sent immediately:\n\n   If bit 0 of msgflg is set (IPC_NOWAIT), then msgsnd() will return immediately if the message cannot be sent. The system limit on the total number of bytes in all messages on the queue (MSGMNB) or the system limit on the number of messages in a queue (MSGTQL) would be exceeded.\n\n   If bit 0 of msgflg is clear (IPC_NOWAIT is not set), then msgsnd() will block until the message can be sent. The calling process ignores SIGINT and SIGQUIT signals during the blocking period. If the signal is caught, msgsnd() returns -1 and sets errno to EINTR.\n\n   If bit 6 of msgflg is set (IPC_NOWAIT), the message will be sent if possible. If not, the message queue will not be filled, and the function will return -1 with errno set to EAGAIN.\n\n   If bit 6 of msgflg is clear, the calling process will sleep until the message queue has enough space, unless interrupted by a signal.\n\n   The return value is the number of bytes actually copied into the mtext array. On failure, both functions return -1, and set errno to indicate the error."
+    },
+    {
+      "heading": "ERRORS",
+      "content": "msgsnd() can fail with the following errors:\n\nEACCES The calling process does not have write permission on the message queue, and does not have the CAP_IPC_OWNER capability in the user namespace that governs its IPC namespace.\nEAGAIN The message can't be sent due to the msg_qbytes limit for the queue and IPC_NOWAIT was specified in msgflg.\nEFAULT The address pointed to by msgp isn't accessible.\nEIDRM The message queue was removed.\nEINTR Sleeping on a full message queue condition, the process caught a signal.\nEINVAL Invalid msqid value, or nonpositive mtype value, or invalid msgsz value (less than 0 or greater than the system value MSGMAX).\nENOMEM The system does not have enough memory to make a copy of the message pointed to by msgp.\nmsgrcv() can fail with the following errors:\n\nE2BIG The message text length is greater than msgsz and MSG_NOERROR isn't specified in msgflg.\nEACCES~2 The calling process does not have read permission on the message queue, and does not have the CAP_IPC_OWNER capability in the user namespace that governs its IPC namespace.\nEFAULT~2 The address pointed to by msgp isn't accessible.\nEIDRM~2 While the process was sleeping to receive a message, the message queue was removed.\nEINTR~2 While the process was sleeping to receive a message, the process caught a signal; see signal(7).\nEINVAL~2 msqid was invalid, or msgsz was less than 0.\nEINVAL~3 (since Linux 3.14) msgflg specified MSG_COPY, but not IPC_NOWAIT.\nEINVAL~4 (since Linux 3.14) msgflg specified both MSG_COPY and MSG_EXCEPT.\nENOMSG IPC_NOWAIT was specified in msgflg and no message of the requested type existed on the message queue.\nENOMSG~2 IPC_NOWAIT and MSG_COPY were specified in msgflg and the queue contains fewer than msgtyp messages.\nENOSYS (since Linux 3.8) Both MSG_COPY and IPC_NOWAIT were specified in msgflg, and this kernel was configured without CONFIG_CHECKPOINT_RESTORE."
+    },
+    {
+      "heading": "STANDARDS",
+      "content": "POSIX.1-2024.\n\nThe MSG_EXCEPT and MSG_COPY flags are Linux-specific; their definitions can be obtained by defining the _GNU_SOURCE feature test macro."
+    },
+    {
+      "heading": "HISTORY",
+      "content": "POSIX.1-2001, SVr4.\n\nThe msgp argument is declared as struct msgbuf * in glibc 2.0 and 2.1. It is declared as void * in glibc 2.2 and later, as required by SUSv2 and SUSv3."
+    },
+    {
+      "heading": "NOTES",
+      "content": "The following limits on message queue resources affect the msgsnd() call:\n\nMSGMAX Maximum size of a message text, in bytes (default value: 8192 bytes). On Linux, this limit can be read and modified via /proc/sys/kernel/msgmax.\nMSGMNB Maximum number of bytes that can be held in a message queue (default value: 16384 bytes). On Linux, this limit can be read and modified via /proc/sys/kernel/msgmnb. A privileged process (Linux: a process with the CAP_SYS_RESOURCE capability) can increase the size of a message queue beyond MSGMNB using the msgctl(2) IPC_SET operation.\n\nThe implementation has no intrinsic system-wide limits on the number of message headers (MSGTQL) and the number of bytes in the message pool (MSGPOOL)."
+    },
+    {
+      "heading": "BUGS",
+      "content": "In Linux 3.13 and earlier, if msgrcv() was called with the MSG_COPY flag, but without IPC_NOWAIT, and the message queue contained less than msgtyp messages, then the call would block until the next message is written to the queue. At that point, the call would return a copy of the message, regardless of whether that message was at the ordinal position msgtyp. This bug is fixed in Linux 3.14.\n\nSpecifying both MSG_COPY and MSC_EXCEPT in msgflg is a logical error (since these flags impose different interpretations on msgtyp). In Linux 3.13 and earlier, this error was not diagnosed by msgrcv(). This bug is fixed in Linux 3.14."
+    },
+    {
+      "heading": "EXAMPLES",
+      "content": "The program below demonstrates the use of msgsnd() and msgrcv().\n\nThe example program is first run with the -s option to send a message and then run again with the -r option to receive a message.\n\nThe following shell session shows a sample run of the program:\n\n$ ./a.out -s\nsent: a message at Wed Mar  4 16:25:45 2015\n$ ./a.out -r\nmessage received: a message at Wed Mar  4 16:25:45 2015\n\nProgram source\n\n#include <errno.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/ipc.h>\n#include <sys/msg.h>\n#include <time.h>\n#include <unistd.h>\nstruct msgbuf {\n    long mtype;\n    char mtext[80];\n};\nstatic void\nusage(char *prog_name, char *msg)\n{\n    if (msg != NULL)\n        fputs(msg, stderr);\n    fprintf(stderr, \"Usage: %s [options]\\n\", prog_name);\n    fprintf(stderr, \"Options are:\\n\");\n    fprintf(stderr, \"-s        send message using msgsnd()\\n\");\n    fprintf(stderr, \"-r        read message using msgrcv()\\n\");\n    fprintf(stderr, \"-t        message type (default is 1)\\n\");\n    fprintf(stderr, \"-k        message queue key (default is 1234)\\n\");\n    exit(EXIT_FAILURE);\n}\nstatic void\nsend_msg(int qid, int msgtype)\n{\n    time_t         t;\n    struct msgbuf  msg;\n    msg.mtype = msgtype;\n    time(&t);\n    snprintf(msg.mtext, sizeof(msg.mtext), \"a message at %s\",\n             ctime(&t));\n    if (msgsnd(qid, &msg, sizeof(msg.mtext),\n               IPC_NOWAIT) == -1)\n    {\n        perror(\"msgsnd error\");\n        exit(EXIT_FAILURE);\n    }\n    printf(\"sent: %s\\n\", msg.mtext);\n}\nstatic void\nget_msg(int qid, int msgtype)\n{\n    struct msgbuf msg;\n    if (msgrcv(qid, &msg, sizeof(msg.mtext), msgtype,\n               MSG_NOERROR | IPC_NOWAIT) == -1) {\n        if (errno != ENOMSG) {\n            perror(\"msgrcv\");\n            exit(EXIT_FAILURE);\n        }\n        printf(\"No message available for msgrcv()\\n\");\n    } else {\n        printf(\"message received: %s\\n\", msg.mtext);\n    }\n}\nint\nmain(int argc, char *argv[])\n{\n    int  qid, opt;\n    int  mode = 0;               /* 1 = send, 2 = receive */\n    int  msgtype = 1;\n    int  msgkey = 1234;\n    while ((opt = getopt(argc, argv, \"srt:k:\")) != -1) {\n        switch (opt) {\n        case 's':\n            mode = 1;\n            break;\n        case 'r':\n            mode = 2;\n            break;\n        case 't':\n            msgtype = atoi(optarg);\n            if (msgtype <= 0)\n                usage(argv[0], \"-t option must be greater than 0\\n\");\n            break;\n        case 'k':\n            msgkey = atoi(optarg);\n            break;\n        default:\n            usage(argv[0], \"Unrecognized option\\n\");\n        }\n    }\n    if (mode == 0)\n        usage(argv[0], \"must use either -s or -r option\\n\");\n    qid = msgget(msgkey, IPC_CREAT | 0666);\n    if (qid == -1) {\n        perror(\"msgget\");\n        exit(EXIT_FAILURE);\n    }\n    if (mode == 2)\n        get_msg(qid, msgtype);\n    else\n        send_msg(qid, msgtype);\n    exit(EXIT_SUCCESS);\n}"
+    },
+    {
+      "heading": "SEE ALSO",
+      "content": "msgctl(2), msgget(2), capabilities(7), mq_overview(7), sysvipc(7)"
+    }
+  ],
+  "footer": {
+    "date": "2025-10-29",
+    "version": "Linux man-pages 6.16"
+  }
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <title>msgop(2) — Arch manual pages</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">msgop(2)</h1>
+
+        <main>
+            <section>
+                <h2>msgop(2)</h2>
+                <dl>
+                    <dt>NAME</dt>
+                    <dd>msgop - operate on message queues</dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>LIBRARY</dt>
+                    <dd>Realtime extensions (libc, -lrt)</dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>SYNOPSIS</dt>
+                    <dd>
+                    <pre><code>#include &lt;mqueue.h&gt;
+
+ssize_t msgop(int msgid, struct msgbuf *msgp, size_t maxlen, int msgflg);
+ssize_t msgsnd(int msqid, const void *msg_ptr, size_t msglen, int msgflg);
+ssize_t msgrcv(int msqid, void *msg_ptr, size_t msglen, long type, int msgflg);
+int msgctl(int msqid, int cmd, struct msqid_ds *buf);
+int msgget(key_t key, int msgflg);
+int msgremove(int msqid);
+int msgrmid(int msqid);</code></pre>
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>DESCRIPTION</dt>
+                    <dd>
+                    The functions described in this page are used to access System V message queues.
+                    These functions are part of the POSIX real-time extensions and are provided
+                    by glibc. They are functionally equivalent to the System V IPC
+                    message queue functions described in <strong><a href="/man/mq_overview.7">mq_overview(7)</a></strong>.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>RETURN VALUE</dt>
+                    <dd>
+                    On success, <strong><code>msgop</code></strong> returns the number of bytes copied into the
+                    message buffer. <strong><code>msgsnd</code></strong> returns 0 on success. <strong><code>msgrcv</code></strong>
+                    returns the number of bytes in the received message on success.
+                    <strong><code>msgget</code></strong> returns the message queue identifier on success.
+                    <strong><code>msgctl</code></strong>, <strong><code>msgremove</code></strong>, and <strong><code>msgrmid</code></strong>
+                    return 0 on success.
+                    
+                    On error, all functions return -1, and <strong><code>errno</code></strong> is set to indicate
+                    the error.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>ERRORS</dt>
+                    <dd>
+                    These functions can fail for the following reasons:
+                    <ul>
+                    <li><strong>EACCES</strong>: Permission denied for the requested operation.</li>
+                    <li><strong>EEXIST</strong>: The queue already exists, and <strong><code>IPC_CREAT</code></strong> was specified.</li>
+                    <li><strong>EINTR</strong>: The operation was interrupted by a signal.</li>
+                    <li><strong>EINVAL</strong>: Invalid argument provided.</li>
+                    <li><strong>ENOMSG</strong>: No message of the requested type found.</li>
+                    <li><strong>ENOSPC</strong>: The system limit for the number of messages or message size has been reached.</li>
+                    <li><strong>ENOENT</strong>: The queue does not exist.</li>
+                    <li><strong>EPERM</strong>: Operation not permitted.</li>
+                    </ul>
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>STANDARDS</dt>
+                    <dd>
+                    POSIX.1-2001, POSIX.1-2008.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>HISTORY</dt>
+                    <dd>
+                    These functions were introduced in POSIX.1-2001.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>NOTES</dt>
+                    <dd>
+                    The System V IPC message queue functions are older and have some differences
+                    from the POSIX message queue functions. It is generally recommended to use
+                    the POSIX functions (<strong><a href="/man/mq_open.2">mq_open(3)</a></strong>, <strong><a href="/man/mq_send.3">mq_send(3)</a></strong>, etc.)
+                    when possible, as they offer better control and portability.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>BUGS</dt>
+                    <dd>
+                    None known.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>EXAMPLES</dt>
+                    <dd>
+                    The following example demonstrates the usage of <strong><code>msgget</code></strong>,
+                    <strong><code>msgsnd</code></strong>, and <strong><code>msgrcv</code></strong>.
+                    
+                    <pre><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/ipc.h&gt;
+#include &lt;sys/msg.h&gt;
+
+struct msgbuf {
+    long mtype;
+    char mtext[256];
+};
+
+int main() {
+    int msgid;
+    struct msgbuf msg;
+    key_t key = 1234;
+
+    // Create or open a message queue
+    msgid = msgget(key, IPC_CREAT | 0666);
+    if (msgid == -1) {
+        perror("msgget");
+        exit(1);
+    }
+
+    // Send a message
+    msg.mtype = 1;
+    strcpy(msg.mtext, "Hello, message queue!");
+    if (msgsnd(msgid, &msg, sizeof(msg.mtext), 0) == -1) {
+        perror("msgsnd");
+        exit(1);
+    }
+
+    printf("Message sent.\n");
+
+    // Receive a message
+    if (msgrcv(msgid, &msg, sizeof(msg.mtext), 1, 0) == -1) {
+        perror("msgrcv");
+        exit(1);
+    }
+
+    printf("Received message: %s\n", msg.mtext);
+
+    // Remove the message queue
+    if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+        perror("msgctl");
+        exit(1);
+    }
+
+    printf("Message queue removed.\n");
+
+    return 0;
+}</code></pre>
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>SEE ALSO</dt>
+                    <dd>
+                    <strong><a href="/man/mq_overview.7">mq_overview(7)</a></strong>,
+                    <strong><a href="/man/mq_open.2">mq_open(3)</a></strong>,
+                    <strong><a href="/man/mq_send.3">mq_send(3)</a></strong>,
+                    <strong><a href="/man/mq_receive.3">mq_receive(3)</a></strong>,
+                    <strong><a href="/man/mq_close.3">mq_close(3)</a></strong>,
+                    <strong><a href="/man/mq_unlink.3">mq_unlink(3)</a></strong>.
+                    </dd>
+                </dl>
+            </section>
+            
+            <section>
+                <dl>
+                    <dt>Source Code:</dt>
+                    <dd><a href="https://gitlab.archlinux.org/archlinux/packaging/packages/glibc/-/blob/main/</body>
+</html>

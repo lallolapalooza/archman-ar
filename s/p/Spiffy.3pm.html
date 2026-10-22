@@ -1,0 +1,353 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Spiffy(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-spiffy/">perl-spiffy</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+<link rel="stylesheet" href="basic.css">
+<p class="Pp"><span class="Li">&quot;AAA-DDD&quot;</span> و <span class="Li">&quot;AAA-CCC&quot;</span> هي الأسماء الحقيقية للفئات التي يتم إنشاؤها. ميزة هذا الأسلوب هي أن المزج في CCC لا يمحو أي وظائف من AAA، و DDD لا يتعارض مع AAA أو CCC. إذا قمت بدمج وظيفة في CCC موجودة أيضًا في AAA، فلا يزال بإمكانك الوصول إليها باستخدام <span class="Li">&quot;super&quot;</span>.</p>
+<p class="Pp">عندما يقوم Spiffy بالمزج في CCC، يتم جلب جميع وظائف CCC التي لا تبدأ بشرطة سفلية. في الواقع، يذهب أبعد من ذلك: إذا كان CCC فئة مشتقة، فسيتم جلب جميع الوظائف التي يمكن لـ CCC <span class="Li">&quot;وراثتها&quot;</span>. هذا قوي جدًا، ربما قوي جدًا.</p>
+<p class="Pp">لتقييد ما تقوم بدمجه، يقوم Spiffy بإلغاء مفهوم أدوار Perl6. يُستخدم مصطلح role بشكل أوسع في Spiffy، على الرغم من أنه مشابه لقائمة الاستيراد التي يستخدمها وحدة Exporter، ويمكنك استخدام مجموعات (علامات) ونفي. إذا كان العنصر الأول في قائمتك يستخدم النفي، فسيبدأ Spiffy بجميع الوظائف التي يمكن لفئة mixin الخاصة بك القيام بها.</p>
+<pre>use EEE -mixin =&gt; qw(:tools walk !run !:sharp_tools);</pre>
+<p class="Pp">في هذا المثال، <span class="Li">&quot;walk&quot;</span> و <span class="Li">&quot;run&quot;</span> هما وظيفتان يمكن لـ EEE القيام بهما، و <span class="Li">&quot;tools&quot;</span> و <span class="Li">&quot;sharp_tools&quot;</span> هما أدوار فئة EEE. كيف تعرف EEE هذه الأدوار؟ ببساطة عن طريق تعريف وظائف تسمى <span class="Li">&quot;_role_tools&quot;</span> و <span class="Li">&quot;_role_sharp_tools&quot;</span> والتي تعيد قوائم بوظائف أعمق. (وربما أدوار أخرى!) الجزء المثير للاهتمام هنا هو أنه نظرًا لأن الأدوار هي مجرد وظائف، فيمكن أيضًا وراثتها. خذ ذلك يا Perl6!</p>
+<section class="Sh">
+<h1 class="Sh" id='FILTERING'><a class='permalink' href='#FILTERING'>التصفية</a></h1>
+<p class="Pp">باستخدام علامة <span class="Li">&quot;-Base&quot;</span> بدلاً من <span class="Li">&quot;-base&quot;</span>، لن تحتاج أبدًا إلى كتابة السطر:</p>
+<pre>my $self = shift;</pre>
+<p class="Pp">يتم إضافة هذا التوجيه إلى جميع الإجراءات الفرعية في فئتك بواسطة مرشح مصدر. الحيلة بسيطة وسريعة، لذلك لا توجد تكلفة أداء كبيرة لإنشاء رمز نظيف مثل Ruby و Python.</p>
+<pre>package Example;
+use Spiffy -Base;
+sub crazy {
+    $self-&gt;nuts;
+}
+sub wacky { }
+sub new() {
+    bless [], shift;
+}</pre>
+<p class="Pp">هو بالضبط نفس:</p>
+<pre>package Example;
+use Spiffy -base;
+use strict;use warnings;
+sub crazy {my $self = shift;
+    $self-&gt;nuts;
+}
+sub wacky {my $self = shift; }
+sub new {
+    bless [], shift;
+}
+;1;</pre>
+<p class="Pp">ملاحظة: الأقواس الفارغة بعد الوظيفة الفرعية <span class="Li">&quot;new&quot;</span> تمنع إضافة <span class="Li">$self</span>. لاحظ أيضًا أنه يتم إضافة الرمز الإضافي إلى الأسطر الموجودة لضمان عدم تغيير أرقام الأسطر.</p>
+<p class="Pp"><span class="Li">&quot;-Base&quot;</span> يقوم أيضًا بتنشيط الأوامر <span class="Li">&quot;strict&quot;</span> و <span class="Li">&quot;warnings&quot;</span>، ويضيف السطر الإضافي <span class="Li">&quot;1;&quot;</span> إلى وحدتك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PRIVATE_METHODS'><a class='permalink' href='#PRIVATE_METHODS'>الوظائف الخاصة</a></h1>
+<p class="Pp">يدعم Spiffy الآن الوظائف الخاصة عند استخدام آلية التصفية <span class="Li">&quot;-Base&quot;</span>. تحتاج فقط إلى التصريح عن الإجراءات الفرعية باستخدام الكلمة المفتاحية <span class="Li">&quot;my&quot;</span> واستدعائها بعلامة <span class="Li">'$'</span> أمامها. على سبيل المثال:</p>
+<pre>package Keen;
+use SomethingSpiffy -Base;
+# وظيفة عامة عادية
+sub swell {
+    $self-&gt;$stinky;
+}
+# وظيفة خاصة بالقاموس. لا يمكن استدعاؤها من خارج هذا الملف.
+my sub stinky {
+    ...
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SPIFFY_DEBUGGING'><a class='permalink' href='#SPIFFY_DEBUGGING'>تصحيح أخطاء Spiffy</a></h1>
+<p class="Pp">وظيفة XXX مفيدة جدًا لتصحيح الأخطاء لأنك يمكنك إدراجها في أي مكان تقريبًا وستعرض محتويات بياناتك بتنسيق YAML نظيف. لنأخذ التوجيه التالي:</p>
+<pre>my @stuff = grep { /keen/ } $self-&gt;find($a, $b);</pre>
+<p class="Pp">إذا كانت لديك مشكلة مع هذا التوجيه، يمكنك تصحيحه في أي من الطرق التالية:</p>
+<pre>XXX my @stuff = grep { /keen/ } $self-&gt;find($a, $b);
+my @stuff = XXX grep { /keen/ } $self-&gt;find($a, $b);
+my @stuff = grep { /keen/ } XXX $self-&gt;find($a, $b);
+my @stuff = grep { /keen/ } $self-&gt;find(XXX $a, $b);</pre>
+<p class="Pp">XXX سهل الإدراج والإزالة. من التقليدي أيضًا تمييز الأجزاء غير المؤكدة من الرمز بـ XXX. سيؤدي هذا إلى تسهيل العثور عليها من قبل مصححي الأخطاء إذا نسيت إزالتها.</p>
+<p class="Pp">WWW و YYY جيدان لأنهما يعرضان وسيطاتهما ثم يعيدان نفس الشيء. لذلك، يمكنك إدراجها في العديد من المواقع ولا يزال الرمز يعمل كما كان. استخدم ZZZ عندما تحتاج إلى التوقف مع تفريغ YAML وتتبع كامل للمكدس.</p>
+<p class="Pp">يتم عرض وظائف تصحيح الأخطاء افتراضيًا إذا استخدمت الخيار <span class="Li">&quot;-base&quot;</span>، ولكن فقط إذا كنت قد استخدمت بالفعل الخيار <span class="Li">&quot;-XXX&quot;</span>. لتصدير جميع الوظائف الأربعة، استخدم العلامة export:</p>
+<pre>use SomeSpiffyModule ':XXX';</pre>
+<p class="Pp">لإجبار وظائف تصحيح الأخطاء على استخدام Data::Dumper بدلاً من YAML:</p>
+<pre>use SomeSpiffyModule -dumper;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SPIFFY_FUNCTIONS'><a class='permalink' href='#SPIFFY_FUNCTIONS'>وظائف Spiffy</a></h1>
+<p class="Pp">يصف هذا القسم الوظائف التي يكشف عنها Spiffy. يتم الكشف عن الوظائف <span class="Li">&quot;field&quot;</span> و <span class="Li">&quot;const&quot;</span> و <span class="Li">&quot;stub&quot;</span> و <span class="Li">&quot;super&quot;</span> فقط عند استخدام الخيارات <span class="Li">&quot;-base&quot;</span> أو <span class="Li">&quot;-Base&quot;</span>.</p>
+<dl class="Bl-tag">
+  <dt id="field"><a class="permalink" href="#field">field</a></dt>
+  <dd>تحدد وظائف الوصول لحقل في فئتك:
+        <pre>package Example;
+use Spiffy -Base;
+field 'foo';
+field bar =&gt; [];
+sub lalala {
+    $self-&gt;foo(42);
+    push @{$self-&gt;{bar}}, $self-&gt;foo;
+}
+</pre>
+    <p class="Pp">المعامل الأول الذي يتم تمريره إلى <span class="Li">&quot;field&quot;</span> هو اسم السمة التي يتم تعريفها. يمكن لوظائف الوصول أن تحتوي على قيمة افتراضية اختيارية. يتم إرجاع هذه القيمة إذا لم يتم تعيين قيمة للحقل في الكائن.</p>
+  </dd>
+  <dt id="const"><a class="permalink" href="#const">const</a></dt>
+  <dd>
+    <pre>const bar =&gt; 42;
+</pre>
+    <p class="Pp">وظيفة <span class="Li">&quot;const&quot;</span> مشابهة لـ <span class="Li">&quot;field&quot;</span> باستثناء أنها غير قابلة للتغيير. كما أنها لا تخزن البيانات في الكائن. تأكد من تزويد <span class="Li">&quot;const&quot;</span> بقيمة افتراضية، وإلا فإن الوظيفة التي تم إنشاؤها ستكون عديمة الفائدة.</p>
+  </dd>
+  <dt id="stub"><a class="permalink" href="#stub">stub</a></dt>
+  <dd>
+    <pre>stub 'cigar';
+</pre>
+    <p class="Pp">وظيفة <span class="Li">&quot;stub&quot;</span> تنشئ وظيفة تتوقف برسالة مناسبة. الفكرة هي أن الفئات الفرعية يجب أن تنفذ هذه الوظائف حتى لا يتم استدعاء وظائف stub.</p>
+  </dd>
+  <dt id="super"><a class="permalink" href="#super">super</a></dt>
+  <dd>إذا تم استدعاء هذه الوظيفة بدون معاملات، فستستدعي نفس الوظيفة التي يتم تنفيذها، أعلى في تسلسل ISA، مع تمرير جميع نفس المعاملات. إذا تم استدعاؤها بمعاملات، فستستخدم تلك المعاملات مع <span class="Li">$self</span> في المقدمة. بمعنى آخر، إنها تعمل ببساطة كما تتوقع.
+        <pre>sub foo {
+    super;             # نفس $self-&gt;SUPER::foo(@_);
+    super('hello');    # نفس $self-&gt;SUPER::foo('hello');
+    $self-&gt;bar(42);
+}
+sub new() {
+    my $self = super;
+    $self-&gt;init;
+    return $self;
+}
+</pre>
+    <p class="Pp"><span class="Li">&quot;super&quot;</span> لن تفعل شيئًا ببساطة إذا لم تكن هناك وظيفة super. أخيرًا، تقوم <span class="Li">&quot;super&quot;</span> بالعمل الصحيح في الإجراءات الفرعية AUTOLOAD.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='METHODS'><a class='permalink' href='#METHODS'>الوظائف</a></h1>
+<p class="Pp">يسرد هذا القسم جميع الوظائف التي ترثها أي فئة فرعية من Spiffy تلقائيًا.</p>
+<dl class="Bl-tag">
+  <dt id="mixin"><a class="permalink" href="#mixin">mixin</a></dt>
+  <dd>وظيفة لدمج فئة في وقت التشغيل. تتلقى نفس المعاملات مثل <span class="Li">&quot;use mixin&quot;</span> <span class="Li">...&quot;</span>. تجعل الفئة المستهدفة دمجا للمكالمة.
+        <pre>$self-&gt;mixin('SomeClass');
+$object-&gt;mixin('SomeOtherClass' =&gt; 'some_method');
+</pre>
+  </dd>
+  <dt id="parse_arguments"><a class="permalink" href="#parse_arguments">parse_arguments</a></dt>
+  <dd>تأخذ هذه الوظيفة قائمة من المعاملات وتقوم بتجميعها في أزواج. تسمح بالمعاملات المنطقية التي قد تحتوي أو لا تحتوي على قيمة (القيمة الافتراضية هي 1). تعيد الوظيفة مرجعًا إلى تجزئة تحتوي على جميع الأزواج كمفاتيح وقيم في التجزئة. يتم إرجاع المعاملات التي لا يمكن تجميعها كقائمة. إليك مثال:
+        <pre>sub boolean_arguments { qw(-has_spots -is_yummy) }
+sub paired_arguments { qw(-name -size) }
+my ($pairs, @others) = $self-&gt;parse_arguments(
+    'red', 'white',
+    -name =&gt; 'Ingy',
+    -has_spots =&gt;
+    -size =&gt; 'large',
+    'black',
+    -is_yummy =&gt; 0,
+);
+</pre>
+    <p class="Pp">بعد هذه المكالمة، ستحتوي <span class="Li">$pairs</span> على:</p>
+        <pre>{
+    -name =&gt; 'Ingy',
+    -has_spots =&gt; 1,
+    -size =&gt; 'large',
+    -is_yummy =&gt; 0,
+}
+</pre>
+    <p class="Pp">وستحتوي <span class="Li">@others</span> على 'red' و 'white' و 'black'.</p>
+  </dd>
+  <dt id="boolean_arguments"><a class="permalink" href="#boolean_arguments">boolean_arguments</a></dt>
+  <dd>تعيد قائمة المعاملات المعترف بها كمنطقية. قم بتجاوز هذه الوظيفة لتعريف قائمتك الخاصة.</dd>
+  <dt id="paired_arguments"><a class="permalink" href="#paired_arguments">paired_arguments</a></dt>
+  <dd>تعيد قائمة المعاملات المعترف بها كأزواج. قم بتجاوز هذه الوظيفة لتعريف قائمتك الخاصة.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ARGUMENTS'><a class='permalink' href='#ARGUMENTS'>المعاملات</a></h1>
+<p class="Pp">عند استخدام وحدة Spiffy أو فئة فرعية منها، يمكنك تمرير قائمة من المعاملات إليها. تتم معالجة هذه المعاملات باستخدام وظيفة <span class="Li">&quot;parse_arguments&quot;</span> الموضحة أعلاه. يُستخدم المعامل الخاص <span class="Li">&quot;-base&quot;</span> لجعل الحزمة الحالية فئة فرعية لوحدة Spiffy قيد الاستخدام.</p>
+<p class="Pp">أي معامل غير مجمع يعمل كقائمة عادية؛ إنه مثل تلك المستخدمة مع وحدة Exporter.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USING_SPIFFY_WITH_BASE.PM'><a class='permalink' href='#USING_SPIFFY_WITH_BASE.PM'>استخدام Spiffy مع base.pm</a></h1>
+<p class="Pp">الطريقة الصحيحة لاستخدام وحدة Spiffy كفئة أساسية هي مع المعامل <span class="Li">&quot;-base&quot;</span> في توجيه <span class="Li">&quot;use&quot;</span>. يختلف هذا عن الوحدات النموذجية حيث ترغب في استخدام <span class="Li">&quot;use base&quot;</span>.</p>
+<pre>package Something;
+use Spiffy::Module -base;
+use base 'NonSpiffy::Module';</pre>
+<p class="Pp">قد يكون من الصعب الآن تتبع ما هو Spiffy وما ليس كذلك. لهذا السبب تم تصميم Spiffy حقًا للعمل مع base.</p>
+</section><section class="Sh">
+<h1 class="Sh" id="USING_SPIFFY_WITH_BASE.PM"><a class='permalink' href='#USING_SPIFFY_WITH_BASE.PM'>USING SPIFFY WITH BASE.PM</a></h1>
+<p class="Pp">The base.pm module is used to specify the base classes for your
+    class. It is used like this:</p>
+<pre>  package MyClass;
+  use base qw(AnotherClass BaseClass);
+</pre>
+<p class="Pp">Spiffy can be used with base.pm. In fact, it is the default
+    behavior when Spiffy is used.</p>
+<pre>  package MyClass;
+  use Spiffy;
+  use base qw(Spiffy::Class);
+</pre>
+<p class="Pp">In this case, Spiffy automatically makes <span class="Li">&quot;Spiffy::Class&quot;</span>
+    a base class. You don't need to do anything special.</p>
+<p class="Pp">If you want to use Spiffy on a class that is not Spiffy, you
+    can do this:</p>
+<pre>package Something;
+use Spiffy -base;
+use base 'NonSpiffy::Class';</pre>
+<p class="Pp">Or even:</p>
+<pre>package Something;
+use Spiffy -base;
+use base qw(NonSpiffy::Class AnotherNonSpiffy::Class);</pre>
+<p class="Pp">And if you want to use Spiffy on a class that is Spiffy, and
+    also use non-Spiffy classes as base classes, you can do this:</p>
+<pre>package Something;
+use Spiffy;
+use base 'Spiffy::Class';
+use base 'NonSpiffy::Class';</pre>
+<p class="Pp"><span class="Li">&quot;use base&quot;</span> is also very useful
+    when your class is not an actual module (a separate file) but just a package
+    in some file that has already been loaded.
+    <span class="Li">&quot;base&quot;</span> will work whether the class is a
+    module or not, while the <span class="Li">&quot;-base&quot;</span> syntax
+    cannot work that way, since <span class="Li">&quot;use&quot;</span> always
+    tries to load a module.</p>
+<section class="Ss">
+<h2 class="Ss" id='base.pm_Caveats'><a class='permalink' href='#base.pm_Caveats'>base.pm   Caveats</a></h2>
+<p class="Pp">To make Spiffy work with base.pm, a dirty trick was played. Spiffy
+    swaps <span class="Li">&quot;base::import&quot;</span> with its own version.
+    If the base modules are not Spiffy, Spiffy calls the original base::import.
+    If the base modules are Spiffy, then Spiffy does its own thing.</p>
+<p class="Pp">There are two caveats.</p>
+<dl class="Bl-tag">
+  <dt id="Spiffy"><a class="permalink" href="#Spiffy">Spiffy must be loaded
+    first.</a></dt>
+  <dd>If Spiffy is not loaded and <span class="Li">&quot;use base&quot;</span>
+      is invoked on a Spiffy module, Spiffy will die with a useful message
+      telling the author to read this documentation. That's because Spiffy
+      needed to do the import swap beforehand.
+    <p class="Pp">If you get this error, simply put a statement like this up
+        front in your code:</p>
+        <pre>use Spiffy ();
+</pre>
+  </dd>
+  <dt id="No"><a class="permalink" href="#No">No Mixing</a></dt>
+  <dd><span class="Li">&quot;base.pm&quot;</span> can take multiple arguments.
+      And this works with Spiffy as long as all the base classes are Spiffy, or
+      they are all non-Spiffy. If they are mixed, Spiffy will die. In this case
+      just use separate <span class="Li">&quot;use base&quot;</span>
+    statements.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SPIFFY_TODO_LIST'><a class='permalink' href='#SPIFFY_TODO_LIST'>SPIFFY   TODO LIST</a></h1>
+<p class="Pp">Spiffy is a wonderful way to do OO programming in Perl, but it is
+    still a work in progress. New things will be added, and things that don't
+    work well, might be removed.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Ingy d&#x00F6;t Net &lt;ingy@cpan.org&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENSE'><a class='permalink' href='#COPYRIGHT_AND_LICENSE'>COPYRIGHT   AND LICENSE</a></h1>
+<p class="Pp">Copyright 2004-2014. Ingy d&#x00F6;t Net.</p>
+<p class="Pp">This program is free software; you can redistribute it and/or
+    modify it under the same terms as Perl itself.</p>
+<p class="Pp">See <a href='http://www.perl.com/perl/misc/Artistic.html'>http://www.perl.com/perl/misc/Artistic.html</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-spiffy/">extra/perl-spiffy</a></dd>
+        <dt>Version:</dt>
+        <dd>0.46-5</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/Spiffy">https://search.cpan.org/dist/Spiffy</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-spiffy/">/listing/extra/perl-spiffy/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#EXPORTING">EXPORTING</a></li>
+        
+            <li><a href="#MIXINS_&amp;amp;_ROLES">MIXINS &amp; ROLES</a></li>
+        
+            <li><a href="#FILTERING">FILTERING</a></li>
+        
+            <li><a href="#PRIVATE_METHODS">PRIVATE METHODS</a></li>
+        
+            <li><a href="#SPIFFY_DEBUGGING">SPIFFY DEBUGGING</a></li>
+        
+            <li><a href="#SPIFFY_FUNCTIONS">SPIFFY FUNCTIONS</a></li>
+        
+            <li><a href="#METHODS">METHODS</a></li>
+        
+            <li><a href="#ARGUMENTS">ARGUMENTS</a></li>
+        
+            <li><a href="#USING_SPIFFY_WITH_BASE.PM">USING SPIFFY WITH BASE.PM</a></li>
+        
+            <li><a href="#SPIFFY_TODO_LIST">SPIFFY TODO LIST</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENSE">COPYRIGHT AND LICENSE</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Spiffy.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Spiffy.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Net::XMPP::Namespaces(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Net__XMPP__Namespaces(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Net::XMPP::Namespaces(3pm)</td>
+    <td class="head-vol">وثائق مقدمة من Perl</td>
+    <td class="head-rtitle">Net::XMPP::Namespaces(3pm)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Net::XMPP::Namespaces - مناقشة معمقة لكيفية تعامل Net::XMPP مع مساحات الأسماء</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp">توفر Net::XMPP::Namespaces عمقًا في تحليل كيفية تعامل Net::XMPP مع مساحات الأسماء، وكيفية إضافة مساحات الأسماء المخصصة الخاصة بك. كما أنها تعمل كمتجر لجميع معلومات مساحة الأسماء التي تتطلبها Net::XMPP.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">بروتوكول XMPP محدد جيدًا. هناك ثلاث حزم رئيسية من المستوى الأعلى (message, iq, and presence). هناك أيضًا طريقة لتوسيع البروتوكول بطريقة واضحة ومنظمة، وذلك باستخدام مساحات الأسماء.</p>
+<p class="Pp">الطريقتان الرئيسيتان اللتان يتم استخدامهما لمساحات الأسماء في Jabber هما جعل <i>iq</i> غلافًا عامًا وطريقة لإضافة بيانات إلى أي حزمة باستخدام وسم ابن <i>x</i>. سنستخدم <i>x</i> لتمثيل الحزمة، ولكنها يمكن أن تكون أي وسم ابن: <i>foo</i>, <i>data</i>, <i>error</i>, إلخ.</p>
+<pre>&lt;iq type=&quot;get&quot;&gt;&lt;query xmlns=&quot;...&quot;/&gt;&lt;/iq&gt;</pre>
+<p class="Pp">أو</p>
+<pre>&lt;iq type=&quot;get&quot;&gt;&lt;foo xmlns=&quot;...&quot;/&gt;&lt;/iq&gt;</pre>
+<p class="Pp">بعد هذا المقطع الاستعلامي، يمكنك تضمين أي عدد من المقاطع الأخرى (وسوم <i>x</i>) تريدها. يتم تمثيل حزمة الاستعلام وتكون متاحة عند استدعاء <b>GetQuery()</b> أو <b>GetChild()</b>، ويمكن الحصول على مساحات الأسماء الأخرى عن طريق استدعاء <b>GetChild()</b>.</p>
+<p class="Pp">الوسم <i>X</i> هو مجرد طريقة لحمل البيانات حول الحزم الأخرى. على سبيل المثال، تضمين وقت الرسالة باستخدام <i>jabber:x:delay</i> أو توقيع الوجود للتشفير باستخدام <i>jabber:x:signed</i>.</p>
+<p class="Pp">لهذا، حاولت Net::XMPP العثور على طريقة لتحديد الوظائف اللازمة للوصول إلى XML لمساحة أسماء بوضوح ويسر. سننظر في المستند بالكامل، ثم سنعرض مثالين لمساحات أسماء حقيقية حتى تتمكن من رؤية ما نتحدث عنه.</p>
+<section class="Ss">
+<h2 class="Ss" id='Overview'><a class='permalink' href='#Overview'>نظرة عامة</a></h2>
+<p class="Pp">لتجنب تحميل العديد من الوحدات الضارة في الذاكرة التي لا تستخدم، ولتجنب الاضطرار إلى تغيير 15 وحدة عند تقديم تغيير بسيط، اتخذت وحدات Net::XMPP استدعاء AUTOLOAD إلى أقصى حد. ملف Namespaces.pm هو مجرد مجموعة من استدعاءات الوظائف التي تولد تجزئة كبيرة من التجزئات. يتم الوصول إلى التجزئة باستخدام وظيفة AUTOLOAD الخاصة بـ Stanza.pm للقيام بشيء ما. (سوف يكون هذا منطقيًا، أعدك.)</p>
+<p class="Pp">قبل المتابعة، أوصي بقراءة كتاب Perl حول AUTOLOAD وكيف يعمل. من هذه النقطة فصاعدًا، أفترض أنك تفهم هذا.</p>
+<p class="Pp">عندما تقوم بإنشاء كائن Net::XMPP::IQ وتضيف إليه استعلامًا (NewChild)، تحدث عدة أشياء في الخلفية. الوسيطة لـ NewChild هي مساحة الأسماء التي تريد إضافتها. (custom-namespace)</p>
+<p class="Pp">الآن بعد أن أصبح لديك كائن Query للعمل معه، ستستدعي وظائف GetXXX و SetXXX. لا توجد وظائف محددة لـ GetXXX و SetXXXX. لن تتمكن من العثور عليها في ملف Namespaces.pm، ولكنك ستجد شيئًا كهذا:</p>
+<pre>&amp;add_ns(ns    =&gt; &quot;mynamespace&quot;,
+        tag   =&gt; &quot;mytag&quot;,
+        xpath =&gt; {
+                  JID       =&gt; { type=&gt;'jid', path =&gt; '@jid' },
+                  Username  =&gt; { path =&gt; 'username/text()' },
+                  Test      =&gt; { type =&gt; 'master' }
+                 }
+       );</pre>
+<p class="Pp">ns - هذه هي مساحة الأسماء الجديدة التي تحاول إضافتها.</p>
+<p class="Pp">tag - هذا هو الوسم الجذر الذي ستستخدمه للكائنات المستندة إلى مساحة الأسماء هذه.</p>
+<p class="Pp">xpath - يشير المرجع إلى التجزئة المقدم في استدعاء add_ns لكل إدخال إلى كيفية التعامل مع استدعاءات GetXXXX() و SetXXXX() و DefinedXXXX() و RemoveXXXX() و AddXXXX() اللاحقة في مساحة الأسماء. الخيارات الأساسية التي يمكنك تمريرها هي:</p>
+<p class="Pp">type - يشير هذا إلى كيفية التعامل مع المكالمة. القيم الممكنة هي:</p>
+<pre>         array - القيمة المراد تعيينها وإرجاعها هي مرجع لمصفوفة.
+                 على سبيل المثال، &lt;group/&gt; في jabber:iq:roster.
+         child - يشير هذا إلى أن Stanza بحاجة إلى البحث عن الأطفال بأسلوب __netxmpp__.
+                 تضيف AddXXX() ابنًا جديدًا، وتعيد GetXXX() كائن Stanza يمثل الحزمة.
+         flag - هذا للعناصر الابن التي هي علامات بحد ذاتها: &lt;foo/&gt;. نظرًا لأن وجود العلامة هو المهم، ولا يوجد cdata لتخزينه، نسميها ببساطة "علم".
+         jid - القيمة هي معرف Jabber. ستعيد GetXXX() كائن Net::XMPP::JID، إلا إذا مررت "jid"، فستعيد سلسلة نصية.
+         master - تعيد استدعاءات GetXXX() و SetXXX() وتستقبل تمثيلًا لتجزئة تحتوي على جميع استدعاءات GetXXX() و SetXXX(). على سبيل المثال:
+                    SetTest(foo=&gt;&quot;bar&quot;,
+                            bar=&gt;&quot;baz&quot;);
+                  يُترجم إلى:
+                    SetFoo(&quot;bar&quot;);
+                    SetBar(&quot;baz&quot;);
+                  ستعيد GetTest() تجزئة تحتوي على ما تحتويه الحزمة:
+                    { foo=&gt;&quot;bar&quot;,  bar=&gt;&quot;baz&quot; }
+         raw - سيضع هذا مباشرة XML الذي تحدده في Stanza في النقطة التي يتم فيها تحديد المسار.
+         scalar - سيقوم هذا بتعيين واسترداد قيمة قياسية. هذا هو العمل الرئيسي، حيث يتم تمثيل السمات و cdata كقيم قياسية. هذا هو الوضع الافتراضي إذا لم يتم توفير واحد.
+         special - هذا النوع فريد من حيث أنه بدلاً من سلسلة نصية "special"، فإنك في الواقع تقدم مصفوفة: [ &quot;special&quot; , &lt;subtype&gt; ]. هذا يسمح لـ Net::XMPP بمعالجة استدعاء SetXXXX() بشكل خاص وفقًا لتفضيلاتك. حاليًا، يتم استخدام هذا بشكل أساسي بواسطة jabber:iq:time لأتمتة إعداد الوقت وبواسطة jabber:iq:version لإعداد نظام تشغيل الجهاز وإضافة إصدار Net::Jabber إلى حزمة العودة. على الرغم من أنك على الأرجح لن تستخدمه، إلا أنني أردت ذكره.
+         timestamp - إذا قمت باستدعاء SetXXX() ولكن لم تمرر أي شيء،
+</pre>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+{
+  "meta": {
+    "version": "1.0",
+    "source": "man",
+    "name": "Net::XMPP::Namespaces",
+    "section": "3pm",
+    "language": "en"
+  },
+  "content": [
+    {
+      "type": "section",
+      "title": "NAME",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            "Net::XMPP::Namespaces - Define and retrieve custom XMPP namespaces"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "SYNOPSIS",
+      "content": [
+        {
+          "type": "code",
+          "content": "use Net::XMPP::Namespaces;\n\n# Define a new namespace\nadd_ns( ns    => \"mynamespace\",\n        tag   => \"mytag\",\n        xpath => {\n                  JID       => { type=>'jid', path => '@jid' },\n                  Username  => { path => 'username/text()' },\n                  Test      => { type => 'master' }\n                 }\n      );\n\n# Access the defined elements\nmy $jid = $stream->GetJID();\n$stream->SetJID( $jid );\n\nmy $username = $stream->GetUsername();\n$stream->SetUsername( \"bob\" );\n\nmy $test = $stream->GetTest();\n$stream->SetTest( \"something\" );\n"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "DESCRIPTION",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            "This module allows you to define and use custom XMPP namespaces within your application. It provides a mechanism to map XML elements and attributes within a specific namespace to methods in your Net::XMPP stream object."
+          ]
+        },
+        {
+          "type": "heading",
+          "level": 3,
+          "content": [
+            "add_ns()"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "The `add_ns()` function is the core of this module. It takes a hash reference as an argument, defining the properties of the new namespace and its associated elements."
+          ]
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "content": [
+                "ns - The namespace URI. This can be a standard XMPP namespace or a custom one."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "tag - The root tag for this namespace within the XML stream. All elements defined within this namespace will be children of this tag."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "xpath - A hash reference defining the mapping between element names and their corresponding XPath expressions. The keys of this hash will become the method names in your stream object (e.g., `JID` will map to `GetJID`, `SetJID`, etc.). The values are themselves hash references with the following possible keys:"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "content": [
+                "type - The data type of the element. Common types include 'jid', 'integer', 'boolean', 'string', and 'master'. 'master' is a generic type for elements that don't fit specific categories."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "path - The XPath expression to locate the element or attribute within the XML. This path is relative to the `tag` defined for the namespace. If omitted, Net::XMPP will attempt to infer the path based on the element name."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "child - A hash reference defining how to handle child elements within this namespace. This is used for more complex structures. The keys for this hash are:"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "content": [
+                "ns - The namespace URI for the child element."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "skip_xmlns => 1 - Prevents Net::XMPP from adding an `xmlns=''` attribute to the child element's XML."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "specify_name => 1 - Allows you to specify a custom tag name for the child element when creating it. This is generally discouraged as it can lead to non-standard XML."
+              ]
+            },
+            {
+              "type": "list_item",
+              "content": [
+                "tag - The default tag name to use for the child element if `specify_name` is enabled. This is also generally discouraged."
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list",
+          "items": [
+            {
+              "type": "list_item",
+              "content": [
+                "calls - An array reference specifying which methods Net::XMPP should generate for this element. Common options are 'Get', 'Set', 'Defined', and 'Remove'. For child types, you need to explicitly define the desired API (e.g., `[\"Get\", \"Add\"]`)."
+              ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "For example, the following `add_ns` call:"
+          ]
+        },
+        {
+          "type": "code",
+          "content": "add_ns(\n    ns    => \"mynamespace\",\n    tag   => \"mytag\",\n    xpath => {\n              JID       => { type=>'jid', path => '@jid' },\n              Username  => { path => 'username/text()' },\n              Test      => { type => 'master' }\n             }\n);\n"
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "Generates the following API methods on your stream object:"
+          ]
+        },
+        {
+          "type": "code",
+          "content": "GetJID(), SetJID(), DefinedJID(), RemoveJID()\nGetUsername(), SetUsername(), DefinedUsername(), RemoveUsername()\nGetTest(), SetTest(), DefinedTest(), RemoveTest()\n"
+        },
+        {
+          "type": "heading",
+          "level": 3,
+          "content": [
+            "Wrap Up"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "Net::XMPP::Namespaces provides a powerful way to extend XMPP functionality with custom namespaces and methods. Refer to the `Net::XMPP::Protocol` manpage for examples of how to register your custom namespaces using `add_ns()`."
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "AUTHOR",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            "Originally authored by Ryan Eatmon."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "Previously maintained by Eric Hacker."
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            "Currently maintained by Darian Anthony Patrick."
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "COPYRIGHT",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            "This module is free software, you can redistribute it and/or modify it under the LGPL 2.1."
+          ]
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "date": "2025-07-14",
+    "os": "perl v5.42.0"
+  }
+}

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>tc-tbf(8) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">tc-tbf(8)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/iproute2/">iproute2</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">TC(8)</td>
+    <td class="head-vol">Linux</td>
+    <td class="head-rtitle">TC(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">tbf - مرشح دلو الرموز</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<p class="Pp"><b>tc qdisc ... tbf rate</b> معدل <b>burst</b> بايت/خلية <b>(
+    latency</b> ملي ثانية <b>| limit</b> بايت <b>) [ mpu</b> بايت <b>[ peakrate</b>
+    معدل <b>mtu</b> بايت/خلية <b>] ]</b></p>
+<p class="Pp">burst يُعرف أيضًا باسم buffer و maxburst. mtu يُعرف أيضًا باسم
+    minburst.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">مرشح دلو الرموز هو نظام ترتيب طوابير (queueing discipline) خاص بالفئات (classful) متاح للتحكم في حركة المرور باستخدام الأمر <a href='/man/tc.8.en'>tc(8)</a>.</p>
+<p class="Pp">TBF هو مجرد مُشكِّل (shaper) ولا يقوم أبدًا بجدولة حركة المرور. إنه غير محافظ على العمل (non-work-conserving) وقد يقوم بتقييد نفسه، على الرغم من توفر الحزم، لضمان عدم تجاوز المعدل المحدد. يمكنه تشكيل ما يصل إلى 1 ميجابت في الثانية من حركة المرور العادية مع حد أدنى مثالي للانفجار، وإرسال البيانات بالمعدلات المحددة بالضبط.</p>
+<p class="Pp">من الممكن تحقيق معدلات أعلى بكثير ولكن بتكلفة فقدان الحد الأدنى من الانفجار. في هذه الحالة، يتم إلغاء تجميع البيانات في المتوسط بالمعدل المحدد ولكن قد يتم إرسالها بشكل أسرع بكثير على نطاقات زمنية بالملي ثانية. نظرًا لوجود طوابير إضافية في محولات الشبكة، فهذا غالبًا ليس مشكلة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ALGORITHM'><a class='permalink' href='#ALGORITHM'>الخوارزمية</a></h1>
+<p class="Pp">كما يوحي الاسم، يتم ترشيح حركة المرور بناءً على إنفاق <b>الرموز (tokens).</b> تتوافق الرموز تقريبًا مع البايتات، مع القيد الإضافي أن كل حزمة تستهلك بعض الرموز، بغض النظر عن مدى صغرها. يعكس هذا حقيقة أن حتى الحزمة ذات الحجم صفر تشغل الارتباط لبعض الوقت.</p>
+<p class="Pp">عند الإنشاء، يتم تزويد TBF بالرموز التي تتوافق مع حجم حركة المرور التي يمكن تفجيرها دفعة واحدة. تصل الرموز بمعدل ثابت، حتى يمتلئ الدلو.</p>
+<p class="Pp">إذا لم تكن الرموز متاحة، يتم وضع الحزم في قائمة الانتظار، حتى حد معين. يقوم TBF الآن بحساب عجز الرموز، ويقوم بالتقييد حتى يمكن إرسال الحزمة الأولى في قائمة الانتظار.</p>
+<p class="Pp">إذا لم يكن من المقبول تفجير الحزم بأقصى سرعة، يمكن تكوين معدل ذروة (peakrate) لتحديد السرعة التي يفرغ بها الدلو. يتم تنفيذ هذا المعدل الذروة كـ TBF ثانٍ بدلو صغير جدًا، بحيث لا ينفجر.</p>
+<p class="Pp">لتحقيق الكمال، قد يحتوي الدلو الثاني على حزمة واحدة فقط، مما يؤدي إلى الحد المذكور سابقًا وهو 1 ميجابت في الثانية.</p>
+<p class="Pp">ينتج هذا الحد عن حقيقة أن النواة يمكنها فقط التقييد لمدة 1 'jiffy' على الأقل، والذي يعتمد على HZ على أنه 1/HZ. من أجل التشكيل المثالي، لا يمكن إرسال سوى حزمة واحدة لكل jiffy - بالنسبة لـ HZ=100، يعني هذا 100 حزمة بمتوسط 1000 بايت لكل منها، وهو ما يتوافق تقريبًا مع 1 ميجابت في الثانية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PARAMETERS'><a class='permalink' href='#PARAMETERS'>المعلمات</a></h1>
+<p class="Pp">انظر <a href='/man/tc.8.en'>tc(8)</a> لكيفية تحديد وحدات هذه القيم.</p>
+<dl class="Bl-tag">
+  <dt id="limit"><a class="permalink" href="#limit">limit أو latency</a></dt>
+  <dd>الحد هو عدد البايتات التي يمكن وضعها في قائمة الانتظار في انتظار توفر الرموز. يمكنك أيضًا تحديد هذا بطريقة أخرى عن طريق تعيين معلمة زمن الاستجابة (latency)، التي تحدد الحد الأقصى للوقت الذي يمكن أن تستغرقه الحزمة في TBF. يأخذ حساب الأخير في الاعتبار حجم الدلو، والمعدل، وربما معدل الذروة (إذا تم تعيينه). هاتان المعلمتان متعارضتان.</dd>
+  <dt id="burst"><a class="permalink" href="#burst">burst</a></dt>
+  <dd>يُعرف أيضًا باسم buffer أو maxburst. حجم الدلو، بالبايت. هذا هو الحد الأقصى لعدد البايتات التي يمكن أن تكون الرموز متاحة لها على الفور. بشكل عام، تتطلب معدلات التشكيل الأعلى دلوًا أكبر. بالنسبة لـ 10 ميجابت في الثانية على Intel، تحتاج إلى ما لا يقل عن 10 كيلوبايت من المخزن المؤقت إذا كنت ترغب في الوصول إلى معدلك المحدد!
+    <p class="Pp">إذا كان المخزن المؤقت الخاص بك صغيرًا جدًا، فقد يتم إسقاط الحزم لأن المزيد من الرموز تصل لكل دورة مؤقت مما يتسع في دلوك. يمكن حساب الحد الأدنى لحجم المخزن المؤقت عن طريق قسمة المعدل على HZ.</p>
+    <p class="Pp">يتم إجراء حسابات استخدام الرموز باستخدام جدول يحتوي افتراضيًا على دقة تبلغ 8 حزم. يمكن تغيير هذه الدقة عن طريق تحديد حجم <b>الخلية (cell)</b> مع الانفجار (burst). على سبيل المثال، لتحديد مخزن مؤقت بحجم 6000 بايت مع حجم خلية 16 بايت، اضبط انفجارًا قدره 6000/16. من المحتمل أنك لن تحتاج أبدًا إلى تعيين هذا. يجب أن يكون قوة صحيحة للعدد 2.</p>
+  </dd>
+  <dt id="mpu"><a class="permalink" href="#mpu">mpu</a></dt>
+  <dd>حزمة بحجم صفر لا تستهلك نطاقًا تردديًا صفرًا. بالنسبة لـ Ethernet، لا تستخدم أي حزمة أقل من 64 بايت. تحدد وحدة الحزمة الدنيا الحد الأدنى لاستهلاك الرموز (بالبايت) للحزمة. الافتراضي هو صفر.</dd>
+  <dt id="rate"><a class="permalink" href="#rate">rate</a></dt>
+  <dd>مقبض السرعة. انظر الملاحظات أعلاه حول الحدود! انظر <a href='/man/tc.8.en'>tc(8)</a> للوحدات.</dd>
+</dl>
+<p class="Pp">علاوة على ذلك، إذا كان هناك حاجة إلى معدل ذروة، فإن المعلمات التالية متاحة:</p>
+<dl class="Bl-tag">
+  <dt id="peakrate"><a class="permalink" href="#peakrate">peakrate</a></dt>
+  <dd>أقصى معدل استنزاف للدلو. لا يلزم تعيين معدل الذروة، فهو ضروري فقط إذا كان التشكيل المثالي على نطاق المللي ثانية مطلوبًا.
+  </dd>
+  <dt id="mtu/minburst"><a class="permalink" href="#mtu/minburst">mtu/minburst</a></dt>
+  <dd>يحدد حجم دلو معدل الذروة. للدقة المثالية، يجب تعيينه على MTU للواجهة. إذا كان معدل الذروة مطلوبًا، ولكن بعض الانفجار مقبول، يمكن زيادة هذا الحجم. يسمح minburst بحجم 3000 بايت بحوالي 3 ميجابت في الثانية من معدل الذروة، نظرًا لحزم بحجم 1000 بايت.
+    <p class="Pp">مثل حجم الانفجار العادي، يمكنك أيضًا تحديد حجم <b>خلية (cell)</b>.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_&amp;amp;_USAGE'><a class='permalink' href='#EXAMPLE_&amp;amp;_USAGE'>مثال   &amp; الاستخدام</a></h1>
+<p class="Pp">لإرفاق TBF بمعدل أقصى مستدام قدره 0.5 ميجابت في الثانية، معدل ذروة قدره 1.0 ميجابت في الثانية، مخزن مؤقت بحجم 5 كيلوبايت، مع حد حجم قائمة الانتظار قبل الدلو محسوب بحيث يسبب TBF 70 مللي ثانية على الأكثر من زمن الاستجابة، مع سلوك معدل ذروة مثالي، قم بتنفيذ:</p>
+<p class="Pp"># tc qdisc add dev eth0 handle 10: root tbf rate 0.5mbit \
+  <br/>
+   burst 5kb latency 70ms peakrate 1mbit \
+  <br/>
+   minburst 1540</p>
+<p class="Pp">لإرفاق qdisc داخلي، على سبيل المثال sfq، قم بتنفيذ:</p>
+<p class="Pp"># tc qdisc add dev eth0 parent 10:1 handle 100: sfq</p>
+<p class="Pp">بدون qdisc داخلي، يتصرف طابور TBF كـ bfifo. إذا تم تغيير qdisc الداخلي، فلن يكون الحد/زمن الاستجابة فعالاً بعد الآن.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/tc.8.en'>tc(8)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Alexey N. Kuznetsov, &lt;kuznet@ms2.inr.ac.ru&gt;. تم الاحتفاظ بصفحة الدليل هذه بواسطة bert hubert &lt;ahu@ds9a.nl&gt;</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">13 ديسمبر 2001</td>
+    <td class="foot-os">iproute2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/iproute2/">core/iproute2</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>6.18.0-1</dd>
+        <dt>المشروع الأصلي:</dt>
+        <dd><a href="https://git.kernel.org/pub/scm/network/iproute2/iproute2.git">https://git.kernel.org/pub/scm/network/iproute2/iproute2.git</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/iproute2/">/listing/core/iproute2/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">ملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#ALGORITHM">الخوارزمية</a></li>
+        
+            <li><a href="#PARAMETERS">المعلمات</a></li>
+        
+            <li><a href="#EXAMPLE_&amp;amp;_USAGE">مثال &amp; الاستخدام</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/tc-tbf.8.en.txt">txt</a>, 
+        
+            <a href="/man/tc-tbf.8.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط <a href=

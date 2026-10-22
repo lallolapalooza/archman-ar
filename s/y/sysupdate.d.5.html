@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>sysupdate.d(5) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+        <link rel="alternate" href="/man/sysupdate.d.5.de" hreflang="de">
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">sysupdate.d(5)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/systemd/">systemd</a></p>
+<p class="lic">التراخيص: LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SYSUPDATE.D(5)</td>
+    <td class="head-vol">sysupdate.d</td>
+    <td class="head-rtitle">SYSUPDATE.D(5)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">sysupdate.d - Transfer Definition Files for Automatic Updates</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<div class="Bd-indent">/etc/sysupdate.d/*.transfer</div>
+<div class="Bd-indent">/run/sysupdate.d/*.transfer</div>
+<div class="Bd-indent">/usr/local/lib/sysupdate.d/*.transfer</div>
+<div class="Bd-indent">/usr/lib/sysupdate.d/*.transfer</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">These files describe how specific resources on the local system
+    shall be updated from a remote source. Each such file defines one such
+    transfer: typically a remote HTTP/HTTPS resource as source; and a local
+    file, directory or partition as target. This may be used as a simple,
+    automatic, atomic update mechanism for the OS itself, for containers,
+    portable services or system extension images &#x2014; but in fact may be
+    used to update any kind of file from a remote source.</p>
+<p class="Pp">The <a href='/man/systemd-sysupdate.8.en'>systemd-sysupdate(8)</a> command reads these files and uses
+    them to determine which local resources should be updated, and then executes
+    the update.</p>
+<p class="Pp">Both the remote HTTP/HTTPS source and the local target typically
+    exist in multiple, concurrent versions, in order to implement flexible
+    update schemes, e.g. A/B updating (or a superset thereof, e.g. A/B/C,
+    A/B/C/D, ...).</p>
+<p class="Pp">Each *.transfer file defines one transfer, i.e. describes one
+    resource to update. Typically, multiple of these files (i.e. multiple of
+    such transfers) are defined together, and are bound together by a common
+    version identifier in order to update multiple resources at once on each
+    update operation, for example to update a kernel, a root file system and a
+    Verity partition in a single, combined, synchronized operation, so that only
+    a combined update of all three together constitutes a complete update. We'll
+    call such a collection of transfers a target. <a href='/man/systemd-sysupdate.8.en'>systemd-sysupdate(8)</a>
+    always operates on a single target.</p>
+<p class="Pp">Transfers may be grouped together into sets that can be
+    individually enabled or disabled by the system administrator, called
+    &quot;Optional Features&quot;: <a href='/man/sysupdate.features.5.en'>sysupdate.features(5)</a>.</p>
+<p class="Pp">Each *.transfer file contains three sections: [Transfer], [Source]
+    and [Target].</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BASIC_MODE_OF_OPERATION'><a class='permalink' href='#BASIC_MODE_OF_OPERATION'>BASIC MODE OF OPERATION</a></h1>
+<p class="Pp">Disk-image based OS updates typically consist of multiple
+    different resources that need to be updated together, for example a secure
+    OS update might consist of a root file system image to drop into a
+    partition, a matching Verity integrity data partition image, and a kernel
+    image prepared to boot into the combination of the two partitions. The first
+    two resources are files that are downloaded and placed in a disk partition,
+    the latter is a file that is downloaded and placed in a regular file in the
+    boot file system (e.g. EFI system partition). Hence, during an update of a
+    hypothetical operating system &quot;foobarOS&quot; to a hypothetical version
+    47 the following operations should take place:</p>
+<div class="Bd-indent"> 1.A file
+  &quot;<a href='https://download.example.com/foobarOS_47.root.xz'>https://download.example.com/foobarOS_47.root.xz</a>&quot; should be
+  downloaded, decompressed and written to a previously unused partition with GPT
+  partition type UUID 4f68bce3-e8cd-4db1-96e7-fbcaf984b709 for x86-64, as per
+  <b>Discoverable Partitions Specification</b>[1].</div>
+<div class="Bd-indent"> 2.Similarly, a file
+  &quot;<a href='https://download.example.com/foobarOS_47.verity.xz'>https://download.example.com/foobarOS_47.verity.xz</a>&quot; should be
+  downloaded, decompressed and written to a previously empty partition with GPT
+  partition type UUID of 2c7357ed-ebd2-46d9-aec1-23d437ec2bf5 (i.e. the
+  partition type for Verity integrity information for x86-64 root file
+  systems).</div>
+<div class="Bd-indent"> 3.Finally, a file
+  &quot;<a href='https://download.example.com/foobarOS_47.efi'>https://download.example.com/foobarOS_47.efi</a>&quot; (a unified kernel, as
+  per <b>Boot Loader Specification</b>[2] Type #2) should be downloaded,
+  decompressed and written to the $BOOT file system, i.e. to
+  EFI/Linux/foobarOS_47.efi in the ESP or XBOOTLDR partition.</div>
+<p class="Pp">The version-independent generalization of this would be (using the
+    special marker &quot;@v&quot; as wildcard for the version identifier):</p>
+<div class="Bd-indent"> 1.A transfer of a file
+  &quot;<a href='https://download.example.com/foobarOS_@v.root.xz'>https://download.example.com/foobarOS_@v.root.xz</a>&quot; &#x2192; a local,
+  previously empty GPT partition of type 4f68bce3-e8cd-4db1-96e7-fbcaf984b709,
+  with the label to be set to &quot;foobarOS_@v&quot;.</div>
+<div class="Bd-indent"> 2.A transfer of a file
+  &quot;<a href='https://download.example.com/foobarOS_@v.verity.xz'>https://download.example.com/foobarOS_@v.verity.xz</a>&quot; &#x2192; a
+  local, previously empty GPT partition of type
+  2c7357ed-ebd2-46d9-aec1-23d437ec2bf5, with the label to be set to
+  &quot;foobarOS_@v_verity&quot;.</div>
+<div class="Bd-indent"> 3.A transfer of a file
+  &quot;<a href='https://download.example.com/foobarOS_@v.efi'>https://download.example.com/foobarOS_@v.efi</a>&quot; &#x2192; a local file
+  $BOOT/EFI/Linux/foobarOS_@v.efi.</div>
+<p class="Pp">An update can only complete if the relevant URLs provide their
+    resources for the same version, i.e. for the same value of
+  &quot;@v&quot;.</p>
+<p class="Pp">The above may be translated into three *.transfer files in
+    sysupdate.d/, one for each resource to transfer. The *.transfer files
+    configure the type of download, and what place to write the download to
+    (i.e. whether to a partition or a file in the file system). Most importantly
+    these files contain the URL, partition name and filename patterns shown
+    above that describe how these resources are called on the source and how
+    they shall be called on the target.</p>
+<p class="Pp">In order to enumerate available versions and figuring out
+    candidates to update to, a mechanism is necessary to list suitable
+  files:</p>
+<div class="Bd-indent">&#x2022;For partitions: the surrounding GPT partition
+  table contains a list of defined partitions, including a partition type UUID
+  and a partition label (in this scheme the partition label plays a role for the
+  partition similar to the filename for a regular file).</div>
+<div class="Bd-indent">&#x2022;For regular files: the directory listing of the
+  directory the files are contained in provides a list of existing files in a
+  straightforward way.</div>
+<div class="Bd-indent">&#x2022;For HTTP/HTTPS sources a simple scheme is used: a
+  manifest file SHA256SUMS, following the format defined by <a href='/man/sha256sum.1.en'>sha256sum(1)</a>,
+  lists file names and their SHA256 hashes.</div>
+<p class="Pp">Transfers are done in the alphabetical order of the .transfer file
+    names they are defined in. First, the resource data is downloaded directly
+    into a target file/directory/partition. Once this is completed for all
+    defined transfers, in a second step the files/directories/partitions are
+    renamed to their final names as defined by the target <i>MatchPattern=</i>,
+    again in the order the .transfer transfer file names dictate. This step is
+    not atomic, however it is guaranteed to be executed strictly in order with
+    suitable disk synchronization in place. Typically, when updating an OS one
+    of the transfers defines the entry point when booting. Thus it is generally
+    a good idea to order the resources via the transfer configuration file names
+    so that the entry point is written last, ensuring that any abnormal
+    termination does not leave an entry point around whose backing is not
+    established yet. In the example above it would hence make sense to establish
+    the EFI kernel image last and thus give its transfer configuration file the
+    alphabetically last name.</p>
+<p class="Pp">See below for an extended, more specific example based on the
+    above.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RESOURCE_TYPES'><a class='permalink' href='#RESOURCE_TYPES'>RESOURCE TYPES</a></h1>
+<p class="Pp">Each transfer file defines one source resource to transfer to one
+    target resource. The following resource types are supported:</p>
+<div class="Bd-indent"> 1.Resources of type &quot;url-file&quot; encapsulate a
+  file on a web server, referenced via a HTTP or HTTPS URL. When an update takes
+  place, the file is downloaded and decompressed and then written to the target
+  file or partition. This resource type is only available for sources, not for
+  targets. The list of available versions of resources of this type is encoded
+  in SHA256SUMS manifest files, accompanied by SHA256SUMS.gpg detached
+  signatures.</div>
+<div class="Bd-indent"> 2.The &quot;url-tar&quot; resource type is similar, but
+  the file must be a .tar archive. When an update takes place, the file is
+  decompressed and unpacked into a directory or btrfs subvolume. This resource
+  type is only available for sources, not for targets. Just like
+  &quot;url-file&quot;, &quot;url-tar&quot; version enumeration makes use of
+  SHA256SUMS files, authenticated via SHA256SUMS.gpg.</div>
+</div>
+</section>
+
+                
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+/div>
+<div class="Bd-indent"> 3. نوع المورد "regular-file"
+  يغلف ملفًا عاديًا محليًا على القرص. أثناء التحديثات، يتم فك ضغط الملف وكتابته
+  إلى الملف أو القسم الهدف. هذا النوع من الموارد متاح كمصدر وكهدف. عند التحديث،
+  لا يتم إجراء أي تحقق من التكامل أو المصادقة للموارد من هذا النوع.</div>
+<div class="Bd-indent"> 4. نوع المورد "partition" مشابه لـ "regular-file"،
+  ويغلف قسم GPT على القرص. عند التحديث، يجب أن يكون القسم موجودًا بالفعل، وأن
+  يكون له نوع قسم GPT الصحيح. يعتبر القسم الذي تم تعيين تسميته إلى "_empty"
+  فارغًا، وهو مرشح لوضع مورد تم تنزيله حديثًا فيه. تُستخدم تسمية قسم GPT
+  لتخزين معلومات الإصدار، بمجرد تحديث القسم. هذا النوع من الموارد متاح فقط
+  للموارد الهدف.</div>
+<div class="Bd-indent"> 5. نوع المورد "tar" يغلف ملفات أرشيف .tar
+  محلية. عند حدوث تحديث، يتم فك ضغط الملفات وفك حزمها في دليل هدف أو
+  subvolume btrfs. السلوك الخاص بـ "tar" و "url-tar" متشابه بشكل عام، ولكن
+  الأخير يقوم بالتنزيل من مصادر بعيدة، ويجري فحوصات التكامل والمصادقة بينما
+  الأول لا يفعل ذلك. نوع المورد "tar" متاح فقط للموارد المصدر.</div>
+<div class="Bd-indent"> 6. نوع المورد "directory" يغلف أشجار الدلائل
+  المحلية. هذا النوع متاح لكل من موارد المصدر والهدف. إذا تم إجراء تحديث على
+  مورد مصدر من هذا النوع، يتم إجراء نسخ متكرر للدليل.</div>
+<div class="Bd-indent"> 7. نوع المورد "subvolume" مطابق لـ "directory"،
+  باستثناء عند استخدامه كهدف، حيث يتم وضع شجرة الملفات في subvolume btrfs بدلاً
+  من دليل عادي، إذا كان نظام الملفات الأساسي يدعم ذلك (أي أنه btrfs).</div>
+<p class="Pp">كما هو مشار إليه بالفعل، يتم دعم مجموعة فرعية فقط من تركيبات
+    أنواع موارد المصدر والهدف:</p>
+<p class="Pp"><b>الجدول 1. أنواع الموارد</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td><b>المعرف</b></td>
+    <td><b>الوصف</b></td>
+    <td><b>قابل للاستخدام كمصدر</b></td>
+    <td><b>عند استخدامه كمصدر: أهداف متوافقة</b></td>
+    <td><b>عند استخدامه كمصدر: التكامل + المصادقة</b></td>
+    <td><b>عند استخدامه كمصدر: فك الضغط</b></td>
+    <td><b>قابل للاستخدام كهدف</b></td>
+    <td><b>عند استخدامه كهدف: مصادر متوافقة</b></td>
+  </tr>
+  <tr>
+    <td><b>url-file</b></td>
+    <td>ملفات HTTP/HTTPS</td>
+    <td>نعم</td>
+    <td><b>regular-file</b>، <b>partition</b></td>
+    <td>نعم</td>
+    <td>نعم</td>
+    <td>لا</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td><b>url-tar</b></td>
+    <td>أرشيفات .tar HTTP/HTTPS</td>
+    <td>نعم</td>
+    <td><b>directory</b>، <b>subvolume</b></td>
+    <td>نعم</td>
+    <td>نعم</td>
+    <td>لا</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td><b>regular-file</b></td>
+    <td>ملفات محلية</td>
+    <td>نعم</td>
+    <td><b>regular-file</b>، <b>partition</b></td>
+    <td>لا</td>
+    <td>نعم</td>
+    <td>نعم</td>
+    <td><b>url-file</b>، <b>regular-file</b></td>
+  </tr>
+  <tr>
+    <td><b>partition</b></td>
+    <td>أقسام GPT محلية</td>
+    <td>لا</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>نعم</td>
+    <td><b>url-file</b>، <b>regular-file</b></td>
+  </tr>
+  <tr>
+    <td><b>tar</b></td>
+    <td>أرشيفات .tar محلية</td>
+    <td>نعم</td>
+    <td><b>directory</b>، <b>subvolume</b></td>
+    <td>لا</td>
+    <td>نعم</td>
+    <td>لا</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td><b>directory</b></td>
+    <td>دلائل محلية</td>
+    <td>نعم</td>
+    <td><b>directory</b>، <b>subvolume</b></td>
+    <td>لا</td>
+    <td>لا</td>
+    <td>نعم</td>
+    <td><b>url-tar</b>، <b>tar</b>، <b>directory</b>، <b>subvolume</b></td>
+  </tr>
+  <tr>
+    <td><b>subvolume</b></td>
+    <td>subvolumes btrfs محلية</td>
+    <td>نعم</td>
+    <td><b>directory</b>، <b>subvolume</b></td>
+    <td>لا</td>
+    <td>لا</td>
+    <td>نعم</td>
+    <td><b>url-tar</b>، <b>tar</b>، <b>directory</b>، <b>subvolume</b></td>
+  </tr>
+</table>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MATCH_PATTERNS'><a class='permalink' href='#MATCH_PATTERNS'>أنماط المطابقة</a></h1>
+<p class="Pp">عادةً ما توجد موارد المصدر والهدف في إصدارات متعددة بشكل متزامن.
+    تتم عملية التحديث عندما يكون أحدث إصدارات المصدر أحدث من أحدث إصدارات
+    الهدف. لتحديد أحدث إصدار للموارد، يتم استخدام قائمة الدلائل، أو قائمة
+    الأقسام، أو قائمة البيانات الوصفية، ويتم تحديد مجموعة فرعية من الإدخالات
+    المؤهلة من ذلك، ويتم استخراج معرف الإصدار من أسماء الملفات أو تسميات
+    الأقسام لهذه الإدخالات المحددة. يتم تحديد المجموعة الفرعية واستخراج معرف
+    الإصدار (بالإضافة إلى بيانات وصفية أخرى محتملة) عبر أنماط المطابقة، التي تم
+    تكوينها في
+  <br/>
+  <i>MatchPattern=</i> في أقسام [Source] و [Target]. هذه الأنماط عبارة عن
+    سلاسل تصف كيفية تسمية الملفات أو الأقسام، مع أحرف بدل مسماة لمجالات
+    محددة مثل معرف الإصدار. أحرف البدل التالية معرفة:</p>
+<p class="Pp"><b>الجدول 2. أحرف البدل لأنماط المطابقة</b></p>
+<table class="tbl" border="1" style="border-style: solid;">
+  <tr>
+    <td><b>حرف بدل</b></td>
+    <td><b>الوصف</b></td>
+    <td><b>التنسيق</b></td>
+    <td><b>ملاحظات</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@v&quot;</td>
+    <td>معرف الإصدار</td>
+    <td>سلسلة إصدار صالحة</td>
+    <td>إلزامي</td>
+  </tr>
+  <tr>
+    <td>&quot;@u&quot;</td>
+    <td>معرف UUID لقسم GPT</td>
+    <td>سلسلة UUID صالحة 128 بت</td>
+    <td>ذات صلة فقط إذا تم اختيار نوع المورد الهدف كـ <b>partition</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@f&quot;</td>
+    <td>أعلام قسم GPT</td>
+    <td>عدد صحيح سداسي عشري منسق</td>
+    <td>ذات صلة فقط إذا تم اختيار نوع المورد الهدف كـ <b>partition</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@a&quot;</td>
+    <td>علم قسم GPT NoAuto</td>
+    <td>إما "0" أو "1"</td>
+    <td>يتحكم في بت NoAuto لأعلام قسم GPT، وفقًا لـ <b>Discoverable
+      Partitions Specification</b>[1]؛ ذو صلة فقط إذا تم اختيار نوع المورد
+      الهدف كـ <b>partition</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@g&quot;</td>
+    <td>علم قسم GPT GrowFileSystem</td>
+    <td>إما "0" أو "1"</td>
+    <td>يتحكم في بت GrowFileSystem لأعلام قسم GPT، وفقًا لـ <b>Discoverable
+      Partitions Specification</b>[1]؛ ذو صلة فقط إذا تم اختيار نوع المورد
+      الهدف كـ <b>partition</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@r&quot;</td>
+    <td>علم القراءة فقط</td>
+    <td>إما "0" أو "1"</td>
+    <td>يتحكم في بت ReadOnly لأعلام قسم GPT، وفقًا لـ <b>Discoverable
+      Partitions Specification</b>[1] وأعلام القراءة فقط الأخرى في الإخراج،
+      انظر <i>ReadOnly=</i> أدناه</td>
+  </tr>
+  <tr>
+    <td>&quot;@t&quot;</td>
+    <td>وقت تعديل الملف</td>
+    <td>عدد صحيح عشري منسق، ميكرو ثانية منذ حقبة يونكس 1 يناير 1970</td>
+    <td>ذات صلة فقط إذا تم اختيار نوع المورد الهدف كـ <b>regular-file</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@m&quot;</td>
+    <td>وضع وصول الملف</td>
+    <td>عدد صحيح ثماني منسق، بأسلوب يونكس</td>
+    <td>ذات صلة فقط إذا تم اختيار نوع المورد الهدف كـ <b>regular-file</b></td>
+  </tr>
+  <tr>
+    <td>&quot;@s&quot;</td>
+    <td>حجم الملف بعد فك الضغط</td>
+    <td>عدد صحيح عشري منسق</td>
+    <td>مفيد لقياس التقدم ولتحسين منطق تخصيص القسم</td>
+  </tr>
+  <tr>
+    <td>&quot;@d&quot;</td>
+    <td>المحاولات التي تم إجراؤها</td>
+    <td>عدد صحيح عشري منسق</td>
+    <td>مفيد عند العمل مع ملفات صور النواة، وفقًا لـ <b>Automatic Boot
+      Assessment</b>[3]</td>
+  </tr>
+  <tr>
+    <td>&quot;@l&quot;</td>
+    <td>المحاولات المتبقية</td>
+    <td>عدد صحيح عشري منسق</td>
+    <td>مفيد عند العمل مع ملفات صور النواة، وفقًا لـ <b>Automatic Boot
+      Assessment</b>[3]</td>
+  </tr>
+  <tr>
+    <td>&quot;@h&quot;</td>
+    <td>تجزئة SHA256 للملف المضغوط</td>
+    <td>64 حرفًا سداسي عشري</td>
+    <td>تجزئة SHA256 للملف المضغوط؛ غير مفيدة لـ <b>url-file</b> أو <b>url-tar</b>
+      حيث يتم تضمين تجزئة SHA256 بالفعل في ملف البيانات الوصفية على أي حال</td>
+  </tr>
+</table>
+<p class="Pp">من بين أحرف البدل هذه، فقط
+  <br/>
+  &quot;@v&quot; يجب أن يكون موجودًا في نمط صالح، وجميع أحرف البدل الأخرى اختيارية.
+    يمكن استخدام كل حرف بدل مرة واحدة على الأكثر في كل نمط. نمط بدل نموذجي يطابق
+    صورة مصدر نظام الملفات يمكن أن يكون
+    &quot;MatchPattern=foobar_@v.raw.xz&quot;، أي ملف يبدأ اسمه بـ &quot;foobar_&quot;،
+    يتبعه معرف إصدار وينتهي بـ &quot;.raw.xz&quot;.</p>
+<p class="Pp">لا تخلط بين بادئة حرف البدل &quot;@&quot; لمطابقة الأنماط وبين
+    بادئة توسيع المحدد &quot;%&quot;. الأولى تغلف جزءًا متغيرًا من سلسلة نمط
+    المطابقة، والأخيرة عبارة عن اختصارات بسيطة يتم توسيعها أثناء تحليل الملفات
+    المُسقطة. للحصول على تفاصيل حول المحددات، انظر أدناه.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='[TRANSFER]_SECTION_OPTIONS'><a class='permalink' href='#%5BTRANSFER%5D_SECTION_OPTIONS'>خيارات قسم [TRANSFER]</a></h1>
+<p class="Pp">يحدد هذا القسم خصائص عامة لهذا النقل.</p>
+<p class="Pp"><i>MinVersion=</i></p>
+<div class="Bd-indent">يحدد الحد الأدنى للإصدار المطلوب لهذا النقل ليحدث.
+    إذا كانت أنماط المصدر أو الهدف في تعريف النقل هذا تطابق ملفات أقدم من
+    هذا الإصدار، فسيتم اعتبارها قديمة، ولن يتم النظر فيها أبدًا لعملية
+    التحديث.
+<p class="Pp">تمت الإضافة في الإصدار 251.</p>
+</div>
+<p class="Pp"><i>ProtectVersion=</i></p>
+<div class="Bd-indent">يأخذ سلسلة إصدار واحد أو أكثر لتمييزها على أنها
+    &quot;محمية&quot;. لا يتم إزالة الإصدارات المحمية أبدًا أثناء توفير مساحة
+    للإصدارات الجديدة والمحدثة. هذا مفيد لضمان عدم استبدال/الكتابة فوق إصدار
+    نظام التشغيل الذي يتم تشغيله حاليًا (أو الموارد الإضافية المرتبطة به) أثناء
+    التحديثات، لتجنب تلف نظام الملفات أثناء التشغيل.
+<p class="Pp">مثل العديد من الإعدادات في ملفات التكوين هذه، يدعم هذا الإعداد
+    توسيع المحددات. من المفيد بشكل خاص تعيين هذا الإعداد إلى أحد محددات
+    &quot;%A&quot; أو &quot;%B&quot; أو &quot;%w&quot; للإشارة تلقائيًا إلى إصدار
+    نظام التشغيل الحالي للنظام قيد التشغيل. انظر أدناه للحصول على تفاصيل حول
+    المحددات المدعومة.</p>
+<p class="Pp">تمت الإضافة في الإصدار 251.</p>
+</div>
+<p class="Pp"><i>Verify=</i></p>
+<div class="Bd-indent">يأخذ قيمة منطقية، والقيمة الافتراضية هي نعم. يتحكم
+    في ما إذا كان سيتم التحقق تشفيريًا من الموارد التي تم تنزيلها (على وجه
+    التحديد: التحقق من صحة توقيعات GPG لملفات SHA256SUMS التي تم تنزيلها، عبر
+    ملفات التوقيع المنفصلة SHA256SUMS.gpg بالاقتران مع مفتاح النظام
+    /usr/lib/systemd/import-pubring.pgp أو /etc/systemd/import-pubring.pgp).
+<p class="Pp">هذا الخيار ضروري لتوفير ضمانات التكامل للموارد التي تم
+    تنزيلها، وبالتالي يجب تركه ممكّنًا، خارج بيئات الاختبار.</p>
+<p class="Pp">لاحظ أن ملفات الحمولة التي تم تنزيلها يتم التحقق منها بشكل غير
+    مشروط مقابل تجزئات SHA256 المدرجة في البيانات الوصفية. يتحكم هذا الخيار فقط
+    في ما إذا كانت توقيعات هذه البيانات الوصفية يتم التحقق منها.</p>
+<p class="Pp">هذا الخيار له تأثير فقط إذا تم تحديد نوع المورد المصدر كـ
+    <b>url-file</b> أو <b>url-tar</b>، حيث أن فحص التكامل والمصادقة متاح فقط
+    للنقل من المصادر البعيدة.</p>
+<p class="Pp">تمت الإضافة في الإصدار 251.</p>
+</div>
+<p class="Pp"><i>ChangeLog=</i></p>
+<div class="Bd-indent">يأخذ اختياريًا عنوان URL يمكن تقديمه بشريًا لموقع ويب
+    يحتوي على سجل تغييرات للمورد الذي يتم تحديثه.
+<p class="Pp"><!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>systemd.directives(7)</title>
+        <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        
+        <main>
+            <article>
+                <section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">sysupdate.d, systemd-sysupdate — Configuration directory for systemd-sysupdate</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp">
+    <pre>/etc/systemd/sysupdate.d/*.conf
+/usr/lib/systemd/sysupdate.d/*.conf
+/run/systemd/sysupdate.d/*.conf</pre>
+</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp"><code class="Nm">systemd-sysupdate</code> is a service that may be used to
+    download and install system updates. The behaviour of the service is configured
+    via these configuration files.</p>
+<p class="Pp">The configuration files are named similarly to <code class="Nm">systemd.directives</code>(7)
+    files, and are parsed in the same order. They contain settings that control the
+    download and installation process.</p>
+<p class="Pp">The primary purpose of these files is to define update resources, their
+    locations, and how they should be deployed. This includes defining how to obtain
+    the updates (e.g., via URL or local path) and where to install them on the
+    system.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BASIC_MODE_OF_OPERATION"><a class="permalink" href="#BASIC_MODE_OF_OPERATION">BASIC MODE OF OPERATION</a></h1>
+<p class="Pp">The service operates by reading a set of configuration files that define
+    various update resources. Each resource is typically described by a set of
+    directives within a section, specifying its source, target, and matching
+    patterns.</p>
+<p class="Pp">The service can be configured to handle different types of updates, such
+    as kernel images, OS components, or container images. The configuration allows
+    for specifying versioning and updating mechanisms, ensuring that the system
+    remains up-to-date with the desired software components.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="RESOURCE_TYPES"><a class="permalink" href="#RESOURCE_TYPES">RESOURCE TYPES</a></h1>
+<p class="Pp">The configuration files define various resource types that can be updated.
+    These include, but are not limited to:</p>
+<dl class="Bl-tag">
+  <dt><code class="Li">url-tar</code></dt>
+  <dd>Downloads a compressed tar archive from a URL.</dd>
+  <dt><code class="Li">directory</code></dt>
+  <dd>Uses a local directory as the source.</dd>
+  <dt><code class="Li">subvolume</code></dt>
+  <dd>Installs the resource as a subvolume (common in Btrfs filesystems).</dd>
+  <dt><code class="Li">file</code></dt>
+  <dd>Installs the resource as a regular file.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="MATCH_PATTERNS"><a class="permalink" href="#MATCH_PATTERNS">MATCH PATTERNS</a></h1>
+<p class="Pp">Match patterns are used to associate specific files or directories with
+    particular configurations. These patterns can include version specifiers that
+    allow for dynamic matching of the latest available update.</p>
+<p class="Pp">For example, a pattern like <code class="Li">myContainer_@v</code> could match
+    files like <code class="Li">myContainer_1.0</code>, <code class="Li">myContainer_1.1</code>, etc.,
+    where <code class="Li">@v</code> is a placeholder for the version number.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="[TRANSFER]_SECTION_OPTIONS"><a class="permalink" href="#[TRANSFER]_SECTION_OPTIONS">[TRANSFER] SECTION OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt><code class="Li">Type=</code></dt>
+  <dd>Specifies the type of the resource to be transferred (e.g., <code class="Li">url-tar</code>,
+      <code class="Li">directory</code>).</dd>
+  <dt><code class="Li">Path=</code></dt>
+  <dd>Specifies the path to the resource. This can be a URL or a local file system
+      path.</dd>
+  <dt><code class="Li">MatchPattern=</code></dt>
+  <dd>A pattern used to identify the specific resource version to download or
+      use.</dd>
+  <dt><code class="Li">CurrentSymlink=</code></dt>
+  <dd>(Optional) Specifies a symbolic link that should always point to the
+      currently active version of the resource.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="[SOURCE]_SECTION_OPTIONS"><a class="permalink" href="#[SOURCE]_SECTION_OPTIONS">[SOURCE] SECTION OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt><code class="Li">Type=</code></dt>
+  <dd>The type of the source, for example <code class="Li">url-tar</code>.</dd>
+  <dt><code class="Li">Path=</code></dt>
+  <dd>The URL from which to download the resource.</dd>
+  <dt><code class="Li">MatchPattern=</code></dt>
+  <dd>A glob pattern used to match the desired file(s) at the specified path.
+      Version specifiers like <code class="Li">@v</code> can be used here.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="[TARGET]_SECTION_OPTIONS"><a class="permalink" href="#[TARGET]_SECTION_OPTIONS">[TARGET] SECTION OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt><code class="Li">Type=</code></dt>
+  <dd>The type of the target location, for example <code class="Li">subvolume</code> or
+      <code class="Li">directory</code>.</dd>
+  <dt><code class="Li">Path=</code></dt>
+  <dd>The destination path on the local file system where the resource should be
+      installed.</dd>
+  <dt><code class="Li">MatchPattern=</code></dt>
+  <dd>A pattern that identifies the target directory or file, often used in
+      conjunction with version specifiers.</dd>
+  <dt><code class="Li">CurrentSymlink=</code></dt>
+  <dd>The name of a symbolic link that will be created or updated to point to the
+      latest installed version.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SPECIFIERS"><a class="permalink" href="#SPECIFIERS">SPECIFIERS</a></h1>
+<p class="Pp">Version specifiers, such as <code class="Li">@v</code>, are used in the
+    <code class="Li">MatchPattern</code> directives to dynamically select the correct
+    version of a resource. <code class="Nm">systemd-sysupdate</code> resolves these
+    specifiers to determine which version to download and install.</p>
+<p class="Pp">&#x2022;foobarOS_7.efi &#x2013; The unified kernel image
+    for version 7</div>
+<p class="Pp">For each new OS release a new set of the latter three files would
+    be added, each time with an updated version. The SHA256SUMS manifest should
+    then be updated accordingly, listing all files for all versions that shall
+    be offered for download.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp"><b>Example&#x00A0;1.&#x00A0;Unified Kernel Image</b></p>
+<div class="Bd-indent">
+<pre>[Transfer]
+Type=directory
+Path=/boot/efi/EFI/Linux/
+MatchPattern=foobarOS_@v.efi
+CurrentSymlink=foobarOS.efi
+</pre>
+</div>
+<p class="Pp">This configuration specifies that kernel images are stored in
+    <code class="Li">/boot/efi/EFI/Linux/</code>. The <code class="Li">MatchPattern</code>
+    <code class="Li">foobarOS_@v.efi</code> indicates that files follow the naming
+    convention <code class="Li">foobarOS_&lt;version&gt;.efi</code>. The
+    <code class="Li">CurrentSymlink=foobarOS.efi</code> directive ensures that a
+    symbolic link named <code class="Li">foobarOS.efi</code> always points to the
+    most recently installed kernel image file.</p>
+<p class="Pp"><b>Example&#x00A0;2.&#x00A0;Updates for Plain Directory Container
+    Image</b></p>
+<div class="Bd-indent">
+<pre>[Source]
+Type=url-tar
+Path=https://download.example.com/
+MatchPattern=myContainer_@v.tar.gz
+[Target]
+Type=subvolume
+Path=/var/lib/machines
+MatchPattern=myContainer_@v
+CurrentSymlink=myContainer</pre>
+</div>
+<p class="Pp">On updates this downloads
+    &quot;<a href="https://download.example.com/myContainer_@v.tar.gz">https://download.example.com/myContainer_@v.tar.gz</a>&quot; and
+    decompresses/unpacks it to /var/lib/machines/myContainer_@v. After each
+    update a symlink /var/lib/machines/myContainer is created/updated always
+    pointing to the most recent update.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+<p class="Pp"><a href="/man/systemd.1.en">systemd(1)</a>, <a href="/man/systemd-sysupdate.8.en">systemd-sysupdate(8)</a>,
+    <a href="/man/systemd-repart.8.en">systemd-repart(8)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>Discoverable Partitions Specification</dd>
+</dl>
+<div class="Bd-indent"><a href="https://uapi-group.org/specifications/specs/discoverable_partitions_specification">https://uapi-group.org/specifications/specs/discoverable_partitions_specification</a></div>
+<dl class="Bl-tag">
+  <dt> 2.</dt>
+  <dd>Boot Loader Specification</dd>
+</dl>
+<div class="Bd-indent"><a href="https://uapi-group.org/specifications/specs/boot_loader_specification">https://uapi-group.org/specifications/specs/boot_loader_specification</a></div>
+<dl class="Bl-tag">
+  <dt> 3.</dt>
+  <dd>Automatic Boot Assessment</dd>
+</dl>
+<div class="Bd-indent"><a href="https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT">https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT</a></div>
+<dl class="Bl-tag">
+  <dt> 4.</dt>
+  <dd>AppStream catalog</dd>
+</dl>
+<div class="Bd-indent"><a href="https://www.freedesktop.org/software/appstream/docs/chap-CatalogData.html">https://www.freedesktop.org/software/appstream/docs/chap-CatalogData.html</a></div>
+<dl class="Bl-tag">
+  <dt> 5.</dt>
+  <dd>special metadata</dd>
+</dl>
+<div class="Bd-indent"><a href="https://systemd.io/APPSTREAM_BUNDLE">https://systemd.io/APPSTREAM_BUNDLE</a></div>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os">systemd 258.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/systemd/">core/systemd</a></dd>
+        <dt>Version:</dt>
+        <dd>258.2-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.github.com/systemd/systemd">https://www.github.com/systemd/systemd</a></dd>
+        <dt>Licenses:</dt>
+        <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/systemd/">/listing/core/systemd/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#BASIC_MODE_OF_OPERATION">BASIC MODE OF OPERATION</a></li>
+        
+            <li><a href="#RESOURCE_TYPES">RESOURCE TYPES</a></li>
+        
+            <li><a href="#MATCH_PATTERNS">MATCH PATTERNS</a></li>
+        
+            <li><a href="#[TRANSFER]_SECTION_OPTIONS">[TRANSFER] SECTION OPTIONS</a></li>
+        
+            <li><a href="#[SOURCE]_SECTION_OPTIONS">[SOURCE] SECTION OPTIONS</a></li>
+        
+            <li><a href="#[TARGET]_SECTION_OPTIONS">[TARGET] SECTION OPTIONS</a></li>
+        
+            <li><a href="#SPECIFIERS">SPECIFIERS</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#NOTES">NOTES</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>In other languages:</p>
+    <ul>
+    
+        <li><a href="/man/sysupdate.d.5.de">de</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/sysupdate.d.5.en.txt">txt</a>, 
+        
+            <a href="/man/sysupdate.d.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

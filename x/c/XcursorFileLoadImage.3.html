@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>XcursorFileLoadImage(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">XcursorFileLoadImage(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">XCURSOR(3)</td>
+    <td class="head-vol">X Version 11</td>
+    <td class="head-rtitle">XCURSOR(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">Xcursor - Cursor management library</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre><b>#include &lt;X11/Xcursor/Xcursor.h&gt;</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp"><b>Xcursor</b> is a simple library designed to help locate and
+    load cursors. Cursors can be loaded from files or memory. A library of
+    common cursors exists which map to the standard X cursor names. Cursors can
+    exist in several sizes and the library automatically picks the best
+  size.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONAL_OVERVIEW'><a class='permalink' href='#FUNCTIONAL_OVERVIEW'>FUNCTIONAL   OVERVIEW</a></h1>
+<p class="Pp">Xcursor is built in a couple of layers; at the bottom layer is
+    code which can load cursor images from files. Above that is a layer which
+    locates cursor files based on the library path and theme. At the top is a
+    layer which builds cursors either out of an image loaded from a file or one
+    of the standard X cursors. When using images loaded from files, Xcursor
+    prefers to use the Render extension CreateCursor request if supported by the
+    X server. Where not supported, Xcursor maps the cursor image to a standard X
+    cursor and uses the core CreateCursor request.</p>
+<section class="Ss">
+<h2 class="Ss" id='CURSOR_FILES'><a class='permalink' href='#CURSOR_FILES'>CURSOR   FILES</a></h2>
+<p class="Pp">Xcursor defines a new format for cursors on disk. Each file holds
+    one or more cursor images. Each cursor image is tagged with a nominal size
+    so that the best size can be selected automatically. Multiple cursors of the
+    same nominal size can be loaded together; applications are expected to use
+    them as an animated sequence.</p>
+<p class="Pp">Cursor files are stored as a header containing a table of contents
+    followed by a sequence of chunks. The table of contents indicates the type,
+    subtype and position in the file of each chunk. The file header looks
+  like:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre><i>magic</i>:	CARD32 &quot;Xcur&quot; (0x58, 0x63, 0x75, 0x72)
+<i>header</i>:	CARD32 bytes in this header
+<i>version</i>:	CARD32 file version number
+<i>ntoc</i>:	CARD32 number of toc entries
+<i>toc</i>:	LISTofTOC table of contents
+<br/></pre>
+<p class="Pp">Each table of contents entry looks like:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre><i>type</i>:	CARD32 entry type
+<i>subtype</i>:	CARD32 type-specific label - size for images
+<i>position</i>:	CARD32 absolute byte position of table in file
+<br/></pre>
+<p class="Pp">Each chunk in the file has set of common header fields followed by
+    additional type-specific fields:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre><i>header</i>:	CARD32 bytes in chunk header (including type-specific fields)
+<i>type</i>:	CARD32 must match type in TOC for this chunk
+<i>subtype</i>:	CARD32 must match subtype in TOC for this chunk
+<i>version</i>:	CARD32 version number for this chunk type
+<br/></pre>
+<p class="Pp">There are currently two chunk types defined for cursor files;
+    comments and images. Comments look like:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre><i>header</i>:	20 Comment headers are 20 bytes
+<i>type</i>:	0xfffe0001 Comment type is 0xfffe0001
+<i>subtype</i>:	{ 1 (COPYRIGHT), 2 (LICENSE), 3 (OTHER) }
+<i>version</i>:	1
+<i>length</i>:	CARD32 byte length of UTF-8 string
+<i>string</i>:	LISTofCARD8 UTF-8 string
+<br/></pre>
+<p class="Pp">Images look like:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre><i>header</i>:	36 Image headers are 36 bytes
+<i>type</i>:	0xfffd0002 Image type is 0xfffd0002
+<i>subtype</i>:	CARD32 Image subtype is the nominal size
+<i>version</i>:	1
+<i>width</i>:	CARD32 Must be less than or equal to 0x7fff
+<i>height</i>:	CARD32 Must be less than or equal to 0x7fff
+<i>xhot</i>:	CARD32 Must be less than or equal to width
+<i>yhot</i>:	CARD32 Must be less than or equal to height
+<i>delay</i>:	CARD32 Delay between animation frames in milliseconds
+<i>pixels</i>:	LISTofCARD32 Packed ARGB format pixels
+<br/></pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='THEMES'><a class='permalink' href='#THEMES'>THEMES</a></h2>
+<p class="Pp">Xcursor (mostly) follows the freedesktop.org spec for theming
+    icons. The default search path it uses is</p>
+<div class="Bd-indent">~/.local/share/icons, ~/.icons, /usr/share/icons,
+  /usr/share/pixmaps</div>
+<p class="Pp">Within each of these directories, it searches for a directory
+    using the theme name:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>Within the theme directory, it looks for cursor files in the
+      &#x201C;cursors&#x201D; subdirectory.</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>Xcursor looks for a specific file, which must be one of the cursor
+      <i>shape</i> names, e.g., as used in XcursorLibraryLoadImage or
+      XcursorLibraryShape.</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>If it finds no matching cursor file in the &#x201C;cursors&#x201D;
+      subdirectory, Xcursor next looks for an &#x201C;index.theme&#x201D; file
+      in each theme directory to look for inherited themes. Those are lines in
+      this format:
+      </dd>
+</dl>
+<div class="Bd-indent">Inherits = <i>theme-name</i>
+<p class="Pp">Xcursor uses the first inherited <i>theme-name</i>, ignoring
+    others which may exist in a given &#x201C;index.theme&#x201D; file. If it
+    finds an inherited theme, Xcursor searches along the path to use that as
+    well. Xcursor ignores other <i>keys</i> in the &#x201C;index.theme&#x201D;
+    file, including &#x201C;Name&#x201D; (i.e., the name which a graphical
+    application may use as the <i>presentation name</i>).</p>
+<p class="Pp">More than one <i>theme-name</i> may be listed on the
+    <b>Inherits=</b> line. The freedesktop.org spec states that list items are
+    separated by commas. Xcursor also accepts semicolon, but translates both to
+    colon when searching the path. Xcursor expects only one <b>Inherits=</b>
+    line; the freedesktop.org spec is unclear whether multiple keys are
+  allowed.</p>
+</div>
+<p class="Pp">If no theme is set, or if no cursor is found for the specified
+    theme anywhere along the path, Xcursor checks the &#x201C;default&#x201D;
+    theme.</p>
+<p class="Pp">When Xcursor finds a cursor file, it stops searching. It always
+    uses the first cursor file found while searching along the path.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DATATYPES'><a class='permalink' href='#DATATYPES'>DATATYPES</a></h1>
+<dl class="Bl-tag">
+  <dt id="XcursorImage"><a class="permalink" href="#XcursorImage"><b>XcursorImage</b></a></dt>
+  <dd>holds a single cursor image in memory. Each pixel in the cursor is a
+      32-bit value containing ARGB with A in the high byte.
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre><span class="Li">typedef struct _XcursorImage {</span>
+<span class="Li">    XcursorDim 	 size; 	/* nominal size for matching */</span>
+<span class="Li">    XcursorDim 	 width; 	/* actual width */</span>
+<span class="Li">    XcursorDim 	 height; 	/* actual height */</span>
+<span class="Li">    XcursorDim 	 xhot; 	/* hot spot x (must be inside image) */</span>
+<span class="Li">    XcursorDim 	 yhot; 	/* hot spot y (must be inside image) */</span>
+<span class="Li">    XcursorPixel 	*pixels; 	/* pointer to pixels */</span>
+<span class="Li">} XcursorImage;</span>
+</pre>
+  </dd>
+  <dt id="XcursorImages"><a class="permalink" href="#XcursorImages"><b>XcursorImages</b></a></dt>
+  <dd>holds multiple XcursorImage structures. They are all freed when the
+      XcursorImages is freed in XcursorImagesDestroy.
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre><span class="Li">typedef struct _XcursorImages {</span>
+<span class="Li">    int 	 nimage; 	/* number of images */</span>
+<span class="Li">    XcursorImage 	**images; 	/* array of XcursorImage pointers */</span>
+<span class="Li">} XcursorImages;</span>
+</pre>
+  </dd>
+  <dt id="XcursorCursors"><a class="permalink" href="#XcursorCursors"><b>XcursorCursors</b></a></dt>
+  <dd>Holds multiple Cursor objects. They are all freed when the XcursorCursors
+      is freed. These are reference counted so that multiple XcursorAnimate
+      structures can use the same XcursorCursors.
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre><span class="Li">typedef struct _XcursorCursors {</span>
+<span class="Li">    Display 	*dpy; 	/* Display holding cursors */</span>
+<span class="Li">    int 	 ref; 	/* reference count */</span>
+<span class="Li">    int 	 ncursor; 	/* number of cursors */</span>
+<span class="Li">    Cursor 	*cursors; 	/* array of cursors */</span>
+<span class="Li">} XcursorCursors;</span>
+</pre>
+  </dd>
+  <dt id="XcursorAnimate"><a class="permalink" href="#XcursorAnimate"><b>XcursorAnimate</b></a></dt>
+  <dd>References a set of cursors and a sequence within that set. Multiple
+      XcursorAnimate structures may reference the same XcursorCursors; each
+      holds a reference which is removed when the XcursorAnimate is freed.
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre><span class="Li">typedef struct _XcursorAnimate {</span>
+<span class="Li">    XcursorCursors 	*cursors; 	/* list of cursors to use */</span>
+<span class="Li">    int 	 sequence; 	/* which cursor is next */</span>
+<span class="Li">} XcursorAnimate;</span>
+</pre>
+  </dd>
+  <dt id="XcursorFile"><a class="permalink" href="#XcursorFile"><b>XcursorFile</b></a></dt>
+  <dd>Xcursor provides an abstract API for accessing the file data. Xcursor
+      provides a stdio implementation of this abstract API; applications are
+      free to create additional implementations. These functions parallel the
+      stdio fu
+</dd>
+</dl>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+nctions in return value and expected argument values; the read and
+      write functions flip the arguments around to match the POSIX versions.
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre><span class="Li">typedef struct _XcursorFile {</span>
+<span class="Li">    void *closure;</span>
+<span class="Li">    int (*read)  (XcursorFile *file, unsigned char *buf, int len);</span>
+<span class="Li">    int (*write) (XcursorFile *file, unsigned char *buf, int len);</span>
+<span class="Li">    int (*seek)  (XcursorFile *file, long offset, int whence);</span>
+<span class="Li">};</span>
+</pre>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الوظائف</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Object_Management'><a class='permalink' href='#Object_Management'>إدارة الكائنات</a></h2>
+<dl class="Bl-tag">
+  <dt>XcursorImage *XcursorImageCreate (</dt>
+  <dd>
+    <pre>int 	 <i>width</i>,
+int 	 <i>height</i>)
+
+</pre>
+  </dd>
+  <dt>void XcursorImageDestroy (</dt>
+  <dd>
+    <pre>	XcursorImage 	*<i>image</i>)
+</pre>
+    <p class="Pp">يخصص ويحرر الصور. عند التخصيص، يتم ترك نقطة الاتصال والبكسلات غير مهيأة. يتم تعيين الحجم إلى الحد الأقصى لـ <i>width</i> و <i>height</i>.</p>
+  </dd>
+  <dt>XcursorImages *XcursorImagesCreate (</dt>
+  <dd>
+    <pre>int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>void XcursorImagesDestroy (</dt>
+  <dd>
+    <pre>	XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">يخصص ويحرر مصفوفات لتخزين صور المؤشر المتعددة. عند التخصيص، يتم تعيين <i>nimage</i> إلى الصفر.</p>
+  </dd>
+  <dt>XcursorCursors *XcursorCursorsCreate (</dt>
+  <dd>
+    <pre>Display 	*<i>dpy</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>void XcursorCursorsDestroy (</dt>
+  <dd>
+    <pre>	XcursorCursors 	*<i>cursors</i>)
+</pre>
+    <p class="Pp">يخصص ويحرر مصفوفات لتخزين المؤشرات المتعددة. عند التخصيص، يتم تعيين <i>ncursor</i> إلى الصفر، و <i>ref</i> إلى واحد.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Reading_and_writing_images'><a class='permalink' href='#Reading_and_writing_images'>قراءة وكتابة الصور</a></h2>
+<dl class="Bl-tag">
+  <dt>XcursorImage *XcursorXcFileLoadImage (</dt>
+  <dd>
+    <pre>XcursorFile 	*<i>file</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorXcFileLoadImages (</dt>
+  <dd>
+    <pre>XcursorFile 	*<i>file</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorXcFileLoadAllImages (</dt>
+  <dd>
+    <pre>XcursorFile 	*<i>file</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorXcFileLoad (</dt>
+  <dd>
+    <pre>XcursorFile 	*<i>file</i>,
+XcursorComments 	**<i>commentsp</i>,
+XcursorImages 	**<i>imagesp</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorXcFileSave (</dt>
+  <dd>
+    <pre>	XcursorFile 	*<i>file</i>,
+	const XcursorComments 	*<i>comments</i>,
+	const XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">تقرأ وتكتب المؤشرات من مقبض XcursorFile. بعد القراءة، سيترك مؤشر الملف في مكان عشوائي في الملف.</p>
+  </dd>
+  <dt>XcursorImage *XcursorFileLoadImage (</dt>
+  <dd>
+    <pre>FILE 	*<i>file</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorFileLoadImages (</dt>
+  <dd>
+    <pre>FILE 	*<i>file</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorFileLoadAllImages (</dt>
+  <dd>
+    <pre>FILE 	*<i>file</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFileLoad (</dt>
+  <dd>
+    <pre>FILE 	*<i>file</i>,
+XcursorComments 	**<i>commentsp</i>,
+XcursorImages 	**<i>imagesp</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFileSaveImages (</dt>
+  <dd>
+    <pre>FILE 	*<i>file</i>,
+const XcursorImages 	*<i>images</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFileSave (</dt>
+  <dd>
+    <pre>	FILE 	*<i>file</i>,
+	const XcursorComments 	*<i>comments</i>,
+	const XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">تقرأ وتكتب المؤشرات من مقبض stdio FILE. الكتابة تقوم بمسح البيانات قبل العودة حتى يتم اكتشاف أي أخطاء.</p>
+  </dd>
+  <dt>XcursorImage *XcursorFilenameLoadImage (</dt>
+  <dd>
+    <pre>const char 	*<i>filename</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorFilenameLoadImages (</dt>
+  <dd>
+    <pre>const char 	*<i>filename</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorFilenameLoadAllImages (</dt>
+  <dd>
+    <pre>const char 	*<i>file</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFilenameLoad (</dt>
+  <dd>
+    <pre>const char 	*<i>file</i>,
+XcursorComments 	**<i>commentsp</i>,
+XcursorImages 	**<i>imagesp</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFilenameSaveImages (</dt>
+  <dd>
+    <pre>const char 	*<i>filename</i>,
+const XcursorImages 	*<i>images</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorBool XcursorFilenameSave (</dt>
+  <dd>
+    <pre>	const char 	*<i>file</i>,
+	const XcursorComments 	*<i>comments</i>,
+	const XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">توازي هذه الواجهات stdio FILE أعلاه، ولكنها تأخذ أسماء ملفات.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Reading_library_images'><a class='permalink' href='#Reading_library_images'>قراءة صور المكتبة</a></h2>
+<dl class="Bl-tag">
+  <dt>XcursorImage *XcursorLibraryLoadImage (</dt>
+  <dd>
+    <pre>const char 	*<i>name</i>,
+const char 	*<i>theme</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorLibraryLoadImages (</dt>
+  <dd>
+    <pre>	const char 	*<i>name</i>,
+	const char 	*<i>theme</i>,
+	int 	 <i>size</i>)
+</pre>
+    <p class="Pp">تبحث هذه الوظائف في مسار المكتبة، وتحمل أول ملف يتم العثور عليه بالحجم المطلوب <i>size</i>، باستخدام وظيفة خاصة (XcursorScanTheme) للعثور على السمة المناسبة:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إذا لم يكن <i>theme</i> NULL، فاستخدمه.</li>
+  <li>إذا كان <i>theme</i> NULL، أو إذا لم يكن هناك تطابق للسمة المطلوبة، فاستخدم "default" لاسم السمة.</li>
+  <li>إذا فشل كلا البحثين، تعيد هذه الوظائف NULL.</li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>تختلف الوظيفتان بأكثر من عدد الصور المحملة:</dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>XcursorLibraryLoadImage تستدعي XcursorFileLoadImage ولكن</li>
+  <li>XcursorLibraryLoadImages تستدعي XcursorFileLoadImages، وتقوم (عند النجاح) باستدعاء XcursorImagesSetName لربط <i>name</i> بالنتيجة.</li>
+</ul>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Library_attributes'><a class='permalink' href='#Library_attributes'>سمات المكتبة</a></h2>
+<dl class="Bl-tag">
+  <dt>const char * XcursorLibraryPath (void)</dt>
+  <dd>
+    <pre></pre>
+    <p class="Pp">تعيد مسار البحث في المكتبة:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إذا كان متغير البيئة <b>XCURSOR_PATH</b> معينًا، فأعد تلك القيمة.</li>
+  <li>بخلاف ذلك، أعد مسار البحث المدمج.</li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt>int XcursorLibraryShape (</dt>
+  <dd>
+    <pre>	const char 	*<i>library</i>)
+</pre>
+    <p class="Pp">ابحث في جدول Xcursor لأسماء خطوط المؤشر عن "اسم الشكل" المحدد (<i>library</i>):</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إذا تم العثور عليه، أعد الفهرس في هذا الجدول، مضروبًا في اثنين (لحساب قيم المصدر والقناع المستخدمة في خط مؤشر X).</li>
+  <li>إذا لم يتم العثور عليه، أعد -1.</li>
+</ul>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Cursor_APIs'><a class='permalink' href='#Cursor_APIs'>واجهات برمجة تطبيقات المؤشر</a></h2>
+<dl class="Bl-tag">
+  <dt>Cursor XcursorFilenameLoadCursor (</dt>
+  <dd>
+    <pre>Display 	*<i>dpy</i>,
+const char 	*<i>file</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorCursors *XcursorFilenameLoadCursors (</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	const char 	*<i>file</i>)
+</pre>
+    <p class="Pp">تقوم هذه الوظائف بتحميل المؤشرات من الملف المحدد.</p>
+  </dd>
+  <dt>Cursor XcursorLibraryLoadCursor (</dt>
+  <dd>
+    <pre>Display 	*<i>dpy</i>,
+const char 	*<i>name</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorCursors *XcursorLibraryLoadCursors (</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	const char 	*<i>name</i>)
+</pre>
+    <p class="Pp">تقوم هذه الوظائف بتحميل المؤشرات باستخدام اسم المكتبة <i>name</i> المحدد. تأتي السمة من الشاشة.</p>
+  </dd>
+  <dt>Cursor XcursorImageLoadCursor(</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	const XcursorImage 	*<i>image</i>)
+</pre>
+    <p class="Pp">تقوم هذه الوظيفة بإنشاء مؤشر، بالنظر إلى الصورة المراد عرضها. تستدعي XcursorSupportsARGB لتحديد نوع المؤشر الذي سيتم إنشاؤه:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يتم استخدام XRenderCreateCursor إذا كانت ARGB مدعومة على الشاشة، و</li>
+  <li>يتم استخدام XCreatePixmapCursor بخلاف ذلك.</li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt>Cursor XcursorImagesLoadCursor(</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	const XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">توفر هذه الوظيفة واجهة لإنشاء مؤشرات متحركة، إذا كانت مصفوفة <i>images</i> تحتوي على صور متعددة، وإذا كانت XcursorSupportsAnim تعيد true. بخلاف ذلك، تستدعي XcursorImageLoadCursor.</p>
+  </dd>
+  <dt>XcursorCursors *XcursorImagesLoadCursors(</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	const XcursorImages 	*<i>images</i>)
+</pre>
+    <p class="Pp">تستدعي هذه الوظيفة XcursorCursorsCreate لإنشاء مصفوفة من XcursorCursors، لتتوافق مع مصفوفة XcursorImages <i>images</i>، وتستخدم XcursorImageLoadCursor لتحميل بيانات المؤشر المقابلة.</p>
+  </dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>عادةً ما تعيد مؤشر المصفوفة الناتج. عند حدوث أي فشل، فإنها تتخلص من نتيجة XcursorCursorsDestroy، وتعيد NULL.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='X_Cursor_Name_APIs'><a class='permalink' href='#X_Cursor_Name_APIs'>واجهات برمجة تطبيقات أسماء مؤشرات X</a></h2>
+<dl class="Bl-tag">
+  <dt>XcursorImage *XcursorShapeLoadImage (</dt>
+  <dd>
+    <pre>unsigned int 	 <i>shape</i>,
+const char 	*<i>theme</i>,
+int 	 <i>size</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorImages *XcursorShapeLoadImages (</dt>
+  <dd>
+    <pre>	unsigned int 	 <i>shape</i>,
+	const char 	*<i>theme</i>,
+	int 	 <i>size</i>)
+</pre>
+    <p class="Pp">تقوم هذه الوظائف بتعيين <i>shape</i> إلى اسم مكتبة ثم تحميل الصور.</p>
+  </dd>
+  <dt>Cursor XcursorShapeLoadCursor (</dt>
+  <dd>
+    <pre>Display 	*<i>dpy</i>,
+unsigned int 	 <i>shape</i>)
+
+</pre>
+  </dd>
+  <dt>XcursorCursors *XcursorShapeLoadCursors (</dt>
+  <dd>
+    <pre>	Display 	*<i>dpy</i>,
+	unsigned int 	 <i>shape</i>)
+</pre>
+    <p class="Pp">تقوم هذه الوظائف بتعيين <i>shape</i> إلى اسم مكتبة ثم تحميل المؤشرات.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='X_Cursor_Comment_APIs'><a class='permalink' href='#X_Cursor_Comment_APIs'>واجهات برمجة تطبيقات تعليقات مؤشر X</a></h2>
+<dl class="Bl-tag">
+  <dt>XcursorComment *XcursorCommentCreate (</dt>
+  <dd>
+    <pre>	XcursorUInt 	 <i>comment_type</i>,
+	int 	 <i>length</i>)
+</pre>
+    <p class="Pp">تستخدم XcursorXcFileLoad هذه الوظيفة لتخصيص هيكل XcursorComment لتعليق واحد. يتم استخدام المعلمة <i>comment_type</i> كحقل <i>subtype</i>، على سبيل المثال، COPYRIGHT. <i>length</i> هو عدد البايتات التي سيتم تخصيصها لنص التعليق.</p>
+  </dd>
+  <dt>void XcursorCommentDestroy(</dt>
+  <dd>
+    <pre>	XcursorComment 	*<i>comment</i>)
+</pre>
+    <p class="Pp">يقوم بإلغاء تخصيص هيكل XcursorComment المحدد.</p>
+  </dd>
+  <dt>XcursorComments * XcursorCommentsCreate (</dt>
+  <dd>
+    <pre>	int 	 <i>size</i>)
+</pre>
+    <p class="Pp">تستخدم XcursorXcFileLoad هذه الوظيفة لتخصيص فهرس لمؤشرات هيكل XcursorComment. تخبر المعلمة <i>size</i> عدد</p>
+  </dd>
+</dl>

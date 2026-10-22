@@ -1,0 +1,436 @@
+<p class="Pp">بغض النظر عن اصطلاح نهاية السطر الذي يتم اختياره عند بناء PCRE، يمكن
+    تجاوز ذلك عند استدعاء دوال المكتبة. عند وقت البناء، من المعتاد استخدام اصطلاح
+    نظام التشغيل الخاص بك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WHAT_\R_MATCHES'><a class='permalink' href='#WHAT_\R_MATCHES'>ماذا يطابق \R</a></h1>
+<p class="Pp">افتراضيًا، تطابق التسلسل \R في نمط أي تسلسل انتقال أسطر يونيكود،
+    بغض النظر عن ما تم تحديده كتسلسل نهاية سطر. إذا قمت بتحديد</p>
+<p class="Pp">
+  <br/>
+   --enable-bsr-anycrlf</p>
+<p class="Pp">يتم تغيير الافتراضي بحيث يطابق \R فقط CR، LF، أو CRLF. مهما تم
+    اختياره عند بناء PCRE، يمكن تجاوزه عند استدعاء دوال المكتبة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='POSIX_MALLOC_USAGE'><a class='permalink' href='#POSIX_MALLOC_USAGE'>استخدام POSIX MALLOC</a></h1>
+<p class="Pp">عند استدعاء مكتبة 8 بت من خلال واجهة POSIX (انظر وثائق
+    <b>pcreposix</b>)، يلزم مساحة عمل إضافية للاحتفاظ بالمؤشرات إلى السلاسل الفرعية
+    الملتقطة، لأن PCRE تتطلب ثلاثة أعداد صحيحة لكل سلسلة فرعية، بينما توفر واجهة
+    POSIX عددين فقط. إذا كان عدد السلاسل الفرعية المتوقعة صغيرًا، فإن الدالة الغلاف
+    تستخدم مساحة على المكدس، لأن ذلك أسرع من استخدام <b>malloc()</b> لكل استدعاء.
+    الحد الافتراضي الذي لا يعود المكدس يستخدم بعده هو 10؛ يمكن تغييره بإضافة إعداد
+    مثل</p>
+<p class="Pp">
+  <br/>
+   --with-posix-malloc-threshold=20</p>
+<p class="Pp">إلى أمر <b>configure</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HANDLING_VERY_LARGE_PATTERNS'><a class='permalink' href='#HANDLING_VERY_LARGE_PATTERNS'>التعامل مع الأنماط الكبيرة جدًا</a></h1>
+<p class="Pp">داخل نمط مجمع، تُستخدم قيم الإزاحة للإشارة من جزء إلى آخر (على سبيل
+    المثال، من قوس فتح إلى حرف ميتا بديل). افتراضيًا، في مكتبتي 8 بت و 16 بت،
+    تُستخدم قيم ثنائية البايت لهذه الإزاحات، مما يؤدي إلى أقصى حجم للنمط المجمع
+    يبلغ حوالي 64 كيلوبايت. هذا يكفي للتعامل مع جميع الأنماط إلا الأكثر ضخامة.
+    ومع ذلك، يرغب بعض الأشخاص في معالجة أنماط ضخمة حقًا، لذا من الممكن تجميع PCRE
+    لاستخدام إزاحات ثلاثة بايت أو أربعة بايت بإضافة إعداد مثل</p>
+<p class="Pp">
+  <br/>
+   --with-link-size=3</p>
+<p class="Pp">إلى أمر <b>configure</b>. يجب أن تكون القيمة المعطاة 2، 3، أو 4.
+    بالنسبة لمكتبة 16 بت، يتم تقريب القيمة 3 إلى 4. في هذه المكتبات، يؤدي استخدام
+    إزاحات أطول إلى إبطاء عملية PCRE لأنه يتعين عليها تحميل بيانات إضافية عند
+    التعامل معها. بالنسبة لمكتبة 32 بت، القيمة دائمًا 4 ولا يمكن تجاوزها؛ يتم
+    تجاهل قيمة --with-link-size.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AVOIDING_EXCESSIVE_STACK_USAGE'><a class='permalink' href='#AVOIDING_EXCESSIVE_STACK_USAGE'>تجنب استخدام المكدس المفرط</a></h1>
+<p class="Pp">عند المطابقة باستخدام الدالة <b>pcre_exec()</b>، تقوم PCRE بتنفيذ
+    التراجع عن طريق استدعاءات متكررة لدالة داخلية تسمى <b>match()</b>. في البيئات
+    التي يكون فيها حجم المكدس محدودًا، يمكن أن يحد هذا بشكل كبير من عملية PCRE.
+    (بيئة يونكس لا تعاني عادة من هذه المشكلة، ولكن قد يكون من الضروري أحيانًا زيادة
+    حجم المكدس الأقصى. هناك مناقشة في وثائق <b>pcrestack</b>.) تم تنفيذ نهج
+    بديل للتكرار يستخدم الذاكرة من الكومة (heap) لتذكر البيانات، بدلاً من استخدام
+    استدعاءات الدوال المتكررة، للتغلب على مشكلة حجم المكدس المحدود. إذا كنت ترغب في
+    بناء إصدار من PCRE يعمل بهذه الطريقة، أضف</p>
+<p class="Pp">
+  <br/>
+   --disable-stack-for-recursion</p>
+<p class="Pp">إلى أمر <b>configure</b>. مع هذا التكوين، ستستخدم PCRE المتغيرات
+    <b>pcre_stack_malloc</b> و <b>pcre_stack_free</b> لاستدعاء دوال إدارة
+    الذاكرة. افتراضيًا، تشير هذه إلى <b>malloc()</b> و <b>free()</b>، ولكن
+    يمكنك استبدال المؤشرات بحيث تستخدم دوالك الخاصة بدلاً من ذلك.</p>
+<p class="Pp">يتم توفير دوال منفصلة بدلاً من استخدام
+    <b>pcre_malloc</b> و <b>pcre_free</b> لأن الاستخدام قابل للتنبؤ للغاية:
+    أحجام الكتل المطلوبة دائمًا ما تكون متماثلة، ويتم تحرير الكتل دائمًا بترتيب عكسي.
+    قد يتمكن البرنامج المستدعي من تنفيذ دوال محسّنة تعمل بشكل أفضل من
+    <b>malloc()</b> و <b>free()</b>. تعمل PCRE بشكل أبطأ بشكل ملحوظ عند بنائها
+    بهذه الطريقة. هذا الخيار يؤثر فقط على الدالة <b>pcre_exec()</b>؛ ولا
+    يتعلق بـ <b>pcre_dfa_exec()</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIMITING_PCRE_RESOURCE_USAGE'><a class='permalink' href='#LIMITING_PCRE_RESOURCE_USAGE'>تحديد استخدام موارد PCRE</a></h1>
+<p class="Pp">داخليًا، لدى PCRE دالة تسمى <b>match()</b>، والتي تستدعيها بشكل
+    متكرر (أحيانًا بشكل متكرر) عند مطابقة نمط باستخدام الدالة
+    <b>pcre_exec()</b>. عن طريق التحكم في الحد الأقصى لعدد المرات التي يمكن فيها
+    استدعاء هذه الدالة أثناء عملية مطابقة واحدة، يمكن وضع حد للموارد التي تستخدمها
+    عملية استدعاء واحدة لـ <b>pcre_exec()</b>. يمكن تغيير الحد في وقت التشغيل،
+    كما هو موضح في وثائق <b>pcreapi</b>. الافتراضي هو 10 ملايين، ولكن يمكن
+    تغييره بإضافة إعداد مثل</p>
+<p class="Pp">
+  <br/>
+   --with-match-limit=500000</p>
+<p class="Pp">إلى أمر <b>configure</b>. هذا الإعداد ليس له تأثير على دالة
+    المطابقة <b>pcre_dfa_exec()</b>.</p>
+<p class="Pp">في بعض البيئات، من المرغوب فيه الحد من عمق الاستدعاءات المتكررة
+    لـ <b>match()</b> بشكل أكثر صرامة من العدد الإجمالي للاستدعاءات، وذلك لتقييد
+    الحد الأقصى للمكدس (أو الكومة، إذا تم تحديد --disable-stack-for-recursion)
+    الذي يتم استخدامه. يوجد حد ثانٍ يتحكم في ذلك؛ افتراضيًا، يتم تعيينه إلى القيمة
+    المحددة لـ --with-match-limit، والتي لا تفرض قيودًا إضافية. ومع ذلك، يمكنك
+    تعيين حد أقل عن طريق إضافة، على سبيل المثال،</p>
+<p class="Pp">
+  <br/>
+   --with-match-limit-recursion=10000</p>
+<p class="Pp">إلى أمر <b>configure</b>. يمكن أيضًا تجاوز هذه القيمة في وقت
+    التشغيل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CREATING_CHARACTER_TABLES_AT_BUILD_TIME'><a class='permalink' href='#CREATING_CHARACTER_TABLES_AT_BUILD_TIME'>إنشاء جداول الأحرف في وقت البناء</a></h1>
+<p class="Pp">تستخدم PCRE جداول ثابتة لمعالجة الأحرف التي تكون قيم أكوادها أقل
+    من 256. افتراضيًا، يتم بناء PCRE بمجموعة من الجداول الموزعة في الملف
+    <i>pcre_chartables.c.dist</i>. هذه الجداول مخصصة لأكواد ASCII فقط. إذا قمت
+    بإضافة</p>
+<p class="Pp">
+  <br/>
+   --enable-rebuild-chartables</p>
+<p class="Pp">إلى أمر <b>configure</b>، فلن يتم استخدام الجداول الموزعة بعد
+    الآن. بدلاً من ذلك، يتم تجميع وتشغيل برنامج يسمى <b>dftables</b>. يقوم هذا
+    البرنامج بإخراج مصدر لمجموعة جديدة من الجداول، تم إنشاؤها في الإعداد الافتراضي
+    للغة (locale) لنظام تشغيل C الخاص بك. (هذه الطريقة لاستبدال الجداول لا تعمل
+    إذا كنت تقوم بالتجميع المتقاطع، لأن <b>dftables</b> يتم تشغيله على المضيف
+    المحلي. إذا كنت بحاجة إلى إنشاء جداول بديلة عند التجميع المتقاطع، فسيتعين عليك
+    القيام بذلك "يدويًا".)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USING_EBCDIC_CODE'><a class='permalink' href='#USING_EBCDIC_CODE'>استخدام شفرة EBCDIC</a></h1>
+<p class="Pp">تفترض PCRE افتراضيًا أنها ستعمل في بيئة يكون فيها شفرة الأحرف هي
+    ASCII (أو Unicode، وهي مجموعة شاملة لـ ASCII). هذا هو الحال بالنسبة لمعظم أنظمة
+    التشغيل الحاسوبية. ومع ذلك، يمكن تجميع PCRE للعمل في بيئة EBCDIC عن طريق إضافة</p>
+<p class="Pp">
+  <br/>
+   --enable-ebcdic</p>
+<p class="Pp">إلى أمر <b>configure</b>. يتضمن هذا الإعداد
+    --enable-rebuild-chartables. يجب استخدامه فقط إذا كنت تعلم أنك في بيئة
+    EBCDIC (على سبيل المثال، نظام تشغيل IBM الرئيسي). الخيار --enable-ebcdic غير
+    متوافق مع --enable-utf.</p>
+<p class="Pp">يُفترض أن الحرف EBCDIC الذي يتوافق مع ASCII LF له القيمة 0x15
+    افتراضيًا. ومع ذلك، في بعض بيئات EBCDIC، يتم استخدام 0x25. في مثل هذه البيئة،
+    يجب عليك استخدام</p>
+<p class="Pp">
+  <br/>
+   --enable-ebcdic-nl25</p>
+<p class="Pp">بالإضافة إلى --enable-ebcdic، أو بدلاً منه. الحرف EBCDIC لـ CR له
+    نفس قيمة ASCII، وهي 0x0d. أياً من 0x15 و 0x25 لم يتم اختياره كـ LF يتم جعله
+    يتوافق مع حرف NEL في يونيكود (وهو 0x85 في يونيكود).</p>
+<p class="Pp">تشير الخيارات التي تحدد سلوك انتقال الأسطر، مثل
+    --enable-newline-is-cr، والخيارات المكافئة في وقت التشغيل، إلى هذه القيم
+    للأحرف في بيئة EBCDIC.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PCREGREP_OPTIONS_FOR_COMPRESSED_FILE_SUPPORT'><a class='permalink' href='#PCREGREP_OPTIONS_FOR_COMPRESSED_FILE_SUPPORT'>خيارات PCREGREP لدعم الملفات المضغوطة</a></h1>
+<p class="Pp">افتراضيًا، يقرأ <b>pcregrep</b> جميع الملفات كنص عادي. يمكنك تجميعه
+    بحيث يتعرف على الملفات التي تنتهي أسماؤها بـ <b>.gz</b> أو <b>.bz2</b>، ويقرأها
+    باستخدام <b>libz</b> أو <b>libbz2</b>، على التوالي، عن طريق إضافة واحد أو
+    كلاهما من</p>
+<p class="Pp">
+  <br/>
+   --enable-pcregrep-libz
+  <br/>
+   --enable-pcregrep-libbz2</p>
+<p class="Pp">إلى أمر <b>configure</b>. تتطلب هذه الخيارات بطبيعة الحال تثبيت
+    المكتبات ذات الصلة على نظامك. سيفشل التكوين إذا لم تكن مثبتة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PCREGREP_BUFFER_SIZE'><a class='permalink' href='#PCREGREP_BUFFER_SIZE'>حجم مخزن PCREGREP المؤقت</a></h1>
+<p class="Pp">يستخدم <b>pcregrep</b> مخزنًا مؤقتًا داخليًا للاحتفاظ بـ
+    &quot;نافذة&quot; على الملف الذي يقوم بمسحه، وذلك لتكون قادرًا على إخراج أسطر
+    &quot;قبل&quot; و &quot;بعد&quot; عند العثور على تطابق. يتم التحكم في حجم المخزن
+    المؤقت بواسطة معلمة قيمتها الافتراضية 20 كيلوبايت. المخزن المؤقت نفسه هو ثلاثة
+    أضعاف هذا الحجم، ولكن بسبب الطريقة التي يستخدم بها للاحتفاظ بالأسطر
+    &quot;السابقة&quot;، فإن أطول سطر مضمون معالجته هو حجم المعلمة. يمكنك تغيير
+    قيمة المعلمة الافتراضية عن طريق إضافة، على سبيل المثال،</p>
+<p class="Pp">
+  <br/>
+   --with-pcregrep-bufsize=50K</p>
+<p class="Pp">إلى أمر <b>configure</b>. ومع ذلك، يمكن للمستدعي لـ
+    <b>pcregrep</b> تجاوز هذه القيمة عن طريق تحديد خيار في وقت التشغيل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PCRETEST_OPTION_FOR_LIBREADLINE_SUPPORT'><a class='permalink' href='#PCRETEST_OPTION_FOR_LIBREADLINE_SUPPORT'>خيار PCRETEST لدعم LIBREADLINE</a></h1>
+<p class="Pp">إذا قمت بإضافة</p>
+<p class="Pp">
+  <br/>
+   --enable-pcretest-libreadline</p>
+<p class="Pp">إلى أمر <b>configure</b>، فسيتم ربط <b>pcretest</b> بمكتبة
+    <b>libreadline</b>، وعندما يكون إدخاله من طرفية، فإنه يقرأه باستخدام الدالة
+    <b>readline()</b>. يوفر هذا مرافق لتعديل الأسطر والتاريخ. لاحظ أن
+    <b>libreadline</b> مرخصة بموجب GPL، لذا إذا قمت بتوزيع إصدار ثنائي من
+    <b>pcretest</b> تم ربطه بهذه الطريقة، فقد تكون هناك مشكلات في الترخيص.</p>
+<p class="Pp">يؤدي تعيين هذا الخيار إلى إضافة الخيار
+    -lreadline إلى بناء <b>pcretest</b>. في العديد من بيئات التشغيل التي تحتوي
+    على <b>libreadline</b> مثبتة على النظام، يكون هذا كافيًا. ومع ذلك، في بعض
+    البيئات (على سبيل المثال، إذا تم استخدام إصدار غير معدل من readline من التوزيع)،
+    قد تكون هناك حاجة إلى تكوين إضافي. يقول ملف INSTALL لـ
+    <b>libreadline</b> ما يلي:</p>
+<p class="Pp">
+  <br/>
+   &quot;يستخدم Readline وظائف termcap، ولكنه لا يربط مع مكتبة
+  <br/>
+   termcap أو curses نفسها، مما يسمح للتطبيقات التي تربط
+  <br/>
+   مع</p>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>pcrebuild(3) — PCRE 8.33 documentation</title>
+        <link rel="stylesheet" type="text/css" href="/css/main.css">
+        <link rel="stylesheet" type="text/css" href="/css/manual.css">
+        <link rel="stylesheet" type="text/css" href="/css/theme.css">
+        <link rel="stylesheet" type="text/css" href="/css/syntax.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pcrebuild(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/pcre/">pcre</a></p>
+<p class="lic">التراخيص: BSD</p>
+
+        
+        <main>
+            <article>
+<section class="Sh">
+<h1 class="Sh" id="PCRETEST_OPTION_FOR_LIBREADLINE_SUPPORT"><a class="permalink" href="#PCRETEST_OPTION_FOR_LIBREADLINE_SUPPORT">PCRETEST OPTION FOR LIBREADLINE SUPPORT</a></h1>
+<p class="Pp">The test program <code class="Nm">pcretest</code> can use the
+    <code class="Nm">readline</code> library to make interactive use easier.
+    If <code class="Nm">readline</code> is available on your system, it will
+    be used automatically. If it is not available, or if you do not want to
+    use it, you may need to specify the library. If your environment has not
+    been set up so that an appropriate library is automatically included, you
+    may need to add something like</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">LIBS="-lreadline"</code></p>
+<p class="Pp">immediately before the <code class="Nm">configure</code>
+    command.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DEBUGGING_WITH_VALGRIND_SUPPORT'><a class='permalink' href='#DEBUGGING_WITH_VALGRIND_SUPPORT'>DEBUGGING   WITH VALGRIND SUPPORT</a></h1>
+<p class="Pp">By adding the</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">--enable-valgrind</code></p>
+<p class="Pp">option to to the <code class="Nm">configure</code> command, PCRE will
+    use valgrind annotations to mark certain memory regions as unaddressable.
+    This allows it to detect invalid memory accesses, and is mostly useful for
+    debugging PCRE itself.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CODE_COVERAGE_REPORTING'><a class='permalink' href='#CODE_COVERAGE_REPORTING'>CODE   COVERAGE REPORTING</a></h1>
+<p class="Pp">If your C compiler is gcc, you can build a version of PCRE that
+    can generate a code coverage report for its test suite. To enable this, you
+    must install <code class="Nm">lcov</code> version 1.6 or above. Then specify</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">--enable-coverage</code></p>
+<p class="Pp">to the <code class="Nm">configure</code> command and build PCRE in the
+    usual way.</p>
+<p class="Pp">Note that using <code class="Nm">ccache</code> (a caching C compiler)
+    is incompatible with code coverage reporting. If you have configured
+    <code class="Nm">ccache</code> to run automatically on your system, you must
+    set the environment variable</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">CCACHE_DISABLE=1</code></p>
+<p class="Pp">before running <code class="Nm">make</code> to build PCRE, so that
+    <code class="Nm">ccache</code> is not used.</p>
+<p class="Pp">When --enable-coverage is used, the following addition targets are
+    added to the <code class="File">Makefile</code>:</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage</code></p>
+<p class="Pp">This creates a fresh coverage report for the PCRE test suite. It
+    is equivalent to running &quot;make coverage-reset&quot;, &quot;make
+    coverage-baseline&quot;, &quot;make check&quot;, and then &quot;make
+    coverage-report&quot;.</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-reset</code></p>
+<p class="Pp">This zeroes the coverage counters, but does nothing else.</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-baseline</code></p>
+<p class="Pp">This captures baseline coverage information.</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-report</code></p>
+<p class="Pp">This creates the coverage report.</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-clean-report</code></p>
+<p class="Pp">This removes the generated coverage report without cleaning the
+    coverage data itself.</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-clean-data</code></p>
+<p class="Pp">This removes the captured coverage data without removing the
+    coverage files created at compile time (*.gcno).</p>
+<p class="Pp">
+  <br/>
+  <code class="Li">make coverage-clean</code></p>
+<p class="Pp">This cleans all coverage data including the generated coverage
+    report. For more information about code coverage, see the <code class="Nm">gcov</code>
+    and <code class="Nm">lcov</code> documentation.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/pcreapi.3.en'>pcreapi(3)</a>, <b>pcre16</b>, <b>pcre32</b>,
+    <a href='/man/pcre_config.3.en'>pcre_config(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<pre>Philip Hazel
+University Computing Service
+Cambridge CB2 3QH, England.</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REVISION'><a class='permalink' href='#REVISION'>REVISION</a></h1>
+<pre>Last updated: 12 May 2013
+Copyright (c) 1997-2013 University of Cambridge.</pre>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">12 May 2013</td>
+    <td class="foot-os">PCRE 8.33</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/pcre/">core/pcre</a></dd>
+        <dt>Version:</dt>
+        <dd>8.45-4</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.pcre.org/">https://www.pcre.org/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/pcre/">/listing/core/pcre/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#BUILDING_PCRE">BUILDING PCRE</a></li>
+        
+            <li><a href="#PCRE_BUILD-TIME_OPTIONS">PCRE BUILD-TIME OPTIONS</a></li>
+        
+            <li><a href="#BUILDING_8-BIT,_16-BIT_AND_32-BIT_LIBRARIES">BUILDING 8-BIT, 16-BIT AND 32-BIT LIBRARIES</a></li>
+        
+            <li><a href="#BUILDING_SHARED_AND_STATIC_LIBRARIES">BUILDING SHARED AND STATIC LIBRARIES</a></li>
+        
+            <li><a href="#C++_SUPPORT">C++ SUPPORT</a></li>
+        
+            <li><a href="#UTF-8,_UTF-16_AND_UTF-32_SUPPORT">UTF-8, UTF-16 AND UTF-32 SUPPORT</a></li>
+        
+            <li><a href="#UNICODE_CHARACTER_PROPERTY_SUPPORT">UNICODE CHARACTER PROPERTY SUPPORT</a></li>
+        
+            <li><a href="#JUST-IN-TIME_COMPILER_SUPPORT">JUST-IN-TIME COMPILER SUPPORT</a></li>
+        
+            <li><a href="#CODE_VALUE_OF_NEWLINE">CODE VALUE OF NEWLINE</a></li>
+        
+            <li><a href="#WHAT_\R_MATCHES">WHAT \R MATCHES</a></li>
+        
+            <li><a href="#POSIX_MALLOC_USAGE">POSIX MALLOC USAGE</a></li>
+        
+            <li><a href="#HANDLING_VERY_LARGE_PATTERNS">HANDLING VERY LARGE PATTERNS</a></li>
+        
+            <li><a href="#AVOIDING_EXCESSIVE_STACK_USAGE">AVOIDING EXCESSIVE STACK USAGE</a></li>
+        
+            <li><a href="#LIMITING_PCRE_RESOURCE_USAGE">LIMITING PCRE RESOURCE USAGE</a></li>
+        
+            <li><a href="#CREATING_CHARACTER_TABLES_AT_BUILD_TIME">CREATING CHARACTER TABLES AT BUILD TIME</a></li>
+        
+            <li><a href="#USING_EBCDIC_CODE">USING EBCDIC CODE</a></li>
+        
+            <li><a href="#PCREGREP_OPTIONS_FOR_COMPRESSED_FILE_SUPPORT">PCREGREP OPTIONS FOR COMPRESSED FILE SUPPORT</a></li>
+        
+            <li><a href="#PCREGREP_BUFFER_SIZE">PCREGREP BUFFER SIZE</a></li>
+        
+            <li><a href="#PCRETEST_OPTION_FOR_LIBREADLINE_SUPPORT">PCRETEST OPTION FOR LIBREADLINE SUPPORT</a></li>
+        
+            <li><a href="#DEBUGGING_WITH_VALGRIND_SUPPORT">DEBUGGING WITH VALGRIND SUPPORT</a></li>
+        
+            <li><a href="#CODE_COVERAGE_REPORTING">CODE COVERAGE REPORTING</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#REVISION">REVISION</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/pcrebuild.3.en.txt">txt</a>, 
+        
+            <a href="/man/pcrebuild.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

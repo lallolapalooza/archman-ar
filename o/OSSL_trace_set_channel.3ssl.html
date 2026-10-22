@@ -1,0 +1,127 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">OSSL_trace_set_channel(3ssl)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">OSSL_TRACE_CATEGORY_DECODER</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_ENCODER</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_REF_COUNT</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_HTTP</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp"><code class="highlight language-c">OSSL_trace_set_channel()</code>، <code class="highlight language-c">OSSL_trace_set_prefix()</code>، <code class="highlight language-c">OSSL_trace_set_suffix()</code>، و<code class="highlight language-c">OSSL_trace_set_callback()</code> تُرجع 1 عند النجاح، أو 0 عند الفشل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">OSSL_TRACE_CATEGORY_DECODER</p>
+<p class="Pp">يتتبع عمليات فك التشفير.</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_ENCODER</p>
+<p class="Pp">يتتبع عمليات التشفير.</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_REF_COUNT</p>
+<p class="Pp">يتتبع تقليل مراجع هياكل ASN.1 معينة.</p>
+<p class="Pp">OSSL_TRACE_CATEGORY_HTTP</p>
+<p class="Pp">يتتبع عميل HTTP، مثل رؤوس الرسائل المرسلة والمستلمة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUES'><a class='permalink' href='#RETURN_VALUES'>قيم الإرجاع</a></h1>
+<p class="Pp"><code class="highlight language-c">OSSL_trace_set_channel()</code>، <code class="highlight language-c">OSSL_trace_set_prefix()</code>، <code class="highlight language-c">OSSL_trace_set_suffix()</code>، و<code class="highlight language-c">OSSL_trace_set_callback()</code> تُرجع 1 عند النجاح، أو 0 عند الفشل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">في جميع الأمثلة أدناه، يُفترض أن الكود الذي ينتج التتبع هو كالتالي:</p>
+<pre>int foo = 42;
+const char bar[] = { 0,  1,  2,  3,  4,  5,  6,  7,
+                     8,  9, 10, 11, 12, 13, 14, 15 };
+OSSL_TRACE_BEGIN(TLS) {
+    BIO_puts(trc_out, &quot;foo: &quot;);
+    BIO_printf(trc_out, &quot;%d\n&quot;, foo);
+    BIO_dump(trc_out, bar, sizeof(bar));
+} OSSL_TRACE_END(TLS);</pre>
+<section class="Ss">
+<h2 class="Ss" id='Simple_example'><a class='permalink' href='#Simple_example'>مثال بسيط</a></h2>
+<p class="Pp">مثال يحتوي على قناة فقط وبادئة / لاحقة ثابتة.</p>
+<pre>int main(int argc, char *argv[])
+{
+    BIO *err = BIO_new_fp(stderr, BIO_NOCLOSE | BIO_FP_TEXT);
+    OSSL_trace_set_channel(OSSL_TRACE_CATEGORY_SSL, err);
+    OSSL_trace_set_prefix(OSSL_TRACE_CATEGORY_SSL, &quot;BEGIN TRACE[TLS]&quot;);
+    OSSL_trace_set_suffix(OSSL_TRACE_CATEGORY_SSL, &quot;END TRACE[TLS]&quot;);
+    /* ... work ... */
+}</pre>
+<p class="Pp">عند تنفيذ الكود الذي ينتج التتبع أعلاه، سيتم إخراج ما يلي على الخطأ القياسي:</p>
+<pre>BEGIN TRACE[TLS]
+foo: 42
+0000 - 00 01 02 03 04 05 06 07-08 09 0a 0b 0c 0d 0e 0f   ................
+END TRACE[TLS]</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Advanced_example'><a class='permalink' href='#Advanced_example'>مثال متقدم</a></h2>
+<p class="Pp">يستخدم هذا المثال دالة الاستدعاء، ويعتمد على وظائف pthreads.</p>
+<pre>static size_t cb(const char *buf, size_t cnt,
+                int category, int cmd, void *vdata)
+{
+    BIO *bio = vdata;
+    const char *label = NULL;
+    switch (cmd) {
+    case OSSL_TRACE_CTRL_BEGIN:
+        label = &quot;BEGIN&quot;;
+        break;
+    case OSSL_TRACE_CTRL_END:
+        label = &quot;END&quot;;
+        break;
+    }
+    if (label != NULL) {
+        union {
+            pthread_t tid;
+            unsigned long ltid;
+        } tid;
+        tid.tid = pthread_self();
+        BIO_printf(bio, &quot;%s TRACE[%s]:%lx\n&quot;,
+                   label, OSSL_trace_get_category_name(category), tid.ltid);
+    }
+    return (size_t)BIO_puts(bio, buf);
+}
+int main(int argc, char *argv[])
+{
+    BIO *err = BIO_new_fp(stderr, BIO_NOCLOSE | BIO_FP_TEXT);
+    OSSL_trace_set_callback(OSSL_TRACE_CATEGORY_SSL, cb, err);
+    /* ... work ... */
+}</pre>
+<p class="Pp">الإخراج مشابه تقريبًا للمثال البسيط أعلاه.</p>
+<pre>BEGIN TRACE[TLS]:7f9eb0193b80
+foo: 42
+0000 - 00 01 02 03 04 05 06 07-08 09 0a 0b 0c 0d 0e 0f   ................
+END TRACE[TLS]:7f9eb0193b80</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Configure_Tracing'><a class='permalink' href='#Configure_Tracing'>تكوين التتبع</a></h2>
+<p class="Pp">افتراضيًا، يتم بناء مكتبة OpenSSL مع تعطيل التتبع. لاستخدام وظائف التتبع الموثقة هنا، من الضروري بالتالي تكوين وبناء OpenSSL باستخدام الخيار 'enable-trace'.</p>
+<p class="Pp">عند بناء المكتبة مع تعطيل التتبع، يتم تعريف الماكرو <b>OPENSSL_NO_TRACE</b> في <i>&lt;openssl/opensslconf.h&gt;</i> وجميع الدوال الموصوفة هنا غير فعالة، أي أنها لن تفعل شيئًا.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/OSSL_TRACE_ENABLED.3.en'>OSSL_TRACE_ENABLED(3)</a>، <a href='/man/OSSL_TRACE_BEGIN.3.en'>OSSL_TRACE_BEGIN(3)</a>،
+    <a href='/man/OSSL_TRACE1.3.en'>OSSL_TRACE1(3)</a>، <a href='/man/atexit.3.en'>atexit(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp"><code class="highlight language-c">OSSL_trace_set_channel()</code>، <code class="highlight language-c">OSSL_trace_set_prefix()</code>، <code class="highlight language-c">OSSL_trace_set_suffix()</code>، و<code class="highlight language-c">OSSL_trace_set_callback()</code> تمت إضافتها جميعًا في OpenSSL 3.0.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">حقوق النشر 2019-2023 مؤلفو مشروع OpenSSL. جميع الحقوق محفوظة.</p>
+<p class="Pp">مرخص بموجب Apache License 2.0 ("الترخيص"). لا يجوز لك استخدام هذا الملف إلا بما يتوافق مع الترخيص. يمكنك الحصول على نسخة في ملف LICENSE في توزيع المصدر أو على
+    <a href='https://www.openssl.org/source/license.html'>https://www.openssl.org/source/license.html</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-01</td>
+    <td class="foot-os">3.6.0</td>
+  </tr>
+</table>

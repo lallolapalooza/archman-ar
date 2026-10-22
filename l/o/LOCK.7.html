@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>LOCK(7) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">LOCK(7)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/postgresql/">postgresql</a></p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">LOCK(7)</td>
+    <td class="head-vol">توثيق PostgreSQL 18.1</td>
+    <td class="head-rtitle">LOCK(7)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">LOCK - قفل جدول</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>LOCK [ TABLE ] [ ONLY ] <i>name</i> [ * ] [, ...] [ IN <i>lockmode</i> MODE ] [ NOWAIT ]
+حيث <i>lockmode</i> هي واحدة من:
+    ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE
+    | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp"><b>LOCK TABLE</b> يحصل على قفل على مستوى الجدول، وينتظر إذا لزم الأمر
+    لإصدار أي أقفال متعارضة. إذا تم تحديد NOWAIT، فإن <b>LOCK
+    TABLE</b> لا تنتظر للحصول على القفل المطلوب: إذا لم يكن من الممكن الحصول عليه
+    على الفور، يتم إلغاء الأمر وإصدار خطأ. بمجرد الحصول عليه، يتم الاحتفاظ بالقفل
+    لبقية المعاملة الحالية.
+    (لا يوجد أمر <b>UNLOCK TABLE</b>؛ يتم دائمًا تحرير الأقفال في نهاية المعاملة.)</p>
+<p class="Pp">عند قفل عرض، يتم أيضًا قفل جميع العلاقات التي تظهر في استعلام تعريف
+    العرض بشكل متكرر بنفس وضع القفل.</p>
+<p class="Pp">عند الحصول على أقفال تلقائيًا للأوامر التي تشير إلى
+    الجداول، يستخدم PostgreSQL دائمًا أقل وضع قفل تقييدي ممكن.
+    يوفر <b>LOCK TABLE</b> الحالات التي قد تحتاج فيها إلى أقفال أكثر تقييدًا. على سبيل
+    المثال، افترض أن تطبيقًا يعمل على مستوى عزل READ COMMITTED ويحتاج إلى
+    ضمان بقاء البيانات في جدول ثابتة طوال مدة المعاملة. لتحقيق ذلك، يمكنك الحصول
+    على وضع قفل SHARE على الجدول قبل الاستعلام. سيؤدي هذا إلى منع تغييرات البيانات المتزامنة
+    وضمان أن القراءات اللاحقة للجدول ترى عرضًا ثابتًا للبيانات الملتزمة، لأن وضع قفل
+    SHARE يتعارض مع قفل ROW EXCLUSIVE الذي يحصل عليه الكتاب، وبيان <b>LOCK
+    TABLE </b><i>name</i><b> IN SHARE MODE</b> الخاص بك سينتظر حتى يلتزم أو يتراجع
+    أي حاملي وضع قفل ROW EXCLUSIVE المتزامنين. وبالتالي، بمجرد الحصول على القفل،
+    لا توجد كتابات غير ملتزمة معلقة؛ علاوة على ذلك، لا يمكن أن تبدأ أي كتابات حتى
+    تتراجع عن القفل.</p>
+<p class="Pp">لتحقيق تأثير مماثل عند تشغيل معاملة على مستوى عزل REPEATABLE READ أو SERIALIZABLE،
+    يجب عليك تنفيذ عبارة <b>LOCK TABLE</b> قبل تنفيذ أي عبارة <b>SELECT</b> أو
+    تعديل بيانات. سيتم تجميد عرض البيانات للمعاملة REPEATABLE READ أو SERIALIZABLE
+    عند بدء أول عبارة <b>SELECT</b> أو تعديل بيانات لها. <b>LOCK TABLE</b> لاحقًا
+    في المعاملة سيمنع الكتابات المتزامنة - ولكن لن يضمن أن ما تقرأه المعاملة يتوافق
+    مع أحدث القيم الملتزمة.</p>
+<p class="Pp">إذا كانت معاملة من هذا النوع ستغير البيانات في الجدول، فيجب عليها
+    استخدام وضع قفل SHARE ROW EXCLUSIVE بدلاً من وضع SHARE. هذا يضمن أن معاملة واحدة
+    من هذا النوع تعمل في وقت واحد. بدون هذا، من الممكن حدوث تعليق متبادل: قد يحصل اثنان
+    من المعاملات على وضع SHARE، ثم لا يمكنهما أيضًا الحصول على وضع ROW EXCLUSIVE
+    لإجراء تحديثاتهما فعليًا. (لاحظ أن أقفال المعاملة الخاصة لا تتعارض أبدًا، لذلك يمكن
+    للمعاملة الحصول على وضع ROW EXCLUSIVE عندما تحتفظ بوضع SHARE - ولكن ليس إذا كان شخص
+    آخر يحتفظ بوضع SHARE.) لتجنب التعليق المتبادل، تأكد من أن جميع المعاملات تحصل
+    على أقفال على نفس الكائنات بنفس الترتيب، وإذا تم استخدام أوضاع قفل متعددة لكائن
+    واحد، فيجب على المعاملات دائمًا الحصول على الوضع الأكثر تقييدًا أولاً.</p>
+<p class="Pp">يمكن العثور على مزيد من المعلومات حول أوضاع القفل واستراتيجيات القفل
+    في القسم 13.3.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PARAMETERS'><a class='permalink' href='#PARAMETERS'>المعلمات</a></h1>
+<p class="Pp"><i>name</i></p>
+<div class="Bd-indent">اسم (يمكن تأهيله بالمخطط اختياريًا) جدول موجود لقفل. إذا تم
+  تحديد ONLY قبل اسم الجدول، يتم قفل هذا الجدول فقط. إذا لم يتم تحديد ONLY،
+  فإن الجدول وجميع الجداول التابعة له (إن وجدت) يتم قفلها. اختياريًا، يمكن
+  تحديد * بعد اسم الجدول للإشارة بوضوح إلى تضمين الجداول التابعة.
+<p class="Pp">الأمر LOCK TABLE a, b؛ يكافئ LOCK TABLE a؛ LOCK TABLE b؛.
+    يتم قفل الجداول واحدًا تلو الآخر بالترتيب المحدد في أمر <b>LOCK TABLE</b>.</p>
+</div>
+<p class="Pp"><i>lockmode</i></p>
+<div class="Bd-indent">يحدد وضع القفل الأقفال التي يتعارض معها هذا القفل. يتم وصف أوضاع
+  القفل في القسم 13.3.
+<p class="Pp">إذا لم يتم تحديد وضع قفل، فإن ACCESS EXCLUSIVE، وهو الوضع الأكثر
+    تقييدًا، يتم استخدامه.</p>
+</div>
+<p class="Pp">NOWAIT</p>
+<div class="Bd-indent">يحدد أن <b>LOCK TABLE</b> يجب ألا ينتظر أي أقفال متعارضة ليتم
+  تحريرها: إذا لم يكن من الممكن الحصول على الأقفال المحددة على الفور دون انتظار،
+  يتم إلغاء المعاملة.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">لقفل جدول، يجب أن يمتلك المستخدم الامتياز الصحيح لـ <i>lockmode</i>
+    المحدد. إذا كان المستخدم لديه امتيازات MAINTAIN أو UPDATE أو DELETE أو TRUNCATE
+    على الجدول، فإن أي <i>lockmode</i> مسموح به. إذا كان المستخدم لديه امتيازات INSERT
+    على الجدول، فإن ROW EXCLUSIVE MODE (أو وضع أقل تعارضًا كما هو موضح في القسم
+    13.3) مسموح به. إذا كان المستخدم لديه امتيازات SELECT على الجدول، فإن ACCESS
+    SHARE MODE مسموح به.</p>
+<p class="Pp">يجب أن يمتلك المستخدم الذي يقوم بعملية القفل على العرض الامتيازات
+    المقابلة على العرض. بالإضافة إلى ذلك، افتراضيًا، يجب أن يمتلك مالك العرض
+    الامتيازات ذات الصلة على العلاقات الأساسية الأساسية، بينما لا يحتاج المستخدم
+    الذي يقوم بعملية القفل إلى أي أذونات على العلاقات الأساسية الأساسية. ومع ذلك،
+    إذا تم تعيين security_invoker للعرض إلى true (انظر <b>CREATE VIEW</b>)،
+    فإن المستخدم الذي يقوم بعملية القفل، بدلاً من مالك العرض، يجب أن يمتلك الامتيازات
+    ذات الصلة على العلاقات الأساسية الأساسية.</p>
+<p class="Pp"><b>LOCK TABLE</b> عديم الفائدة خارج كتلة المعاملة: سيظل القفل محتفظًا
+    به حتى اكتمال العبارة. لذلك يبلغ PostgreSQL عن خطأ إذا تم استخدام <b>LOCK</b>
+    خارج كتلة المعاملة. استخدم <b>BEGIN</b> و <b>COMMIT</b> (أو <b>ROLLBACK</b>)
+    لتحديد كتلة معاملة.</p>
+<p class="Pp"><b>LOCK TABLE</b> يتعامل فقط مع أقفال على مستوى الجدول، وبالتالي فإن
+    أسماء الأوضاع التي تتضمن ROW هي جميعها أسماء خاطئة. يجب قراءة أسماء الأوضاع
+    هذه بشكل عام على أنها تشير إلى نية المستخدم للحصول على أقفال على مستوى الصف
+    داخل الجدول المقفل. أيضًا، وضع ROW EXCLUSIVE هو قفل جدول قابل للمشاركة.
+    ضع في اعتبارك أن جميع أوضاع القفل لها دلالات متطابقة فيما يتعلق بـ <b>LOCK
+    TABLE</b>، وتختلف فقط في قواعد أي الأوضاع تتعارض مع أي منها. للحصول على معلومات
+    حول كيفية الحصول على قفل صف فعلي، انظر القسم 13.3.2 و The Locking
+    Clause في توثيق <a href='/man/SELECT.7.en'>SELECT(7)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">الحصول على قفل SHARE على جدول مفتاح أساسي عند القيام بعمليات إدراج
+    في جدول مفتاح خارجي:</p>
+<div class="Bd-indent">
+<pre>BEGIN WORK;
+LOCK TABLE films IN SHARE MODE;
+SELECT id FROM films
+    WHERE name = 'Star Wars: Episode I - The Phantom Menace';
+-- قم بعمل ROLLBACK إذا لم يتم إرجاع السجل
+INSERT INTO films_user_comments VALUES
+    (_id_, 'GREAT! I was waiting for it for so long!');
+COMMIT WORK;</pre>
+</div>
+<p class="Pp">الحصول على قفل SHARE ROW EXCLUSIVE على جدول مفتاح أساسي عند القيام
+    بعملية حذف:</p>
+<div class="Bd-indent">
+<pre>BEGIN WORK;
+LOCK TABLE films IN SHARE ROW EXCLUSIVE MODE;
+DELETE FROM films_user_comments WHERE id IN
+    (SELECT id FROM films WHERE rating &lt; 5);
+DELETE FROM films WHERE rating &lt; 5;
+COMMIT WORK;</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COMPATIBILITY'><a class='permalink' href='#COMPATIBILITY'>التوافق</a></h1>
+<p class="Pp">لا يوجد <b>LOCK TABLE</b> في معيار SQL، والذي يستخدم بدلاً من ذلك <b>SET TRANSACTION</b>
+    لتحديد مستويات التزامن للمعاملات. يدعم PostgreSQL ذلك أيضًا؛ انظر SET TRANSACTION
+    (<a href='/man/SET_TRANSACTION.7.en'>SET_TRANSACTION(7)</a>) لمزيد من
+    التفاصيل.</p>
+<p class="Pp">باستثناء أوضاع قفل ACCESS SHARE و ACCESS EXCLUSIVE و SHARE UPDATE
+    EXCLUSIVE، فإن أوضاع القفل في PostgreSQL وصيغة <b>LOCK TABLE</b> متوافقة مع
+    تلك الموجودة في Oracle.</p>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025</td>
+    <td class="foot-os">PostgreSQL 18.1</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/postgresql/">extra/postgresql</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>18.1-1</dd>
+        <dt>المنشأ:</dt>
+        <dd><a href="https://www.postgresql.org/">https://www.postgresql.org/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>PostgreSQL</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/postgresql/">/listin
+</dd>
+    </dl>
+</section>
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>re2hs(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">re2hs(1)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">RE2HS(1)</td>
+    <td class="head-vol"></td>
+    <td class="head-rtitle">RE2HS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>اسم</a></h1>
+<p class="Pp">re2hs - إنشاء محللات معجمية سريعة لـ Haskell</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<p class="Pp">re2hs <b>[ خيارات ]</b> <b>[ تحذيرات ]</b> <b>المدخل</b></p>
+<p class="Pp">يمكن أن يكون المدخل إما ملفًا أو <b>-</b> لـ stdin.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>مقدمة</a></h1>
+<p class="Pp">يعمل re2hs كمعالج مسبق. يقرأ ملف الإدخال (وهو عادةً برنامج بلغة Haskell، ولكن يمكن أن يكون أي شيء) ويبحث عن كتل التعليمات البرمجية المغلفة بعلامات بدء/نهاية خاصة الشكل. يتم نسخ النص خارج هذه الكتل حرفيًا إلى ملف الإخراج. تتم معالجة محتويات الكتل بواسطة re2hs. يقوم بترجمتها إلى شفرة بلغة Haskell ويخرج الشفرة المولدة في مكان الكتلة.</p>
+<p class="Pp">إليك مثال لبرنامج صغير يتحقق مما إذا كان سلسلة معينة تحتوي على رقم عشري:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT -i
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+import Data.ByteString (ByteString, index)
+data State = State {
+    _yyinput :: ByteString,
+    _yycursor :: Int
+}
+%{
+    re2c:YYFN = [&quot;lexer;Bool&quot;, &quot;State{..};State&quot;];
+    re2c:yyfill:enable = 0;
+    [1-9][0-9]* { True }
+    *           { False }
+%}
+main :: IO ()
+main = case lexer State{_yyinput = &quot;1234\0&quot;, _yycursor = 0} of
+    True -&gt; return ()
+    False -&gt; error &quot;lexer failed!&quot;</pre>
+</div>
+</div>
+<p class="Pp">في الإخراج، استبدل re2hs الكتلة في المنتصف بالشفرة المولدة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- تم الإنشاء بواسطة re2hs
+{-# LANGUAGE RecordWildCards #-}
+-- re2hs $INPUT -o $OUTPUT -i
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+import Data.ByteString (ByteString, index)
+data State = State {
+    _yyinput :: ByteString,
+    _yycursor :: Int
+}
+yy0 :: State -&gt; Bool
+yy0 State{..} =
+    let yych = index _yyinput _yycursor in
+    let __ = _yycursor + 1 in let _yycursor = __ in
+    case yych of
+        _c | 0x31 &lt;= _c &amp;&amp; _c &lt;= 0x39 -&gt;
+            yy2 State{..}
+        _c | True -&gt;
+            yy1 State{..}
+yy1 :: State -&gt; Bool
+yy1 State{..} =
+    False
+yy2 :: State -&gt; Bool
+yy2 State{..} =
+    let yych = index _yyinput _yycursor in
+    case yych of
+        _c | 0x30 &lt;= _c &amp;&amp; _c &lt;= 0x39 -&gt;
+            let __ = _yycursor + 1 in let _yycursor = __ in
+            yy2 State{..}
+        _c | True -&gt;
+            yy3 State{..}
+yy3 :: State -&gt; Bool
+yy3 State{..} =
+    True
+lexer :: State -&gt; Bool
+lexer State{..} =
+    yy0 State{..}
+main :: IO ()
+main = case lexer State{_yyinput = &quot;1234\0&quot;, _yycursor = 0} of
+    True -&gt; return ()
+    False -&gt; error &quot;lexer failed!&quot;</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BASICS'><a class='permalink' href='#BASICS'>أساسيات</a></h1>
+<p class="Pp">يتكون برنامج re2hs من سلسلة من <i>الكتل</i> المتناوبة مع شفرة في اللغة المستهدفة. قد تحتوي الكتلة على <i>تعريفات</i>، <i>تكوينات</i>، <i>قواعد</i>، <i>إجراءات</i> و <i>توجيهات</i> بأي ترتيب:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="name"><a class="permalink" href="#name"><b><b>الاسم =
+    تعبير-عادي ;</b></b></a></dt>
+  <dd><i>التعريف</i> يربط <b>الاسم</b> بـ <b>التعبير-العادي</b>. يمكن أن تحتوي الأسماء على أحرف أبجدية رقمية وشرطة سفلية. يقدم قسم <i>التعبيرات العادية</i> نظرة عامة على صيغة re2hs للتعبيرات العادية. بمجرد تعريفه، يمكن استخدام <b>الاسم</b> في تعبيرات عادية أخرى وفي القواعد. لا يُسمح بالتكرار في التعريفات المسماة، ويجب تعريف كل اسم قبل استخدامه. ترث الكتلة التعريفات المسماة من النطاق العام. إعادة تعريف اسم موجود في النطاق الحالي هو خطأ.</dd>
+  <dt id="configuration"><a class="permalink" href="#configuration"><b><b>تكوين
+    = قيمة ;</b></b></a></dt>
+  <dd><i>التكوين</i> يسمح للمرء بتغيير سلوك re2hs وتخصيص الشفرة المولدة. للحصول على قائمة كاملة بالتكوينات التي يدعمها re2hs، راجع قسم <i>التكوينات</i>. اعتمادًا على تكوين معين، يمكن أن تكون <b>القيمة</b> كلمة مفتاحية، أو رقم صحيح غير سالب، أو سلسلة نصية من سطر واحد يجب أن تكون محاطة بعلامات اقتباس مزدوجة أو فردية ما لم تتكون من أحرف أبجدية رقمية. ترث الكتلة التكوينات من النطاق العام ويمكنها إعادة تعريفها أو إضافة تكوينات جديدة. التكوينات المعرفة داخل كتلة تؤثر على الكتلة بأكملها، حتى لو ظهرت في نهايتها.</dd>
+  <dt id="regular"><a class="permalink" href="#regular"><b><b>تعبير-عادي
+    شفرة</b></b></a></dt>
+  <dd><i>القاعدة</i> تربط <b>التعبير-العادي</b> بإجراءها الدلالي (كتلة شفرة بأقواس متعرجة، أو كتلة شفرة تبدأ بـ <b>:=</b> وتنتهي بسطر جديد متبوعًا بأي حرف غير مسافة بيضاء). إذا تطابق <b>التعبير-العادي</b>، يتم تنفيذ <b>الشفرة</b> المرتبطة به. إذا تطابقت عدة قواعد، فإن أطول تطابق له الأسبقية. إذا تطابقت عدة قواعد مع نفس السلسلة، فإن أقدمها له الأسبقية. هناك قاعدتان خاصتان: القاعدة الافتراضية <b>*</b> وقاعدة نهاية الإدخال <b>$</b>. يجب تعريف القاعدة الافتراضية دائمًا، ولها أقل أولوية بغض النظر عن مكانها في الكتلة، وتتطابق مع أي وحدة رمز (ليس بالضرورة حرفًا صالحًا، انظر قسم <i>دعم الترميز</i>). يجب تعريف قاعدة نهاية الإدخال إذا تم استخدام طريقة <i>معالجة نهاية الإدخال</i> المقابلة. مع <i>حالات البدء</i>، تكون للقواعد صيغة أكثر تعقيدًا.</dd>
+  <dt><b><b>!إجراء شفرة</b></b></dt>
+  <dd><i>الإجراء</i> يربط كتلة <b>شفرة</b> معرفة من قبل المستخدم بمكان معين في آلة الحالة المحدودة المولدة (بنفس طريقة ربط الإجراءات الدلالية بالشفرة في الحالات النهائية). راجع قسم <i>الإجراءات</i> للحصول على قائمة كاملة بالإجراءات المعرفة مسبقًا.</dd>
+  <dt><b><b>!توجيه ;</b></b></dt>
+  <dd><i>التوجيه</i> هو أحد البيانات الخاصة المعرفة مسبقًا. لكل توجيه غرض فريد. راجع قسم <i>التوجيهات</i> للحصول على التفاصيل.</dd>
+</dl>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Blocks'><a class='permalink' href='#Blocks'>الكتل</a></h2>
+<p class="Pp">علامات بدء وانتهاء الكتلة هي إما <b>/*!re2c</b> و <b>*/</b>، أو <b>%{</b> و <b>%}</b> (يتم دعم كلا الأسلوبين). بدءًا من الإصدار 2.2، يمكن أن تحتوي الكتل على أسماء اختيارية تسمح بالإشارة إليها في كتل أخرى. هناك أنواع مختلفة من الكتل:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>/*!re2c[:&lt;name&gt;] ... */</b> أو <b>%{[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>تحتوي <i>الكتلة العامة</i> على تعريفات وتكوينات وقواعد وتوجيهات. يقوم re2hs بتجميع التعبيرات العادية المرتبطة بكل قاعدة في آلة حالة محدودة حتمية، ويقوم بترميزها في شكل قفزات شرطية في اللغة المستهدفة ويستبدل الكتلة بالشفرة المولدة. تضاف الأسماء والتكوينات المعرفة في كتلة عامة إلى النطاق العام وتصبح مرئية للكتل اللاحقة. في بداية البرنامج، يتم تهيئة النطاق العام بـ <i>خيارات</i> سطر الأوامر.</dd>
+  <dt><b><b>/*!local:re2c[:&lt;name&gt;] ... */</b> أو <b>%{local[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>الكتلة المحلية</i> تشبه الكتلة العامة، ولكن الأسماء والتكوينات فيها لها نطاق محلي (لا تؤثر على الكتل الأخرى).</dd>
+  <dt><b><b>/*!rules:re2c[:&lt;name&gt;] ... */</b> أو <b>%{rules[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>كتلة القواعد</i> تشبه الكتلة المحلية، لكنها لا تولد أي شفرة بنفسها، ولا تضيف أي تعريفات إلى النطاق العام -- إنها مخصصة لإعادة استخدامها في كتل أخرى. هذه طريقة لمشاركة الشفرة (مزيد من التفاصيل في قسم <i>الكتل القابلة لإعادة الاستخدام</i>). قبل الإصدار 2.2 من re2hs، كانت كتل القواعد تتطلب الخيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!use:re2c[:&lt;name&gt;] ... */</b> أو <b>%{use[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>كتلة استخدام تشير إلى كتلة قواعد معرفة مسبقًا. إذا تم تحديد الاسم، يبحث re2hs عن كتل قواعد بهذا الاسم. بخلاف ذلك، يتم استخدام أحدث كتلة قواعد (سواء كانت مسماة أو غير مسماة). يمكن لكتلة الاستخدام إضافة تعريفات وتكوينات وقواعد خاصة بها، والتي تضاف إلى تلك الموجودة في كتلة القواعد المشار إليها. قبل الإصدار 2.2 من re2hs، كانت كتل الاستخدام تتطلب الخيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!max:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{max[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تولد تعريف <b>YYMAXFILL</b>. تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب قيمة <b>YYMAXFILL</b> (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). بشكل افتراضي، الشفرة المولدة هي تعريف ماكرو لـ C (<b>#define
+    YYMAXFILL &lt;n&gt;</b>)، أو متغير عام لـ Go (<b>var YYMAXFILL
+    int = &lt;n&gt;</b>). يمكن تخصيصها بتكوين اختياري <b>format</b> يحدد سلسلة قالب حيث يتم استبدال <b>@@{max}</b> (أو <b>@@</b> باختصار) بالقيمة الرقمية لـ <b>YYMAXFILL</b>.</dd>
+  <dt><b><b>/*!maxnmatch:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{m</b></dt>
+</dl>
+</div>
+</section>
+</div>
+</section>
+                
+            </article>
+            
+        </main>
+        
+    </body>
+</html>
+<div>
+<section class="Ss">
+<h2 class="Ss" id='Blocks'><a class='permalink' href='#Blocks'>Blocks</a></h2>
+<dl class="Bl-tag">
+  <dt><b><b>/*!maxnmatch[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تقوم بإنشاء تعريف <b>YYMAXNMATCH</b> (تتطلب خيار <b>-P
+      --posix-captures</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب قيمة
+      <b>YYMAXNMATCH</b> (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، يكون الرمز الذي تم إنشاؤه هو تعريف ماكرو لـ C (<b>#define YYMAXNMATCH &lt;n&gt;</b>)،
+      أو متغير عام لـ Go (<b>var YYMAXNMATCH int = &lt;n&gt;</b>). يمكن تخصيصه بتكوين اختياري <b>format</b> يحدد سلسلة قالب حيث يتم استبدال <b>@@{max}</b> (أو <b>@@</b> اختصارًا) بالقيمة الرقمية لـ <b>YYMAXNMATCH</b>.</dd>
+  <dt><b><b>/*!stags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!mtags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{stags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>,
+    <b>%{mtags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b></dt>
+  <dd>كتل تحدد جزءًا اختياريًا من الرمز يتم توسيعه لكل متغير علامة s/m تم إنشاؤه بواسطة re2hs. تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب مجموعة متغيرات العلامات (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). هناك تكوينات اختيارية: <b>format</b> و <b>separator</b>. يحدد التكوين <b>format</b> سلسلة قالب حيث يتم استبدال <b>@@{tag}</b> (أو <b>@@</b> اختصارًا) باسم كل متغير علامة. يحدد التكوين <b>separator</b> جزءًا من الرمز يستخدم لربط أجزاء <b>format</b> التي تم إنشاؤها لمتغيرات علامات مختلفة.</dd>
+  <dt><b><b>/*!svars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!mvars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{svars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>,
+    <b>%{mvars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b></dt>
+  <dd>كتل تحدد جزءًا اختياريًا من الرمز يتم توسيعه لكل علامة s/m تم ذكرها صراحةً بواسطة القواعد (مع الخيار <b>--tags</b>) أو تم إنشاؤها ضمنيًا بواسطة re2hs (مع الخيارات <b>--captvars</b> أو <b>--posix-captvars</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب مجموعة العلامات (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). هناك تكوينات اختيارية: <b>format</b> و <b>separator</b>. يحدد التكوين <b>format</b> سلسلة قالب حيث يتم استبدال <b>@@{tag}</b> (أو <b>@@</b> اختصارًا) باسم كل علامة. يحدد التكوين <b>separator</b> جزءًا من الرمز يستخدم لربط أجزاء <b>format</b> التي تم إنشاؤها لعلامات مختلفة.</dd>
+  <dt><b><b>/*!getstate:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{getstate[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تقوم بإنشاء إرسال شرطي لحالة الم محلل (تتطلب الخيار <b>--storable-state</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها في إرسال الحالة. ينتقل الانتقال الافتراضي إلى تسمية البداية للكتلة الأولى في القائمة. إذا كانت القائمة فارغة، يتم تضمين جميع الكتل، وينتقل الانتقال الافتراضي إلى الكتلة الأولى في الملف التي تحتوي على تسمية بداية. هذه الكتلة غير متوافقة مع الخيار <b>--loop-switch</b>، لأنها تتطلب انتقالات عبر الكتل غير مدعومة بدون <b>goto</b> أو استدعاءات الدوال.</dd>
+  <dt><b><b>/*!conditions:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!types:re2c... */</b> أو
+    <b>%{conditions[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>, <b>%{types...
+    %}</b></b></dt>
+  <dd>كتلة تقوم بإنشاء تعداد للشروط (تتطلب الخيار <b>--conditions</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب مجموعة الشروط (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، يكون الرمز الذي تم إنشاؤه هو تعداد <b>YYCONDTYPE</b>. يمكن تخصيصه بتكوينات اختيارية <b>format</b> و <b>separator</b>. يحدد التكوين <b>format</b> سلسلة قالب حيث يتم استبدال <b>@@{cond}</b> (أو <b>@@</b> اختصارًا) باسم كل شرط، و <b>@@{num}</b> يتم استبدالها بفهرس رقمي لذلك الشرط. يحدد التكوين <b>separator</b> جزءًا من الرمز يستخدم لربط أجزاء <b>format</b> التي تم إنشاؤها لشروط مختلفة.</dd>
+  <dt><b><b>/*!include:re2c &lt;file&gt; */</b> أو <b>%{include &lt;file&gt;
+    %}</b></b></dt>
+  <dd>تسمح هذه الكتلة بتضمين <b>&lt;file&gt;</b>، والتي يجب أن تكون مسار ملف محاط بعلامات اقتباس مزدوجة. يتم استبدال محتويات الملف حرفيًا مكان الكتلة، بنفس طريقة عمل <b>#include</b> في C/C++. يمكن استخدام هذه الكتلة مع الخيار <b>--depfile</b> لإنشاء تبعيات نظام البناء على الملفات المضمنة.</dd>
+  <dt><b><b>/*!header:re2c:on*/</b> أو <b>%{header:on %}</b></b></dt>
+  <dd>تحدد هذه الكتلة بداية ملف الرأس. يتم معالجة كل شيء بعدها وحتى كتلة <b>header:off</b> التالية بواسطة re2hs ويكتب إلى ملف الرأس المحدد بالخيار <b>-t --type-header</b>.</dd>
+  <dt><b><b>/*!header:re2c:off*/</b> أو <b>%{header:off %}</b></b></dt>
+  <dd>تحدد هذه الكتلة نهاية ملف الرأس الذي بدأ بكتلة <b>header:on*/</b>.</dd>
+  <dt><b><b>/*!ignore:re2c ... */</b> أو <b>%{ignore ... %}</b></b></dt>
+  <dd>كتلة يتم تجاهل محتوياتها وإزالتها من ملف الإخراج.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Configurations'><a class='permalink' href='#Configurations'>Configurations</a></h2>
+<p class="Pp">هذه قائمة كاملة بالتكوينات التي يدعمها re2hs:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="re2c:api"><a class="permalink" href="#re2c:api"><b><b>re2c:api</b>,
+    <b>re2c:input</b></b></a></dt>
+  <dd>نفس الخيار <b>--api</b>.</dd>
+  <dt id="re2c:api:sigil"><a class="permalink" href="#re2c:api:sigil"><b><b>re2c:api:sigil</b></b></a></dt>
+  <dd>تحديد العلامة ("sigil") المستخدمة لمحددات الوسيطات في بدائيات API. الافتراضي هو <b>@@</b>. تبدأ المحددات بالـ sigil متبوعًا باسم الوسيطة بين قوسين معقوفين. على سبيل المثال، إذا تم تعيين sigil إلى <b>$</b>، فستكون المحددات بالشكل <b>${name}</b>. قد تستخدم واجهات برمجة التطبيقات ذات الوسيطة الواحدة صيغة مختصرة بدون الاسم بين قوسين. يمكن تجاوز هذا الخيار بواسطة خيارات لواجهات برمجة التطبيقات الفردية، على سبيل المثال <b>re2c:YYFILL@len</b> لـ <b>YYFILL</b>.</dd>
+  <dt id="re2c:api:style"><a class="permalink" href="#re2c:api:style"><b><b>re2c:api:style</b></b></a></dt>
+  <dd>تحديد نمط API. القيم الممكنة هي <b>functions</b> (الافتراضي لـ C) و <b>free-form</b> (الافتراضي لـ Go و Rust). في نمط <b>functions</b>، يتم إنشاء بدائيات API مع قائمة وسيطات بين قوسين بعد اسم البديهية. يتم توفير الوسيطات فقط للمعلمات التي تم إنشاؤها تلقائيًا (مثل عدد الأحرف التي تم تمريرها إلى <b>YYFILL</b>)، ولكن ليس لسياق الم محلل العام، لذا تتصرف البدائيات بشكل أشبه بالماكرو في C/C++ أو الإغلاقات في Go و Rust. في نمط <b>free-form</b>، لا تحتوي بدائيات API على شكل ثابت: يجب تعريفها كسلاسل تحتوي على أجزاء رمز حرة مع متغيرات مستبدلة بالشكل <b>@@{var}</b> أو <b>@@</b> (تتوافق مع الوسيطات في النمط الشبيه بالدالة). يمكن تجاوز هذا التكوين لواجهات برمجة التطبيقات الفردية، انظر على سبيل المثال تكوين <b>re2c:YYFILL:naked</b> لـ <b>YYFILL</b>.</dd>
+  <dt id="re2c:bit"><a class="permalink" href="#re2c:bit"><b><b>re2c:bit-vectors</b>,
+    <b>re2c:flags:bit-vectors</b>, <b>re2c:flags:b</b></b></a></dt>
+  <dd>نفس الخيار <b>--bit-vectors</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:captures"><a class="permalink" href="#re2c:captures"><b><b>re2c:captures</b>,
+    <b>re2c:leftmost-captures</b></b></a></dt>
+  <dd>نفس الخيار <b>--leftmost-captures</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:captvars"><a class="permalink" href="#re2c:captvars"><b><b>re2c:captvars</b>,
+    <b>re2c:leftmost-captvars</b></b></a></dt>
+  <dd>نفس الخيار <b>--leftmost-captvars</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case"><a class="permalink" href="#re2c:case"><b><b>re2c:case-insensitive</b>,
+    <b>re2c:flags:case-insensitive</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-insensitive</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case~2"><a class="permalink" href="#re2c:case~2"><b><b>re2c:case-inverted</b>,
+    <b>re2c:flags:case-inverted</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-inverted</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case~3"><a class="permalink" href="#re2c:case~3"><b><b>re2c:case-ranges</b>,
+    <b>re2c:flags:case-ranges</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-ranges</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed"><a class="permalink" href="#re2c:computed"><b><b>re2c:computed-gotos</b>,
+    <b>re2c:flags:computed-gotos</b>, <b>re2c:flags:g</b></b></a></dt>
+  <dd>نفس الخيار <b>--computed-gotos</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed~2"><a class="permalink" href="#re2c:computed~2"><b><b>re2c:computed-gotos:relative</b>,
+    <b>re2c:cgoto:relative</b></b></a></dt>
+  <dd>نفس الخيار <b>--computed-gotos-relative</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed~3"><a class="permalink" href="#re2c:computed~3"><b><b>re2c:computed-gotos:threshold</b>,
+    <b>re2c:cgoto:threshold</b></b></a></dt>
+  <dd>إذا تم استخدام <b>goto</b> المحسوب، فإن هذا التكوين يحدد عتبة التعقيد التي تؤدي إلى إنشاء جداول قفز بدلاً من عبارات <b>if</b> متداخلة وخرائط بت. القيمة الافتراضية هي
+    <b>9</b>.</dd>
+  <dt id="re2c:cond:abort"><a class="permalink" href="#re2c:cond:abort"><b><b>re2c:cond:abort</b></b></a></dt>
+  <dd>إذا تم تعيينها إلى قيمة عدد صحيح موجبة، فإن الحالة الافتراضية في إرسال الشرط الذي تم إنشاؤه تقوم بإيقاف تنفيذ البرنامج.</dd>
+  <dt id="re2c:cond:goto"><a class="permalink" href="#re2c:cond:goto"><b><b>re2c:cond:goto</b></b></a></dt>
+  <dd>يحدد جزءًا من الرمز يستخدم للقواعد المختصرة التي تم إنشاؤها تلقائيًا <b>:=&gt;</b> في الشروط. الافتراضي هو <b>goto @@;</b>. يتم استبدال محدد <b>@@</b> باسم الشرط (انظر التكوينات
+      <b>re2c:api:sigil</b> و <b>re2c:cond:goto@cond</b>).</dd>
+  <dt id="re2c:cond:goto@cond"><a class="permalink" href="#re2c:cond:goto@cond"><b><b>re2c:cond:goto@cond</b></b></a></dt>
+  <dd>يحدد الـ sigil المستخدم لاستبدال الوسيطات في تعريف
+      <b>re2c:cond:goto</b>. القيمة الافتراضية هي <b>@@</b>.
+      يتجاوز التكوين العام <b>re2c:api:sigil</b>.</dd>
+  <dt id="re2c:cond:divider"><a class="permalink" href="#re2c:cond:divider"><b><b>re2c:cond:divider</b></b></a></dt>
+  <dd>يحدد الفاصل بين كتل الشروط. القيمة الافتراضية هي <b>/*
+      *********************************** */</b>. يتم استبدال المحددات
+      باسم الشرط (انظر <b>re2c:api;sigil</b> و
+      <b>re2c:cond:divider@cond</b>).</dd>
+  <dt id="re2c:cond:divider@cond"><a class="permalink" href="#re2c:cond:divider@cond"><b><b>re2c:cond:divider@cond</b></b></a></dt>
+  <dd>يحدد الـ sigil المستخدم لاستبدال الوسيطات في تعريف
+      <b>re2c:cond:divider</b>. الافتراضي هو <b>@@</b>. يتجاوز
+      التكوين العام <b>re2c:api:sigil</b>.</dd>
+  <dt id="re2c:cond:prefix"><a class="permalink" href="#re2c:cond:prefix"><b><b>re2c:cond:pr</b></b></a></dt>
+</dl>
+</div>
+</section>
+</div>
+efix</b>،
+    <b>re2c:condprefix</b></b></a></dt>
+  <dd>يحدد البادئة المستخدمة لملصقات الشروط. الافتراضي هو
+      <b>yyc_</b>.</dd>
+  <dt id="re2c:cond:enumprefix"><a class="permalink" href="#re2c:cond:enumprefix"><b><b>re2c:cond:enumprefix</b>،
+    <b>re2c:condenumprefix</b></b></a></dt>
+  <dd>يحدد البادئة المستخدمة لمعرفات الشروط. الافتراضي هو
+      <b>yyc</b>.</dd>
+  <dt id="re2c:debug"><a class="permalink" href="#re2c:debug"><b><b>re2c:debug-output</b>،
+    <b>re2c:flags:debug-output</b>، <b>re2c:flags:d</b></b></a></dt>
+  <dd>نفس خيار <b>--debug-output</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:empty"><a class="permalink" href="#re2c:empty"><b><b>re2c:empty-class</b>،
+    <b>re2c:flags:empty-class</b></b></a></dt>
+  <dd>نفس خيار <b>--empty-class</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding:ebcdic"><a class="permalink" href="#re2c:encoding:ebcdic"><b><b>re2c:encoding:ebcdic</b>،
+    <b>re2c:flags:ecb</b>، <b>re2c:flags:e</b></b></a></dt>
+  <dd>نفس خيار <b>--ebcdic</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding:ucs2"><a class="permalink" href="#re2c:encoding:ucs2"><b><b>re2c:encoding:ucs2</b>،
+    <b>re2c:flags:wide-chars</b>، <b>re2c:flags:w</b></b></a></dt>
+  <dd>نفس خيار <b>--ucs2</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding:utf8"><a class="permalink" href="#re2c:encoding:utf8"><b><b>re2c:encoding:utf8</b>،
+    <b>re2c:flags:utf-8</b>، <b>re2c:flags:8</b></b></a></dt>
+  <dd>نفس خيار <b>--utf8</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding:utf16"><a class="permalink" href="#re2c:encoding:utf16"><b><b>re2c:encoding:utf16</b>،
+    <b>re2c:flags:utf-16</b>، <b>re2c:flags:x</b></b></a></dt>
+  <dd>نفس خيار <b>--utf16</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding:utf32"><a class="permalink" href="#re2c:encoding:utf32"><b><b>re2c:encoding:utf32</b>،
+    <b>re2c:flags:unicode</b>، <b>re2c:flags:u</b></b></a></dt>
+  <dd>نفس خيار <b>--utf32</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:encoding"><a class="permalink" href="#re2c:encoding"><b><b>re2c:encoding-policy</b>،
+    <b>re2c:flags:encoding-policy</b></b></a></dt>
+  <dd>نفس خيار <b>--encoding-policy</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:eof"><a class="permalink" href="#re2c:eof"><b><b>re2c:eof</b></b></a></dt>
+  <dd>يحدد الرمز الخاص المستخدم مع قاعدة نهاية الإدخال <b>$</b>.
+      القيمة الافتراضية هي <b>-1</b> (قاعدة <b>$</b> غير مستخدمة). القيم الأخرى الممكنة
+      تشمل جميع وحدات الشفرة الصالحة. يتم التعرف فقط على الأرقام العشرية.</dd>
+  <dt id="re2c:header"><a class="permalink" href="#re2c:header"><b><b>re2c:header</b>،
+    <b>re2c:flags:type-header</b>، <b>re2c:flags:t</b></b></a></dt>
+  <dd>يحدد اسم ملف الرأس الذي تم إنشاؤه بالنسبة إلى دليل ملف الإخراج. نفس خيار
+      <b>--header</b> باستثناء أن مسار الملف نسبي.</dd>
+  <dt id="re2c:indent:string"><a class="permalink" href="#re2c:indent:string"><b><b>re2c:indent:string</b></b></a></dt>
+  <dd>يحدد السلسلة النصية المستخدمة للمسافة البادئة. الافتراضي هو حرف علامة جدولة واحد
+      <b>&quot;\t&quot;</b>. يجب أن تحتوي سلسلة المسافة البادئة على أحرف مسافة بيضاء
+      فقط. لتعطيل المسافة البادئة بالكامل، اضبط هذا التكوين على سلسلة فارغة.</dd>
+  <dt id="re2c:indent:top"><a class="permalink" href="#re2c:indent:top"><b><b>re2c:indent:top</b></b></a></dt>
+  <dd>يحدد الحد الأدنى لمقدار المسافة البادئة المراد استخدامه. القيمة الافتراضية هي
+      صفر. يجب أن تكون القيمة رقمًا صحيحًا غير سالب.</dd>
+  <dt id="re2c:invert"><a class="permalink" href="#re2c:invert"><b><b>re2c:invert-captures</b></b></a></dt>
+  <dd>نفس خيار <b>--invert-captures</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:label:prefix"><a class="permalink" href="#re2c:label:prefix"><b><b>re2c:label:prefix</b>،
+    <b>re2c:labelprefix</b></b></a></dt>
+  <dd>يحدد البادئة المستخدمة لملصقات حالة DFA. الافتراضي هو
+    <b>yy</b>.</dd>
+  <dt id="re2c:label:start"><a class="permalink" href="#re2c:label:start"><b><b>re2c:label:start</b>،
+    <b>re2c:startlabel</b></b></a></dt>
+  <dd>يتحكم في إنشاء ملصق بداية الكتلة. القيمة الافتراضية هي صفر،
+      مما يعني أن الملصق يبدأ فقط إذا تم استخدامه. قيمة عدد صحيح أكبر من الصفر
+      تجبر على إنشاء ملصق البداية حتى لو لم يتم استخدامه بواسطة المحلل اللغوي. قيمة
+      سلسلة نصية تجبر أيضًا على إنشاء ملصق البداية وتعيين اسم الملصق إلى السلسلة
+      المحددة. ينطبق هذا التكوين فقط على الكتلة الحالية (يتم إعادة تعيينه إلى الافتراضي
+      للكتلة التالية).</dd>
+  <dt id="re2c:label:yyFillLabel"><a class="permalink" href="#re2c:label:yyFillLabel"><b><b>re2c:label:yyFillLabel</b></b></a></dt>
+  <dd>يحدد بادئة ملصقات <b>YYFILL</b> المستخدمة مع <b>re2c:eof</b> وفي وضع الحالة القابلة للتخزين.</dd>
+  <dt id="re2c:label:yyloop"><a class="permalink" href="#re2c:label:yyloop"><b><b>re2c:label:yyloop</b></b></a></dt>
+  <dd>يحدد اسم الملصق الذي يحدد بداية حلقة المحلل اللغوي مع خيار
+      <b>--loop-switch</b>. الافتراضي هو <b>yyloop</b>.</dd>
+  <dt id="re2c:label:yyNext"><a class="permalink" href="#re2c:label:yyNext"><b><b>re2c:label:yyNext</b></b></a></dt>
+  <dd>يحدد اسم الملصق الاختياري الذي يتبع مفتاح <b>YYGETSTATE</b>
+      في وضع الحالة القابلة للتخزين (ممكّن مع
+      <b>re2c:state:nextlabel</b>). الافتراضي هو <b>yyNext</b>.</dd>
+  <dt id="re2c:lookahead"><a class="permalink" href="#re2c:lookahead"><b><b>re2c:lookahead</b>،
+    <b>re2c:flags:lookahead</b></b></a></dt>
+  <dd>مهمل (راجع خيار <b>--no-lookahead</b> المهمل).</dd>
+  <dt id="re2c:monadic"><a class="permalink" href="#re2c:monadic"><b><b>re2c:monadic</b></b></a></dt>
+  <dd>إذا تم تعيينه على قيمة غير صفرية، فسيستخدم المحلل اللغوي الذي تم إنشاؤه التدوين الأحادي (هذا التكوين خاص بلغة Haskell).</dd>
+  <dt id="re2c:nested"><a class="permalink" href="#re2c:nested"><b><b>re2c:nested-ifs</b>،
+    <b>re2c:flags:nested-ifs</b>، <b>re2c:flags:s</b></b></a></dt>
+  <dd>نفس خيار <b>--nested-ifs</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:posix"><a class="permalink" href="#re2c:posix"><b><b>re2c:posix-captures</b>،
+    <b>re2c:flags:posix-captures</b>، <b>re2c:flags:P</b></b></a></dt>
+  <dd>نفس خيار <b>--posix-captures</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:posix~2"><a class="permalink" href="#re2c:posix~2"><b><b>re2c:posix-captvars</b></b></a></dt>
+  <dd>نفس خيار <b>--posix-captvars</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:tags"><a class="permalink" href="#re2c:tags"><b><b>re2c:tags</b>،
+    <b>re2c:flags:tags</b>، <b>re2c:flags:T</b></b></a></dt>
+  <dd>نفس خيار <b>--tags</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:tags:expression"><a class="permalink" href="#re2c:tags:expression"><b><b>re2c:tags:expression</b></b></a></dt>
+  <dd>يحدد التعبير المستخدم لمتغيرات العلامات. افتراضيًا، re2hs
+      ينشئ تعبيرات بالشكل <b>yyt&lt;N&gt;</b>. قد يكون هذا غير مريح، على سبيل المثال
+      إذا تم تعريف متغيرات العلامات كحقول في بنية. يتم استبدال جميع تكرارات
+      <b>@@{tag}</b> أو <b>@@</b> باسم العلامة الفعلي. على سبيل المثال،
+      <b>re2c:tags:expression = &quot;s.@@&quot;;</b> يؤدي إلى تعبيرات بالشكل
+      <b>s.yyt&lt;N&gt;</b> في الكود الذي تم إنشاؤه. راجع أيضًا تكوين
+      <b>re2c:api:sigil</b>.</dd>
+  <dt id="re2c:tags:negative"><a class="permalink" href="#re2c:tags:negative"><b><b>re2c:tags:negative</b></b></a></dt>
+  <dd>يحدد التعبير الثابت الذي يستخدم لقيمة العلامة السالبة (عادة ما يكون هذا
+      <b>-1</b> إذا كانت العلامات هي إزاحات عدد صحيح في سلسلة الإدخال، أو مؤشر
+      فارغ إذا كانت مؤشرات).</dd>
+  <dt id="re2c:tags:prefix"><a class="permalink" href="#re2c:tags:prefix"><b><b>re2c:tags:prefix</b></b></a></dt>
+  <dd>يحدد البادئة لأسماء متغيرات العلامات. الافتراضي هو
+    <b>yyt</b>.</dd>
+  <dt id="re2c:sentinel"><a class="permalink" href="#re2c:sentinel"><b><b>re2c:sentinel</b></b></a></dt>
+  <dd>يحدد الرمز الخاص المستخدم لفحوصات نهاية الإدخال (عند تعطيل فحوصات الحدود
+      مع <b>re2c:yyfill:enable = 0;</b> ولم يتم تعيين <b>re2c:eof</b>). هذا التكوين
+      لا يؤثر على إنشاء الكود: هدفه هو التحقق من أن الرمز الخاص غير مسموح به في
+      منتصف القاعدة، والتأكد من أن المحلل اللغوي لن يقرأ بعد نهاية المخزن المؤقت.
+      القيمة الافتراضية هي <i>-1`</i> (في هذه الحالة يفترض re2hs أن الرمز الخاص هو
+      صفر، وهو الحالة الأكثر شيوعًا). يتم التعرف فقط على الأرقام العشرية.</dd>
+  <dt id="re2c:state:abort"><a class="permalink" href="#re2c:state:abort"><b><b>re2c:state:abort</b></b></a></dt>
+  <dd>إذا تم تعيينه على قيمة عدد صحيح موجبة، فإن الحالة الافتراضية في إرسال الحالة الذي تم إنشاؤه
+      توقف تنفيذ البرنامج، وحالة <b>-1</b> صريحة تحتوي على انتقال إلى بداية
+      الكتلة.</dd>
+  <dt id="re2c:state:nextlabel"><a class="permalink" href="#re2c:state:nextlabel"><b><b>re2c:state:nextlabel</b></b></a></dt>
+  <dd>يتحكم فيما إذا كان مفتاح <b>YYGETSTATE</b> يتبعه ملصق <b>yyNext</b>
+      (القيمة الافتراضية هي صفر، والتي تتوافق مع عدم وجود ملصق).
+      بدلاً من ذلك، يمكن استخدام <b>re2c:label:start</b> لإنشاء ملصق بداية محدد،
+      أو كتلة <b>getstate</b> صريحة لإنشاء مفتاح <b>YYGETSTATE</b> بشكل منفصل عن
+      كتلة المحلل اللغوي.</dd>
+  <dt id="re2c:unsafe"><a class="permalink" href="#re2c:unsafe"><b><b>re2c:unsafe</b>،
+    <b>re2c:flags:unsafe</b></b></a></dt>
+  <dd>نفس خيار <b>--no-unsafe</b>، ولكن يمكن تكوينه على أساس كل كتلة. إذا تم تعيينه
+      على صفر، فإنه يمنع إنشاء أغلفة <b>unsafe</b> حول <b>YYPEEK</b>. الافتراضي هو
+      غير صفري (يتم إنشاء الأغلفة). هذا التكوين خاص بلغة Rust.</dd>
+  <dt id="re2c:YYBACKUP"><a class="permalink" href="#re2c:YYBACKUP"><b><b>re2c:YYBACKUP</b>،
+    <b>re2c:define:YYBACKUP</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYBACKUP</b>.</dd>
+  <dt id="re2c:YYBACKUPCTX"><a class="permalink" href="#re2c:YYBACKUPCTX"><b><b>re2c:YYBACKUPCTX</b>،
+    <b>re2c:define:YYBACKUPCTX</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYBACKUPCTX</b>.</dd>
+  <dt id="re2c:YYCONDTYPE"><a class="permalink" href="#re2c:YYCONDTYPE"><b><b>re2c:YYCONDTYPE</b>،
+    <b>re2c:define:YYCONDTYPE</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات <b>YYCONDTYPE</b>.</dd>
+  <dt id="re2c:YYCTYPE"><a class="permalink" href="#re2c:YYCTYPE"><b><b>re2c:YYCTYPE</b>،
+    <b>re2c:define:YYCTYPE</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYCTYPE</b>.</dd>
+  <dt id="re2c:YYCTXMARKER"><a class="permalink" href="#re2c:YYCTXMARKER"><b><b>re2c:YYCTXMARKER</b>،
+    <b>re2c:define:YYCTXMARKER</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYCTXMARKER</b>.</dd>
+  <dt id="re2c:YYCURSOR"><a class="permalink" href="#re2c:YYCURSOR"><b><b>re2c:YYCURSOR</b>،
+    <b>re2c:define:YYCURSOR</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYCURSOR</b>.</dd>
+  <dt id="re2c:YYDEBUG"><a class="permalink" href="#re2c:YYDEBUG"><b><b>re2c:YYDEBUG</b>،
+    <b>re2c:define:YYDEBUG</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYDEBUG</b>.</dd>
+  <dt id="re2c:YYFILL"><a class="permalink" href="#re2c:YYFILL"><b><b>re2c:YYFILL</b>،
+    <b>re2c:define:YYFILL</b></b></a></dt>
+  <dd>يعرّف بدائية واجهة برمجة التطبيقات العامة <b>YYFILL</b>.</dd>
+  <dt id="re2c:YYFILL@len"><a class="permalink" href="#re2c:YYFILL@len"><b><b>re2c:YYFILL@len</b>،
+    <b>re2c:define:YYFILL@len</b></b></a></dt>
+  <dd>يحدد الإشارة المستخدمة لاستبدال الوسائط في تعريف <b>YYFILL</b>. الافتراضي هو
+      <b>@@</b>. يتجاوز الإشارة الأكثر عمومية
+      <b>re2c:api:sigi</b>  <dt id="re2c:YYFILL:naked"><a class="permalink" href="#re2c:YYFILL:naked"><b><b>re2c:YYFILL:naked</b>,
+    <b>re2c:define:YYFILL:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYFILL</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات الحر.</dd>
+  <dt id="re2c:YYFN"><a class="permalink" href="#re2c:YYFN"><b><b>re2c:YYFN</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYFN</b>.</dd>
+  <dt id="re2c:YYINPUT"><a class="permalink" href="#re2c:YYINPUT"><b><b>re2c:YYINPUT</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYINPUT</b>.</dd>
+  <dt id="re2c:YYGETCOND"><a class="permalink" href="#re2c:YYGETCOND"><b><b>re2c:YYGETCOND</b>,
+    <b>re2c:define:YYGETCONDITION</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYGETCOND</b>.</dd>
+  <dt id="re2c:YYGETCOND:naked"><a class="permalink" href="#re2c:YYGETCOND:naked"><b><b>re2c:YYGETCOND:naked</b>,
+    <b>re2c:define:YYGETCONDITION:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETCOND</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات الحر.</dd>
+  <dt id="re2c:YYGETSTATE"><a class="permalink" href="#re2c:YYGETSTATE"><b><b>re2c:YYGETSTATE</b>,
+    <b>re2c:define:YYGETSTATE</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYGETSTATE</b>.</dd>
+  <dt id="re2c:YYGETSTATE:naked"><a class="permalink" href="#re2c:YYGETSTATE:naked"><b><b>re2c:YYGETSTATE:naked</b>,
+    <b>re2c:define:YYGETSTATE:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETSTATE</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات الحر.</dd>
+  <dt id="re2c:YYGETACCEPT"><a class="permalink" href="#re2c:YYGETACCEPT"><b><b>re2c:YYGETACCEPT</b>,
+    <b>re2c:define:YYGETACCEPT</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYGETACCEPT</b>.</dd>
+  <dt id="re2c:YYLESSTHAN"><a class="permalink" href="#re2c:YYLESSTHAN"><b><b>re2c:YYLESSTHAN</b>,
+    <b>re2c:define:YYLESSTHAN</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYLESSTHAN</b>.</dd>
+  <dt id="re2c:YYLIMIT"><a class="permalink" href="#re2c:YYLIMIT"><b><b>re2c:YYLIMIT</b>,
+    <b>re2c:define:YYLIMIT</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYLIMIT</b>.</dd>
+  <dt id="re2c:YYMARKER"><a class="permalink" href="#re2c:YYMARKER"><b><b>re2c:YYMARKER</b>,
+    <b>re2c:define:YYMARKER</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYMARKER</b>.</dd>
+  <dt id="re2c:YYMTAGN"><a class="permalink" href="#re2c:YYMTAGN"><b><b>re2c:YYMTAGN</b>,
+    <b>re2c:define:YYMTAGN</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYMTAGN</b>.</dd>
+  <dt id="re2c:YYMTAGP"><a class="permalink" href="#re2c:YYMTAGP"><b><b>re2c:YYMTAGP</b>,
+    <b>re2c:define:YYMTAGP</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYMTAGP</b>.</dd>
+  <dt id="re2c:YYPEEK"><a class="permalink" href="#re2c:YYPEEK"><b><b>re2c:YYPEEK</b>,
+    <b>re2c:define:YYPEEK</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYPEEK</b>.</dd>
+  <dt id="re2c:YYRESTORE"><a class="permalink" href="#re2c:YYRESTORE"><b><b>re2c:YYRESTORE</b>,
+    <b>re2c:define:YYRESTORE</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYRESTORE</b>.</dd>
+  <dt id="re2c:YYRESTORECTX"><a class="permalink" href="#re2c:YYRESTORECTX"><b><b>re2c:YYRESTORECTX</b>,
+    <b>re2c:define:YYRESTORECTX</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYRESTORECTX</b>.</dd>
+  <dt id="re2c:YYRESTORETAG"><a class="permalink" href="#re2c:YYRESTORETAG"><b><b>re2c:YYRESTORETAG</b>,
+    <b>re2c:define:YYRESTORETAG</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYRESTORETAG</b>.</dd>
+  <dt id="re2c:YYSETCOND"><a class="permalink" href="#re2c:YYSETCOND"><b><b>re2c:YYSETCOND</b>,
+    <b>re2c:define:YYSETCONDITION</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYSETCOND</b>.</dd>
+  <dt id="re2c:YYSETCOND@cond"><a class="permalink" href="#re2c:YYSETCOND@cond"><b><b>re2c:YYSETCOND@cond</b>,
+    <b>re2c:define:YYSETCONDITION@cond</b></b></a></dt>
+  <dd>يحدد الرمز المميز المستخدم لاستبدال الوسيطات في تعريف
+      <b>YYSETCOND</b>. القيمة الافتراضية هي <b>@@</b>. يتجاوز إعداد
+      <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETCOND:naked"><a class="permalink" href="#re2c:YYSETCOND:naked"><b><b>re2c:YYSETCOND:naked</b>,
+    <b>re2c:define:YYSETCONDITION:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETCOND</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات الحر.</dd>
+  <dt id="re2c:YYSETSTATE"><a class="permalink" href="#re2c:YYSETSTATE"><b><b>re2c:YYSETSTATE</b>,
+    <b>re2c:define:YYSETSTATE</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYSETSTATE</b>.</dd>
+  <dt id="re2c:YYSETSTATE@state"><a class="permalink" href="#re2c:YYSETSTATE@state"><b><b>re2c:YYSETSTATE@state</b>,
+    <b>re2c:define:YYSETSTATE@state</b></b></a></dt>
+  <dd>يحدد الرمز المميز المستخدم لاستبدال الوسيطات في تعريف
+      <b>YYSETSTATE</b>. القيمة الافتراضية هي <b>@@</b>. يتجاوز إعداد
+      <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETSTATE:naked"><a class="permalink" href="#re2c:YYSETSTATE:naked"><b><b>re2c:YYSETSTATE:naked</b>,
+    <b>re2c:define:YYSETSTATE:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETSTATE</b>. القيمة الصفرية تتوافق مع نمط واجهة برمجة التطبيقات الحر.</dd>
+  <dt id="re2c:YYSETACCEPT"><a class="permalink" href="#re2c:YYSETACCEPT"><b><b>re2c:YYSETACCEPT</b>,
+    <b>re2c:define:YYSETACCEPT</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>YYSETACCEPT</b>.</dd>
+  <dt id="re2c:YYSKIP"><a class="permalink" href="#re2c:YYSKIP"><b><b>re2c:YYSKIP</b>,
+    <b>re2c:define:YYSKIP</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSKIP</b>.</dd>
+  <dt id="re2c:YYSHIFT"><a class="permalink" href="#re2c:YYSHIFT"><b><b>re2c:YYSHIFT</b>,
+    <b>re2c:define:YYSHIFT</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSHIFT</b>.</dd>
+  <dt id="re2c:YYCOPYMTAG"><a class="permalink" href="#re2c:YYCOPYMTAG"><b><b>re2c:YYCOPYMTAG</b>,
+    <b>re2c:define:YYCOPYMTAG</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYCOPYMTAG</b>.</dd>
+  <dt id="re2c:YYCOPYSTAG"><a class="permalink" href="#re2c:YYCOPYSTAG"><b><b>re2c:YYCOPYSTAG</b>,
+    <b>re2c:define:YYCOPYSTAG</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYCOPYSTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTMTAG"><a class="permalink" href="#re2c:YYSHIFTMTAG"><b><b>re2c:YYSHIFTMTAG</b>,
+    <b>re2c:define:YYSHIFTMTAG</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSHIFTMTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTSTAG"><a class="permalink" href="#re2c:YYSHIFTSTAG"><b><b>re2c:YYSHIFTSTAG</b>,
+    <b>re2c:define:YYSHIFTSTAG</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSHIFTSTAG</b>.</dd>
+  <dt id="re2c:YYSTAGN"><a class="permalink" href="#re2c:YYSTAGN"><b><b>re2c:YYSTAGN</b>,
+    <b>re2c:define:YYSTAGN</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSTAGN</b>.</dd>
+  <dt id="re2c:YYSTAGP"><a class="permalink" href="#re2c:YYSTAGP"><b><b>re2c:YYSTAGP</b>,
+    <b>re2c:define:YYSTAGP</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات العامة <b>YYSTAGP</b>.</dd>
+  <dt id="re2c:yyaccept"><a class="permalink" href="#re2c:yyaccept"><b><b>re2c:yyaccept</b>,
+    <b>re2c:variable:yyaccept</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yyaccept</b>.</dd>
+  <dt id="re2c:yybm"><a class="permalink" href="#re2c:yybm"><b><b>re2c:yybm</b>,
+    <b>re2c:variable:yybm</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yybm</b>.</dd>
+  <dt id="re2c:yybm:hex"><a class="permalink" href="#re2c:yybm:hex"><b><b>re2c:yybm:hex</b>,
+    <b>re2c:variable:yybm:hex</b></b></a></dt>
+  <dd>إذا تم ضبطه على قيمة غير صفرية، فسيتم إنشاء جداول البتات لـ
+      <b>--bit-vectors</b> بالصيغة السداسية عشرية. القيمة الافتراضية هي صفر
+      (جداول البتات بالصيغة العشرية).</dd>
+  <dt id="re2c:yych"><a class="permalink" href="#re2c:yych"><b><b>re2c:yych</b>,
+    <b>re2c:variable:yych</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yych</b>.</dd>
+  <dt id="re2c:yych:emit"><a class="permalink" href="#re2c:yych:emit"><b><b>re2c:yych:emit</b>,
+    <b>re2c:variable:yych:emit</b></b></a></dt>
+  <dd>إذا تم ضبطه على صفر، فلن يتم إنشاء تعريف <b>yych</b>. القيمة الافتراضية
+      غير صفرية.</dd>
+  <dt id="re2c:yych:conversion"><a class="permalink" href="#re2c:yych:conversion"><b><b>re2c:yych:conversion</b>,
+    <b>re2c:variable:yych:conversion</b></b></a></dt>
+  <dd>إذا تم ضبطه على قيمة غير صفرية، فسيقوم re2hs تلقائيًا بإنشاء تحويل إلى
+      <b>YYCTYPE</b> في كل مرة يتم فيها قراءة <b>yych</b>. الافتراضي هو صفر
+      (لا يوجد تحويل).</dd>
+  <dt id="re2c:yych:literals"><a class="permalink" href="#re2c:yych:literals"><b><b>re2c:yych:literals</b>,
+    <b>re2c:variable:yych:literals</b></b></a></dt>
+  <dd>يحدد شكل الثوابت التي تتم مطابقتها مع <b>yych</b>. القيم الممكنة
+      هي: <b>char</b> (ثوابت الأحرف في علامات اقتباس فردية، غير القابلة للطباعة
+      تستخدم تسلسلات هروب تبدأ بشرطة مائلة للخلف)، <b>hex</b> (أعداد صحيحة
+      سداسية عشرية) و <b>char_or_hex</b> (مزيج من كليهما، ثوابت أحرف للأحرف
+      القابلة للطباعة وأعداد صحيحة سداسية عشرية لغيرها).</dd>
+  <dt id="re2c:yyctable"><a class="permalink" href="#re2c:yyctable"><b><b>re2c:yyctable</b>,
+    <b>re2c:variable:yyctable</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yyctable</b>.</dd>
+  <dt id="re2c:yynmatch"><a class="permalink" href="#re2c:yynmatch"><b><b>re2c:yynmatch</b>,
+    <b>re2c:variable:yynmatch</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yynmatch</b>.</dd>
+  <dt id="re2c:yypmatch"><a class="permalink" href="#re2c:yypmatch"><b><b>re2c:yypmatch</b>,
+    <b>re2c:variable:yypmatch</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yypmatch</b>.</dd>
+  <dt id="re2c:yytarget"><a class="permalink" href="#re2c:yytarget"><b><b>re2c:yytarget</b>,
+    <b>re2c:variable:yytarget</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yytarget</b>.</dd>
+  <dt id="re2c:yystable"><a class="permalink" href="#re2c:yystable"><b><b>re2c:yystable</b>,
+    <b>re2c:variable:yystable</b></b></a></dt>
+  <dd>مهمل.</dd>
+  <dt id="re2c:yystate"><a class="permalink" href="#re2c:yystate"><b><b>re2c:yystate</b>,
+    <b>re2c:variable:yystate</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yystate</b>.</dd>
+  <dt id="re2c:yyfill"><a class="permalink" href="#re2c:yyfill"><b><b>re2c:yyfill</b>,
+    <b>re2c:variable:yyfill</b></b></a></dt>
+  <dd>يعرف بدائية واجهة برمجة التطبيقات <b>yyfill</b>.</dd>
+  <dt id="re2c:yyfill:check"><a class="permalink" href="#re2c:yyfill:check"><b><b>re2c:yyfill:check</b></b></a></dt>
+  <dd>إذا تم ضبطه على صفر، فسيتم قمع إنشاء فحص ما قبل <b>YYFILL</b> لعدد
+      أحرف الإدخال (تعريف <b>YYLESSTHAN</b> في واجهة برمجة التطبيقات العامة
+      والمقارنة المستندة إلى <b>YYLIMIT</b> في واجهة برمجة تطبيقات مؤشر C).
+      القيمة الافتراضية غير صفرية (إنشاء الفحص).</dd>
+  <dt id="re2c:yyfill:enable"><a class="permalink" href="#re2c:yyfill:enable"><b><b>re2c:yyfill:enable</b></b></a></dt>
+  <dd>إذا تم ضبطه على صفر، فسيتم قمع إنشاء <b>YYFILL</b> (بالاقتران مع
+      الفحص). يجب استخدام هذا عندما يتناسب الإدخال بالكامل مع قطعة واحدة من
+      الذاكرة (لا حاجة للتخزين المؤقت) ولا تعتمد فحوصات نهاية الإدخال على
+      فحوصات <b>YYFILL</b> (على سبيل المثال، إذا تم استخدام حرف كحاجز). استخدم
+      التحذيرات (الخيار <b>-W</b>) وإعداد <b>re2c:sentinel</b> للتحقق من أن
+      المحلل اللغوي الذي تم إنشاؤه لا يمكنه القراءة بعد نهاية الإدخال. القيمة
+      الافتراضية غير صفرية (<b>YYFILL</b> ممكّن).</dd>
+  <dt id="re2c:yyfill:parameter"><a class="permalink" href="#re2c:yyfill:parameter"><b><b>re2c:yyfill:parameter</b></b></a></dt>
+  <dd>إذا تم ضبطه على صفر، فسيتم قمع إنشاء المعلمة التي تم تمريرها إلى
+      <b>YYFILL</b>. المعلمة هي الحد الأدنى لعدد الأحرف التي يجب توفيرها.
+      القيمة الافتراضية غير صفرية (تم إنشاء المعلمة). يمكن تجاوز هذا الإعداد
+      باستخدام <b>re2c:YYFILL:naked</b> أو <b>re2c:api:style</b>.</dd>
+  <dt id="re2c:yyfn:sep"><a class="permalink" href="#re2c:yyfn:sep"><b><b>re2c:yyfn:sep</b></b></a> stores the current input character sequence (string,
+      buffer, etc.).</dd>
+  <dt id="YYMAXFILL"><a class="permalink" href="#YYMAXFILL"><b><b>YYMAXFILL</b></b></a></dt>
+  <dd>An integral constant equal to the maximum value of the argument to
+      <b>YYFILL</b>. It can be generated with a <b>max</b> block.</dd>
+  <dt id="YYLESSTHAN"><a class="permalink" href="#YYLESSTHAN"><b><b>YYLESSTHAN</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>len</b>. It should be defined
+      as an r-value of boolean type that equals <b>true</b> if and only if there
+      are less than <b>len</b> input characters left.</dd>
+  <dt id="YYPEEK"><a class="permalink" href="#YYPEEK"><b><b>YYPEEK</b></b></a></dt>
+  <dd>A generic API primitive with no variables. It should be defined as an
+      r-value of type <b>YYCTYPE</b> that is equal to the character at the
+      current input position.</dd>
+  <dt id="YYSKIP"><a class="permalink" href="#YYSKIP"><b><b>YYSKIP</b></b></a></dt>
+  <dd>A generic API primitive that should advance the current input position by
+      one code unit.</dd>
+  <dt id="YYBACKUP"><a class="permalink" href="#YYBACKUP"><b><b>YYBACKUP</b></b></a></dt>
+  <dd>A generic API primitive that should save the current input position (to be
+      restored with <b>YYRESTORE</b> later).</dd>
+  <dt id="YYRESTORE"><a class="permalink" href="#YYRESTORE"><b><b>YYRESTORE</b></b></a></dt>
+  <dd>A generic API primitive that should restore the current input position to
+      the value saved by <b>YYBACKUP</b>.</dd>
+  <dt id="YYBACKUPCTX"><a class="permalink" href="#YYBACKUPCTX"><b><b>YYBACKUPCTX</b></b></a></dt>
+  <dd>A generic API primitive that should save the current input position as the
+      position of the trailing context (to be restored with <b>YYRESTORECTX</b>
+      later).</dd>
+  <dt id="YYRESTORECTX"><a class="permalink" href="#YYRESTORECTX"><b><b>YYRESTORECTX</b></b></a></dt>
+  <dd>A generic API primitive that should restore the trailing context position
+      saved with <b>YYBACKUPCTX</b>.</dd>
+  <dt id="YYRESTORETAG"><a class="permalink" href="#YYRESTORETAG"><b><b>YYRESTORETAG</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>tag</b> that should restore
+      the trailing context position to the value of <b>tag</b>.</dd>
+  <dt id="YYSTAGP"><a class="permalink" href="#YYSTAGP"><b><b>YYSTAGP</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>tag</b>, where <b>tag</b> can
+      be a pointer or an offset in <b>YYINPUT</b> (see submatch extraction
+      section for details). <b>YYSTAGP</b> should set <b>tag</b> to the current
+      input position.</dd>
+  <dt id="YYSTAGN"><a class="permalink" href="#YYSTAGN"><b><b>YYSTAGN</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>tag</b>, where <b>tag</b> can
+      be a pointer or an offset in <b>YYINPUT</b> (see submatch extraction
+      section for details). <b>YYSTAGN</b> should to set <b>tag</b> to a value
+      that represents non-existent input position.</dd>
+  <dt id="YYMTAGP"><a class="permalink" href="#YYMTAGP"><b><b>YYMTAGP</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>tag</b>. <b>YYMTAGP</b>
+      should append the current position to the submatch history of <b>tag</b>
+      (see the submatch extraction section for details.)</dd>
+  <dt id="YYMTAGN"><a class="permalink" href="#YYMTAGN"><b><b>YYMTAGN</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>tag</b>. <b>YYMTAGN</b>
+      should append a value that represents non-existent input position position
+      to the submatch history of <b>tag</b> (see the submatch extraction section
+      for details.)</dd>
+  <dt id="YYSHIFT"><a class="permalink" href="#YYSHIFT"><b><b>YYSHIFT</b></b></a></dt>
+  <dd>A generic API primitive with one variable <b>shift</b> that should shift
+      the current input position by <b>shift</b> characters (the shift value may
+      be negative).</dd>
+  <dt id="YYCOPYSTAG"><a class="permalink" href="#YYCOPYSTAG"><b><b>YYCOPYSTAG</b></b></a></dt>
+  <dd>A generic API primitive with two variables, <b>lhs</b> and <b>rhs</b> that
+      should copy right-hand-side s-tag variable <b>rhs</b> to the
+      left-hand-side s-tag variable <b>lhs</b>. For most languages this
+      primitive has a default definition that assigns <b>lhs</b> to
+    <b>rhs</b>.</dd>
+  <dt id="YYCOPYMTAG"><a class="permalink" href="#YYCOPYMTAG"><b><b>YYCOPYMTAG</b></b></a></dt>
+  <dd>A generic API primitive with two variables, <b>lhs</b> and <b>rhs</b> that
+      should copy right-hand-side m-tag variable <b>rhs</b> to the
+      left-hand-side m-tag variable <b>lhs</b>. For most languages this
+      primitive has a default definition that assigns <b>lhs</b> to
+    <b>rhs</b>.</dd>
+  <dt id="YYSHIFTSTAG"><a class="permalink" href="#YYSHIFTSTAG"><b><b>YYSHIFTSTAG</b></b></a></dt>
+  <dd>A generic API primitive with two variables, <b>tag</b> and <b>shift</b>
+      that should shift <b>tag</b> by <b>shift</b> code units (the shift value
+      may be negative).</dd>
+  <dt id="YYSHIFTMTAG"><a class="permalink" href="#YYSHIFTMTAG"><b><b>YYSHIFTMTAG</b></b></a></dt>
+  <dd>A generic API primitive with two variables, <b>tag</b> and <b>shift</b>
+      that should shift the latest value in the history of <b>tag</b> by
+      <b>shift</b> code units (the shift value may be negative).</dd>
+  <dt id="YYMAXNMATCH"><a class="permalink" href="#YYMAXNMATCH"><b><b>YYMAXNMATCH</b></b></a></dt>
+  <dd>An integral constant equal to the maximal number of POSIX capturing groups
+      in a rule. It is generated with a <b>maxnmatch</b> block.</dd>
+  <dt id="YYCONDTYPE"><a class="permalink" href="#YYCONDTYPE"><b><b>YYCONDTYPE</b></b></a></dt>
+  <dd>The type of the condition enum. It can be generated either with
+      <b>conditions</b> block or <b>--header</b> option.</dd>
+  <dt id="YYGETACCEPT"><a class="permalink" href="#YYGETACCEPT"><b><b>YYGETACCEPT</b></b></a></dt>
+  <dd>A primitive with one variable <b>var</b> that stores numeric selector of
+      the accepted rule. For most languages this primitive has a default
+      definition that reads from <b>var</b>.</dd>
+  <dt id="YYSETACCEPT"><a class="permalink" href="#YYSETACCEPT"><b><b>YYSETACCEPT</b></b></a></dt>
+  <dd>A primitive with two variables: <b>var</b> (an l-value that stores numeric
+      selector of the accepted rule), and <b>val</b> (the value of selector).
+      For most languages this primitive has a default definition that assigns
+      <b>var</b> to <b>val</b>.</dd>
+  <dt id="YYGETCOND"><a class="permalink" href="#YYGETCOND"><b><b>YYGETCOND</b></b></a></dt>
+  <dd>An r-value of type <b>YYCONDTYPE</b> that is equal to the current
+      condition identifier.</dd>
+  <dt id="YYSETCOND"><a class="permalink" href="#YYSETCOND"><b><b>YYSETCOND</b></b></a></dt>
+  <dd>A primitive with one variable <b>cond</b> that should set the current
+      condition identifier to <b>cond</b>.</dd>
+  <dt id="YYGETSTATE"><a class="permalink" href="#YYGETSTATE"><b><b>YYGETSTATE</b></b></a></dt>
+  <dd>An r-value of integer type that is equal to the current lexer state. It
+      should be initialized to <b>-1</b>.</dd>
+  <dt id="YYSETSTATE"><a class="permalink" href="#YYSETSTATE"><b><b>YYSETSTATE</b></b></a></dt>
+  <dd>A primitive with one variable <b>state</b> that should set the current
+      lexer state to <b>state</b>.</dd>
+  <dt id="YYDEBUG"><a class="permalink" href="#YYDEBUG"><b><b>YYDEBUG</b></b></a></dt>
+  <dd>This primitive is generated only with <b>-d</b>, <b>--debug-output</b>
+      option. Its purpose is to add logging to the generated code (typical
+      <b>YYDEBUG</b> definition is a print statement). <b>YYDEBUG</b> statements
+      are generated in every state and have two variables: <b>state</b> (either
+      a DFA state index or <b>-1</b>) and <b>symbol</b> (the current input
+      symbol).</dd>
+  <dt id="yyaccept"><a class="permalink" href="#yyaccept"><b><b>yyaccept</b></b></a></dt>
+  <dd>An l-value of unsigned integral type that stores the number of the latest
+      matched rule. User definition is necessary only with
+      <b>--storable-state</b> option.</dd>
+  <dt id="yybm"><a class="permalink" href="#yybm"><b><b>yybm</b></b></a></dt>
+  <dd>A table containing compressed bitmaps for up to 8 transitions (used with
+      the <b>--bitmaps</b> option). The table contains 256 elements and is
+      indexed by 1-byte code units. Each 8-bit element combines boolean values
+      for up to 8 transitions. k-Th bit of n-th element is true iff n-th code
+      unit is in the range of k-th transition. The idea of this bitmap is to
+      replace many <i>if</i> branches or <i>switch</i> cases with one check of a
+      single bit in the table.</dd>
+  <dt id="yych"><a class="permalink" href="#yych"><b><b>yych</b></b></a></dt>
+  <dd>An l-value of type <b>YYCTYPE</b> that stores the current input character.
+      User definition is necessary only with <b>-f</b> <b>--storable-state</b>
+      option.</dd>
+  <dt id="yyctable"><a class="permalink" href="#yyctable"><b><b>yyctable</b></b></a></dt>
+  <dd>Jump table generated for the initial condition dispatch (enabled with the
+      combination of <b>--conditions</b> and <b>--computed-gotos</b>
+    options).</dd>
+  <dt id="yyfill"><a class="permalink" href="#yyfill"><b><b>yyfill</b></b></a></dt>
+  <dd>An l-value that stores the result of <b>YYFILL</b> call (this may be
+      necessary for pure functional languages, where <b>YYFILL</b> is a monadic
+      function with complex return value).</dd>
+  <dt id="yynmatch"><a class="permalink" href="#yynmatch"><b><b>yynmatch</b></b></a></dt>
+  <dd>An l-value of unsigned integral type that stores the number of POSIX
+      capturing groups in the matched rule. Used only with <b>-P</b>
+      <b>--posix-captures</b> option.</dd>
+  <dt id="yypmatch"><a class="permalink" href="#yypmatch"><b><b>yypmatch</b></b></a></dt>
+  <dd>An array of l-values that are used to hold the tag values corresponding to
+      the capturing parentheses in the matching rule. Array length must be at
+      least <b>yynmatch * 2</b> (usually <b>YYMAXNMATCH * 2</b> is a good
+      choice). Used only with <b>-P</b> <b>--posix-captures</b> option.</dd>
+  <dt id="yystable"><a class="permalink" href="#yystable"><b><b>yystable</b></b></a></dt>
+  <dd>Deprecated.</dd>
+  <dt id="yystate"><a class="permalink" href="#yystate"><b><b>yystate</b></b></a></dt>
+  <dd>An l-value used with the <b>--loop-switch</b> option to store the current
+      DFA state.</dd>
+  <dt id="yytarget"><a class="permalink" href="#yytarget"><b><b>yytarget</b></b></a></dt>
+  <dd>Jump table that contains jump targets (label addresses) for all
+      transitions from a state. This table is local to each state. Generation of
+      <b>yytarget</b> tables is enabled with <b>--computed-gotos</b>
+    option.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Options'><a class='permalink' href='#Options'>Options</a></h2>
+<p class="Pp">Some of the options have corresponding <i>configurations</i>,
+    others are global and cannot be changed after re2c starts reading the input
+    file. Debug options generally require building re2c in debug configuration.
+    Internal options are useful for experimenting with the algorithms used in
+    re2c.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>-? --help -h</b></b></dt>
+  <dd>Show help message.</dd>
+  <dt id="api"><a class="permalink" href="#api"><b><b>--api &lt;simple | record
+    | generic&gt;</b></b></a></dt>
+  <dd>Specify the API used by the generated code to interface with used-defined
+      code. Option <b>simple</b> shold be used in simple cases when there's no
+      need for buffer refilling and storing lexer state. Option <b>record</b>
+      should be used when lexer state needs to be stored in a record (struct,
+      class, etc.). Option <b>generic</b> should be used in complex cases when
+      the other two APIs are not flexible enough.</dd>
+  <dt id="bit"><a class="permalink" href="#bit"><b><b>--bit-vectors
+    -b</b></b></a></dt>
+  <dd>Optimize conditional jumps using bit masks. This option implies
+     </dd>
+</dl>
+</div>
+</section>
+ <b>--nested-ifs</b>.</dd>
+  <dt id="captures"><a class="permalink" href="#captures"><b><b>--captures</b>,
+    <b>--leftmost-captures</b></b></a></dt>
+  <dd>تمكين استخراج المطابقة الفرعية باستخدام مجموعات الالتقاط الجشعة من اليسار. يتم تجميع النتيجة في مصفوفة <b>yybmatch</b> بسعة <b>2 * YYMAXNMATCH</b>، ويتم تعيين <b>yynmatch</b> إلى عدد المجموعات للقاعدة المطابقة.</dd>
+  <dt id="captvars"><a class="permalink" href="#captvars"><b><b>--captvars</b>,
+    <b>--leftmost-captvars</b></b></a></dt>
+  <dd>تمكين استخراج المطابقة الفرعية باستخدام مجموعات الالتقاط الجشعة من اليسار. يتم تجميع النتيجة في المتغيرات <b>yytl&lt;k&gt;</b>، <b>yytr&lt;k&gt;</b> للمجموعة الملتقطة <b>k</b>.</dd>
+  <dt id="case"><a class="permalink" href="#case"><b><b>--case-insensitive</b></b></a></dt>
+  <dd>عامل السلاسل النصية الموضوعة بين علامتي اقتباس مفردة أو مزدوجة على أنها غير حساسة لحالة الأحرف.</dd>
+  <dt id="case~2"><a class="permalink" href="#case~2"><b><b>--case-inverted</b></b></a></dt>
+  <dd>اعكس معنى السلاسل النصية الموضوعة بين علامتي اقتباس مفردة أو مزدوجة: عامل السلاسل النصية الموضوعة بين علامتي اقتباس مفردة على أنها حساسة لحالة الأحرف والسلاسل النصية الموضوعة بين علامتي اقتباس مزدوجة على أنها غير حساسة لحالة الأحرف.</dd>
+  <dt id="case~3"><a class="permalink" href="#case~3"><b><b>--case-ranges</b></b></a></dt>
+  <dd>دمج الحالات المتتالية في عبارات switch في نطاق بالشكل <b>low ... high</b>. هذه الصيغة هي امتداد للغة C/C++ تدعمه المترجمات مثل GCC و Clang و Tcc. الميزة الرئيسية مقارنة باستخدام حالات منفردة هي توليد كود أصغر ووقت توليد أسرع، على الرغم من أنها تؤدي أيضًا إلى حجم ثنائي أصغر لبعض المترجمات مثل Tcc.</dd>
+  <dt id="computed"><a class="permalink" href="#computed"><b><b>--computed-gotos
+    -g</b></b></a></dt>
+  <dd>تحسين القفزات الشرطية باستخدام امتداد "computed goto" غير القياسي (الذي يجب أن يدعمه المترجم). يقوم re2hs بإنشاء جداول القفز فقط في الحالات المعقدة ذات الفروع الشرطية الكثيرة. يمكن تهيئة عتبة التعقيد باستخدام إعداد <b>cgoto:threshold</b>. يمكن تمكين الإزاحات النسبية باستخدام إعداد <b>cgoto:relative</b>. يتضمن هذا الخيار <b>--bit-vectors</b>.</dd>
+  <dt id="computed~2"><a class="permalink" href="#computed~2"><b><b>--computed-gotos-relative</b></b></a></dt>
+  <dd>مشابه للخيار --computed-gotos ولكنه ينشئ إزاحات نسبية لجداول القفز بدلاً من ذلك (والتي يجب أن يدعمها المترجم). يتضمن هذا الخيار <b>--computed-gotos</b>.</dd>
+  <dt id="conditions"><a class="permalink" href="#conditions"><b><b>--conditions
+    --start-conditions -c</b></b></a></dt>
+  <dd>تمكين دعم "الشروط" المشابهة لـ Flex: العديد من المحللات النصية المترابطة ضمن كتلة واحدة. هذا بديل لتحديد كتل re2hs مختلفة يدويًا متصلة بـ <b>goto</b> أو استدعاءات الدوال.</dd>
+  <dt id="depfile"><a class="permalink" href="#depfile"><b><b>--depfile
+    FILE</b></b></a></dt>
+  <dd>كتابة معلومات التبعية إلى <b>FILE</b> في شكل قاعدة Makefile <b>&lt;output-file&gt; : &lt;input-file&gt; [include-file ...]</b>. يتيح ذلك تتبع تبعيات البناء في وجود كتل/توجيهات <b>include</b>، بحيث يؤدي تحديث ملفات التضمين إلى إعادة توليد الملف الناتج. يعتمد هذا الخيار على الخيار <b>--output</b>.</dd>
+  <dt id="ebcdic"><a class="permalink" href="#ebcdic"><b><b>--ebcdic --ecb
+    -e</b></b></a></dt>
+  <dd>إنشاء محلل نصي يقرأ الإدخال بتشفير EBCDIC. يفترض re2hs أن نطاق الأحرف هو 0 -- 0xFF وحجم الأحرف هو 1 بايت.</dd>
+  <dt id="empty"><a class="permalink" href="#empty"><b><b>--empty-class
+    &lt;match-empty | match-none | error&gt;</b></b></a></dt>
+  <dd>تحديد طريقة تعامل re2hs مع فئات الأحرف الفارغة. مع <b>match-empty</b> (الافتراضي) تتطابق الفئة الفارغة مع إدخال فارغ (وهو أمر غير منطقي، ولكنه متوافق مع الإصدارات السابقة). مع <b>match-none</b> تفشل الفئة الفارغة دائمًا في المطابقة. مع <b>error</b> تثير الفئة الفارغة خطأ في التصريف.</dd>
+  <dt id="encoding"><a class="permalink" href="#encoding"><b><b>--encoding-policy
+    &lt;fail | substitute | ignore&gt;</b></b></a></dt>
+  <dd>تحديد طريقة تعامل re2hs مع بدائل Unicode. مع <b>fail</b> يتوقف re2hs بخطأ عند مواجهة بديل. مع <b>substitute</b> يستبدل re2hs البدائل بصمت بنقطة الرمز الخطأ 0xFFFD. مع <b>ignore</b> (الافتراضي) يعامل re2hs البدائل كنقاط رمز عادية. تنص معيار Unicode على أن البدائل المستقلة غير صالحة، ولكن المكتبات والبرامج في العالم الحقيقي تتصرف بطرق مختلفة.</dd>
+  <dt id="flex"><a class="permalink" href="#flex"><b><b>--flex-syntax
+    -F</b></b></a></dt>
+  <dd>دعم جزئي لصيغة Flex: في هذا الوضع، لا تحتاج التعريفات المسماة إلى علامة يساوي وفاصلة منقوطة، وعند استخدامها يجب أن تكون محاطة بأقواس معقوفة. تُعامل الأسماء بدون أقواس معقوفة كسلاسل نصية موضوعة بين علامتي اقتباس مزدوجة.</dd>
+  <dt id="goto"><a class="permalink" href="#goto"><b><b>--goto-label</b></b></a></dt>
+  <dd>استخدام نموذج كود "goto/label": ترميز DFA في شكل كتل كود مسماة متصلة بانتقالات <b>goto</b> عبر الكتل. هذا مدعوم فقط للغات التي تحتوي على عبارة <b>goto</b>.</dd>
+  <dt id="header"><a class="permalink" href="#header"><b><b>--header
+    --type-header -t HEADER</b></b></a></dt>
+  <dd>إنشاء ملف <b>HEADER</b>. يمكن تحديد محتويات الملف باستخدام الكتل الخاصة <b>header:on</b> و <b>header:off</b>. إذا تم استخدام الشروط، فسيكون للملف الرأسي الذي تم إنشاؤه تعداد شرط مضاف تلقائيًا إليه (ما لم يكن هناك كتلة <b>conditions</b> صريحة).</dd>
+  <dt id="I"><a class="permalink" href="#I"><b><b>-I PATH</b></b></a></dt>
+  <dd>إضافة <b>PATH</b> إلى قائمة المواقع التي يتم استخدامها عند البحث عن ملفات التضمين. هذا الخيار مفيد بالاشتراك مع كتلة أو توجيه <b>include</b>. يبحث re2hs عن <b>FILE</b> في دليل الملف الأصلي وفي مواقع التضمين المحددة بالخيار <b>-I</b>.</dd>
+  <dt id="input"><a class="permalink" href="#input"><b><b>--input &lt;default |
+    custom&gt;</b></b></a></dt>
+  <dd>اسم مستعار مهمل لـ <b>--api</b>. الخيار <b>default</b> يتوافق مع <b>simple</b> (وهو بالفعل الافتراضي لمعظم الواجهات الخلفية، ولكن ليس كلها). الخيار <b>custom</b> يتوافق مع <b>generic</b>.</dd>
+  <dt id="input~2"><a class="permalink" href="#input~2"><b><b>--input-encoding
+    &lt;ascii | utf8&gt;</b></b></a></dt>
+  <dd>تحديد الطريقة التي يفسر بها re2hs التعبيرات العادية. مع <b>ascii</b> (الافتراضي) يتعامل re2hs مع الإدخال على أنه مشفر بـ ASCII: أي تسلسل من وحدات الكود هو تسلسل من أحرف مستقلة من بايت واحد. مع <b>utf8</b> يتعامل re2hs مع الإدخال على أنه مشفر بـ UTF8 ويتعرف على الأحرف متعددة البايت.</dd>
+  <dt id="invert"><a class="permalink" href="#invert"><b><b>--invert-captures</b></b></a></dt>
+  <dd>عكس معنى مجموعات الالتقاط وغير الالتقاط. افتراضيًا، <b>(...)</b> هي مجموعة التقاط و <b>(! ...)</b> هي مجموعة غير التقاط. مع هذا الخيار، <b>(! ...)</b> هي مجموعة التقاط و <b>(...)</b> هي مجموعة غير التقاط.</dd>
+  <dt id="lang"><a class="permalink" href="#lang"><b><b>--lang &lt;none | c | d
+    | go | haskell | java | js | ocaml | python | rust | swift | v |
+    zig&gt;</b></b></a></dt>
+  <dd>تحديد لغة الهدف. اللغات المدعومة هي C، D، Go، Haskell، Java، JS، OCaml، Python، Rust، Swift، V، Zig (يمكن إضافة المزيد من اللغات عبر ملفات صيغة محددة من قبل المستخدم، راجع الخيار <b>--syntax</b>). الخيار <b>none</b> يعطل إعدادات الصيغة الافتراضية، بحيث تكون لغة الهدف غير محددة.</dd>
+  <dt id="location"><a class="permalink" href="#location"><b><b>--location-format
+    &lt;gnu | msvc&gt;</b></b></a></dt>
+  <dd>تحديد تنسيق الموقع في الرسائل. مع <b>gnu</b> يتم طباعة المواقع كـ 'filename:line:column: ...'. مع <b>msvc</b> يتم طباعة المواقع كـ 'filename(line,column) ...'. الافتراضي هو <b>gnu</b>.</dd>
+  <dt id="loop"><a class="permalink" href="#loop"><b><b>--loop-switch</b></b></a></dt>
+  <dd>استخدام نموذج كود "loop/switch": ترميز DFA في شكل حلقة فوق عبارة switch، حيث تكون الحالات الفردية عبارة عن حالات switch. يتم تخزين الحالة في متغير <b>yystate</b>. تحديث الانتقالات بين الحالات <b>yystate</b> إلى تسمية الحالة الوجهة وتستمر التنفيذ إلى رأس الحلقة.</dd>
+  <dt id="nested"><a class="permalink" href="#nested"><b><b>--nested-ifs
+    -s</b></b></a></dt>
+  <dd>استخدام عبارات <b>if</b> متداخلة بدلاً من عبارات <b>switch</b> في القفزات الشرطية. ينتج عن هذا عادةً كود أكثر كفاءة مع المترجمات غير المحسّنة.</dd>
+  <dt id="no"><a class="permalink" href="#no"><b><b>--no-debug-info
+    -i</b></b></a></dt>
+  <dd>عدم إخراج توجيهات السطر. قد يكون هذا مفيدًا عندما يتم تخزين الكود الذي تم إنشاؤه في نظام تحكم بالإصدار (لتجنب الاختلافات الكبيرة التي تم إنشاؤها تلقائيًا على التغييرات الصغيرة).</dd>
+  <dt id="no~2"><a class="permalink" href="#no~2"><b><b>--no-generation-date</b></b></a></dt>
+  <dd>قمع إخراج التاريخ في الملف الذي تم إنشاؤه.</dd>
+  <dt id="no~3"><a class="permalink" href="#no~3"><b><b>--no-version</b></b></a></dt>
+  <dd>قمع إخراج الإصدار في الملف الذي تم إنشاؤه.</dd>
+  <dt id="no~4"><a class="permalink" href="#no~4"><b><b>--no-unsafe</b></b></a></dt>
+  <dd>عدم إنشاء غلاف <b>unsafe</b> فوق <b>YYPEEK</b> (هذا الخيار خاص بـ Rust). لأسباب تتعلق بالأداء، يجب أن يتجنب <b>YYPEEK</b> التحقق من الحدود، حيث يقوم المحلل النصي بالفعل بإجراء فحوصات نهاية الإدخال بطريقة أكثر كفاءة. قد يختار المستخدم توفير تعريف <b>YYPEEK</b> آمن، أو تعريف غير آمن فقط في الإصدارات النهائية، وفي هذه الحالة يساعد الخيار <b>--no-unsafe</b> على تجنب التحذيرات بشأن كتل <b>unsafe</b> المكررة.</dd>
+  <dt id="output"><a class="permalink" href="#output"><b><b>--output -o
+    OUTPUT</b></b></a></dt>
+  <dd>تحديد الملف <b>OUTPUT</b>.</dd>
+  <dt id="posix"><a class="permalink" href="#posix"><b><b>--posix-captures</b>,
+    <b>-P</b></b></a></dt>
+  <dd>تمكين استخراج المطابقة الفرعية باستخدام مجموعات التقاط بأسلوب POSIX. يتم تجميع النتيجة في مصفوفة <b>yybmatch</b> بسعة <b>2 * YYMAXNMATCH</b>، ويتم تعيين <b>yynmatch</b> إلى عدد المجموعات للقاعدة المطابقة.</dd>
+  <dt id="posix~2"><a class="permalink" href="#posix~2"><b><b>--posix-captvars</b></b></a></dt>
+  <dd>تمكين استخراج المطابقة الفرعية باستخدام مجموعات التقاط بأسلوب POSIX. يتم تجميع النتيجة في المتغيرات <b>yytl&lt;k&gt;</b>، <b>yytr&lt;k&gt;</b> للمجموعة الملتقطة <b>k</b>.</dd>
+  <dt id="recursive"><a class="permalink" href="#recursive"><b><b>--recursive-functions</b></b></a></dt>
+  <dd>استخدام نموذج كود يعتمد على الدوال المشتركة التكرارية، حيث تكون كل حالة DFA دالة منفصلة قد تستدعي دوال الحالة الأخرى أو نفسها.</dd>
+  <dt id="reusable"><a class="permalink" href="#reusable"><b><b>--reusable
+    -r</b></b></a></dt>
+  <dd>تم إهماله منذ الإصدار 2.2 (الكتل القابلة لإعادة الاستخدام مسموح بها افتراضيًا الآن).</dd>
+  <dt id="skeleton"><a class="permalink" href="#skeleton"><b><b>--skeleton
+    -S</b></b></a></dt>
+  <dd>تجاهل كود الواجهة المحدد من قبل المستخدم وإنشاء برنامج "هيكل عظمي" مستقل. بالإضافة إلى ذلك، يتم إنشاء ملفات إدخال بسلاسل مشتقة من القواعد النحوية العادية ونتائج مطابقة مضغوطة تُستخدم للتحقق من سلوك "الهيكل العظمي" على جميع المدخلات. هذا الخيار مفيد للعثور على الأخطاء في التحسينات وتوليد الكود. هذا الخيار مدعوم فقط للغة C.</dd>
+  <dt id="storable"><a class="permalink" href="#storable"><b><b>--storable-state
+    -f</b></b></a></dt>
+  <dd>إنشاء محلل نصي يمكنه تخزين حالته الداخلية. هذا مفيد في نماذج الدفع للمحللات النصية التي يتم إيقافها بواسطة خارجي.</dd>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<p class="Pp">Options are grouped into several categories.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="continue"><a class="permalink" href="#continue"><b><b>--continue</b></b></a></dt>
+  <dd>Continue lexing when there is not
+      enough input, and then resumed when more input becomes available. In this
+      mode users should additionally define <b>YYGETSTATE</b> and
+      <b>YYSETSTATE</b> primitives, and variables <b>yych</b>, <b>yyaccept</b>
+      and <b>state</b> should be part of the stored lexer state.</dd>
+  <dt id="syntax"><a class="permalink" href="#syntax"><b><b>--syntax</b>
+    <i>FILE</i></b></a></dt>
+  <dd>Load configurations from the specified <b>FILE</b> and apply them on top
+      of the default syntax file. Note that <b>FILE</b> can define only a few
+      configurations (if it's used to amend the default syntax file), or it can
+      define a whole new language backend (in the latter case it is recommended
+      to use <b>--lang none</b> option).</dd>
+  <dt id="tags"><a class="permalink" href="#tags"><b><b>--tags</b>
+    <b>-T</b></b></a></dt>
+  <dd>Enable submatch extraction with tags.</dd>
+  <dt id="ucs2"><a class="permalink" href="#ucs2"><b><b>--ucs2</b>
+    <b>--wide-chars</b>
+    <b>-w</b></b></a></dt>
+  <dd>Generate a lexer that reads UCS2-encoded input. re2hs assumes that the
+      character range is 0 -- 0xFFFF and character size is 2 bytes. This option
+      implies <b>--nested-ifs</b>.</dd>
+  <dt id="utf8"><a class="permalink" href="#utf8"><b><b>--utf8</b>
+    <b>--utf-8</b>
+    <b>-8</b></b></a></dt>
+  <dd>Generate a lexer that reads input in UTF-8 encoding. re2hs assumes that
+      the character range is 0 -- 0x10FFFF and character size is 1 byte.</dd>
+  <dt id="utf16"><a class="permalink" href="#utf16"><b><b>--utf16</b>
+    <b>--utf-16</b>
+    <b>-x</b></b></a></dt>
+  <dd>Generate a lexer that reads UTF16-encoded input. re2hs assumes that the
+      character range is 0 -- 0x10FFFF and character size is 2 bytes. This
+      option implies <b>--nested-ifs</b>.</dd>
+  <dt id="utf32"><a class="permalink" href="#utf32"><b><b>--utf32</b>
+    <b>--unicode</b>
+    <b>-u</b></b></a></dt>
+  <dd>Generate a lexer that reads UTF32-encoded input. re2hs assumes that the
+      character range is 0 -- 0x10FFFF and character size is 4 bytes. This
+      option implies <b>--nested-ifs</b>.</dd>
+  <dt id="verbose"><a class="permalink" href="#verbose"><b><b>--verbose</b></b></a></dt>
+  <dd>Output a short message in case of success.</dd>
+  <dt id="vernum"><a class="permalink" href="#vernum"><b><b>--vernum</b>
+    <b>-V</b></b></a></dt>
+  <dd>Show version information in <b>MMmmpp</b> format (major, minor,
+    patch).</dd>
+  <dt id="version"><a class="permalink" href="#version"><b><b>--version</b>
+    <b>-v</b></b></a></dt>
+  <dd>Show version information.</dd>
+  <dt id="single"><a class="permalink" href="#single"><b><b>--single-pass</b>
+    <b>-1</b></b></a></dt>
+  <dd>Deprecated. Does nothing (single pass is the default now).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="debug"><a class="permalink" href="#debug"><b><b>--debug-output</b>
+    <b>-d</b></b></a></dt>
+  <dd>Emit <b>YYDEBUG</b> invocations in the generated code. This is useful to
+      trace lexer execution.</dd>
+  <dt id="dump"><a class="permalink" href="#dump"><b><b>--dump-adfa</b></b></a></dt>
+  <dd>Debug option: output DFA after tunneling (in .dot format).</dd>
+  <dt id="dump~2"><a class="permalink" href="#dump~2"><b><b>--dump-cfg</b></b></a></dt>
+  <dd>Debug option: output control flow graph of tag variables (in .dot
+    format).</dd>
+  <dt id="dump~3"><a class="permalink" href="#dump~3"><b><b>--dump-closure-stats</b></b></a></dt>
+  <dd>Debug option: output statistics on the number of states in closure.</dd>
+  <dt id="dump~4"><a class="permalink" href="#dump~4"><b><b>--dump-dfa-det</b></b></a></dt>
+  <dd>Debug option: output DFA immediately after determinization (in .dot
+      format).</dd>
+  <dt id="dump~5"><a class="permalink" href="#dump~5"><b><b>--dump-dfa-min</b></b></a></dt>
+  <dd>Debug option: output DFA after minimization (in .dot format).</dd>
+  <dt id="dump~6"><a class="permalink" href="#dump~6"><b><b>--dump-dfa-tagopt</b></b></a></dt>
+  <dd>Debug option: output DFA after tag optimizations (in .dot format).</dd>
+  <dt id="dump~7"><a class="permalink" href="#dump~7"><b><b>--dump-dfa-tree</b></b></a></dt>
+  <dd>Debug option: output DFA under construction with states represented as tag
+      history trees (in .dot format).</dd>
+  <dt id="dump~8"><a class="permalink" href="#dump~8"><b><b>--dump-dfa-raw</b></b></a></dt>
+  <dd>Debug option: output DFA under construction with expanded state-sets (in
+      .dot format).</dd>
+  <dt id="dump~9"><a class="permalink" href="#dump~9"><b><b>--dump-interf</b></b></a></dt>
+  <dd>Debug option: output interference table produced by liveness analysis of
+      tag variables.</dd>
+  <dt id="dump~10"><a class="permalink" href="#dump~10"><b><b>--dump-nfa</b></b></a></dt>
+  <dd>Debug option: output NFA (in .dot format).</dd>
+  <dt id="emit"><a class="permalink" href="#emit"><b><b>--emit-dot</b>
+    <b>-D</b></b></a></dt>
+  <dd>Instead of normal output generate lexer graph in .dot format. The output
+      can be converted to an image with the help of Graphviz (e.g. something
+      like <b>dot -Tpng -odfa.png dfa.dot</b>).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="dfa"><a class="permalink" href="#dfa"><b><b>--dfa-minimization</b>
+    &lt;moore | table&gt;</b></a></dt>
+  <dd>Internal option: DFA minimization algorithm used by re2hs. The
+      <b>moore</b> option is the Moore algorithm (it is the default). The
+      <b>table</b> option is the &quot;table filling&quot; algorithm. Both
+      algorithms should produce the same DFA up to states relabeling; table
+      filling is simpler and much slower and serves as a reference
+      implementation.</dd>
+  <dt id="eager"><a class="permalink" href="#eager"><b><b>--eager-skip</b></b></a></dt>
+  <dd>Internal option: make the generated lexer advance the input position
+      eagerly -- immediately after reading the input symbol. This changes the
+      default behavior when the input position is advanced lazily -- after
+      transition to the next state.</dd>
+  <dt id="no~5"><a class="permalink" href="#no~5"><b><b>--no-lookahead</b></b></a></dt>
+  <dd>Internal option, deprecated. It used to enable TDFA(0) algorithm. Unlike
+      TDFA(1), TDFA(0) algorithm does not use one-symbol lookahead. It applies
+      register operations to the incoming transitions rather than the outgoing
+      ones. Benchmarks showed that TDFA(0) algorithm is less efficient than
+      TDFA(1).</dd>
+  <dt id="no~6"><a class="permalink" href="#no~6"><b><b>--no-optimize-tags</b></b></a></dt>
+  <dd>Internal option: suppress optimization of tag variables (useful for
+      debugging).</dd>
+  <dt id="posix~3"><a class="permalink" href="#posix~3"><b><b>--posix-closure</b>
+    &lt;gor1 | gtop&gt;</b></a></dt>
+  <dd>Internal option: specify shortest-path algorithm used for the construction
+      of epsilon-closure with POSIX disambiguation semantics: <b>gor1</b> (the
+      default) stands for Goldberg-Radzik algorithm, and <b>gtop</b> stands for
+      &quot;global topological order&quot; algorithm.</dd>
+  <dt id="posix~4"><a class="permalink" href="#posix~4"><b><b>--posix-prectable</b>
+    &lt;complex | naive&gt;</b></a></dt>
+  <dd>Internal option: specify the algorithm used to compute POSIX precedence
+      table. The <b>complex</b> algorithm computes precedence table in one
+      traversal of tag history tree and has quadratic complexity in the number
+      of TNFA states; it is the default. The <b>naive</b> algorithm has
+      worst-case cubic complexity in the number of TNFA states, but it is much
+      simpler than <b>complex</b> and may be slightly faster in non-pathological
+      cases.</dd>
+  <dt id="stadfa"><a class="permalink" href="#stadfa"><b><b>--stadfa</b></b></a></dt>
+  <dd>Internal option, deprecated. It used to enable staDFA algorithm, which
+      differs from TDFA in that register operations are placed in states rather
+      than on transitions. Benchmarks showed that staDFA algorithm is less
+      efficient than TDFA.</dd>
+  <dt id="fixed"><a class="permalink" href="#fixed"><b><b>--fixed-tags</b>
+    &lt;none | toplevel | all&gt;</b></a></dt>
+  <dd>Internal option: specify whether the fixed-tag optimization should be
+      applied to all tags (<b>all</b>), none of them (<b>none</b>), or only
+      those in toplevel concatenation (<b>toplevel</b>). The default is
+      <b>all</b>. &quot;Fixed&quot; tags are those that are located within a
+      fixed distance to some other tag (called &quot;base&quot;). In such cases
+      only the base tag needs to be tracked, and the value of the fixed tag can
+      be computed as the value of the base tag plus a static offset. For tags
+      that are under alternative or repetition it is also necessary to check if
+      the base tag has a no-match value (in that case fixed tag should also be
+      set to no-match, disregarding the offset). For tags in top-level
+      concatenation the check is not needed, because they always match.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Warnings'><a class='permalink' href='#Warnings'>Warnings</a></h2>
+<p class="Pp">Warnings can be invividually enabled, disabled and turned into an
+    error.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="W"><a class="permalink" href="#W"><b><b>-W</b></b></a></dt>
+  <dd>Turn on all warnings.</dd>
+  <dt id="Werror"><a class="permalink" href="#Werror"><b><b>-Werror</b></b></a></dt>
+  <dd>Turn warnings into errors. Note that this option alone doesn't turn on any
+      warnings; it only affects those warnings that have been turned on so far
+      or will be turned on later.</dd>
+  <dt id="W_warning_"><a class="permalink" href="#W_warning_"><b><b>-W&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn on <b>warning</b>.</dd>
+  <dt id="Wno"><a class="permalink" href="#Wno"><b><b>-Wno-&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn off <b>warning</b>.</dd>
+  <dt id="Werror~2"><a class="permalink" href="#Werror~2"><b><b>-Werror-&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn on <b>warning</b> and treat it as an error (this implies
+      <b>-W&lt;warning&gt;</b>).</dd>
+  <dt id="Wno~2"><a class="permalink" href="#Wno~2"><b><b>-Wno-error-&lt;warning&gt;</b></b></a></dt>
+  <dd>Don't treat this particular <b>warning</b> as an error. This doesn't turn
+      off the warning itself.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Wcondition"><a class="permalink" href="#Wcondition"><b><b>-Wcondition-order</b></b></a></dt>
+  <dd>Warn if the generated program makes implicit assumptions about condition
+      numbering. One should use either <b>--header</b> option or
+      <b>conditions</b> block to generate a mapping of condition names to
+      numbers and then use the autogenerated condition names.</dd>
+  <dt id="Wempty"><a class="permalink" href="#Wempty"><b><b>-Wempty-character-class</b></b></a></dt>
+  <dd>Warn if a regular expression contains an empty character class. Trying to
+      match an empty character class makes no sense: it should always fail.
+      However, for backwards compatibility reasons re2hs permits empty character
+      classes and treats them as empty strings. Use the <b>--empty-class</b>
+      option to change the default behavior.</dd>
+  <dt id="Wmatch"><a class="permalink" href="#Wmatch"><b><b>-Wmatch-empty-string</b></b></a></dt>
+  <dd>Warn if a rule is nullable (matches an empty string). If the lexer runs in
+      a loop and the empty match is unintentional, the lexer may unexpectedly
+      hang in an infinite loop.</dd>
+  <dt id="Wswapped"><a class="permalink" href="#Wswapped"><b><b>-Wswapped-range</b></b></a></dt>
+  <dd>Warn if the lower bound of a range is greater than its upper bound. The
+      default behavior is to silently swap the range bounds.</dd>
+  <dt id="Wundefined"><a class="permalink" href="#Wundefined"><b><b>-Wundefined-control-flow</b></b></a></dt>
+  <dd>Warn if some input strings cause undefined control flow in the lexer (the
+      faulty patterns are reported). This is a dangerous and common mistake. It
+      can be easily fixed by adding the default rule <b>*</b> which has the
+      lowest priority, matches any code unit, </dd>
+</dl>
+</div>
+</section>
+ ويستهلك دائمًا وحدة رمز واحدة.</dd>
+  <dt id="Wunreachable"><a class="permalink" href="#Wunreachable"><b><b>-Wunreachable-rules</b></b></a></dt>
+  <dd>تحذير بشأن القواعد التي يتم حجبها بواسطة قواعد أخرى ولن تتطابق أبدًا.</dd>
+  <dt id="Wdeprecated"><a class="permalink" href="#Wdeprecated"><b><b>-Wdeprecated-eof_rule</b></b></a></dt>
+  <dd>تحذير بشأن قواعد نهاية الإدخال المستقلة <b>$</b> التي ستتعطل بسبب
+      التغييرات المستقبلية وتتطلب الإصلاح. في الوقت الحالي، تتفوق هذه القواعد
+      عند التعارض مع قواعد أخرى، ولكن بعد إدخال رمز نهاية الإدخال المعمم
+      <b>$</b>، سيتغير ترتيب الأسبقية وستصبح هذه القواعد محجوبة بواسطة قواعد
+      أخرى.</dd>
+  <dt id="Wuseless"><a class="permalink" href="#Wuseless"><b><b>-Wuseless-escape</b></b></a></dt>
+  <dd>تحذير إذا تم الهروب من رمز لم يكن ينبغي ذلك. بشكل افتراضي، يتجاهل re2hs
+      عمليات الهروب هذه بصمت، ولكن قد يشير ذلك أيضًا إلى خطأ مطبعي أو خطأ في تسلسل
+      الهروب.</dd>
+  <dt id="Wnondeterministic"><a class="permalink" href="#Wnondeterministic"><b><b>-Wnondeterministic-tags</b></b></a></dt>
+  <dd>تحذير إذا كان للعلامة درجة <b>n</b> من عدم التحديد، حيث <b>n</b> أكبر من
+      1.</dd>
+  <dt id="Wsentinel"><a class="permalink" href="#Wsentinel"><b><b>-Wsentinel-in-midrule</b></b></a></dt>
+  <dd>تحذير إذا كان رمز الحارس يظهر في منتصف قاعدة - قد يتسبب هذا في قراءات
+      تتجاوز نهاية المخزن المؤقت، أو تعطل، أو تلف في الذاكرة في المحلل اللغوي
+      المولد. هذا التحذير ينطبق فقط إذا تم استخدام طريقة الحارس للتحقق من نهاية
+      الإدخال. تم تعيينه كخطأ إذا تم استخدام إعداد <b>re2c:sentinel</b>.</dd>
+  <dt id="Wundefined~2"><a class="permalink" href="#Wundefined~2"><b><b>-Wundefined-syntax-config</b></b></a></dt>
+  <dd>تحذير إذا كان ملف الصيغة المحدد بالخيار <b>--syntax</b> يفتقر إلى تعريفات
+      لبعض الإعدادات. هذا يساعد في الحفاظ على ملفات الصيغة المعرفة من قبل المستخدم:
+      إذا أضاف إصدار جديد إعدادات، فسيرفع ملف الصيغة القديم تحذيرًا، وسيتم إعلام
+      المستخدم. إذا كانت بعض الإعدادات غير مستخدمة ولا تحتاج إلى تعريف، فيجب تعيينها
+      صراحةً إلى <b>&lt;undefined&gt;</b>.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Syntax_files'><a class='permalink' href='#Syntax_files'>ملفات الصيغة</a></h2>
+<p class="Pp">يعتمد دعم اللغات المختلفة في re2c على فكرة <i>ملفات الصيغة</i>.
+    ملف الصيغة هو ملف إعداد يحدد صيغة اللغة المستهدفة - وليس اللغة بأكملها، ولكن
+    جزءًا صغيرًا منها يستخدمه الرمز المولد. تجعل ملفات الصيغة re2c مرنة للغاية،
+    ولكن لا ينبغي استخدامها كبديل لإعدادات <b>re2c:</b>: الغرض منها هو تحديد
+    صيغة اللغة المستهدفة، وليس تخصيص محلل لغوي معين. جميع اللغات المدعومة لديها
+    ملفات صيغة افتراضية هي جزء من التوزيع (انظر الدليل الفرعي <b>include/syntax</b>)؛
+    وهي مدمجة أيضًا في الثنائي re2hs. قد يوفر المستخدمون ملف صيغة مخصصًا يتجاوز
+    بعض الإعدادات للغة مدعومة، أو قد يختارون إعادة تعريف جميع الإعدادات (في هذه
+    الحالة يجب استخدام الخيار <b>--lang none</b>). تحتوي ملفات الصيغة على إعدادات
+    من أربعة أنواع مختلفة: قوائم الميزات، إعدادات اللغة، إعدادات الموضع، ونماذج
+    التعليمات البرمجية.</p>
+<p class="Pp"><b>قوائم الميزات</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد بضع قوائم إعدادات ميزات مختلفة مدعومة بواسطة
+    الواجهة الخلفية المعينة، بحيث يمكن لـ re2hs إصدار خطأ واضح إذا حاول المستخدم
+    تمكين ميزة غير مدعومة:
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="supported_apis"><a class="permalink" href="#supported_apis"><b><b>supported_apis</b></b></a></dt>
+  <dd>قائمة بواجهات برمجة التطبيقات المدعومة مع عناصر محتملة <b>simple</b>،
+      <b>record</b>، <b>generic</b>.</dd>
+  <dt id="supported_api_styles"><a class="permalink" href="#supported_api_styles"><b><b>supported_api_styles</b></b></a></dt>
+  <dd>قائمة بأنماط واجهة برمجة التطبيقات المدعومة مع عناصر محتملة <b>functions</b>،
+      <b>free-form</b>.</dd>
+  <dt id="supported_code_models"><a class="permalink" href="#supported_code_models"><b><b>supported_code_models</b></b></a></dt>
+  <dd>قائمة بنماذج التعليمات البرمجية المدعومة مع عناصر محتملة <b>goto-label</b>،
+      <b>loop-switch</b>، <b>recursive-functions</b>.</dd>
+  <dt id="supported_targets"><a class="permalink" href="#supported_targets"><b><b>supported_targets</b></b></a></dt>
+  <dd>قائمة بأهداف توليد التعليمات البرمجية المدعومة مع عناصر محتملة <b>code</b>،
+      <b>dot</b>، <b>skeleton</b>.</dd>
+  <dt id="supported_features"><a class="permalink" href="#supported_features"><b><b>supported_features</b></b></a></dt>
+  <dd>قائمة بالميزات المدعومة مع عناصر محتملة <b>nested-ifs</b>،
+      <b>bitmaps</b>، <b>computed-gotos</b>، <b>case-ranges</b>، <b>monadic</b>،
+      <b>unsafe</b>، <b>tags</b>، <b>captures</b>، <b>captvars</b>.</dd>
+</dl>
+</div>
+</div>
+</div>
+<p class="Pp"><b>إعدادات اللغة</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تصف بضع إعدادات منطقية ميزات اللغة المستهدفة التي
+    تؤثر على محلل re2hs ومولد التعليمات البرمجية:
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="semicolons"><a class="permalink" href="#semicolons"><b><b>semicolons</b></b></a></dt>
+  <dd>غير صفري إذا كانت اللغة تستخدم علامات ترقيم منقوطة بعد العبارات.</dd>
+  <dt id="backtick_quoted_strings"><a class="permalink" href="#backtick_quoted_strings"><b><b>backtick_quoted_strings</b></b></a></dt>
+  <dd>غير صفري إذا كانت اللغة تحتوي على سلاسل محاطة بعلامات اقتباس خلفية.</dd>
+  <dt id="single_quoted_strings"><a class="permalink" href="#single_quoted_strings"><b><b>single_quoted_strings</b></b></a></dt>
+  <dd>غير صفري إذا كانت اللغة تحتوي على سلاسل محاطة بعلامات اقتباس مفردة.</dd>
+  <dt id="indentation_sensitive"><a class="permalink" href="#indentation_sensitive"><b><b>indentation_sensitive</b></b></a></dt>
+  <dd>غير صفري إذا كانت اللغة حساسة للمسافة البادئة.</dd>
+  <dt id="wrap_blocks_in_braces"><a class="permalink" href="#wrap_blocks_in_braces"><b><b>wrap_blocks_in_braces</b></b></a></dt>
+  <dd>غير صفري إذا كان يجب لف الكتل المركبة بأقواس معقوفة.</dd>
+</dl>
+</div>
+</div>
+</div>
+<p class="Pp"><b>إعدادات الموضع</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد ملفات الصيغة القيم الأولية لجميع إعدادات
+    <b>re2c:</b>، حيث قد تختلف بالنسبة للغات المختلفة. انظر قسم الإعدادات للحصول
+    على قائمة كاملة بجميع إعدادات الموضع ومعناها.</div>
+</div>
+<p class="Pp"><b>نماذج التعليمات البرمجية</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">تحدد نماذج التعليمات البرمجية صيغة اللغة المستهدفة.
+    وهي مكتوبة بلغة بسيطة خاصة بالمجال مع القواعد الرسمية التالية:
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>code-template ::
+      name '=' code-exprs ';'
+    | CODE_TEMPLATE ';'
+    | '&lt;undefined&gt;' ';'
+code-exprs ::
+      &lt;EMPTY&gt;
+    | code-exprs code-expr
+code-expr ::
+      STRING
+    | VARIABLE
+    | optional
+    | list
+optional ::
+      '(' CONDITIONAL '?' code-exprs ')'
+    | '(' CONDITIONAL '?' code-exprs ':' code-exprs ')'
+list ::
+      '[' VARIABLE ':' code-exprs ']'
+    | '[' VARIABLE '{' NUMBER '}' ':' code-exprs ']'
+    | '[' VARIABLE '{' NUMBER ',' NUMBER '}' ':' code-exprs ']'.</pre>
+</div>
+</div>
+<p class="Pp">نموذج التعليمات البرمجية هو تسلسل من السلاسل النصية، والمتغيرات،
+    والعناصر الاختيارية، والقوائم، أو إشارة إلى نموذج تعليمات برمجية آخر، أو قيمة
+    خاصة <b>&lt;undefined&gt;</b>. المتغيرات هي عناصر نائبة يتم استبدالها أثناء
+    مرحلة توليد التعليمات البرمجية. متغيرات القائمة خاصة: عند توسيع نماذج
+    القائمة، يكرر re2hs التعبيرات الموجودة على الجانب الأيمن من العمود عدة مرات،
+    ويستبدل في كل مرة تكرارات متغير القائمة بقيمة خاصة بهذه التكرارات. تحتوي
+    القوائم على حدود اختيارية (يتم حساب القيم السالبة من النهاية، على سبيل المثال،
+    <b>-1</b> تعني العنصر الأخير). تبدأ أسماء الشروط بنقطة. قد تكون الشروط
+    والمتغيرات محلية (خاصة بنموذج التعليمات البرمجية المعطى) أو عامة (مسموح بها في
+    جميع نماذج التعليمات البرمجية). عندما يقرأ re2hs ملف الصيغة، فإنه يتحقق من
+    أن كل نموذج تعليمات برمجية يستخدم فقط المتغيرات والشروط المسموح بها فيه.</p>
+<p class="Pp">على سبيل المثال، يحدد نموذج التعليمات البرمجية التالي بنية
+    if-then-else للغة شبيهة بلغة C:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>code:if_then_else =
+    [branch{0}: topindent &quot;if &quot; cond &quot; {&quot; nl
+        indent [stmt: stmt] dedent]
+    [branch{1:-1}: topindent &quot;} else&quot; (.cond ? &quot; if &quot; cond) &quot; {&quot; nl
+        indent [stmt: stmt] dedent]
+    topindent &quot;}&quot; nl.</pre>
+</div>
+</div>
+<p class="Pp">هنا <b>branch</b> هو متغير قائمة: <b>branch{0}</b> يتوسع إلى
+    الفرع الأول (وهو خاص، حيث لا يوجد جزء <b>else</b>)، <b>branch{1:-1}</b>
+    يتوسع إلى جميع الفروع المتبقية (إن وجدت). <b>stmt</b> هو أيضًا متغير قائمة:
+    <b>[stmt: stmt]</b> هي قائمة متداخلة تتوسع إلى قائمة بالعبارات في جسم
+    الفرع الحالي. <b>topindent</b>، <b>indent</b>، <b>dedent</b>، و <b>nl</b>
+    هي متغيرات عامة، و <b>.cond</b> هو شرط محلي (معانيها موصوفة أدناه). قد ينتج
+    نموذج التعليمات البرمجية هذا التعليمات البرمجية التالية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>if x {
+    // do something
+} else if y {
+    // do something else
+} else {
+    // don't do anything
+}</pre>
+</div>
+</div>
+<p class="Pp">فيما يلي قائمة بجميع نماذج التعليمات البرمجية التي يدعمها re2hs مع
+    متغيراتها المحلية وشروطها. لاحظ أن التعريف المحدد قد يستخدم، ولكنه لا يلزم
+    أن يستخدم، المتغيرات المحلية والشروط. يجب تعيين أي نماذج تعليمات برمجية غير
+    مستخدمة إلى <b>&lt;undefined&gt;</b>.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="code:var_local"><a class="permalink" href="#code:var_local"><b><b>code:var_local</b></b></a></dt>
+  <dd>إعلان أو تعريف متغير محلي. المتغيرات المدعومة: <b>type</b> (نوع
+      المتغير)، <b>name</b> (اسمه)، و <b>init</b> (القيمة الأولية، إن وجدت).
+      الشروط: <b>.init</b> (صحيح إذا كان هناك تهيئة).</dd>
+  <dt id="code:var_global"><a class="permalink" href="#code:var_global"><b><b>code:var_global</b></b></a></dt>
+  <dd>نفس <b>code:var_local</b>، باستثناء أنه يستخدم على المستوى الأعلى.</dd>
+  <dt id="code:const_local"><a class="permalink" href="#code:const_local"><b><b>code:const_local</b></b></a></dt>
+  <dd>تعريف ثابت محلي. المتغيرات المدعومة: <b>type</b> (نوع الثابت)،
+      <b>name</b> (اسمه)، و <b>init</b> (القيمة الأولية).</dd>
+  <dt id="code:const_global"><a class="permalink" href="#code:const_global"><b><b>code:const_global</b></b></a></dt>
+  <dd>نفس <b>code:const_local</b>، باستثناء أنه يستخدم على المستوى الأعلى.</dd>
+  <dt id="code:array_local"><a class="permalink" href="#code:array_local"><b><b>code:array_local</b></b></a></dt>
+  <dd>تعريف مصفوفة محلية (جدول). المتغيرات المدعومة: <b>type</b> (نوع عناصر
+      المصفوفة)، <b>name</b> (اسم المصفوفة)، <b>size</b> (حجمها)، <b>row</b>
+      (متغير قائمة لا ينتج أي تعليمات برمجية بحد ذاته، ولكنه يوسع تعبير القائمة
+      عدة مرات بعدد الصفوف في الجدول) و <b>elem</b> (متغير قائمة يتوسع إلى جميع
+      عناصر الجدول في الصف الحالي - وهو مخصص للتداخل في قائمة <b>row</b>). الشرط
+      المدعوم: <b>.const</b> (صحيح إذا كانت المصفوفة غير قابلة للتغيير).</dd>
+  <dt id="code:array_global"><a class="permalink" href="#code:array_global"><b><b>code:array_global</b></b></a></dt>
+  <dd>نفس <b>code:array_local</b>، باستثناء أنه يستخدم على المستوى الأعلى.</dd>
+  <dt id="code:array_elem"><a class="permalink" href="#code:array_elem"><b><b>code:array_elem</b></b></a></dt>
+  <dd>إشارة إلى عنصر في مصفوفة (</dd>
+</dl>
+</div>
+</div>
+</div>
+{
+  "code:array": {
+    "description": "An array definition. Supported variables: <b>array</b> (the name of the array) and <b>index</b> (index of the element).",
+    "variables": ["array", "index"]
+  },
+  "code:enum": {
+    "description": "Definition of an enumeration (it may be defined using a special language construct for enumerations, or simply as a few standalone constants). Supported variables are <b>type</b> (user-defined enumeration type or type of the constants), <b>elem</b> (list variable that expands to the name of each member) and <b>init</b> (initializer for each member). Conditionals: <b>.init</b> (true if there is an initializer).",
+    "variables": ["type", "elem", "init"],
+    "conditionals": [".init"]
+  },
+  "code:enum_elem": {
+    "description": "Enumeration element (a member of a user-defined enumeration type or a name of a constant, depending on how <b>code:enum</b> is defined). Supported variables are <b>name</b> (the name of the element) and <b>type</b> (its type).",
+    "variables": ["name", "type"]
+  },
+  "code:assign": {
+    "description": "Assignment statement. Supported variables are <b>lhs</b> (left hand side) and <b>rhs</b> (right hand side).",
+    "variables": ["lhs", "rhs"]
+  },
+  "code:type_int": {
+    "description": "Signed integer type.",
+    "variables": []
+  },
+  "code:type_uint": {
+    "description": "Unsigned integer type.",
+    "variables": []
+  },
+  "code:type_yybm": {
+    "description": "Type of elements in the <b>yybm</b> table.",
+    "variables": []
+  },
+  "code:type_yytarget": {
+    "description": "Type of elements in the <b>yytarget</b> table.",
+    "variables": []
+  },
+  "code:type_yyctable": {
+    "description": "Type of elements in the <b>yyctable</b> table.",
+    "variables": []
+  },
+  "code:cmp_eq": {
+    "description": "Operator \"equals\".",
+    "variables": []
+  },
+  "code:cmp_ne": {
+    "description": "Operator \"not equals\".",
+    "variables": []
+  },
+  "code:cmp_lt": {
+    "description": "Operator \"less than\".",
+    "variables": []
+  },
+  "code:cmp_gt": {
+    "description": "Operator \"greater than\"",
+    "variables": []
+  },
+  "code:cmp_le": {
+    "description": "Operator \"less or equal\"",
+    "variables": []
+  },
+  "code:cmp_ge": {
+    "description": "Operator \"greater or equal\"",
+    "variables": []
+  },
+  "code:if_then_else": {
+    "description": "If-then-else statement with one or more branches. Supported variables: <b>branch</b> (a list variable that does not itself produce any code, but expands list expression as many times as there are branches), <b>cond</b> (condition of the current branch) and <b>stmt</b> (a list variable that expands to all statements in the current branch). Conditionals: <b>.cond</b> (true if the current branch has a condition), <b>.many</b> (true if there's more than one branch).",
+    "variables": ["branch", "cond", "stmt"],
+    "conditionals": [".cond", ".many"]
+  },
+  "code:if_then_else_oneline": {
+    "description": "A specialization of <b>code:if_then_else</b> for the case when all branches have one-line statements. If this is <b>&lt;undefined&gt;</b>, <b>code:if_then_else</b> is used instead.",
+    "variables": []
+  },
+  "code:switch": {
+    "description": "A switch statement with one or more cases. Supported variables: <b>expr</b> (the switched-on expression) and <b>case</b> (a list variable that expands to all cases-groups with their code blocks).",
+    "variables": ["expr", "case"]
+  },
+  "code:switch_cases": {
+    "description": "A group of switch cases that maps to a single code block. Supported variables are <b>case</b> (a list variable that expands to all cases in this group) and <b>stmt</b> (a list variable that expands to all statements in the code block.",
+    "variables": ["case", "stmt"]
+  },
+  "code:switch_cases_oneline": {
+    "description": "A specialization of <b>code:switch_cases</b> for the case when the code block consists of a single one-line statement. If this is <b>&lt;undefined&gt;</b>, <b>code:switch_cases</b> is used instead.",
+    "variables": []
+  },
+  "code:switch_case_range": {
+    "description": "A single switch case that covers a range of values (possibly consisting of a single value). Supported variable: <b>val</b> (a list variable that expands to all values in the range). Supported conditionals: <b>.many</b> (true if there's more than one value in the range) and <b>.char_literals</b> (true if this is a switch on character literals -- some languages provide special syntax for this case).",
+    "variables": ["val"],
+    "conditionals": [".many", ".char_literals"]
+  },
+  "code:switch_case_default": {
+    "description": "Default switch case.",
+    "variables": []
+  },
+  "code:loop": {
+    "description": "A loop that runs forever (unless interrupted from the loop body). Supported variables: <b>label</b> (loop label), <b>stmt</b> (a list variable that expands to all statements in the loop body).",
+    "variables": ["label", "stmt"]
+  },
+  "code:continue": {
+    "description": "Continue statement. Supported variables: <b>label</b> (label from which to continue execution).",
+    "variables": ["label"]
+  },
+  "code:goto": {
+    "description": "Goto statement. Supported variables: <b>label</b> (label of the jump target).",
+    "variables": ["label"]
+  },
+  "code:cgoto": {
+    "description": "Computed <b>goto</b> statement. Supported variables: <b>array</b> (the table containing computed <b>goto</b> information), <b>index</b> (index of the element in the table) and <b>base</b> (base label, only used if <b>.cgoto.relative</b> is true).",
+    "variables": ["array", "index", "base"],
+    "conditionals": [".cgoto.relative"]
+  },
+  "code:cgoto:data": {
+    "description": "Initializer expression for a single element in computed <b>goto</b> table. Supported variables: <b>label</b> (the label that is used to initialize the current element), <b>type</b> (underlying type of the elements in the table) and <b>base</b> (base label - only used if <b>.cgoto.relative</b> is true).",
+    "variables": ["label", "type", "base"],
+    "conditionals": [".cgoto.relative"]
+  },
+  "code:fndecl": {
+    "description": "Function declaration. Supported variables: <b>name</b> (function name), <b>type</b> (return type), <b>throw</b> (exceptions thrown by this function, maps to <b>re2c:yyfn:throw</b> configuration), <b>arg</b> (a list variable that does not itself produce code, but expands list expression as many times as there are function arguments), <b>argname</b> (name of the current argument), <b>argtype</b> (type of the current argument). Conditional: <b>.type</b> (true if this is a non-void function).",
+    "variables": ["name", "type", "throw", "arg", "argname", "argtype"],
+    "conditionals": [".type"]
+  },
+  "code:fndef": {
+    "description": "Like <b>code:fndecl</b>, but used for function definitions, so it has one additional list variable <b>stmt</b> that expands to all statements in the function body.",
+    "variables": ["name", "type", "throw", "arg", "argname", "argtype", "stmt"],
+    "conditionals": [".type"]
+  },
+  "code:fncall": {
+    "description": "Function call statement. Supported variables: <b>name</b> (function name), <b>retval</b> (l-value where the return value is stored, if any) and <b>arg</b> (a list variable that expands to all function arguments). Conditionals: <b>.args</b> (true if the function has arguments) and <b>.retval</b> (true if return value needs to be saved).",
+    "variables": ["name", "retval", "arg"],
+    "conditionals": [".args", ".retval"]
+  },
+  "code:tailcall": {
+    "description": "Tail call statement. Supported variables: <b>name</b> (function name), and <b>arg</b> (a list variable that expands to all function arguments). Conditionals: <b>.args</b> (true if the function has arguments) and <b>.retval</b> (true if this is a non-void function).",
+    "variables": ["name", "arg"],
+    "conditionals": [".args", ".retval"]
+  },
+  "code:recursive_functions": {
+    "description": "Program body with <b>--recursive-functions</b> code model. Supported variables: <b>fn</b> (a list variable that does not itself produce any code, but expands list expression as many times as there are functions), <b>fndecl</b> (declaration of the current function) and <b>fndef</b> (definition of the current function).",
+    "variables": ["fn", "fndecl", "fndef"]
+  },
+  "code:fingerprint": {
+    "description": "The fingerprint at the top of the generated output file. Supported variables: <b>ver</b> (re2hs version that was used to generate this) and <b>date</b> (generation date).",
+    "variables": ["ver", "date"]
+  },
+  "code:line_info": {
+    "description": "The format of line directives (if this is set to <b>&lt;undefined&gt;</b>, no directives are generated). Supported variables: <b>line</b> (line number) and <b>file</b> (filename).",
+    "variables": ["line", "file"]
+  },
+  "code:abort": {
+    "description": "A statement that aborts program execution.",
+    "variables": []
+  },
+  "code:yydebug": {
+    "description": "<b>YYDEBUG</b> statement, possibly specialized for different APIs. Supported variables: <b>YYDEBUG</b>, <b>yyrecord</b>, <b>yych</b> (map to the corresponding <b>re2c:</b> configurations), <b>state</b> (DFA state number).",
+    "variables": ["YYDEBUG", "yyrecord", "yych", "state"]
+  },
+  "code:yypeek": {
+    "description": "<b>YYPEEK</b> statement, possibly specialized for different APIs. Supported variables: <b>YYPEEK</b>, <b>YYCTYPE</b>, <b>YYINPUT</b>, <b>YYCURSOR</b>, <b>yyrecord</b>, <b>yych</b> (map to the corresponding <b>re2c:</b> configurations). Conditionals: <b>.cast</b> (true if <b>re2c:yych:conversion</b> is set to non-zero).",
+    "variables": ["YYPEEK", "YYCTYPE", "YYINPUT", "YYCURSOR", "yyrecord", "yych"],
+    "conditionals": [".cast"]
+  },
+  "code:yyskip": {
+    "description": "<b>YYSKIP</b> statement, possibly specialized for different APIs. Supported variables: <b>YYSKIP</b>, <b>YYCURSOR</b>, <b>yyrecord</b> (map to the corresponding <b>re2c:</b> configurations).",
+    "variables": ["YYSKIP", "YYCURSOR", "yyrecord"]
+  },
+  "code:yybackup": {
+    "description": "<b>YYBACKUP</b> statement, possibly specialized for different APIs. Supported variables: <b>YYBACKUP</b>, <b>YYCURSOR</b>, <b>YYMARKER</b>, <b>yyrecord</b> (map to the corresponding <b>re2c:</b> configurations).",
+    "variables": ["YYBACKUP", "YYCURSOR", "YYMARKER", "yyrecord"]
+  },
+  "code:yybackupctx": {
+    "description": "<b>YYBACKUPCTX</b> statement, possibly specialized for different APIs. Supported variables: <b>YYBACKUPCTX</b>, <b>YYCURSOR</b>, <b>YYCTXMARKER</b>, <b>yyrecord</b> (map to the corresponding <b>re2c:</b> configurations).",
+    "variables": ["YYBACKUPCTX", "YYCURSOR", "YYCTXMARKER", "yyrecord"]
+  }
+}
+ot;] BadPacket</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Reusable_blocks'><a class='permalink' href='#Reusable_blocks'>الكتل القابلة لإعادة الاستخدام</a></h2>
+<p class="Pp">يمكن إعادة استخدام الكتل القابلة لإعادة الاستخدام من النوع <b>/*!rules:re2c[:&lt;name&gt;] ...
+    */</b> أو <b>%{rules[:&lt;name&gt;] ... %}</b> أي عدد من المرات ودمجها مع كتل re2hs أخرى.
+    <b>&lt;name&gt;</b> اختياري. يمكن استخدام كتلة القواعد في كتلة <b>use</b> أو توجيه.
+    يتم إنشاء الكود الخاص بكتلة القواعد في كل نقطة استخدام.</p>
+<p class="Pp">يتم تعريف كتل الاستخدام باستخدام <b>/*!use:re2c[:&lt;name&gt;] ...
+    */</b> أو <b>%{use[:&lt;name&gt;] ... %}</b>. <b>&lt;name&gt;</b> اختياري: إذا لم يتم تحديده،
+    فإن كتلة القواعد المرتبطة بها هي الأحدث (سواء كانت مسماة أو غير مسماة). يمكن لكتلة
+    الاستخدام إضافة تعريفات وتكوينات وقواعد مسماة خاصة بها. أحد حالات الاستخدام المهمة
+    للكتل المستخدمة هو محلل الأكواد الذي يدعم تشفيرات إدخال متعددة: يتم إعادة استخدام نفس
+    كتلة القواعد عدة مرات مع تكوينات خاصة بتشفير معين (انظر المثال أدناه).</p>
+<p class="Pp">يمكن استخدام توجيه الاستخدام داخل الكتلة <b>!use:&lt;name&gt;;</b>
+    من داخل كتلة re2hs. يقوم بدمج الكتلة المشار إليها <b>&lt;name&gt;</b> في الكتلة الحالية.
+    إذا تداخلت بعض القواعد والتكوينات المدمجة مع تلك المعرفة مسبقًا، يتم حل التعارضات
+    بالطريقة المعتادة: الأولوية للقاعدة الأقدم، والتكوين الأحدث يلغي ما سبقه. الاستثناء الوحيد
+    هو القواعد الخاصة <b>*</b> و <b>$</b> و (في وضع الشرط) <b>&lt;!&gt;</b>، حيث يلغي التعريف
+    المحلي للكتلة أي تعريفات موروثة. يسمح توجيه الاستخدام بدمج كتل re2hs مختلفة معًا في كتلة
+    واحدة (انظر المثال أدناه).</p>
+<p class="Pp">تمت إضافة الكتل المسماة وتوجيه الاستخدام داخل الكتلة في الإصدار 2.2
+    من re2hs. منذ ذلك الحين، يُسمح بالكتل القابلة لإعادة الاستخدام بشكل افتراضي (لا حاجة
+    لخيار خاص). قبل الإصدار 2.2، تم تمكين وضع إعادة الاستخدام باستخدام الخيار
+    <b>-r --reusable</b>. قبل الإصدار 1.2، لم يكن من الممكن دمج الكتل القابلة لإعادة
+    الاستخدام مع الكتل العادية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">مثال على توجيه <b>!use</b></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+-- يوضح هذا المثال كيفية دمج كتل re2c القابلة لإعادة الاستخدام: يتم دمج كتلتين
+-- ('colors' و 'fish') في كتلة واحدة. القاعدة 'salmon' تظهر في كلتا الكتلتين؛
+-- كتلة 'fish' لها الأولوية لأنها مستخدمة مبكرًا. القاعدة الافتراضية * تظهر في
+-- جميع الكتل الثلاث؛ التعريف المحلي (غير الموروث) له الأولوية.
+import Control.Monad (when)
+import Data.ByteString (ByteString, index)
+data Answer = Color | Fish | Dunno deriving (Eq)
+data State = State {
+    _yyinput :: ByteString,
+    _yycursor :: Int,
+    _yymarker :: Int
+}
+%{rules:colors
+    *                            { error &quot;ah&quot; }
+    &quot;red&quot; | &quot;salmon&quot; | &quot;magenta&quot; { Color }
+%}
+%{rules:fish
+    *                            { error &quot;oh&quot; }
+    &quot;haddock&quot; | &quot;salmon&quot; | &quot;eel&quot; { Fish }
+%}
+%{
+    re2c:YYFN = [&quot;lexer;Answer&quot;, &quot;State{..};State&quot;];
+    re2c:yyfill:enable = 0;
+    !use:fish;
+    !use:colors;
+    * { Dunno } // يلغي قواعد * الموروثة
+%}
+main :: IO ()
+main = do
+    let test str ans = do
+            let st = State {_yyinput = str, _yycursor = 0, _yymarker = 0}
+            when (lexer st /= ans) $ error &quot;failed&quot;
+    test &quot;salmon&quot; Fish
+    test &quot;what?&quot; Dunno</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">مثال على كتلة <b>/*!use:re2c</b> <b>...</b> <b>*/</b></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT --input-encoding utf8
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+-- يوضح هذا المثال دعم تشفيرات الإدخال المتعددة: UTF-8 و UTF-32.
+-- يتم إنشاء كل من محليلي الأكواد من نفس كتلة القواعد، وتضيف كتل الاستخدام
+-- فقط تكوينات خاصة بالتشفير.
+import Control.Monad (when)
+import Data.Array
+import Data.Word
+data State a = State {
+    _yyinput :: a,
+    _yycursor :: Int,
+    _yymarker :: Int
+}
+%{rules
+    re2c:yyfill:enable = 0;
+    re2c:YYPEEK = &quot;(!)&quot;;
+    &quot;&#x2200;x &#x2203;y&quot; { Just _yycursor }
+    *       { Nothing }
+%}
+%{use
+    re2c:YYFN = [&quot;lex8;Maybe Int&quot;, &quot;State{..};State (Array Int Word8)&quot;];
+    re2c:encoding:utf8 = 1;
+    re2c:YYCTYPE = Word8;
+%}
+%{use
+    re2c:YYFN = [&quot;lex32;Maybe Int&quot;, &quot;State{..};State (Array Int Int)&quot;];
+    re2c:encoding:utf32 = 1;
+    re2c:YYCTYPE = Int;
+%}
+main :: IO ()
+main = do
+    let make_st l = State {
+            _yyinput = listArray (0, length l - 1) l,
+            _yycursor = 0,
+            _yymarker = 0}
+    let s8 = [0xe2, 0x88, 0x80, 0x78, 0x20, 0xe2, 0x88, 0x83, 0x79]
+    when (lex8 (make_st s8) /= Just (length s8)) $ error &quot;lex8 failed&quot;
+    let s32 = [0x2200, 0x78, 0x20, 0x2203, 0x79]
+    when (lex32 (make_st s32) /= Just (length s32)) $ error &quot;lex32 failed&quot;</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Submatch_extraction'><a class='permalink' href='#Submatch_extraction'>استخراج المطابقات الفرعية</a></h2>
+<p class="Pp">يحتوي re2hs على خيارين لاستخراج المطابقات الفرعية.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Tags"><a class="permalink" href="#Tags"><b><b>العلامات (Tags)</b></b></a></dt>
+  <dd>الخيار الأول هو استخدام <i>علامات</i> مستقلة من النوع <b>@stag</b>
+      أو <b>#mtag</b>، حيث <b>stag</b> و <b>mtag</b> هما أسماء عشوائية يحددها المستخدم.
+      يتم تمكين العلامات باستخدام الخيار <b>-T --tags</b> أو التكوين
+      <b>re2c:tags = 1</b>. من الناحية الدلالية، العلامات هي علامات مواضع: يمكن
+      إدراجها في أي مكان في تعبير عادي، وترتبط بالموضع المقابل (أو المواضع المتعددة)
+      في سلسلة الإدخال. علامات <i>s-tags</i> ترتبط بآخر موضع مطابق، وعلامات
+      <i>m-tags</i> ترتبط بقائمة من المواضع (يمكن استخدامها في تعبيرات التكرار الفرعية،
+      حيث يتوافق موضع واحد في تعبير عادي مع مواضع متعددة في سلسلة الإدخال).
+      يجب تعريف جميع العلامات من قبل المستخدم، إما يدويًا أو بمساعدة كتل
+      <b>svars</b> و <b>mvars</b>. إذا كان هناك أكثر من طريقة لمطابقة العلامات مع
+      الإدخال، يتم حل الغموض باستخدام استراتيجية إزالة الغموض الجشعة من اليسار إلى اليمين.</dd>
+  <dt id="Captures"><a class="permalink" href="#Captures"><b><b>المجموعات الملتقطة (Captures)</b></b></a></dt>
+  <dd>الخيار الثاني هو استخدام <i>مجموعات التقاط</i>. يتم تمكينها باستخدام
+      الخيار <b>--captures</b> أو التكوين <b>re2c:captures = 1</b>. هناك نوعان
+      لسياسات إزالة الغموض المختلفة، <b>--leftmost-captures</b> (الافتراضي)
+      للسياسة الجشعة من اليسار إلى اليمين، و <b>--posix-captures</b> لسياسة أطول
+      مطابقة POSIX. في هذا الوضع، تعتبر جميع التعبيرات الفرعية الموضوعة بين قوسين
+      مجموعات التقاط، ويمكن استخدام علامة تعجب لتحديد المجموعات غير الملتقطة:
+      <b>(! ... )</b>. مع الخيار <b>--invert-captures</b> أو التكوين
+      <b>re2c:invert-captures = 1</b>، يتم عكس معنى علامة التعجب. يتم تخزين
+      عدد المجموعات للقاعدة المطابقة في المتغير <b>yynmatch</b> (يُعتبر التعبير
+      العادي بأكمله المجموعة رقم صفر)، ويتم تخزين نتائج المطابقة الفرعية في
+      المصفوفة <b>yypmatch</b>. يجب تعريف كل من <b>yynmatch</b> و <b>yypmatch</b>
+      من قبل المستخدم، ويجب أن يكون حجم <b>yypmatch</b> على الأقل <b>[yynmatch * 2]</b>.
+      استخدم كتلة <b>maxnmatch</b> لتحديد <b>YYMAXNMATCH</b>، وهو ثابت يساوي
+      القيمة القصوى لـ <b>yynmatch</b> بين جميع القواعد.</dd>
+  <dt id="Captvars"><a class="permalink" href="#Captvars"><b><b>متغيرات الالتقاط (Captvars)</b></b></a></dt>
+  <dd>طريقة أخرى لاستخدام مجموعات الالتقاط هي الخيار <b>--captvars</b> أو
+      التكوين <b>re2c:captvars = 1</b>. الفرق الوحيد مع <b>--captures</b> هو
+      في طريقة تخزين re2hs لنتائج المطابقات الفرعية: بدلاً من <b>yynmatch</b>
+      و <b>yypmatch</b>، ينشئ re2hs المتغيرات <b>yytl&lt;k&gt;</b> و
+      <b>yytr&lt;k&gt;</b> للمجموعة الملتقطة <i>k</i> (يجب على المستخدم الإعلان
+      عن هذه باستخدام كتلة <b>svars</b>). تدعم متغيّرات الالتقاط سياسات إزالة
+      غموض مختلفة: <b>--leftmost-captvars</b> أو
+      <b>re2c:leftmost-captvars = 1</b> للسياسة الجشعة من اليسار إلى اليمين
+      (السياسة الافتراضية) و <b>--posix-captvars</b> أو
+      <b>re2c:posix-captvars</b> لسياسة أطول مطابقة POSIX.</dd>
+</dl>
+</div>
+<p class="Pp">تحت الغطاء، تترجم جميع هذه الخيارات إلى العلامات و <i>آلات الحالات
+    المحددة المحددة بالعلامات مع التطلع (TDFA)</i>. الفكرة الأساسية لـ TDFA هي
+    تقليل النفقات العامة لاستخراج المطابقات الفرعية. في أقصى حد، إذا لم تكن هناك
+    علامات أو مجموعات التقاط في تعبير عادي، فإن TDFA هو مجرد DFA عادي. إذا كان عدد
+    العلامات معتدلاً، فإن النفقات تكاد لا تكون ملحوظة. تستخدم TDFA الذي تم إنشاؤه
+    عددًا من <i>متغيرات العلامات</i> التي لا تتطابق مباشرة مع العلامات: قد يُستخدم
+    متغير واحد لعلامات مختلفة، وقد تتطلب العلامة متغيرات متعددة لتخزين جميع
+    قيمها الممكنة. في النهاية، يتم حل الغموض، ويبقى متغير واحد نهائي لكل علامة.
+    يجب تعريف متغيرات العلامات باستخدام كتل <b>stags</b> أو <b>mtags</b>. إذا تم
+    تخزين حالة محلل الأكواد، فيجب أن تكون متغيرات العلامات جزءًا منها. كما تحتاج
+    إلى تحديثها بواسطة <b>YYFILL</b>.</p>
+<p class="Pp">تدعم علامات s-tags العمليات التالية:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>حفظ موضع الإدخال إلى علامة s: <b>t = YYCURSOR</b> باستخدام واجهة برمجة تطبيقات مؤشر C أو
+      عملية معرفة من قبل المستخدم <b>YYSTAGP(t)</b> باستخدام واجهة برمجة التطبيقات العامة</li>
+  <li>حفظ القيمة الافتراضية إلى علامة s: <b>t = NULL</b> باستخدام واجهة برمجة تطبيقات مؤشر C أو
+      عملية معرفة من قبل المستخدم <b>YYSTAGN(t)</b> باستخدام واجهة برمجة التطبيقات العامة</li>
+  <li>نسخ علامة s إلى أخرى: <b>t1 = t2</b></li>
+</ul>
+</div>
+<p class="Pp">تدعم علامات m-tags العمليات التالية:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إلحاق موضع الإدخال بعلامة m: عملية معرفة من قبل المستخدم
+      <b>YYMTAGP(t)</b> باستخدام واجهة برمجة التطبيقات الافتراضية والعامة</li>
+  <li>إلحاق القيمة الافتراضية بعلامة m: عملية معرفة من قبل المستخدم
+      <b>YYMTAGN(t)</b> باستخدام واجهة برمجة التطبيقات الافتراضية والعامة</li>
+  <li>نسخ علامة m إلى أخرى: <b>t1 = t2</b></li>
+</ul>
+</div>
+<p class="Pp">يمكن تنفيذ علامات s-tags كقيم قياسية (مؤشرات أو إزاحات).
+    تحتاج علامات m-tags إلى تمثيل أكثر تعقيدًا، حيث تحتاج إلى تخزين تسلسل من
+    قيم العلامات. التمثيل الأكثر بدائية وغير فعال لعلامة m هو قائمة (مصفوفة، متجه)
+    من قيم العلامات؛ تمثيل أكثر كفاءة هو تخزين جميع علامات m في شجرة بادئة
+    ممثلة بمصفوفة من العقد <b>(v, p)</b>، حيث <b>v</b> هي قيمة العلامة و
+    <b>p</b> هو مؤشر إلى العقدة الأصل.</p>
+<p class="Pp">هذا مثال بسيط لاستخدام علامات s-tags لتحليل الإصدارات الدلالية
+    التي تتكون من ثلاثة مكونات رقمية: رئيسية، ثانوية، تصحيح (الأخيرة اختيارية). انظر
+    أدناه مثالًا أكثر تعقيدًا يستخدم <b>YYFILL</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+import Control.Monad (when)
+import Data.ByteString (ByteString, index)
+data State = State {
+    -- روابط العلامات النهائية المتاحة في الإجراء الدلالي.
+    %{svars format = &quot;\n@@ :: !Int,&quot;; %}
+    -- روابط العلامات الوسيطة التي يستخدمها محلل الأكواد (يجب إنشاؤها تلقائيًا).
+    %{stags format = &quot;\n@@ :: !Int,&quot;; %}
+    _yyinput :: !ByteString,
+    _yycursor :: !Int,
+    _yymarker :: !Int
+}
+data SemVer = SemVer {
+    major :: !Int,
+    minor :: !Int,
+    patch :: !Int
+} deriving (Eq)
+s2n :: ByteString -&gt; Int -&gt; Int -&gt; Int
+s2n s i j = f i 0 where
+    f k n = if k &gt;= j then n
+else f (k + 1) (n * 10 + (fromIntegral (index s k) - 48))
+%{
+    re2c:YYFN = ["parse;Maybe SemVer", "State{..};State"];
+    re2c:tags = 1;
+    re2c:yyfill:enable = 0;
+    num = [0-9]+;
+    @_1 num @_2 "." @_3 num @_4 ("." @_5 num)? [\x00] {
+        Just SemVer {
+            major = s2n _yyinput _1 _2,
+            minor = s2n _yyinput _3 _4,
+            patch = if _5 == (-1) then 0 else s2n _yyinput _5 (_yycursor - 1)
+        }
+    }
+    * { Nothing }
+%}
+test :: ByteString -> Maybe SemVer -> IO ()
+test str expect = do
+    let s = State {
+        %{svars format = "\n@@ = (-1),"; %}
+        %{stags format = "\n@@ = (-1),"; %}
+        _yyinput = str,
+        _yycursor = 0,
+        _yymarker = 0
+    }
+    when (parse s /= expect) $ error "failed!"
+main :: IO ()
+main = do
+    test "23.34\0" (Just SemVer {major = 23, minor = 34, patch = 0})
+    test "1.2.99999\0" (Just SemVer {major = 1, minor = 2, patch = 99999})
+    test "1.a\0" Nothing
+```
+```c
+else f (k + 1) (n * 10 + (fromIntegral (BS.index s k) - 48))
+%{
+    re2c:YYFN = ["lexer;IO [SemVer]", "State{..};State", "_vers;[SemVer]"];
+    re2c:YYPEEK = "BS.index";
+    re2c:YYFILL = "(State{..}, yyfill) <- fill State{..}";
+    re2c:eof = 0;
+    re2c:monadic = 1;
+    re2c:tags = 1;
+    num = [0-9]+;
+    @_1 num @_2 "." @_3 num @_4 ("." @_5 num)? [\n] {
+        let ver = SemVer {
+            major = s2n _yyinput _1 _2,
+            minor = s2n _yyinput _3 _4,
+            patch = if _5 == (-1) then 0 else s2n _yyinput _5 (_yycursor - 1)
+        }
+        lexer State{..} (ver: _vers)
+    }
+    $ { return _vers }
+    * { error "lexer failed" }
+%}
+fill :: State -> IO (State, Bool)
+fill State{..} = do
+    case _eof of
+        True -> return (State{..}, False)
+        False -> do
+            -- Discard everything up to the current token, cut off terminating null,
+            -- read new chunk from file and reappend terminating null at the end.
+            chunk <- BS.hGet _file chunk_size
+            return (State{
+                _yyinput = BS.concat [(BS.init . BS.drop _token) _yyinput, chunk, "\0"],
+                _yycursor = _yycursor - _token,
+                _yymarker = _yymarker - _token,
+                _yylimit = _yylimit - _token + BS.length chunk, -- exclude terminating null
+                _token = 0,
+                _eof = BS.null chunk, -- end of file?
+                ..}, True)
+main :: IO ()
+main = do
+    let fname = "input"
+    -- Prepare input file.
+    BS.writeFile fname $ BS.concat ["1.22.333\n" | _ <- [1..chunk_size]]
+    let expect = [SemVer {major = 1, minor = 22, patch = 333} | _ <- [1..chunk_size]]
+    -- Run lexer on the prepared file.
+    fh <- openFile fname ReadMode
+    let st = State {
+        _file = fh,
+        _yyinput = BS.singleton 0,
+        _yycursor = 0,
+        _yymarker = 0,
+        _yylimit = 0,
+        _token = 0,
+        %{svars format = "\n@@ = (-1),"; %}
+        %{stags format = "\n@@ = (-1),"; %}
+        _eof = False
+    }
+    result <- lexer st []
+    hClose fh
+    -- Cleanup.
+    removeFile fname
+    -- Check result.
+    when (result /= expect) $ error $ "expected " ++ show expect ++ ", got " ++ show result
+    return ()
+```
+```c
+else f (k + 1) (n * 10 + (fromIntegral (index s k) - 48))
+%{
+    re2c:YYFN = ["parse;Maybe SemVer", "State{..};State"];
+    re2c:YYCTYPE = "Word8";
+    re2c:captvars = 1;
+    re2c:yypmatch = _;
+    re2c:yyfill:enable = 0;
+    num = [0-9]+;
+    (num) "." (num) ("." num)? [\x00] {
+        Just SemVer {
+            major = s2n _yyinput _yytl1 _yytr1,
+            minor = s2n _yyinput _yytl2 _yytr2,
+            patch = if _yytl3 == none then 0 else s2n _yyinput (_yytl3 + 1) _yytr3
+        }
+    }
+    * { Nothing }
+%}
+test :: ByteString -> Maybe SemVer -> IO ()
+test str expect = do
+    let s = State {
+        %{svars format = "\n@@ = none,"; %}
+        %{stags format = "\n@@ = none,"; %}
+        _yyinput = str,
+        _yycursor = 0,
+        _yymarker = 0
+    }
+    when (parse s /= expect) $ error "failed!"
+main :: IO ()
+main = do
+    test "23.34\0" (Just SemVer {major = 23, minor = 34, patch = 0})
+    test "1.2.99999\0" (Just SemVer {major = 1, minor = 2, patch = 99999})
+    test "1.a\0" Nothing
+```
+```c
+else f (k + 1) (n * 10 + (fromIntegral (index s k) - 48))
+%{
+    re2c:YYFN = ["parse;Maybe [Int]", "State{..};State"];
+    re2c:YYMTAGP = "let tag = _yycursor : @@{tag} in let @@{tag} = tag in";
+    re2c:YYMTAGN = ""; // alternatively could add -1 to the list
+    re2c:tags = 1;
+    re2c:yyfill:enable = 0;
+    num = [0-9]+;
+    @_1 num @_2 (".") #_3 num #_4)* [\x00] {
+        Just $ (s2n _yyinput _1 _2) : (reverse $ zipWith (\i j -> s2n _yyinput i j) _3 _4)
+    }
+    * { Nothing }
+%}
+test :: ByteString -> Maybe [Int] -> IO ()
+test str expect = do
+    let st = State {
+        %{svars format = "\n@@ = (-1),"; %}
+        %{stags format = "\n@@ = (-1),"; %}
+        %{mvars format = "\n@@ = [],"; %}
+        %{mtags format = "\n@@ = [],"; %}
+        _yyinput = str,
+        _yycursor = 0,
+        _yymarker = 0
+    }
+    when (parse st /= expect) $ error "failed!"
+main :: IO ()
+main = do
+    test "1\0" (Just [1])
+    test "1.2.3.4.5.6.7\0" (Just [1, 2, 3, 4, 5, 6, 7])
+    test "1.2.\0" Nothing
+de literals in regular expressions. For
+    example <b>--input-encoding utf8</b> tells re2hs that the source file is in
+    UTF8 (it differs from <b>--utf8</b> which sets input text encoding). Option
+    <b>--encoding-policy</b> specifies the way re2hs handles Unicode surrogates
+    (code points in range <b>[0xD800-0xDFFF]</b>).</p>
+<p class="Pp">Below is an example of a lexer for UTF8 encoded Unicode
+    identifiers.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT --utf8 -i
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+import Control.Monad (when)
+import Data.ByteString (ByteString, index)
+%{include &quot;unicode_categories.re&quot; %}
+data State = State {
+    _yyinput :: ByteString,
+    _yycursor :: Int,
+    _yymarker :: Int,
+    _yyaccept :: Int
+}
+%{
+    re2c:YYFN = [&quot;lexer;Bool&quot;, &quot;State{..};State&quot;];
+    re2c:yyfill:enable = 0;
+    // Simplified &quot;Unicode Identifier and Pattern Syntax&quot;
+    // (see https://unicode.org/reports/tr31)
+    id_start    = L | Nl | [$_];
+    id_continue = id_start | Mn | Mc | Nd | Pc | [\u200D\u05F3];
+    identifier  = id_start id_continue*;
+    identifier { True }
+    *          { False }
+%}
+main :: IO ()
+main = do
+    let st = State {
+            _yyinput = &quot;_&#x042B;&#x0434;&#x0435;&#x043D;&#x0442;&#x0438;&#x0444;&#x0438;&#x043A;&#x0430;&#x0442;&#x043E;&#x0440;\x00&quot;,
+            _yycursor = 0,
+            _yymarker = 0,
+            _yyaccept = 0}
+    when (not $ lexer st) $ error &quot;failed&quot;</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Include_files'><a class='permalink' href='#Include_files'>Include   files</a></h2>
+<p class="Pp">re2hs allows one to include other files using a block of the form
+    <b>/*!include:re2c FILE */</b> or <b>%{include FILE %}</b>, or an in-block
+    directive <b>!include FILE ;</b>, where <b>FILE</b> is a path to the file to
+    be included. re2hs looks for include files in the directory of the including
+    file and in include locations, which can be specified with the <b>-I</b>
+    option. Include blocks/directives in re2hs work in the same way as C/C++
+    <b>#include</b>: <b>FILE</b> contents are copy-pasted verbatim in place of
+    the block/directive. Include files may have further includes of their own.
+    Use <b>--depfile</b> option to track build dependencies of the output file
+    on include files. re2hs provides some predefined include files that can be
+    found in the <b>include/</b> subdirectory of the project. These files
+    contain definitions that may be useful to other projects (such as Unicode
+    categories) and form something like a standard library for re2hs. Below is
+    an example of using include files.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Include_file_1_(definitions.hs)'><a class='permalink' href='#Include_file_1_(definitions.hs)'>Include   file 1 (definitions.hs)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>data Number = INum | FNum | NNaN deriving (Eq)
+%{
+    number = [1-9][0-9]*;
+%}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Include_file_2_(extra_rules.re.inc)'><a class='permalink' href='#Include_file_2_(extra_rules.re.inc)'>Include   file 2 (extra_rules.re.inc)</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>// floating-point numbers
+frac  = [0-9]* &quot;.&quot; [0-9]+ | [0-9]+ &quot;.&quot;;
+exp   = 'e' [+-]? [0-9]+;
+float = frac exp? | [0-9]+ exp;
+float { FNum }</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss">Input file</h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT -i
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+import Control.Monad (when)
+import Data.ByteString (ByteString, index)
+%{include &quot;definitions.hs&quot; %}
+data State = State {
+    _yyinput :: ByteString,
+    _yycursor :: Int,
+    _yymarker :: Int,
+    _yyaccept :: Int
+}
+%{
+    re2c:YYFN = [&quot;lexer;Number&quot;, &quot;State{..};State&quot;];
+    re2c:yyfill:enable = 0;
+    *      { NNaN }
+    number { INum }
+    !include &quot;extra_rules.re.inc&quot;;
+%}
+main :: IO ()
+main = do
+    let test s n = do
+            let st = State {
+                    _yyinput = s,
+                    _yycursor = 0,
+                    _yymarker = 0,
+                    _yyaccept = 0}
+            when (lexer st /= n) $ error &quot;failed&quot;
+    test &quot;123\0&quot; INum
+    test &quot;123.4567\0&quot; FNum</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Header_files'><a class='permalink' href='#Header_files'>Header   files</a></h2>
+<p class="Pp">re2hs allows one to generate header file from the input <b>.re</b>
+    file using <b>--header</b> option or <b>re2c:header</b> configuration and
+    block pairs of the form <b>/*!header:re2c:on*/</b> and
+    <b>/*!header:re2c:off*/</b>, or <b>%{header:on%}</b> and
+    <b>%{header:off%}</b>. The first block marks the beginning of header file,
+    and the second block marks the end of it. Everything between these blocks is
+    processed by re2hs, and the generated code is written to the file specified
+    with <b>--header</b> option or <b>re2c:header</b> configuration (or
+    <b>stdout</b> if neither option nor configuration is used). Autogenerated
+    header file may be needed in cases when re2hs is used to generate
+    definitions that must be visible from other translation units.</p>
+<p class="Pp">Here is an example of generating a header file that contains
+    definition of the lexer state with tag variables (the number variables
+    depends on the regular grammar and is unknown to the programmer).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">Input file</h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- re2hs $INPUT -o $OUTPUT --header lexer/state.hs -i
+{-# OPTIONS_GHC -Wno-unused-record-wildcards #-}
+{-# LANGUAGE OverloadedStrings #-}
+import Control.Monad (when)
+import Data.ByteString (index)
+import State
+%{header:on %}
+module State where
+import Data.ByteString (ByteString)
+data State = State {
+    _yyinput :: !ByteString,
+    _yycursor :: !Int,
+    %{stags format = &quot;\n@@{tag} :: !Int,&quot;; %}
+    _tag :: !Int
+}
+%{header:off %}
+%{
+    re2c:YYFN = [&quot;lexer;Int&quot;, &quot;State{..};State&quot;];
+    re2c:tags = 1;
+    re2c:yyfill:enable = 0;
+    re2c:header = &quot;lexer/state.hs&quot;;
+    [a]* @_tag [b]* { _tag }
+%}
+main :: IO ()
+main = do
+    let s = State {
+        _yyinput = &quot;ab\0&quot;,
+        _yycursor = 0,
+        %{stags format = &quot;\n@@{tag} = -1,&quot;; %}
+        _tag = 0}
+    when (lexer s /= 1) $ error &quot;failed!&quot;</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Header_file'><a class='permalink' href='#Header_file'>Header   file</a></h2>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-- Generated by re2c
+{-# LANGUAGE RecordWildCards #-}
+module State where
+import Data.ByteString (ByteString)
+data State = State {
+    _yyinput :: !ByteString,
+    _yycursor :: !Int,
+_yyt1 :: !Int,
+    _tag :: !Int
+}</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Skeleton_programs'><a class='permalink' href='#Skeleton_programs'>Skeleton   programs</a></h2>
+<p class="Pp">With the <b>-S, --skeleton</b> option, re2hs ignores all non-re2hs
+    code and generates a self-contained C program that can be further compiled
+    and executed. The program consists of lexer code and input data. For each
+    constructed DFA (block or condition) re2hs generates a standalone lexer and
+    two files: an <b>.input</b> file with strings derived from the DFA and a
+    <b>.keys</b> file with expected match results. The program runs each lexer
+    on the corresponding <b>.input</b> file and compares results with the
+    expectations. Skeleton programs are very useful for a number of reasons:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>They can check correctness of various re2hs optimizations (the data is
+      generated early in the process, before any DFA transformations have taken
+      place).</li>
+  <li>Generating a set of input data with good coverage may be useful for both
+      testing and benchmarking.</li>
+  <li>Generating self-contained executable programs allows one to get minimized
+      test cases (the original code may be large or have a lot of
+    dependencies).</li>
+</ul>
+</div>
+<p class="Pp">The difficulty with generating input data is that for all but the
+    most trivial cases the number of possible input strings is too large (even
+    if the string length is limited). re2hs solves this difficulty by generating
+    sufficiently many strings to cover almost all DFA transitions. It uses the
+    following algorithm. First, it constructs a skeleton of the DFA. For
+    encodings with 1-byte code unit size (such as ASCII, UTF-8 and EBCDIC)
+    skeleton is just an exact copy of the original DFA. For encodings with
+    multibyte code units skeleton is a copy of DFA with certain transitions
+    omitted: namely, re2hs takes at most 256 code units for each disjoint
+    continuous range that corresponds to a DFA transition. The chosen values are
+    evenly distributed and include range bounds. Instead of trying to cover all
+    possible paths in the skeleton (which is infeasible) re2hs generates
+    sufficiently many paths to cover all skeleton transitions, and thus trigger
+    the corresponding conditional jumps in the lexer. The algorithm
+    implementation is limited by ~1Gb of transitions and consumes constant
+    amount of memory (re2hs writes data to file as soon as it is generated).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Visualization_and_debug'><a class='permalink' href='#Visualization_and_debug'>Visualization   and debug</a></h2>
+<p class="Pp">With the <b>-D, --emit-dot</b> option, re2hs does not generate
+    code. Instead, it dumps the generated DFA in DOT format. One can convert
+    this dump to an image of the DFA using Graphviz or another library. Note
+    that this option shows the final DFA after it has gone through a number of
+    optimizations and transformations. Earlier stages can be dumped with various
+    debug options, such as <b>--dump-nfa</b>, <b>--dump-dfa-raw</b> etc. (see
+    the full list of options).</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp">You can find more information about re2c at the official website:
+    <a href='http://re2c.org'>http://re2c.org</a>. Similar programs are flex(1), lex(1),
+    quex(<a href='http://quex.sourceforge.net'>http://quex.sourceforge.net</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>AUTHORS</a></h1>
+<p class="Pp">re2hs was originally written by Peter Bumbulis
+    (<i>peter@csg.uwaterloo.ca</i>) in 1993. Marcus Boerger and Dan Nuffer spent
+    several years to turn the original idea into a production ready code
+    generator. Since then it has been maintained and developed by multiple
+    volunteers, most notably, Brian Young (<i>bayoung@acm.org</i>), <i>Marcus
+    Boerger</i>, Dan Nuffer (<i>nuffer@users.sourceforge.net</i>), <i>Ulya
+    Trofimovich</i> (<i>skvadrik@gmail.com</i>), <i>Serghei Iakovlev</i>,
+    <i>Sergei Trofimovich</i>, <i>Petr Skocik</i>, <i>ligfx</i> <i>raekye</i>
+    and <i>PolarGoose</i>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>

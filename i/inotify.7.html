@@ -1,0 +1,222 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">inotify(7)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+<link rel="stylesheet" href="basic.css">
+        if (size <= 0)
+            break;
+        /* Loop over all events in the buffer.  */
+        for (char *ptr = buf; ptr < buf + size;
+                ptr += sizeof(struct inotify_event) + event->len) {
+            event = (const struct inotify_event *) ptr;
+            /* Print event type.  */
+            if (event->mask & IN_OPEN)
+                printf("IN_OPEN: ");
+            if (event->mask & IN_CLOSE_NOWRITE)
+                printf("IN_CLOSE_NOWRITE: ");
+            if (event->mask & IN_CLOSE_WRITE)
+                printf("IN_CLOSE_WRITE: ");
+            /* Print the name of the watched directory.  */
+            for (size_t i = 1; i < argc; ++i) {
+                if (wd[i] == event->wd) {
+                    printf("%s/", argv[i]);
+                    break;
+                }
+            }
+            /* Print the name of the file.  */
+            if (event->len)
+                printf("%s", event->name);
+            /* Print type of filesystem object.  */
+            if (event->mask & IN_ISDIR)
+                printf(" [directory]\n");
+            else
+                printf(" [file]\n");
+        }
+    }
+}
+int
+main(int argc, char* argv[])
+{
+    char buf;
+    int fd, i, poll_num;
+    int *wd;
+    nfds_t nfds;
+    struct pollfd fds[2];
+    if (argc < 2) {
+        printf("Usage: %s PATH [PATH ...]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    printf("Press ENTER key to terminate.\n");
+    /* Create the file descriptor for accessing the inotify API.  */
+    fd = inotify_init1(IN_NONBLOCK);
+    if (fd == -1) {
+        perror("inotify_init1");
+        exit(EXIT_FAILURE);
+    }
+    /* Allocate memory for watch descriptors.  */
+    wd = calloc(argc, sizeof(int));
+    if (wd == NULL) {
+        perror("calloc");
+        exit(EXIT_FAILURE);
+    }
+    /* Mark directories for events
+       - file was opened
+       - file was closed */
+    for (i = 1; i < argc; i++) {
+        wd[i] = inotify_add_watch(fd, argv[i],
+                                  IN_OPEN | IN_CLOSE);
+        if (wd[i] == -1) {
+            fprintf(stderr, "Cannot watch '%s': %s\n",
+                    argv[i], strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+    }
+    /* Prepare for polling.  */
+    nfds = 2;
+    fds[0].fd = STDIN_FILENO;       /* Console input */
+    fds[0].events = POLLIN;
+    fds[1].fd = fd;                 /* Inotify input */
+    fds[1].events = POLLIN;
+    /* Wait for events and/or terminal input.  */
+    printf("Listening for events.\n");
+    while (1) {
+        poll_num = poll(fds, nfds, -1);
+        if (poll_num == -1) {
+            if (errno == EINTR)
+                continue;
+            perror("poll");
+            exit(EXIT_FAILURE);
+        }
+        if (poll_num > 0) {
+            if (fds[0].revents & POLLIN) {
+                /* Console input is available.  Empty stdin and quit.  */
+                while (read(STDIN_FILENO, &buf, 1) > 0 && buf != '\n')
+                    continue;
+                break;
+            }
+            if (fds[1].revents & POLLIN) {
+                /* Inotify events are available.  */
+                handle_events(fd, wd, argc, argv);
+            }
+        }
+    }
+    printf("Listening for events stopped.\n");
+    /* Close inotify file descriptor.  */
+    close(fd);
+    free(wd);
+    exit(EXIT_SUCCESS);
+}
+```
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/inotifywait.1.en'>inotifywait(1)</a>, <a href='/man/inotifywatch.1.en'>inotifywatch(1)</a>,
+    <a href='/man/inotify_add_watch.2.en'>inotify_add_watch(2)</a>, <a href='/man/inotify_init.2.en'>inotify_init(2)</a>,
+    <a href='/man/inotify_init1.2.en'>inotify_init1(2)</a>, <a href='/man/inotify_rm_watch.2.en'>inotify_rm_watch(2)</a>, <a href='/man/read.2.en'>read(2)</a>,
+    <a href='/man/stat.2.en'>stat(2)</a>, <a href='/man/fanotify.7.en'>fanotify(7)</a></p>
+<p class="Pp"><i>Documentation/filesystems/inotify.txt</i> in the Linux kernel
+    source tree</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-09-21</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>Version:</dt>
+        <dd>6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#STANDARDS">STANDARDS</a></li>
+        
+            <li><a href="#HISTORY">HISTORY</a></li>
+        
+            <li><a href="#NOTES">NOTES</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>In other languages:</p>
+    <ul>
+    
+        <li><a href="/man/inotify.7.fr">fr</a></li>
+    
+        <li><a href="/man/inotify.7.ru">ru</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/inotify.7.en.txt">txt</a>, 
+        
+            <a href="/man/inotify.7.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

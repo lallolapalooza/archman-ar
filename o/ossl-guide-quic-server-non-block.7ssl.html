@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ossl-guide-quic-server-non-block(7ssl) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ossl-guide-quic-server-non-block(7ssl)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/openssl/">openssl</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">OSSL-GUIDE-QUIC-SERVER-NON-BLOCK(7ssl)</td>
+    <td class="head-vol">OpenSSL</td>
+    <td class="head-rtitle">OSSL-GUIDE-QUIC-SERVER-NON-BLOCK(7ssl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">ossl-guide-quic-server-non-block - دليل OpenSSL: كتابة خادم QUIC بسيط غير متزامن</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SIMPLE_NONBLOCKING_QUIC_SERVER_EXAMPLE'><a class='permalink' href='#SIMPLE_NONBLOCKING_QUIC_SERVER_EXAMPLE'>مثال بسيط لخادم QUIC غير متزامن</a></h1>
+<p class="Pp">تقدم هذه الصفحة عينات مختلفة من شفرة المصدر توضح كيفية كتابة تطبيق خادم QUIC بسيط وغير متزامن يقوم بإعادة توجيه "الصدى"، يقبل اتصال عميل واحد في كل مرة، ويعيد إرسال المدخلات من العميل إلى نفس العميل. بمجرد قطع اتصال العميل الحالي، يتم قبول اتصال العميل التالي.</p>
+<p class="Pp">يقبل الخادم فقط بروتوكولات ALPN
+    <span class="Li">&quot;http/1.0&quot;</span> و
+    <span class="Li">&quot;hq-interop&quot;</span> ولا يقوم بتنفيذ HTTP فعليًا، بل يقوم فقط بإعادة توجيه بسيطة. هذا غير قياسي ولن تدعمه الخوادم الواقعية. هذا لأغراض توضيحية فقط.</p>
+<p class="Pp">هناك طرق مختلفة لاختبار هذا الخادم:
+    <b>quic-client-block.c</b> و <b>quic-client-non-block.c</b> سترسل طلب HTTP/1.0 أساسي، والذي سيعيده الخادم. يمكنك أيضًا اختبار هذا الخادم عن طريق تشغيل
+    <span class="Li">&quot;openssl s_client -connect
+    localhost:4443 -4 -quic -alpn http/1.0&quot;</span> وإدخال نص سيقوم الخادم بإعادته.</p>
+<p class="Pp">كل من مقبس الاستماع والمقبس المتصل هما
+    &quot;غير متزامنين&quot;. ومع ذلك، نستخدم <b>select()</b> لجعل مقبس الاستماع يقوم بعملية حظر عندما لا يمكنه القراءة/الكتابة. بدلاً من التوقف والانتظار، قد تحتاج إلى تطبيقك إلى القيام بمهام أخرى أثناء عدم قدرة كائن
+    <b>SSL</b> على القراءة/الكتابة. على سبيل المثال: تحديث واجهة المستخدم الرسومية أو إجراء عمليات على اتصال أو دفق آخر.</p>
+<p class="Pp">الكود المصدري الكامل لمثال خادم QUIC غير المتزامن هذا متاح في الدليل
+    <b>demos/guide</b> في توزيعة OpenSSL المصدرية في الملف
+    <b>quic-server-non-block.c</b>. وهو متاح أيضًا عبر الإنترنت على
+    <a href='https://github.com/openssl/openssl/blob/master/demos/guide/quic-server-non-block.c'>https://github.com/openssl/openssl/blob/master/demos/guide/quic-server-non-block.c</a>.</p>
+<p class="Pp">نفترض أن لديك OpenSSL مثبتًا بالفعل على نظامك؛ وأن لديك بالفعل فهمًا أساسيًا لمفاهيم OpenSSL و QUIC (راجع
+    <a href='/man/ossl-guide-libraries-introduction.7.en'>ossl-guide-libraries-introduction(7)</a> و
+    <a href='/man/ossl-guide-quic-introduction.7.en'>ossl-guide-quic-introduction(7)</a>)؛ وأنك تعرف كيفية كتابة وبناء كود C وربطه بمكتبات libcrypto و libssl التي توفرها OpenSSL. كما يفترض أن لديك فهمًا أساسيًا لـ UDP/IP والمقابس.</p>
+<section class="Ss">
+<h2 class="Ss" id='Creating_the_SSL_CTX_and_SSL_objects'><a class='permalink' href='#Creating_the_SSL_CTX_and_SSL_objects'>إنشاء كائنات SSL_CTX و SSL</a></h2>
+<p class="Pp">الخطوة الأولى هي إنشاء كائن <b>SSL_CTX</b> لخادمنا. نستخدم الدالة
+    <a href='/man/SSL_CTX_new.3.en'>SSL_CTX_new(3)</a> لهذا الغرض. نمرر كوسيطة قيمة الإرجاع للدالة
+    <a href='/man/OSSL_QUIC_server_method.3.en'>OSSL_QUIC_server_method(3)</a>. يجب عليك استخدام هذه الطريقة كلما كنت تكتب خادم QUIC.</p>
+<pre>/*
+ * يحتوي SSL_CTX على معلومات تكوين مشتركة لعدة اتصالات SSL لاحقة لكل عميل.
+ * نقوم بتحميل طريقة QUIC الخاصة بالخادم هنا بشكل خاص.
+ */
+ctx = SSL_CTX_new(OSSL_QUIC_server_method());
+if (ctx == NULL)
+    goto err;</pre>
+<p class="Pp">تحتاج الخوادم إلى مفتاح خاص وشهادة. غالبًا ما تكون شهادات CA للمصدر الوسيط مطلوبة، ويتم تكوين كل من شهادة الخادم (الكيان النهائي أو EE) وشهادات المصدر (&quot;السلسلة&quot;) بسهولة في &quot;ملف سلسلة&quot; واحد. أدناه نقوم بتحميل ملف سلسلة من هذا القبيل (يجب أن تظهر شهادة EE أولاً)، ثم نقوم بتحميل المفتاح الخاص المقابل، ونتحقق من أنه يطابق شهادة الخادم. لا يتم إجراء أي فحوصات للتحقق من سلامة السلسلة (توقيعات CA أو تواريخ انتهاء صلاحية الشهادات، على سبيل المثال)، ولكننا نتحقق من اتساق المفتاح الخاص مع الشهادة المقابلة.</p>
+<pre>/*
+ * قم بتحميل ملف *سلسلة* شهادة الخادم (بتنسيق PEM)، والذي يتضمن
+ * ليس فقط شهادة الخادم الطرفية (الكيان النهائي)، ولكن أيضًا أي
+ * شهادات CA الوسيطة للمصدر. يجب أن تكون شهادة الطرفية هي
+ * الشهادة الأولى في الملف.
+ *
+ * في حالات الاستخدام المتقدمة، يمكن استدعاء هذا عدة مرات، مرة لكل خوارزمية مفتاح عام
+ * لديها الخادم شهادة مقابلة لها.
+ * ومع ذلك، يجب تحميل المفتاح الخاص المقابل (انظر أدناه) أولاً،
+ * * قبل * الانتقال إلى ملف السلسلة التالي.
+ */
+if (SSL_CTX_use_certificate_chain_file(ctx, cert_path) &lt;= 0) {
+    fprintf(stderr, &quot;لم نتمكن من تحميل ملف الشهادة: %s\n&quot;, cert_path);
+    goto err;
+}
+/*
+ * قم بتحميل المفتاح الخاص المقابل، وهذا يتحقق أيضًا من أن المفتاح الخاص
+ * يتطابق مع شهادة الكيان النهائي المحملة للتو. لا يتحقق
+ * مما إذا كانت سلسلة الشهادات صالحة، يمكن أن تكون الشهادات
+ * منتهية الصلاحية، أو قد تفشل بطريقة أخرى في تشكيل سلسلة يمكن للعميل
+ * التحقق منها.
+ */
+if (SSL_CTX_use_PrivateKey_file(ctx, key_path, SSL_FILETYPE_PEM) &lt;= 0) {
+    fprintf(stderr, &quot;لم نتمكن من تحميل ملف المفتاح: %s\n&quot;, key_path);
+    goto err;
+}</pre>
+<p class="Pp">معظم الخوادم، بما في ذلك هذا الخادم، لا تطلب شهادات العملاء. لذلك، لا نحتاج إلى &quot;متجر موثوق&quot; ونسمح بإكمال المصافحة حتى عندما لا يقدم العميل شهادة. ملاحظة: حتى لو قدم العميل شهادة موثوقة، لكي تكون مفيدة، سيحتاج تطبيق الخادم إلى شفرة مخصصة لاستخدام الهوية التي تم التحقق منها لمنح وصول غير افتراضي لهذا العميل المحدد. تمنح بعض الخوادم الوصول لجميع العملاء بشهادات من CA خاص، وهذا يتطلب معالجة قوائم إبطال الشهادات لسحب تفويض عميل. غالبًا ما يكون من الأسهل وأكثر أمانًا الاحتفاظ بقائمة من المفاتيح العامة المصرح بها بدلاً من ذلك.</p>
+<p class="Pp">على الرغم من أن هذا هو الإعداد الافتراضي، إلا أننا نستدعي الدالة
+    <a href='/man/SSL_CTX_set_verify.3.en'>SSL_CTX_set_verify(3)</a> بشكل صريح ونمرر القيمة <b>SSL_VERIFY_NONE</b>
+    إليها. الوسيط النهائي لهذه الدالة هو دالة رد اتصال يمكنك توفيرها اختياريًا لتجاوز المعالجة الافتراضية للتحقق من الشهادة. معظم التطبيقات لا تحتاج إلى القيام بذلك، لذلك يمكن تعيينها بأمان إلى NULL للحصول على المعالجة الافتراضية.</p>
+<pre>/*
+ * نادرًا ما يستخدم العملاء المصادقة المستندة إلى الشهادات، ولذلك لا نطلب
+ * مصادقة TLS &quot;متبادلة&quot; (في الواقع لا توجد طريقة لمعرفة
+ * ما إذا كان العميل قد صادق على الخادم وكيف، لذلك فإن مصطلح &quot;متبادل&quot;
+ * قد يكون مضللاً).
+ *
+ * بما أننا لا نطلب أو نعالج شهادات العملاء، فإننا لا نحتاج إلى
+ * تكوين مخزن شهادات موثوق به، لذلك لا يلزم استدعاء
+ * SSL_CTX_set_default_verify_paths(). يُفترض أن سلسلة شهادات الخادم
+ * الخاصة صحيحة.
+ */
+SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);</pre>
+<p class="Pp">يفرض QUIC أيضًا استخدام التفاوض على بروتوكول طبقة التطبيق (ALPN) لاختيار بروتوكول تطبيق. نستخدم
+    <a href='/man/SSL_CTX_set_alpn_select_cb.3.en'>SSL_CTX_set_alpn_select_cb(3)</a> لهذا الغرض. يمكننا تمرير دالة رد اتصال سيتم استدعاؤها لكل اتصال لاختيار ALPN يعتبره الخادم مقبولًا.</p>
+<pre>/* إعداد دالة رد اتصال التفاوض ALPN لتحديد ALPN المقبولة. */
+SSL_CTX_set_alpn_select_cb(ctx, select_alpn, NULL);</pre>
+<p class="Pp">في هذه الحالة، نقبل فقط &quot;http/1.0&quot; و
+    &quot;hq-interop&quot;.</p>
+<pre>/*
+* سلاسل ALPN لمصافحة TLS. فقط 'http/1.0' و 'hq-interop'
+* مقبولة.
+*/
+static const unsigned char alpn_ossltest[] = {
+    8,  'h', 't', 't', 'p', '/', '1', '.', '0',
+    10, 'h', 'q', '-', 'i', 'n', 't', 'e', 'r', 'o', 'p',
+};
+static int select_alpn(SSL *ssl, const unsigned char **out,
+                       unsigned char *out_len, const unsigned char *in,
+                       unsigned int in_len, void *arg)
+{
+    if (SSL_select_next_proto((unsigned char **)out, out_len, alpn_ossltest,
+                              sizeof(alpn_ossltest), in,
+                              in_len) == OPENSSL_NPN_NEGOTIATED)
+        return SSL_TLSEXT_ERR_OK;
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}</pre>
+<p class="Pp">هذا كل الإعداد الذي نحتاج إلى القيام به لـ <b>SSL_CTX</b>. بعد ذلك، نقوم بإنشاء مقبس UDP وربطه على localhost.</p>
+<pre>/* الحصول على واصف الملف لمقبس UDP جديد */
+if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) &lt; 0) {
+    fprintf(stderr, &quot;لا يمكن إنشاء المقبس&quot;);
+    return -1;
+}
+sa.sin_family = AF_INET;
+sa.sin_port = htons(port);
+/* الربط بمقبس UDP الجديد على localhost */
+if (bind(fd, (const struct sockaddr *)&amp;sa, sizeof(sa)) &lt; 0) {
+    fprintf(stderr, &quot;لا يمكن الربط بـ %u\n&quot;, port);
+    BIO_closesocket(fd);
+    return -1;
+}
+/* ضبط المنفذ على وضع غير متزامن */
+if (BIO_socket_nbio(fd, 1) &lt;= 0) {
+    fprintf(stderr, &quot;غير قادر على ضبط المنفذ على وضع غير متزامن&quot;);
+    BIO_closesocket(fd);
+    return -1;
+}</pre>
+<p class="Pp">لتشغيل خادم QUIC، نقوم بإنشاء <b>SSL_LISTENER</b> للاستماع إلى الاتصالات الواردة. نقدم له منفذ UDP المرتبط لبدء الاستماع بشكل صريح لاتصالات جديدة.</p>
+<pre>/* إنشاء مستمع SSL جديد */
+</pre>
+</div>
+</section>
+</article>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+ QUIC listener */
+if ((listener = SSL_new_listener(ctx, 0)) == NULL)
+    goto err;
+/* Provide the listener with our UDP socket. */
+if (!SSL_set_fd(listener, fd))
+    goto err;
+/* Set the listener mode to nonblocking, which is inherited by
+ * child objects.
+ */
+if (!SSL_set_blocking_mode(listener, 0))
+    goto err;
+/*
+ * Begin listening. Note that is not usually needed as SSL_accept_connection
+ * will implicitly start listening. It is only needed if a server wishes to
+ * ensure it has started to accept incoming connections but does not wish to
+ * actually call SSL_accept_connection yet.
+ */
+if (!SSL_listen(listener))
+    goto err;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Server_loop'><a class='permalink' href='#Server_loop'>حلقة الخادم</a></h2>
+<p class="Pp">يدخل الخادم الآن في حلقة "إلى الأبد"، يتعامل مع اتصال عميل واحد في كل مرة. قبل كل اتصال، نمسح مكدس أخطاء OpenSSL بحيث تكون تقارير الأخطاء متعلقة بالاتصال الجديد فقط.</p>
+<pre>/* Pristine error stack for each new connection */
+ERR_clear_error();</pre>
+<p class="Pp">ثم ننتظر حتى يصبح الاتصال جاهزًا للقراءة. يستخدم وظيفة select للانتظار حتى يصبح المقبس قابلاً للقراءة أو للكتابة، اعتمادًا على ما يتطلبه اتصال SSL.</p>
+<p class="Pp">ثم نقبل اتصالًا جديدًا تم فيه إجراء المصافحة بالفعل. ومع ذلك، نظرًا لأننا في وضع غير مانع، ستعود <a href='/man/SSL_accept_connection.3.en'>SSL_accept_connection(3)</a> فورًا. لذلك، نستخدم وظيفة مساعدة لمنع الانتظار فعليًا حتى يتم إنشاء اتصال.</p>
+<pre>printf(&quot;Waiting for connection\n&quot;);
+while ((conn = SSL_accept_connection(listener, 0)) == NULL) {
+    wait_for_activity(listener);
+}
+printf(&quot;Accepted new connection\n&quot;);</pre>
+<p class="Pp">تستخدم الوظيفة المساعدة wait_for_activity <b>select()</b> لمنع الانتظار حتى يصبح واصف الملف الخاص بكائن SSL المقدم قابلاً للقراءة. كما ذكرنا سابقًا، من المحتمل أن يستخدم تطبيق أكثر واقعية هذا الوقت للقيام بمهام أخرى.</p>
+<pre>/* Initialize the fd_set structure */
+FD_ZERO(&amp;read_fd);
+FD_ZERO(&amp;write_fd);
+/*
+ * Determine if we would like to write to the socket, read from it, or both.
+ */
+if (SSL_net_write_desired(ssl))
+    FD_SET(sock, &amp;write_fd);
+if (SSL_net_read_desired(ssl))
+    FD_SET(sock, &amp;read_fd);
+/*
+ * Find out when OpenSSL would next like to be called, regardless of
+ * whether the state of the underlying socket has changed or not.
+ */
+if (SSL_get_event_timeout(ssl, &amp;tv, &amp;isinfinite) &amp;&amp; !isinfinite)
+    tvp = &amp;tv;
+/*
+ * Wait until the socket is writeable or readable. We use select here
+ * for the sake of simplicity and portability, but you could equally use
+ * poll/epoll or similar functions
+ *
+ * NOTE: For the purposes of this demonstration code this effectively
+ * makes this demo block until it has something more useful to do. In a
+ * real application you probably want to go and do other work here (e.g.
+ * update a GUI, or service other connections).
+ *
+ * Let's say for example that you want to update the progress counter on
+ * a GUI every 100ms. One way to do that would be to use the timeout in
+ * the last parameter to &quot;select&quot; below. If the tvp value is greater
+ * than 100ms then use 100ms instead. Then, when select returns, you
+ * check if it did so because of activity on the file descriptors or
+ * because of the timeout. If the 100ms GUI timeout has expired but the
+ * tvp timeout has not then go and update the GUI and then restart the
+ * &quot;select&quot; (with updated timeouts).
+ */
+select(sock + 1, &amp;read_fd, &amp;write_fd, NULL, tvp);</pre>
+<p class="Pp">بعد اكتمال المصافحة، يقرأ الخادم كل مدخلات العميل.</p>
+<pre>/* Read from client until the client sends a end of stream packet */
+while (!eof) {
+    ret = SSL_read_ex(conn, buf + total_read, sizeof(buf) - total_read,
+                      &amp;nread);
+    total_read += nread;
+    if (total_read &gt;= 8192) {
+        fprintf(stderr, &quot;Could not fit all data into buffer\n&quot;);
+        goto err;
+    }
+    switch (handle_io_failure(conn, ret)) {
+    case 1:
+        continue; /* Retry */
+    case 0:
+        /* Reached end of stream */
+        if (!SSL_has_pending(conn))
+            eof = 1;
+        break;
+    default:
+        fprintf(stderr, &quot;Failed reading remaining data\n&quot;);
+        goto err;
+    }
+}</pre>
+<p class="Pp">أخيرًا، نعيد إرسال البيانات المستلمة إلى العميل. يمكننا استخدام <a href='/man/SSL_write_ex2.3.en'>SSL_write_ex2(3)</a> لتمرير علامة خاصة SSL_WRITE_FLAG_CONCLUDE التي سترسل حزمة FIN بمجرد انتهاء الكتابة بنجاح من كتابة جميع البيانات إلى الطرف المقابل.</p>
+<pre>/* Echo client input */
+while (!SSL_write_ex2(conn, buf,
+                      total_read,
+                      SSL_WRITE_FLAG_CONCLUDE, &amp;total_written)) {
+    if (handle_io_failure(conn, 0) == 1)
+        continue;
+    fprintf(stderr, &quot;Failed to write data\n&quot;);
+    goto err;
+}</pre>
+<p class="Pp">ثم نقوم بإغلاق الاتصال باستخدام <a href='/man/SSL_shutdown.3.en'>SSL_shutdown(3)</a>، والتي قد تحتاج إلى استدعائها عدة مرات لضمان إغلاق الاتصال بالكامل.</p>
+<pre>/*
+ * Shut down the connection. We may need to call this multiple times
+ * to ensure the connection is shutdown completely.
+ */
+while ((ret = SSL_shutdown(conn)) != 1) {
+    if (ret &lt; 0 &amp;&amp; handle_io_failure(conn, ret) == 1)
+        continue; /* Retry */
+}</pre>
+<p class="Pp">أخيرًا، نحرر اتصال SSL، ويكون الخادم الآن جاهزًا لقبول اتصال العميل التالي.</p>
+<pre>SSL_free(conn);</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Final_clean_up'><a class='permalink' href='#Final_clean_up'>التنظيف النهائي</a></h2>
+<p class="Pp">إذا تمكن الخادم بطريقة ما من الخروج من الحلقة اللانهائية وكان مستعدًا للخروج، فسيقوم بإلغاء تخصيص <b>SSL</b> المنشأ.</p>
+<pre>SSL_free(listener);</pre>
+<p class="Pp">وفي الدالة الرئيسية، سيقوم بإلغاء تخصيص <b>SSL_CTX</b> المنشأ.</p>
+<pre>SSL_CTX_free(ctx);
+BIO_closesocket(fd);</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/ossl-guide-introduction.7.en'>ossl-guide-introduction(7)</a>،
+    <a href='/man/ossl-guide-libraries-introduction.7.en'>ossl-guide-libraries-introduction(7)</a>،
+    <a href='/man/ossl-guide-libssl-introduction.7.en'>ossl-guide-libssl-introduction(7)</a>،
+    <a href='/man/ossl-guide-quic-introduction.7.en'>ossl-guide-quic-introduction(7)</a>،
+    <a href='/man/ossl-guide-quic-client-non-block.7.en'>ossl-guide-quic-client-non-block(7)</a>،
+    <a href='/man/ossl-guide-quic-client-block.7.en'>ossl-guide-quic-client-block(7)</a>،
+    <a href='/man/ossl-guide-tls-server-block.7.en'>ossl-guide-tls-server-block(7)</a>،
+    <a href='/man/ossl-guide-quic-server-block.7.en'>ossl-guide-quic-server-block(7)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright 2024-2025 The OpenSSL Project Authors. All Rights
+    Reserved.</p>
+<p class="Pp">Licensed under the Apache License 2.0 (the &quot;License&quot;).
+    You may not use this file except in compliance with the License. You can
+    obtain a copy in the file LICENSE in the source distribution or at
+    <a href='https://www.openssl.org/source/license.html'>https://www.openssl.org/source/license.html</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-01</td>
+    <td class="foot-os">3.6.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/openssl/">core/openssl</a></dd>
+        <dt>Version:</dt>
+        <dd>3.6.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.openssl.org">https://www.openssl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/openssl/">/listing/core/openssl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SIMPLE_NONBLOCKING_QUIC_SERVER_EXAMPLE">SIMPLE NONBLOCKING QUIC SERVER EXAMPLE</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/ossl-guide-quic-server-non-block.7ssl.en.txt">txt</a>, 
+        
+            <a href="/man/ossl-guide-quic-server-non-block.7ssl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

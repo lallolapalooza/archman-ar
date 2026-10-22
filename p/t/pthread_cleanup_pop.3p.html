@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>pthread_cleanup_push(3) — archlinux man pages</title>
+        <link rel="stylesheet" href="https://man.archlinux.org/css/man.css">
+        <link rel="stylesheet" href="https://man.archlinux.org/css/styles.css">
+        <link rel="icon" type="image/png" href="https://man.archlinux.org/favicon.png">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">pthread_cleanup_pop(3p)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+
+        
+        <main>
+            <article>
+                <section class="Sh">
+    <h1 class="Sh" id="PROLOG"><a class="permalink" href="#PROLOG">PROLOG</a></h1>
+    <p class="Pp">This page is part of the Linux man-pages project. It describes a Linux
+        specific, and may not match the behavior of other operating systems.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+    <p class="Pp">pthread_cleanup_push, pthread_cleanup_pop - thread cleanup handling</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+    <p class="Pp"><code>#include &lt;pthread.h&gt;</code></p>
+    <p class="Pp"><code>void pthread_cleanup_push(void (*routine)(void *), void *arg);</code></p>
+    <p class="Pp"><code>void pthread_cleanup_pop(int execute);</code></p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+    <p class="Pp">The POSIX threads library provides mechanisms for threads to manage
+        resource cleanup in the face of asynchronous cancellation. These functions
+        are typically used in pairs, like this:</p>
+    <pre>
+pthread_cleanup_push(cleanup_handler, cleanup_arg);
+    /* Do work that might be cancelled */
+    ...
+pthread_cleanup_pop(1); /* or 0 */
+    </pre>
+    <dl class="Bl-tag">
+        <dt><code>routine</code></dt>
+        <dd>A pointer to a function that will be called when the cleanup is performed.
+            This function takes a single argument, <code>arg</code>.</dd>
+        <dt><code>arg</code></dt>
+        <dd>The argument to be passed to the cleanup handler function.</dd>
+    </dl>
+    <p class="Pp">When <code>pthread_cleanup_push</code> is called, the specified
+        cleanup handler (<code>routine</code>, <code>arg</code>) is pushed onto a
+        thread-local stack of cleanup handlers.</p>
+    <p class="Pp">When <code>pthread_cleanup_pop</code> is called, the top handler
+        is popped from the stack. If the <code>execute</code> argument is non-zero,
+        the popped handler is executed.</p>
+    <p class="Pp">A thread can have multiple cleanup handlers registered. The cleanup
+        handlers are executed in the reverse order that they were pushed.</p>
+    <p class="Pp">These functions are intended to be used to manage resources like
+        memory, mutexes, file descriptors, etc., that must be released when a thread
+        is cancelled. Cancellation occurs when another thread calls
+        <code>pthread_cancel</code> on the target thread.</p>
+    <p class="Pp">The cleanup handlers are invoked in the following situations:</p>
+    <ul class="Bl-bullet">
+        <li>When the thread is cancelled via <code>pthread_cancel</code>.</li>
+        <li>When the thread calls <code>pthread_exit</code>.</li>
+        <li>When the thread returns from its initial start routine (in this case, the
+            handlers are popped but not executed).</li>
+        <li>When <code>pthread_cleanup_pop</code> is called with a non-zero
+            <code>execute</code> argument.</li>
+    </ul>
+    <p class="Pp">Note that cancellation points are points in the execution where a
+        thread may be asynchronously cancelled. These include functions like
+        <code>read</code>, <code>write</code>, <code>select</code>,
+        <code>pthread_join</code>, <code>pthread_testcancel</code>, etc. If a
+        thread is cancelled at a cancellation point, all pending cleanup handlers
+        are executed (in reverse order of being pushed) and then the thread is
+        terminated.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="RETURN_VALUE"><a class="permalink" href="#RETURN_VALUE">RETURN VALUE</a></h1>
+    <p class="Pp">These functions do not return values.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="ERRORS"><a class="permalink" href="#ERRORS">ERRORS</a></h1>
+    <p class="Pp">No errors are returned by these functions.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+    <p class="Pp">The following example shows how to use these functions to protect a
+        mutex from being left locked if the thread is cancelled:</p>
+    <pre>
+void *thread_routine(void *arg) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)arg;
+    int s;
+
+    s = pthread_mutex_lock(mutex);
+    if (s != 0)
+        /* handle error */ ;
+
+    pthread_cleanup_push(mutex_cleanup_handler, mutex);
+
+    /* Do work that requires the mutex */
+    sleep(5); /* This is a cancellation point */
+
+    pthread_cleanup_pop(1); /* Remove and execute the handler */
+
+    s = pthread_mutex_unlock(mutex);
+    if (s != 0)
+        /* handle error */ ;
+
+    return NULL;
+}
+
+void mutex_cleanup_handler(void *arg) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)arg;
+    pthread_mutex_unlock(mutex);
+}
+    </pre>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="APPLICATION_USAGE"><a class="permalink" href="#APPLICATION_USAGE">APPLICATION USAGE</a></h1>
+    <p class="Pp">The <code>pthread_cleanup_push</code> and
+        <code>pthread_cleanup_pop</code> functions are macros. Their usage is subject
+        to the following restrictions:</p>
+    <ul class="Bl-bullet">
+        <li>They must be used in pairs within the same lexical scope.</li>
+        <li>A <code>pthread_cleanup_pop</code> must occur after its corresponding
+            <code>pthread_cleanup_push</code>.</li>
+        <li>They cannot be used inside a signal handler.</li>
+        <li>They cannot be used within a function that contains a <span class="Li">goto</span>
+            statement that jumps over the corresponding <code>pthread_cleanup_pop</code>,
+            or a <span class="Li">continue</span> or <span class="Li">break</span>
+            statement that would cause control to be transferred out of the lexical
+            scope enclosed by the pair.</li>
+    </ul>
+    <p class="Pp">Because they are implemented as macros, the code between the
+        <code>pthread_cleanup_push</code> and <code>pthread_cleanup_pop</code> calls
+        is effectively wrapped in a block scope. This can affect variable scoping
+        and the behavior of control flow statements like <code>return</code>.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="RATIONALE"><a class="permalink" href="#RATIONALE">RATIONALE</a></h1>
+    <p class="Pp">Note that the specified cleanup handling mechanism is especially
+        tied to the C language and, while the requirement for a uniform mechanism
+        for expressing cleanup is language-independent, the mechanism used in other
+        languages may be quite different. In addition, this mechanism is really only
+        necessary due to the lack of a real exception mechanism in the C language,
+        which would be the ideal solution.</p>
+    <p class="Pp">There is no notion of a cancellation cleanup-safe function. If an
+        application has no cancellation points in its signal handlers, blocks any
+        signal whose handler may have cancellation points while calling async-unsafe
+        functions, or disables cancellation while calling async-unsafe functions,
+        all functions may be safely called from cancellation cleanup routines.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="FUTURE_DIRECTIONS"><a class="permalink" href="#FUTURE_DIRECTIONS">FUTURE DIRECTIONS</a></h1>
+    <p class="Pp">None.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+    <p class="Pp"><i><i>pthread_cancel</i>()</i>,
+        <i><i>pthread_setcancelstate</i>()</i></p>
+    <p class="Pp">The Base Definitions volume of POSIX.1&#x2010;2017,
+        <i><b>&lt;pthread.h&gt;</b></i></p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="COPYRIGHT"><a class="permalink" href="#COPYRIGHT">COPYRIGHT</a></h1>
+    <p class="Pp">Portions of this text are reprinted and reproduced in electronic
+        form from IEEE Std 1003.1-2017, Standard for Information Technology --
+        Portable Operating System Interface (POSIX), The Open Group Base
+        Specifications Issue 7, 2018 Edition, Copyright (C) 2018 by the Institute of
+        Electrical and Electronics Engineers, Inc and The Open Group. In the event
+        of any discrepancy between this version and the original IEEE and The Open
+        Group Standard, the original IEEE and The Open Group Standard is the referee
+        document. The original Standard can be obtained online at
+        <a href="http://www.opengroup.org/unix/online.html">http://www.opengroup.org/unix/online.html</a> .</p>
+    <p class="Pp">Any typographical or formatting errors that appear in this page
+        are most likely to have been introduced during the conversion of the source
+        files to man page format. To report such errors, see
+        <a href="https://www.kernel.org/doc/man-pages/reporting_bugs.html">https://www.kernel.org/doc/man-pages/reporting_bugs.html</a> .</p>
+</section>
+                
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>Version:</dt>
+        <dd>6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#PROLOG">PROLOG</a></li>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#RETURN_VALUE">RETURN VALUE</a></li>
+        
+            <li><a href="#ERRORS">ERRORS</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#APPLICATION_USAGE">APPLICATION USAGE</a></li>
+        
+            <li><a href="#RATIONALE">RATIONALE</a></li>
+        
+            <li><a href="#FUTURE_DIRECTIONS">FUTURE DIRECTIONS</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+<nav class="other-sections">
+    <p>In other sections:</p>
+    <ul>
+    
+        <li><a href="/man/pthread_cleanup_pop.3.en">pthread_cleanup_pop(3)</a></li>
+    
+    </ul>
+</nav>
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/pthread_cleanup_pop.3p.en.txt">txt</a>, 
+        
+            <a href="/man/pthread_cleanup_pop.3p.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>
+```
+
+```html
+<!DOCTYPE html>
+<html lang="ar">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>pthread_cleanup_push(3) — صفحات دليل Arch Linux</title>
+        <link rel="stylesheet" href="https://man.archlinux.org/css/man.css">
+        <link rel="stylesheet" href="https://man.archlinux.org/css/styles.css">
+        <link rel="icon" type="image/png" href="https://man.archlinux.org/favicon.png">
+    </head>
+    <body>
+        
+        <main>
+            <article>
+                <section class="Sh">
+    <h1 class="Sh" id="PROLOG"><a class="permalink" href="#PROLOG">مقدمة</a></h1>
+    <p class="Pp">هذه الصفحة جزء من مشروع صفحات دليل Linux. تصف آلية خاصة بنظام Linux، وقد لا تتطابق مع سلوك أنظمة التشغيل الأخرى.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">الاسم</a></h1>
+    <p class="Pp">pthread_cleanup_push, pthread_cleanup_pop - معالجة تنظيف الخيط</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">الملخص</a></h1>
+    <p class="Pp"><code>#include &lt;pthread.h&gt;</code></p>
+    <p class="Pp"><code>void pthread_cleanup_push(void (*routine)(void *), void *arg);</code></p>
+    <p class="Pp"><code>void pthread_cleanup_pop(int execute);</code></p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">الوصف</a></h1>
+    <p class="Pp">توفر مكتبة POSIX threads آليات للخيوط لإدارة تنظيف الموارد في مواجهة الإلغاء غير المتزامن. تُستخدم هذه الوظائف عادةً في أزواج، على هذا النحو:</p>
+    <pre>
+pthread_cleanup_push(cleanup_handler, cleanup_arg);
+    /* قم بالعمل الذي قد يتم إلغاؤه */
+    ...
+pthread_cleanup_pop(1); /* أو 0 */
+    </pre>
+    <dl class="Bl-tag">
+        <dt><code>routine</code></dt>
+        <dd>مؤشر إلى دالة سيتم استدعاؤها عند إجراء التنظيف. تأخذ هذه الدالة وسيطًا واحدًا، <code>arg</code>.</dd>
+        <dt><code>arg</code></dt>
+        <dd>الوسيط الذي سيتم تمريره إلى دالة معالج التنظيف.</dd>
+    </dl>
+    <p class="Pp">عند استدعاء <code>pthread_cleanup_push</code>، يتم دفع معالج التنظيف المحدد (<code>routine</code>، <code>arg</code>) إلى مكدس معالجات التنظيف الخاص بالخيط.</p>
+    <p class="Pp">عند استدعاء <code>pthread_cleanup_pop</code>، يتم إخراج المعالج العلوي من المكدس. إذا كان الوسيط <code>execute</code> غير صفري، فسيتم تنفيذ المعالج الذي تم إخراجه.</p>
+    <p class="Pp">يمكن أن يحتوي الخيط على معالجات تنظيف متعددة مسجلة. يتم تنفيذ معالجات التنظيف بترتيب عكسي لترتيب دفعها.</p>
+    <p class="Pp">الغرض من هذه الوظائف هو إدارة الموارد مثل الذاكرة، والأقفال، ومقابض الملفات، وما إلى ذلك، التي يجب تحريرها عند إلغاء خيط. يحدث الإلغاء عندما يستدعي خيط آخر <code>pthread_cancel</code> على الخيط المستهدف.</p>
+    <p class="Pp">يتم استدعاء معالجات التنظيف في المواقف التالية:</p>
+    <ul class="Bl-bullet">
+        <li>عند إلغاء الخيط عبر <code>pthread_cancel</code>.</li>
+        <li>عندما يستدعي الخيط <code>pthread_exit</code>.</li>
+        <li>عندما يعود الخيط من روتينه البدئي الأولي (في هذه الحالة، يتم إخراج المعالجات ولكن لا يتم تنفيذها).</li>
+        <li>عند استدعاء <code>pthread_cleanup_pop</code> مع وسيط <code>execute</code> غير صفري.</li>
+    </ul>
+    <p class="Pp">لاحظ أن نقاط الإلغاء هي نقاط في التنفيذ حيث يمكن إلغاء الخيط بشكل غير متزامن. تشمل هذه الوظائف مثل <code>read</code>، <code>write</code>، <code>select</code>، <code>pthread_join</code>، <code>pthread_testcancel</code>، إلخ. إذا تم إلغاء خيط عند نقطة إلغاء، فسيتم تنفيذ جميع معالجات التنظيف المعلقة (بترتيب عكسي لترتيب دفعها) ثم يتم إنهاء الخيط.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="RETURN_VALUE"><a class="permalink" href="#RETURN_VALUE">قيمة الإرجاع</a></h1>
+    <p class="Pp">لا تقوم هذه الوظائف بإرجاع قيم.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="ERRORS"><a class="permalink" href="#ERRORS">الأخطاء</a></h1>
+    <p class="Pp">لا يتم إرجاع أي أخطاء بواسطة هذه الوظائف.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">أمثلة</a></h1>
+    <p class="Pp">يوضح المثال التالي كيفية استخدام هذه الوظائف لحماية قفل mutex من تركه مقفلاً إذا تم إلغاء الخيط:</p>
+    <pre>
+void *thread_routine(void *arg) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)arg;
+    int s;
+
+    s = pthread_mutex_lock(mutex);
+    if (s != 0)
+        /* معالجة الخطأ */ ;
+
+    pthread_cleanup_push(mutex_cleanup_handler, mutex);
+
+    /* قم بالعمل الذي يتطلب mutex */
+    sleep(5); /* هذه نقطة إلغاء */
+
+    pthread_cleanup_pop(1); /* إزالة وتنفيذ المعالج */
+
+    s = pthread_mutex_unlock(mutex);
+    if (s != 0)
+        /* معالجة الخطأ */ ;
+
+    return NULL;
+}
+
+void mutex_cleanup_handler(void *arg) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)arg;
+    pthread_mutex_unlock(mutex);
+}
+    </pre>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="APPLICATION_USAGE"><a class="permalink" href="#APPLICATION_USAGE">استخدام التطبيق</a></h1>
+    <p class="Pp"><code>pthread_cleanup_push</code> و <code>pthread_cleanup_pop</code> هي وحدات ماكرو. يخضع استخدامها للقيود التالية:</p>
+    <ul class="Bl-bullet">
+        <li>يجب استخدامها في أزواج داخل نفس النطاق المعجمي.</li>
+        <li>يجب أن تحدث <code>pthread_cleanup_pop</code> بعد <code>pthread_cleanup_push</code> المقابلة لها.</li>
+        <li>لا يمكن استخدامها داخل معالج إشارة.</li>
+        <li>لا يمكن استخدامها داخل دالة تحتوي على عبارة <span class="Li">goto</span> تقفز فوق <code>pthread_cleanup_pop</code> المقابلة، أو عبارة <span class="Li">continue</span> أو <span class="Li">break</span> تتسبب في نقل التحكم خارج النطاق المعجمي المحاط بالزوج.</li>
+    </ul>
+    <p class="Pp">نظرًا لأنها منفذة كوحدات ماكرو، فإن الكود بين استدعاءات <code>pthread_cleanup_push</code> و <code>pthread_cleanup_pop</code> يتم تغليفه فعليًا في نطاق كتلة. يمكن أن يؤثر هذا على نطاق المتغيرات وسلوك عبارات تدفق التحكم مثل <code>return</code>.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="RATIONALE"><a class="permalink" href="#RATIONALE">المنطق</a></h1>
+    <p class="Pp">لاحظ أن آلية معالجة التنظيف المحددة مرتبطة بشكل خاص بلغة C، وبينما يعد مطلب آلية موحدة للتعبير عن التنظيف مستقلاً عن اللغة، فإن الآلية المستخدمة في لغات أخرى قد تكون مختلفة تمامًا. بالإضافة إلى ذلك، هذه الآلية ضرورية حقًا فقط بسبب عدم وجود آلية استثناء حقيقية في لغة C، والتي ستكون الحل المثالي.</p>
+    <p class="Pp">لا يوجد مفهوم لدالة آمنة للتنظيف من الإلغاء. إذا لم يكن لدى التطبيق نقاط إلغاء في معالجات الإشارة الخاصة به، أو قام بحظر أي إشارة قد تحتوي معالجاتها على نقاط إلغاء أثناء استدعاء وظائف غير آمنة بشكل غير متزامن، أو قام بتعطيل الإلغاء أثناء استدعاء وظائف غير آمنة بشكل غير متزامن، فيمكن استدعاء جميع الوظائف بأمان من روتينات تنظيف الإلغاء.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="FUTURE_DIRECTIONS"><a class="permalink" href="#FUTURE_DIRECTIONS">الاتجاهات المستقبلية</a></h1>
+    <p class="Pp">لا شيء.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">انظر أيضاً</a></h1>
+    <p class="Pp"><i><i>pthread_cancel</i>()</i>,
+        <i><i>pthread_setcancelstate</i>()</i></p>
+    <p class="Pp">مجلد التعريفات الأساسية لـ POSIX.1&#x2010;2017،
+        <i><b>&lt;pthread.h&gt;</b></i></p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="COPYRIGHT"><a class="permalink" href="#COPYRIGHT">حقوق النشر</a></h1>
+    <p class="Pp">تمت إعادة طباعة أجزاء من هذا النص وإعادة إنتاجها بصيغة إلكترونية من IEEE Std 1003.1-2017، معيار تكنولوجيا المعلومات -- واجهة نظام التشغيل المحمولة (POSIX)، الإصدار 7 من مواصفات مجموعة Open Group الأساسية، إصدار 2018، حقوق النشر (C) 2018 من قبل المعهد الهندسي الكهربائي والإلكتروني، و The Open Group. في حالة وجود أي تباين بين هذا الإصدار والمعيار الأصلي لـ IEEE و The Open Group، يكون المعيار الأصلي لـ IEEE و The Open Group هو المستند المرجعي. يمكن الحصول على المعيار الأصلي عبر الإنترنت على
+        <a href="http://www.opengroup.org/unix/online.html">http://www.opengroup.org/unix/online.html</a> .</p>
+    <p class="Pp">من المحتمل جدًا أن تكون أي أخطاء مطبعية أو تنسيق تظهر في هذه الصفحة قد تم إدخالها أثناء تحويل الملفات المصدر إلى تنسيق صفحة دليل. للإبلاغ عن مثل هذه الأخطاء، انظر
+        <a href="https://www.kernel.org/doc/man-pages/reporting_bugs.html">https://www.kernel.org/doc/man-pages/reporting_bugs.html</a> .</p>
+</section>
+                
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقال" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>6.16-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/man-pages/">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#PROLOG">مقدمة</a></li>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#ERRORS">الأخطاء</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#APPLICATION_USAGE">استخدام التطبيق</a></li>
+        
+            <li><a href="#RATIONALE">المنطق</a></li>
+        
+            <li><a href="#FUTURE_DIRECTIONS">الاتجاهات المستقبلية</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+<nav class="other-sections">
+    <p>في أقسام أخرى:</p>
+    <ul>
+    
+        <li><a href="/man/pthread_cleanup_pop.3.en">pthread_cleanup_pop(3)</a></li>
+    
+    </ul>
+</nav>
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/pthread_cleanup_pop.3p.en.txt">txt</a>, 
+        
+            <a href="/man/pthread_cleanup_pop.3p.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

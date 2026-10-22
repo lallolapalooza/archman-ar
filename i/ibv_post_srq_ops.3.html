@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ibv_post_srq_ops(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ibv_post_srq_ops(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/rdma-core/">rdma-core</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-MIT, GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-FreeBSD, GPL-2.0-or-later OR LicenseRef-Intel-BSD-3-Clause, GPL-2.0-or-later OR LicenseRef-PathScale-BSD-Patent-License, CC0-1.0, MIT, BSD-2-Clause, CPL-1.0 OR BSD-2-Clause OR GPL-2.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">IBV_POST_SRQ_OPS(3)</td>
+    <td class="head-vol">دليل مبرمج Libibverbs</td>
+    <td class="head-rtitle">IBV_POST_SRQ_OPS(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">ibv_post_srq_ops - إجراء عمليات على قائمة انتظار الاستلام المشتركة (SRQ) الخاصة ذات الإعدادات الخاصة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre><b>#include &lt;infiniband/verbs.h&gt;</b>
+
+<b>int ibv_post_srq_ops(struct ibv_srq </b><i>*srq</i><b>, struct ibv_ops_wr </b><i>*wr</i><b>,</b>
+<b>                     struct ibv_ops_wr </b><i>**bad_wr</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تقوم الدالة <b>ibv_post_srq_ops()</b> بتنفيذ سلسلة من عمليات التعديل على إعدادات خاصة من نوع SRQ <i>srq. حالياً، تُستخدم لتكوين SRQ لمطابقة العلامات. سلسلة عمليات الإعداد</i> معرفة بقوائم مرتبطة من عناصر struct ibv_ops_wr بدءًا من <i>wr.</i></p>
+<pre>struct ibv_ops_wr {
+uint64_t                wr_id;   /* معرف WR معرف من قبل المستخدم */
+/* مؤشر إلى WR التالي في القائمة، NULL إذا كان WR الأخير */
+struct ibv_ops_wr      *next;
+enum ibv_ops_wr_opcode  opcode;  /* من enum ibv_ops_wr_opcode */
+int                     flags;   /* من enum ibv_ops_flags */
+struct {
+/* عدد الرسائل غير المتوقعة
+ * التي تتعامل معها البرامج */
+uint32_t unexpected_cnt;
+/* معامل الإدخال لعملية DEL
+ * ومعامل الإخراج لعملية ADD */
+uint32_t handle;
+struct {
+uint64_t                recv_wr_id;   /* معرف WR معرف من قبل المستخدم لـ TM_RECV */
+struct ibv_sge         *sg_list; /* مؤشر إلى مصفوفة s/g */
+int                     num_sge; /* حجم مصفوفة s/g */
+uint64_t                tag;
+uint64_t                mask;    /* تعتبر الرسالة الواردة مطابقة إذا كان
+                                    TMH.tag &amp; entry.mask == entry.tag */
+} add;
+} tm;
+};</pre>
+<p class="Pp">يحتفظ الجزء الأول من struct ibv_ops_wr بفكرة ibv_send_wr. يحدد Opcode العملية المراد تنفيذها. حالياً، المدعومة هي قيم IBV_WR_TAG_ADD و IBV_WR_TAG_DEL و IBV_WR_TAG_SYNC. انظر أدناه لوصف مفصل.</p>
+<p class="Pp">للسماح بتسليم البيانات الموثوق به، تحتفظ TM SRQ بآلية تزامن خاصة على مستوى منخفض - مزامنة الطور. يشمل التعامل مع رسائل جانب الاستلام نشاطين متزامنين - نشر المخازن المؤقتة المعنونة بواسطة البرامج واستقبال الرسائل الواردة بواسطة الأجهزة. تعتبر هذه العملية متماسكة فقط إذا تم معالجة جميع الرسائل غير المتوقعة التي استقبلتها الأجهزة بالكامل في البرامج. لتمرير عدد الرسائل غير المتوقعة التي تمت معالجتها إلى الأجهزة، يجب استخدام الحقل unexpected_cnt ويجب تعيين علامة IBV_OPS_TM_SYNC.</p>
+<p class="Pp">لطلب WC لعمليات قائمة العلامات، يجب تمرير علامة IBV_OPS_SIGNALED. في هذه الحالة، سيتم إنشاء WC في CQ الخاص بـ TM SRQ، مع تحديد wr_id لـ WC.</p>
+<p class="Pp">تُستخدم العملية IBV_WR_TAG_ADD لإضافة إدخال علامة إلى قائمة مطابقة العلامات. يتكون إدخال العلامة من قائمة SGE، والعلامة &amp; القناع (معاملات المطابقة)، ومعرف WR مبهم محدد من قبل المستخدم (يتم تمريره عبر حقل recv_wr_id) ويتم تحديده بشكل فريد بواسطة handle (تم إرجاعه بواسطة برنامج التشغيل). حجم قائمة مطابقة العلامات محدود بـ max_num_tags. حجم قائمة SGE محدود بـ max_sge.</p>
+<p class="Pp">تقوم العملية IBV_WR_TAG_DEL بإزالة إدخال علامة تمت إضافته سابقًا. يجب تعيين الحقل handle إلى القيمة التي تم إرجاعها بواسطة عملية IBV_WR_TAG_ADD التي تم إجراؤها سابقًا. قد تفشل العملية بسبب استهلاك العلامة المتزامن - في هذه الحالة، سيتم إرجاع الحالة IBV_WC_TM_ERR في WC.</p>
+<p class="Pp">قد تُستخدم العملية IBV_WR_TAG_SYNC إذا لم تكن هناك حاجة إلى تغييرات في قائمة المطابقة، فقط لتحديث عداد الرسائل غير المتوقعة.</p>
+<p class="Pp">تشير علامة IBV_WC_TM_SYNC_REQ التي تم إرجاعها في WC لعملية القائمة إلى أن مزامنة العداد مطلوبة. قد يتم أيضًا إرجاع هذه العلامة بواسطة WC الاستلام غير المتوقع، مما يطلب عملية IBV_WR_TAG_SYNC للحفاظ على اتساق TM.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">تُرجع الدالة <b>ibv_post_srq_ops()</b> القيمة 0 عند النجاح، أو قيمة errno عند الفشل (والتي تشير إلى سبب الفشل).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/ibv_create_srq_ex.3.en'>ibv_create_srq_ex(3)</a>,</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<dl class="Bl-tag">
+  <dt id="Artemy"><a class="permalink" href="#Artemy">Artemy Kovalyov
+    &lt;artemyko@mellanox.com&gt;</a></dt>
+  <dd></dd>
+</dl>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2017-03-26</td>
+    <td class="foot-os">libibverbs</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/rdma-core/">extra/rdma-core</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>60.0-2</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://github.com/linux-rdma/rdma-core">https://github.com/linux-rdma/rdma-core</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-MIT, GPL-2.0-or-later OR LicenseRef-OpenIB.org-BSD-FreeBSD, GPL-2.0-or-later OR LicenseRef-Intel-BSD-3-Clause, GPL-2.0-or-later OR LicenseRef-PathScale-BSD-Patent-License, CC0-1.0, MIT, BSD-2-Clause, CPL-1.0 OR BSD-2-Clause OR GPL-2.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/rdma-core/">/listing/extra/rdma-core/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/ibv_post_srq_ops.3.en.txt">txt</a>, 
+        
+            <a href="/man/ibv_post_srq_ops.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,1174 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perl56delta.1perl</h1>
+<link rel="stylesheet" href="basic.css">
+نحن نفترض أن
+    الإصدارات الأقدم من v5.6.0 كانت تزيد المكون الفرعي للإصدار بمضاعفات 10. الإصدارات التي تلي v5.6.0 ستزيدها بمقدار 1. بالتالي،
+    باستخدام التدوين الجديد، 5.005_03 هو &quot;نفس&quot; v5.5.30، وأول
+    إصدار صيانة يلي v5.6.0 سيكون v5.6.1 (والذي يجب أن
+    يُقرأ على أنه يعادل قيمة نقطة عائمة 5.006_001 بالتنسيق الأقدم، مخزنة في <span class="Li">$]</span>).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='New_syntax_for_declaring_subroutine_attributes'><a class='permalink' href='#New_syntax_for_declaring_subroutine_attributes'>صيغة جديدة لتعريف سمات الروتين الفرعي</a></h2>
+<p class="Pp">في السابق، إذا كنت ترغب في تمييز روتين فرعي على أنه استدعاء لطريقة أو أنه يتطلب <b>lock()</b> تلقائي عند دخوله، كان عليك تعريفه باستخدام التوجيه <span class="Li">&quot;use attrs&quot;</span> في جسم الروتين الفرعي. يمكن الآن تحقيق ذلك باستخدام صيغة التعريف، مثل هذا:</p>
+<pre>sub mymethod : locked method;
+...
+sub mymethod : locked method {
+    ...
+}
+sub othermethod :locked :method;
+...
+sub othermethod :locked :method {
+    ...
+}</pre>
+<p class="Pp">(لاحظ كيف أن <span class="Li">&quot;:&quot;</span> الأولى فقط إلزامية، والمسافات المحيطة بـ
+    <span class="Li">&quot;:&quot;</span> اختيارية.)</p>
+<p class="Pp">تم تحديث <i>AutoSplit.pm</i> و <i>SelfLoader.pm</i> للاحتفاظ بالسمات مع الأجزاء الوظيفية التي توفرها. راجع سمات (attributes).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='File_and_directory_handles_can_be_autovivified'><a class='permalink' href='#File_and_directory_handles_can_be_autovivified'>مقابض الملفات والمجلدات يمكن أن تكون ذاتية الإنشاء (autovivified)</a></h2>
+<p class="Pp">على غرار كيفية قيام تراكيب مثل
+    <span class="Li">&quot;$x-&gt;[0]&quot;</span> بإنشاء مرجع ذاتي، فإن مُنشِئات المقابض (<b>open()</b>، <b>opendir()</b>، <b>pipe()</b>،
+    <b>socketpair()</b>، <b>sysopen()</b>، <b>socket()</b>، و <b>accept()</b>)
+    تقوم الآن بإنشاء مقبض ملف أو مجلد ذاتيًا إذا كان المقبض الذي تم تمريره إليها متغيرًا سكالرًا غير مُهيأ. هذا يسمح باستخدام تراكيب مثل
+    <span class="Li">&quot;open(my $fh, ...)&quot;</span> و
+    <span class="Li">&quot;open(local $fh,...)&quot;</span> لإنشاء مقابض ملفات سيتم إغلاقها تلقائيًا بشكل ملائم عند انتهاء النطاق، بشرط عدم وجود مراجع أخرى لها. هذا يلغي إلى حد كبير الحاجة إلى typeglobs عند فتح مقابض الملفات التي يجب تمريرها، كما في المثال التالي:</p>
+<pre>sub myopen {
+    open my $fh, &quot;@_&quot;
+         or die &quot;Can't open '@_': $!&quot;;
+    return $fh;
+}
+{
+    my $f = myopen(&quot;&lt;/etc/motd&quot;);
+    print &lt;$f&gt;;
+    # $f مغلق ضمنيًا هنا
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss"><b>open()</b> مع أكثر من وسيطين</h2>
+<p class="Pp">إذا تم تمرير ثلاثة وسائط إلى <b>open()</b> بدلاً من وسيطين، فسيتم استخدام الوسيط الثاني كوضع ويُعتبر الوسيط الثالث اسم الملف. هذا مفيد بشكل أساسي للحماية من السلوك السحري غير المقصود للشكل التقليدي ذي الوسيطين. انظر &quot;open&quot; في perlfunc.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='64-bit_support'><a class='permalink' href='#64-bit_support'>دعم 64 بت</a></h2>
+<p class="Pp">أي منصة تحتوي على أعداد صحيحة 64 بت إما</p>
+<pre>(1) بشكل أصلي كـ longs أو ints
+(2) عبر أعلام مترجم خاصة
+(3) باستخدام long long أو int64_t</pre>
+<p class="Pp">قادرة على استخدام &quot;quads&quot; (أعداد صحيحة 64 بت) على النحو التالي:</p>
+<ul class="Bl-bullet">
+  <li>ثوابت (عشري، سداسي عشري، ثماني، ثنائي) في الكود</li>
+  <li>وسائط لـ <b>oct()</b> و <b>hex()</b></li>
+  <li>وسائط لـ <b>print()</b> و <b>printf()</b> و <b>sprintf()</b> (بادئات العلامات ll، L، q)</li>
+  <li>تُطبع على هذا النحو</li>
+  <li>تنسيقات &quot;q&quot; و &quot;Q&quot; لـ <b>pack()</b> و <b>unpack()</b></li>
+  <li>في الحساب الأساسي: + - * / % (ملاحظة: قد يؤدي التشغيل بالقرب من حدود قيم الأعداد الصحيحة إلى نتائج مفاجئة)</li>
+  <li>في حسابات البت: &amp; | ^ ~ &lt;&lt; &gt;&gt; (ملاحظة: كانت هذه تُجبر على أن تكون بعرض 32 بت ولكنها تعمل الآن على العرض الأصلي الكامل.)</li>
+  <li><b>vec()</b></li>
+</ul>
+<p class="Pp">لاحظ أنه ما لم يكن لديك الحالة (أ) فسيتعين عليك تكوين وترجمة Perl باستخدام علامة التكوين -Duse64bitint.
+</p>
+<pre>ملاحظة: تم إيقاف استخدام علامات التكوين -Duselonglong و -Duse64bits.
+استخدم -Duse64bitint بدلاً من ذلك.</pre>
+<p class="Pp">هناك في الواقع وضعان للـ 64 بت: الأول يتم تحقيقه باستخدام -Duse64bitint للتكوين والثاني باستخدام -Duse64bitall للتكوين. الفرق هو أن الأول هو الحد الأدنى والثاني هو الحد الأقصى. الأول يعمل في أماكن أكثر من الثاني.</p>
+<p class="Pp"><span class="Li">&quot;use64bitint&quot;</span> يقوم بالحد الأدنى المطلوب لإدخال أعداد صحيحة 64 بت في Perl (قد يعني هذا، على سبيل المثال، استخدام &quot;long longs&quot;) بينما قد تظل ذاكرتك محدودة بـ 2 جيجابايت (لأن مؤشراتك قد تظل 32 بت). لاحظ أن اسم <span class="Li">&quot;64bitint&quot;</span> لا يعني أن مترجم C الخاص بك سيستخدم &quot;int&quot; 64 بت (قد يفعل ذلك، ولكنه ليس ضروريًا): <span class="Li">&quot;use64bitint&quot;</span> يعني أنك ستتمكن من الحصول على قيم مقياس بعرض 64 بت.</p>
+<p class="Pp"><span class="Li">&quot;use64bitall&quot;</span> يذهب بعيدًا عن طريق محاولة تبديل الأعداد الصحيحة (إذا استطاع) و longs (والمؤشرات) لتكون 64 بت. قد يؤدي هذا إلى إنشاء Perl غير متوافق ثنائيًا أكثر من -Duse64bitint: قد لا يعمل الملف التنفيذي الناتج على الإطلاق في صندوق 32 بت، أو قد تحتاج إلى إعادة تشغيل / إعادة تكوين / إعادة بناء نظام التشغيل الخاص بك ليكون مدركًا لـ 64 بت.</p>
+<p class="Pp">الأنظمة الأصلية 64 بت مثل Alpha و Cray لا تحتاج إلى -Duse64bitint ولا -Duse64bitall.</p>
+<p class="Pp">أخيرًا وليس آخرًا: لاحظ أنه بسبب عادة Perl في استخدام الأرقام ذات النقطة العائمة دائمًا، فإن الـ quads ليست أعدادًا صحيحة حقيقية. عندما تتجاوز الـ quads حدودها (0...18_446_744_073_709_551_615 غير موقعة، -9_223_372_036_854_775_808...9_223_372_036_854_775_807 موقعة)، يتم ترقيتها بصمت إلى أرقام نقطة عائمة، وبعد ذلك ستبدأ في فقدان الدقة (في أرقامها السفلية).</p>
+<pre>ملاحظة: دعم 64 بت لا يزال تجريبيًا على معظم المنصات.
+الدعم الحالي يغطي فقط نموذج بيانات LP64. على وجه الخصوص،
+نموذج بيانات LLP64 غير مدعوم بعد. لم تستقر مكتبات
+وواجهات برمجة تطبيقات النظام 64 بت على العديد من المنصات - قد تختلف تجربتك.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Large_file_support'><a class='permalink' href='#Large_file_support'>دعم الملفات الكبيرة</a></h2>
+<p class="Pp">إذا كانت لديك أنظمة ملفات تدعم &quot;الملفات الكبيرة&quot;
+    (ملفات أكبر من 2 جيجابايت)، فقد تكون قادرًا الآن أيضًا على إنشائها والوصول إليها من Perl.</p>
+<pre>ملاحظة: الإجراء الافتراضي هو تمكين دعم الملفات الكبيرة، إذا
+كان متاحًا على المنصة.</pre>
+<p class="Pp">إذا كان دعم الملفات الكبيرة قيد التشغيل، ولديك ثابت Fcntl O_LARGEFILE، فسيتم إضافة O_LARGEFILE تلقائيًا إلى علامات <b>sysopen()</b>.</p>
+<p class="Pp">احذر أنه ما لم يكن نظام الملفات الخاص بك يدعم أيضًا &quot;الملفات المتفرقة&quot;، فقد يكون البحث عن عشرات البيتابايت غير مستحسن.</p>
+<p class="Pp">لاحظ أنه بالإضافة إلى الحاجة إلى نظام ملفات مناسب للملفات الكبيرة، قد تحتاج أيضًا إلى تعديل حدود ملفات العمليات (أو حدود ملفات النظام، أو حدود مجموعة العمليات، أو حدود المستخدم) الخاصة بك قبل تشغيل نصوص Perl التي تحاول التعامل مع الملفات الكبيرة، خاصة إذا كنت تنوي كتابة مثل هذه الملفات.</p>
+<p class="Pp">أخيرًا، بالإضافة إلى حدود ملفات العمليات / مجموعة العمليات الخاصة بك، قد تكون لديك حدود حصص على أنظمة الملفات الخاصة بك تمنعك (معرف المستخدم الخاص بك أو معرف مجموعة المستخدم الخاص بك) من استخدام الملفات الكبيرة.</p>
+<p class="Pp">تعديل حدود العمليات / المستخدم / المجموعة / نظام الملفات / نظام التشغيل خارج نطاق لغة Perl الأساسية. بالنسبة لحدود العمليات، يمكنك محاولة زيادة الحدود باستخدام أمر limits/limit/ulimit الخاص بالصدفة الخاصة بك قبل تشغيل Perl. قد يكون امتداد BSD::Resource (غير مدرج مع توزيع Perl القياسي) مفيدًا أيضًا، حيث يوفر واجهة getrlimit/setrlimit التي يمكن استخدامها لتعديل حدود استخدام موارد العملية، بما في ذلك الحد الأقصى لحجم الملف.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Long_doubles'><a class='permalink' href='#Long_doubles'>Long   doubles</a></h2>
+<p class="Pp">في بعض الأنظمة، قد تكون قادرًا على استخدام long doubles لتعزيز نطاق ودقة أرقام النقطة العائمة ذات الدقة المزدوجة (أي، أرقام Perl). استخدم Configure -Duselongdouble لتمكين هذا الدعم (إذا كان متاحًا).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;more_bits&amp;quot;'><a class='permalink' href='#&amp;quot;more_bits&amp;quot;'>&quot;مزيد من البتات&quot;</a></h2>
+<p class="Pp">يمكنك استخدام &quot;Configure -Dusemorebits&quot; لتشغيل كل من دعم 64 بت ودعم long double.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Enhanced_support_for_&lt;b&gt;sort()&lt;/b&gt;_subroutines'><a class='permalink' href='#Enhanced_support_for_&lt;b&gt;sort()&lt;/b&gt;_subroutines'>دعم محسّن للروتينات الفرعية <b>sort()</b></a></h2>
+<p class="Pp">يمكن الآن استخدام الروتينات الفرعية Perl ذات النموذج الأولي
+    <span class="Li">&quot;($$)&quot;</span>، و XSUBs بشكل عام، كروتينات فرعية للفرز. في كلتا الحالتين، يتم تمرير العنصرين المراد مقارنتهما كوسائط عادية في <span class="Li">@_</span>. انظر &quot;sort&quot; في perlfunc.</p>
+<p class="Pp">بالنسبة للروتينات الفرعية للفرز غير المسندة، يظل السلوك التاريخي لتمرير العناصر المراد مقارنتها إلى المتغيرات العامة
+    <span class="Li">$a</span> و <span class="Li">$b</span> دون تغيير.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='&amp;quot;sort_$coderef_@foo&amp;quot;_allowed'><a class='permalink' href='#&amp;quot;sort_$coderef_@foo&amp;quot;_allowed'>&quot;sort   $coderef @foo&quot; مسموح به</a></h2>
+<p class="Pp">لم يقبل <b>sort()</b> مرجع روتين فرعي كوظيفة مقارنة في الإصدارات السابقة. هذا مسموح به الآن.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='File_globbing_implemented_internally'><a class='permalink' href='#File_globbing_implemented_internally'>التوسع في الملفات (File globbing) مُنفذ داخليًا</a></h2>
+<p class="Pp">يستخدم Perl الآن تطبيق File::Glob لمشغل <b>glob()</b> تلقائيًا. هذا يتجنب استخدام عملية csh خارجية والمشاكل المرتبطة بها.</p>
+<pre>ملاحظة: هذه ميزة تجريبية حاليًا. الواجهات والتنفيذ
+عرضة للتغيير.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Support_for_CHECK_blocks'><a class='permalink' href='#Support_for_CHECK_blocks'>دعم كتل CHECK</a></h2>
+<p class="Pp">بالإضافة إلى <span class="Li">&quot;BEGIN&quot;</span>،
+    <span class="Li">&quot;INIT&quot;</span>،
+    <span class="Li">&quot;END&quot;</span>،
+    <span class="Li">&quot;DESTROY&quot;</span>، و
+    <span class="Li">&quot;AUTOLOAD&quot;</span>، فإن الروتينات الفرعية المسماة
+    <span class="Li">&quot;CHECK&quot;</span> أصبحت خاصة الآن. يتم إدراج هذه في قائمة الانتظار أثناء الترجمة وتتصرف بشكل مشابه لكتل END، باستثناء أنها تُستدعى في نهاية الترجمة بدلاً من نهاية التنفيذ. لا يمكن استدعاؤها مباشرة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='POSIX_character_class_syntax_[:_:]_supported'><a class='permalink' href='#POSIX_character_class_syntax_%5B:_:%5D_supported'>صيغة فئات أحرف POSIX [: :] مدعومة</a></h2>
+<p class="Pp">على سبيل المثال، لمطابقة الأحرف الأبجدية استخدم /[[:alpha:]]/. انظر perlre لـ det</p>>
+<pre>في السلسلة النصية، يجب الآن كتابة @example كـ \@example</pre>
+<p class="Pp">كانت الفكرة هنا هي حث الناس على عادة كتابة
+    <span class="Li">&quot;fred\@example.com&quot;</span> عندما يريدون علامة
+    <span class="Li">&quot;@&quot;</span> حرفية، تمامًا كما اعتادوا دائمًا على كتابة
+    <span class="Li">&quot;أعطني 5 دولارات الخاصة بي&quot;</span> عندما يريدون علامة
+    <span class="Li">&quot;$&quot;</span> حرفية.</p>
+<p class="Pp">بدءًا من الإصدار 5.6.1، عندما ترى Perl الآن علامة
+    <span class="Li">&quot;@&quot;</span> في سلسلة نصية مزدوجة علامات الاقتباس، فإنها
+    <i>دائمًا</i> تحاول استيفاء مصفوفة، بغض النظر عما إذا كانت المصفوفة قد تم استخدامها
+    أو الإعلان عنها بالفعل أم لا. تم تخفيض خطأ قاتل إلى تحذير اختياري:</p>
+<pre>تداخل محتمل غير مقصود لـ @example في السلسلة النصية</pre>
+<p class="Pp">هذا يحذرك من أن
+    <span class="Li">&quot;fred@example.com&quot;</span> ستتحول إلى
+    <span class="Li">&quot;fred.com&quot;</span> إذا لم تقم بإلغاء علامة
+    <span class="Li">&quot;@&quot;</span>. انظر
+    <a href='http://perl.plover.com/at-error.html'>http://perl.plover.com/at-error.html</a> لمزيد من التفاصيل حول التاريخ
+    هنا.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='@- _و_@+_توفير_إزاحات_البدء/النهاية_لمطابقات_التعبيرات_العادية'><a class='permalink' href='#@-_and_@+_provide_starting/ending_offsets_of_regex_matches'>@- و @+ توفر إزاحات البدء/النهاية لمطابقات التعبيرات العادية</a></h2>
+<p class="Pp">المتغيرات السحرية الجديدة @- و @+ توفر إزاحات البدء والنهاية، على
+    التوالي، لـ $&amp;، <span class="Li">$1</span>، <span class="Li">$2</span>، إلخ. انظر perlvar
+    للتفاصيل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='الوحدات_والبرجماتا'><a class='permalink' href='#Modules_and_Pragmata'>الوحدات والبرجماتا</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='الوحدات'><a class='permalink' href='#Modules'>الوحدات</a></h2>
+<dl class="Bl-tag">
+  <dt id="attributes"><a class="permalink" href="#attributes">attributes</a></dt>
+  <dd>بينما تستخدم داخليًا بواسطة Perl كبرجماتا، توفر هذه الوحدة أيضًا طريقة
+      لجلب سمات الإجراءات الفرعية والمتغيرات. انظر attributes.</dd>
+  <dt id="B"><a class="permalink" href="#B">B</a></dt>
+  <dd>تمت إعادة هيكلة مجموعة مترجم Perl بشكل كبير لهذا الإصدار.
+      يمر المزيد من مجموعة اختبارات Perl القياسية عند تشغيلها تحت المترجم،
+      ولكن لا يزال هناك طريق طويل لتحقيق جودة إنتاجية للملفات التنفيذية المترجمة.
+        <pre>ملاحظة: مجموعة المترجم تظل تجريبية للغاية.  قد لا تكون التعليمات البرمجية
+المنشأة صحيحة، حتى عندما تنجح في التنفيذ دون أخطاء.
+</pre>
+  </dd>
+  <dt id="Benchmark"><a class="permalink" href="#Benchmark">Benchmark</a></dt>
+  <dd>بشكل عام، تظهر نتائج Benchmark متوسط خطأ أقل ودقة توقيت أفضل.
+    <p class="Pp">يمكنك الآن تشغيل الاختبارات لمدة <i>n</i> ثانية بدلاً من تخمين
+        العدد الصحيح للاختبارات المراد تشغيلها: على سبيل المثال، timethese(-5, ...)
+        سيقوم بتشغيل كل رمز لمدة 5 ثوانٍ على الأقل من وحدة المعالجة المركزية.
+        صفر كـ "عدد التكرارات" يعني "لمدة 3 ثوانٍ على الأقل من وحدة المعالجة
+        المركزية". تغير تنسيق الإخراج أيضًا. على سبيل المثال:</p>
+        <pre>use Benchmark;$x=3;timethese(-5,{a=&gt;sub{$x*$x},b=&gt;sub{$x**2}})
+</pre>
+    <p class="Pp">سيخرج الآن شيئًا مثل هذا:</p>
+        <pre>Benchmark: running a, b, each for at least 5 CPU seconds...
+         a:  5 wallclock secs ( 5.77 usr +  0.00 sys =  5.77 CPU) @ 200551.91/s (n=1156516)
+         b:  4 wallclock secs ( 5.00 usr +  0.02 sys =  5.02 CPU) @ 159605.18/s (n=800686)
+</pre>
+    <p class="Pp">ميزات جديدة: "each for at least N CPU seconds..."،
+        "wallclock secs"، و "عمليات @/ثانية وحدة معالجة مركزية (n=عمليات)".</p>
+    <p class="Pp"><b>timethese()</b> الآن تعيد مرجعًا إلى تجزئة من كائنات
+        Benchmark تحتوي على نتائج الاختبار، مرتبة حسب أسماء الاختبارات.</p>
+    <p class="Pp"><b>timethis()</b> الآن تعيد حقل التكرارات في كائن نتيجة
+        Benchmark بدلاً من 0.</p>
+    <p class="Pp"><b>timethese()</b>، <b>timethis()</b>، والوظيفة الجديدة
+        <b>cmpthese()</b> (انظر أدناه) يمكنها أيضًا أخذ محدد تنسيق 'none'
+        لقمع الإخراج.</p>
+    <p class="Pp">وظيفة جديدة <b>countit()</b> تشبه <b>timeit()</b> باستثناء
+        أنها تأخذ TIME بدلاً من COUNT.</p>
+    <p class="Pp">وظيفة جديدة <b>cmpthese()</b> تطبع جدولًا يقارن نتائج كل
+        اختبار تم إرجاعه من استدعاء <b>timethese()</b>. لكل زوج محتمل من
+        الاختبارات، يتم عرض نسبة الفرق في السرعة (التكرارات/ثانية أو ثواني/تكرار).</p>
+    <p class="Pp">للتفاصيل الأخرى، انظر Benchmark.</p>
+  </dd>
+  <dt id="ByteLoader"><a class="permalink" href="#ByteLoader">ByteLoader</a></dt>
+  <dd>ByteLoader هو امتداد مخصص لإنشاء وتشغيل بايت كود Perl. انظر ByteLoader.</dd>
+  <dt id="constant"><a class="permalink" href="#constant">constant</a></dt>
+  <dd>يمكن الآن استخدام المراجع.
+    <p class="Pp">الإصدار الجديد يسمح أيضًا بشرطة سفلية بادئة في أسماء الثوابت،
+        ولكنه يمنع الشرطة السفلية المزدوجة البادئة (كما في "&amp;__LINE__؛").
+        بعض الأسماء الأخرى ممنوعة أو تم التحذير منها، بما في ذلك BEGIN، END،
+        إلخ. بعض الأسماء التي تم فرضها في main:: كانت تفشل بصمت في بعض
+        الحالات؛ الآن هي قاتلة (خارج main::) وتحذير اختياري (داخل main::).
+        تمت إضافة القدرة على اكتشاف ما إذا كان الثابت قد تم تعيينه باسم معين.</p>
+    <p class="Pp">انظر constant.</p>
+  </dd>
+  <dt id="charnames"><a class="permalink" href="#charnames">charnames</a></dt>
+  <dd>تنفذ هذه البرجماتا تسلسل الهروب النصي " \N ". انظر charnames.</dd>
+  <dt id="Data::Dumper"><a class="permalink" href="#Data::Dumper">Data::Dumper</a></dt>
+  <dd>يمكن تحديد إعداد "Maxdepth" لتجنب التعمق كثيرًا في هياكل البيانات
+      العميقة. انظر Data::Dumper.
+    <p class="Pp">يتم الآن استدعاء تطبيق XSUB لـ <b>Dump()</b> تلقائيًا إذا لم
+        يكن إعداد "Useqq" قيد الاستخدام.</p>
+    <p class="Pp">إفراغ كائنات "qr//" يعمل بشكل صحيح.</p>
+  </dd>
+  <dt id="DB"><a class="permalink" href="#DB">DB</a></dt>
+  <dd>"DB" هي وحدة تجريبية تكشف عن تجريد نظيف لواجهة تصحيح الأخطاء في Perl.</dd>
+  <dt id="DB_File"><a class="permalink" href="#DB_File">DB_File</a></dt>
+  <dd>يمكن الآن بناء DB_File باستخدام إصدارات Berkeley DB 1 أو 2 أو 3. انظر
+      <span class="Li">&quot;ext/DB_File/Changes&quot;</span>.</dd>
+  <dt id="Devel::DProf"><a class="permalink" href="#Devel::DProf">Devel::DProf</a></dt>
+  <dd>تمت إضافة Devel::DProf، وهو محلل شيفرة مصدر Perl. انظر Devel::DProf
+      و dprofpp.</dd>
+  <dt id="Devel::Peek"><a class="permalink" href="#Devel::Peek">Devel::Peek</a></dt>
+  <dd>توفر وحدة Devel::Peek الوصول إلى التمثيل الداخلي لمتغيرات وبيانات Perl.
+      إنها أداة تصحيح بيانات لمبرمج XS.</dd>
+  <dt id="Dumpvalue"><a class="permalink" href="#Dumpvalue">Dumpvalue</a></dt>
+  <dd>توفر وحدة Dumpvalue تفريغات للشاشة لبيانات Perl.</dd>
+  <dt id="DynaLoader"><a class="permalink" href="#DynaLoader">DynaLoader</a></dt>
+  <dd>يدعم DynaLoader الآن وظيفة <b>dl_unload_file()</b> على المنصات التي
+      تدعم إلغاء تحميل الكائنات المشتركة باستخدام <b>dlclose()</b>.
+    <p class="Pp">يمكن لـ Perl أيضًا ترتيب إلغاء تحميل جميع كائنات امتدادات Perl
+        المشتركة التي تم تحميلها بواسطة Perl اختياريًا. لتمكين هذا، قم ببناء Perl
+        باستخدام خيار التكوين
+        <span class="Li">&quot;-Accflags=-DDL_UNLOAD_ALL_AT_EXIT&quot;</span>.
+        (قد يكون هذا مفيدًا إذا كنت تستخدم Apache مع mod_perl.)</p>
+  </dd>
+  <dt id="English"><a class="permalink" href="#English">English</a></dt>
+  <dd>$PERL_VERSION الآن يمثل
+      <span class="Li">$^V</span> (قيمة نصية) بدلاً من
+      <span class="Li">$]</span> (قيمة رقمية).</dd>
+  <dt id="Env"><a class="permalink" href="#Env">Env</a></dt>
+  <dd>يدعم Env الآن الوصول إلى متغيرات البيئة مثل PATH كمتغيرات مصفوفة.</dd>
+  <dt id="Fcntl"><a class="permalink" href="#Fcntl">Fcntl</a></dt>
+  <dd>تمت إضافة المزيد من ثوابت Fcntl: F_SETLK64، F_SETLKW64، O_LARGEFILE للوصول
+      إلى الملفات الكبيرة (أكثر من 4 جيجابايت) (ملاحظة: يتم إضافة O_LARGEFILE
+      تلقائيًا إلى علامات <b>sysopen()</b> إذا تم تكوين دعم الملفات الكبيرة، كما هو
+      الافتراضي)، ثوابت سلوك القفل Free/Net/OpenBSD F_FLOCK، F_POSIX، Linux
+      F_SHLCK، و O_ACCMODE: القناع المدمج لـ O_RDONLY، O_WRONLY، و O_RDWR.
+      الثوابت SEEK_SET، SEEK_CUR، و SEEK_END للوظيفتين <b>seek()</b>/<b>sysseek()</b>
+      متاحة عبر العلامة
+      <span class="Li">&quot;:seek&quot;</span>. ثوابت <b>chmod()</b>/<b>stat()</b>
+      S_IF* والوظائف S_IS* متاحة عبر العلامة
+      <span class="Li">&quot;:mode&quot;</span>.</dd>
+  <dt id="File::Compare"><a class="permalink" href="#File::Compare">File::Compare</a></dt>
+  <dd>تمت إضافة وظيفة <b>compare_text()</b>، والتي تسمح بوظائف مقارنة مخصصة.
+      انظر File::Compare.</dd>
+  <dt id="File::Find"><a class="permalink" href="#File::Find">File::Find</a></dt>
+  <dd>تعمل File::Find الآن بشكل صحيح عندما تكون وظيفة <b>wanted()</b> إما
+      محملة تلقائيًا أو مرجعًا رمزيًا.
+    <p class="Pp">تم إصلاح خطأ كان يتسبب في فقدان File::Find مسار دليل العمل
+        عند تقليم الدلائل من المستوى الأعلى.</p>
+    <p class="Pp">تدعم File::Find الآن أيضًا العديد من الخيارات الأخرى للتحكم
+        في سلوكها. يمكنها اتباع الروابط الرمزية إذا تم تحديد خيار
+        <span class="Li">&quot;follow&quot;</span>. تمكين خيار
+        <span class="Li">&quot;no_chdir&quot;</span> سيجعل File::Find تتخطى تغيير
+        الدليل الحالي عند اجتياز الدلائل. يمكن أن يكون العلامة
+        <span class="Li">&quot;untaint&quot;</span> مفيدة عند التشغيل مع تمكين
+        فحوصات التلطخ (taint checks).</p>
+    <p class="Pp">انظر File::Find.</p>
+  </dd>
+  <dt id="File::Glob"><a class="permalink" href="#File::Glob">File::Glob</a></dt>
+  <dd>يقوم هذا الامتداد بتنفيذ نظام glob للملفات بأسلوب BSD. افتراضيًا، سيتم
+      استخدامه أيضًا للتنفيذ الداخلي لمعامل <b>glob()</b>. انظر File::Glob.</dd>
+  <dt id="File::Spec"><a class="permalink" href="#File::Spec">File::Spec</a></dt>
+  <dd>تمت إضافة طرق جديدة إلى وحدة File::Spec: <b>devnull()</b> تعيد اسم الجهاز
+       الفارغ (/dev/null على Unix) و <b>tmpdir()</b> اسم دليل الملفات المؤقتة
+      (عادةً /tmp على Unix). هناك الآن أيضًا طرق للتحويل بين الأسماء المطلقة
+      والنسبية للملفات: <b>abs2rel()</b> و <b>rel2abs()</b>. للتوافق مع أنظمة
+      التشغيل التي تحدد أسماء وحدات التخزين في مسارات الملفات، تمت إضافة الطرق
+      <b>splitpath()</b>، <b>splitdir()</b>، و <b>catdir()</b>.</dd>
+  <dt id="File::Spec::Functions"><a class="permalink" href="#File::Spec::Functions">File::Spec::Functions</a></dt>
+  <dd>توفر وحدة File::Spec::Functions الجديدة واجهة وظيفية لوحدة File::Spec.
+      تسمح بالاختصار
+        <pre>$fullname = catfile($dir1, $dir2, $file);
+</pre>
+    <p class="Pp">بدلاً من</p>
+        <pre>$fullname = File::Spec-&gt;catfile($dir1, $dir2, $file);
+</pre>
+  </dd>
+  <dt id="Getopt::Long"><a class="permalink" href="#Getopt::Long">Getopt::Long</a></dt>
+  <dd>تغير ترخيص Getopt::Long للسماح بترخيص Perl الفني (Artistic License) بالإضافة
+      إلى GPL. كان سابقًا GPL فقط، مما أعاق التطبيقات غير GPL التي أرادت استخدام
+      Getopt::Long.
+    <p class="Pp">يشجع Getopt::Long على استخدام Pod::Usage لإنتاج رسائل المساعدة.
+        على سبيل المثال:</p>
+        <pre>use Getopt::Long;
+use Pod::Usage;
+</pre>
+  </dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="Internal_Improvements">Improvements</h1>
+<section class="Ss">
+<h2 class="Ss" id="Lexical_variable_scoping_is_faster"><a class="permalink" href="#Lexical_variable_scoping_is_faster">Lexical variable scoping is faster</a></h2>
+<p class="Pp">The internal representation of lexically scoped variables has been
+    optimized. This should make programs that use many lexical variables run
+    noticably faster.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Subroutine_call_overhead_reduced"><a class="permalink" href="#Subroutine_call_overhead_reduced">Subroutine call overhead reduced</a></h2>
+<p class="Pp">Calling subroutines has been made faster by removing some overhead
+    associated with argument passing.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Regular_expression_engine_improvements"><a class="permalink" href="#Regular_expression_engine_improvements">Regular expression engine improvements</a></h2>
+<p class="Pp">Some common regular expression patterns now execute faster. The
+    optimizer has been taught about more patterns, and some checks that were
+    previously done at runtime are now done at compile time.</p>
+<p class="Pp">The performance of character classes has been improved.</p>
+<p class="Pp">Performance of backreferences in complex patterns has been improved.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Object_oriented_programming_improvements"><a class="permalink" href="#Object_oriented_programming_improvements">Object oriented programming improvements</a></h2>
+<p class="Pp">The overhead associated with method calls has been reduced.</p>
+<p class="Pp">Method lookups are now cached, which speeds up repeated calls to the
+    same method.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="String_and_numeric_operations"><a class="permalink" href="#String_and_numeric_operations">String and numeric operations</a></h2>
+<p class="Pp">Some operations involving strings and numbers have been optimized.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Taint_mode_checking_is_faster"><a class="permalink" href="#Taint_mode_checking_is_faster">Taint mode checking is faster</a></h2>
+<p class="Pp">The overhead associated with checking for taint violations has been
+    reduced.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Memory_usage_reduced"><a class="permalink" href="#Memory_usage_reduced">Memory usage reduced</a></h2>
+<p class="Pp">Perl now uses less memory for internal data structures.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="Bug_Fixes">Bug Fixes</h1>
+<section class="Ss">
+<h2 class="Ss" id="Lexical_scoping_fixes"><a class="permalink" href="#Lexical_scoping_fixes">Lexical scoping fixes</a></h2>
+<p class="Pp">The handling of lexical variables in closures has been corrected.
+    Previously, closures could sometimes capture the wrong values or leak memory.</p>
+<p class="Pp">The interaction between lexical variables and the <span class="Li">&quot;local&quot;</span>
+    keyword has been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Regular_expression_fixes"><a class="permalink" href="#Regular_expression_fixes">Regular expression fixes</a></h2>
+<p class="Pp">Some edge cases in the regular expression engine have been fixed. This
+    includes issues with nested quantifiers, and with certain character
+    combinations in the input string.</p>
+<p class="Pp">The handling of the <span class="Li">&quot;(*ACCEPT)&quot;</span>
+    and <span class="Li">&quot;(*FAIL)&quot;</span> verbs has been corrected.</p>
+<p class="Pp">The use of <span class="Li">&quot;(?{ code })&quot;</span>
+    in certain contexts has been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Object_oriented_programming_fixes"><a class="permalink" href="#Object_oriented_programming_fixes">Object oriented programming fixes</a></h2>
+<p class="Pp">The handling of inheritance in certain complex scenarios has been
+    fixed.</p>
+<p class="Pp">The behavior of <span class="Li">&quot;SUPER::method&quot;</span>
+    when called from an overloaded method has been corrected.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="String_and_numeric_operation_fixes"><a class="permalink" href="#String_and_numeric_operation_fixes">String and numeric operation fixes</a></h2>
+<p class="Pp">The behavior of string comparison operators with certain non-ASCII
+    characters has been corrected.</p>
+<p class="Pp">The handling of very large numbers in numeric contexts has been
+    improved.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Taint_mode_fixes"><a class="permalink" href="#Taint_mode_fixes">Taint mode fixes</a></h2>
+<p class="Pp">Taint mode checking has been made more robust. Previously, certain
+    operations could inadvertently clear taint status.</p>
+<p class="Pp">The interaction between taint mode and the <span class="Li">&quot;eval&quot;</span>
+    construct has been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Filehandle_and_I-O_fixes"><a class="permalink" href="#Filehandle_and_I-O_fixes">Filehandle and I/O fixes</a></h2>
+<p class="Pp">The handling of certain file modes and options has been corrected.</p>
+<p class="Pp">The behavior of <span class="Li">&quot;print&quot;</span> with
+    binary data has been fixed.</p>
+<p class="Pp">The handling of end-of-file conditions has been improved.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Core_dump_fixes"><a class="permalink" href="#Core_dump_fixes">Core dump fixes</a></h2>
+<p class="Pp">Several potential causes of core dumps have been addressed. These
+    include issues with deeply nested calls, and with certain invalid
+    operations.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Memory_leak_fixes"><a class="permalink" href="#Memory_leak_fixes">Memory leak fixes</a></h2>
+<p class="Pp">Several memory leaks have been plugged. These include leaks related to
+    closures, regular expressions, and filehandles.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Diagnostic_fixes"><a class="permalink" href="#Diagnostic_fixes">Diagnostic fixes</a></h2>
+<p class="Pp">Error messages and warnings have been made more precise and informative.</p>
+<p class="Pp">The handling of warnings related to lexical variables has been
+    improved.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Lexical_variable_scoping_is_correct"><a class="permalink" href="#Lexical_variable_scoping_is_correct">Lexical variable scoping is correct</a></h2>
+<p class="Pp">We were searching the wrong place for lexicals. The lexical search now
+    correctly ends at the subroutine's block boundary.</p>
+<p class="Pp">The use of <span class="Li">&quot;return&quot;</span> within
+    <span class="Li">&quot;eval {...}&quot;</span> caused $@ not to be reset
+    correctly when no exception occurred within the eval. This has been
+  fixed.</p>
+<p class="Pp">Parsing of here documents used to be flawed when they appeared as
+    the replacement expression in <span class="Li">&quot;eval
+    's/.../.../e'&quot;</span>. This has been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="All_compilation_errors_are_true_errors"><a class="permalink" href="#All_compilation_errors_are_true_errors">All   compilation errors are true errors</a></h2>
+<p class="Pp">Some &quot;errors&quot; encountered at compile time were by
+    necessity generated as warnings followed by eventual termination of the
+    program. This enabled more such errors to be reported in a single run,
+    rather than causing a hard stop at the first error that was encountered.</p>
+<p class="Pp">The mechanism for reporting such errors has been reimplemented to
+    queue compile-time errors and report them at the end of the compilation as
+    true errors rather than as warnings. This fixes cases where error messages
+    leaked through in the form of warnings when code was compiled at run time
+    using <span class="Li">&quot;eval STRING&quot;</span>, and also allows such
+    errors to be reliably trapped using <span class="Li">&quot;eval
+    &quot;...&quot;&quot;</span>.</p>
+</section>
+<section class=" Ss">
+<h2 class="Ss" id="Implicitly_closed_filehandles_are_safer"><a class="permalink" href="#Implicitly_closed_filehandles_are_safer">Implicitly   closed filehandles are safer</a></h2>
+<p class="Pp">Sometimes implicitly closed filehandles (as when they are
+    localized, and Perl automatically closes them on exiting the scope) could
+    inadvertently set $? or $!. This has been corrected.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Behavior_of_list_slices_is_more_consistent"><a class="permalink" href="#Behavior_of_list_slices_is_more_consistent">Behavior   of list slices is more consistent</a></h2>
+<p class="Pp">When taking a slice of a literal list (as opposed to a slice of an
+    array or hash), Perl used to return an empty list if the result happened to
+    be composed of all undef values.</p>
+<p class="Pp">The new behavior is to produce an empty list if (and only if) the
+    original list was empty. Consider the following example:</p>
+<pre>@a = (1,undef,undef,2)[2,1,2];</pre>
+<p class="Pp">The old behavior would have resulted in <span class="Li">@a</span>
+    having no elements. The new behavior ensures it has three undefined
+    elements.</p>
+<p class="Pp">Note in particular that the behavior of slices of the following
+    cases remains unchanged:</p>
+<pre>@a = ()[1,2];
+@a = (getpwent)[7,0];
+@a = (anything_returning_empty_list())[2,1,2];
+@a = @b[2,1,2];
+@a = @c{'a','b','c'};</pre>
+<p class="Pp">See perldata.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="&amp;quot;(\$)&amp;quot;_prototype_and_$foo{a}"><a class="permalink" href="#&amp;quot;(\$)&amp;quot;_prototype_and_$foo{a}">&quot;(\$)&quot;   prototype and $foo{a}</a></h2>
+<p class="Pp">A scalar reference prototype now correctly allows a hash or array
+    element in that slot.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="&amp;quot;goto_&amp;amp;sub&amp;quot;_and_AUTOLOAD"><a class="permalink" href="#&amp;quot;goto_&amp;amp;sub&amp;quot;_and_AUTOLOAD">&quot;goto   &amp;sub&quot; and AUTOLOAD</a></h2>
+<p class="Pp">The <span class="Li">&quot;goto &amp;sub&quot;</span> construct
+    works correctly when <span class="Li">&amp;sub</span> happens to be
+    autoloaded.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss">&quot;-bareword&quot; allowed under &quot;use integer&quot;</h2>
+<p class="Pp">The autoquoting of barewords preceded by
+    <span class="Li">&quot;-&quot;</span> did not work in prior versions when
+    the <span class="Li">&quot;integer&quot;</span> pragma was enabled. This has
+    been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Failures_in_&lt;b&gt;DESTROY()&lt;/b&gt;"><a class="permalink" href="#Failures_in_&lt;b&gt;DESTROY()&lt;/b&gt;">Failures   in <b>DESTROY()</b></a></h2>
+<p class="Pp">When code in a destructor threw an exception, it went unnoticed in
+    earlier versions of Perl, unless someone happened to be looking in $@ just
+    after the point the destructor happened to run. Such failures are now
+    visible as warnings when warnings are enabled.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Locale_bugs_fixed"><a class="permalink" href="#Locale_bugs_fixed">Locale   bugs fixed</a></h2>
+<p class="Pp"><b>printf()</b> and <b>sprintf()</b> previously reset the numeric
+    locale back to the default &quot;C&quot; locale. This has been fixed.</p>
+<p class="Pp">Numbers formatted according to the local numeric locale (such as
+    using a decimal comma instead of a decimal dot) caused &quot;isn't
+    numeric&quot; warnings, even while the operations accessing those numbers
+    produced correct results. These warnings have been discontinued.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Memory_leaks"><a class="permalink" href="#Memory_leaks">Memory   leaks</a></h2>
+<p class="Pp">The <span class="Li">&quot;eval 'return sub {...}'&quot;</span>
+    construct could sometimes leak memory. This has been fixed.</p>
+<p class="Pp">Operations that aren't filehandle constructors used to leak memory
+    when used on invalid filehandles. This has been fixed.</p>
+<p class="Pp">Constructs that modified <span class="Li">@_</span> could fail to
+    deallocate values in <span class="Li">@_</span> and thus leak memory. This
+    has been corrected.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Spurious_subroutine_stubs_after_failed_subroutine_calls"><a class="permalink" href="#Spurious_subroutine_stubs_after_failed_subroutine_calls">Spurious   subroutine stubs after failed subroutine calls</a></h2>
+<p class="Pp">Perl could sometimes create empty subroutine stubs when a
+    subroutine was not found in the package. Such cases stopped later method
+    lookups from progressing into base packages. This has been corrected.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Taint_failures_under_&amp;quot;-U&amp;quot;"><a class="permalink" href="#Taint_failures_under_&amp;quot;-U&amp;quot;">Taint   failures under &quot;-U&quot;</a></h2>
+<p class="Pp">When running in unsafe mode, taint violations could sometimes
+    cause silent failures. This has been fixed.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="END_blocks_and_the_&amp;quot;-c&amp;quot;_switch"><a class="permalink" href="#END_blocks_and_the_&amp;quot;-c&amp;quot;_switch">END   blocks and the &quot;-c&quot; switch</a></h2>
+<p class="Pp">Prior versions used to run BEGIN <b>and</b> END blocks when Perl
+    was run in compile-only mode. Since this is typically not the expected
+    behavior, END blocks are not executed anymore when the
+    <span class="Li">&quot;-c&quot;</span> switch is used, or if compilation
+    fails.</p>
+<p class="Pp">See &quot;Support for CHECK blocks&quot; for how to run things
+    when the compile phase ends.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Potential_to_leak_DATA_filehandles"><a class="permalink" href="#Potential_to_leak_DATA_filehandles">Potential   to leak DATA filehandles</a></h2>
+<p class="Pp">Using the <span class="Li">&quot;__DATA__&quot;</span> token
+    creates an implicit filehandle to the file that contains the token. It is
+    the program's responsibility to close it when it is done reading from
+  it.</p>
+<p class="Pp">This caveat is now better explained in the documentation. See
+    perldata.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="New_or_Changed_Diagnostics">New or Changed Diagnostics</h1>
+<dl class="Bl-tag">
+  <dt>&quot;%s&quot; variable %s masks earlier declaration in same %s</dt>
+  <dd>(W misc) A &quot;my&quot; or &quot;our&quot; variable has been redeclared
+      in the current scope or statement, effectively eliminating all access to
+      the previous instance. This is almost always a typographical error. Note
+      that the earlier variable will still exist until the end of the scope or
+      until all closure referents to it are destroyed.</dd>
+  <dt>&quot;my sub&quot; not yet implemented</dt>
+  <dd>(F) Lexically scoped subroutines are not yet implemented. Don't try that
+      yet.</dd>
+  <dt>&quot;our&quot; variable %s redeclared</dt>
+  <dd>(W misc) You seem to have already declared the same global once before in
+      the current lexical scope.</dd>
+  <dt>'!' allowed only after types %s</dt>
+  <dd>(F) The '!' is allowed in <b>pack()</b> and <b>unpack()</b> only after
+      certain types. See &quot;pack&quot; in perlfunc.</dd>
+  <dt>/ cannot take a count</dt>
+  <dd>(F) You had an unpack template indicating a counted-length string, but you
+      have also specified an explicit size for the string. See &quot;pack&quot;
+      in perlfunc.</dd>
+  <dt>/ must be followed by a, A or Z</dt>
+  <dd>(F) You had an unpack template indicating a counted-length string, which
+      must be followed by one of the letters a, A or Z to indicate what sort of
+      string is to be unpacked. See &quot;pack&quot; in perlfunc.</dd>
+  <dt>/ must be followed by a*, A* or Z*</dt>
+  <dd>(F) You had a pack template indicating a counted-length string, Currently
+      the only things that can have their length counted are a*, A* or Z*. See
+      &quot;pack&quot; in perlfunc.</dd>
+  <dt>/ must follow a numeric type</dt>
+  <dd>(F) You had an unpack template that contained a '#', but this did not
+      follow some numeric unpack specification. See &quot;pack&quot; in
+      perlfunc.</dd>
+  <dt>/%s/: Unrecognized escape \\%c passed through</dt>
+  <dd>(W regexp) You used a backslash-character combination which is not
+      recognized by Perl. This combination appears in an interpolated variable
+      or a <span class="Li">&quot;'&quot;</span>-delimited regular expression.
+      The character was understood literally.</dd>
+  <dt>/%s/: Unrecognized escape \\%c in character class passed through</dt>
+  <dd>(W regexp) You used a backslash-character combination which is not
+      recognized by Perl inside character classes. The character was understood
+      literally.</dd>
+  <dt>/%s/ should probably be written as &quot;%s&quot;</dt>
+  <dd>(W syntax) You have used a pattern where Perl expected to find a string,
+      as in the first argument to <span class="Li">&quot;join&quot;</span>. Perl
+      will treat the true or false result of matching the pattern against
+      <span class="Li">$_</span> as the string, which is probably not what you
+      had in mind.</dd>
+  <dt>%s() called too early to check prototype</dt>
+  <dd>(W prototype) You've called a function that has a prototype before the
+      parser saw a definition or declaration for it, and Perl could not check
+      that the call conforms to the prototype. You need to either add an early
+      prototype declaration for the subroutine in question, or move the
+      subroutine definition ahead of the call to get proper prototype checking.
+      Alternatively, if you are certain that you're calling the function
+      correctly, you may put an ampersand before the name to avoid the warning.
+      See perlsub.</dd>
+  <dt>%s argument is not a HASH or ARRAY element</dt>
+  <dd>(F) The argument to <b>exists()</b> must be a hash or array element, such
+      as:
+        <pre>$foo{$bar}
+$ref-&gt;{&quot;susie&quot;}[12]
+</pre>
+  </dd>
+  <dt>%s argument is not a HASH or ARRAY element or slice</dt>
+  <dd>(F) The argument to <b>delete()</b> must be either a hash or array
+      element, such as:
+        <pre>$foo{$bar}
+$ref-&gt;{&quot;susie&quot;}[12]
+</pre>
+    <p class="Pp">or a hash or array slice, such as:</p>
+        <pre>@foo[$bar, $baz,
+</pre>
+  </dd>
+</dl>
+</section>
+[
+  {
+    "term": "Hexadecimal number > 0xffffffff non-portable",
+    "id": "Hexadecimal",
+    "type": "W portable",
+    "description": "The hexadecimal number you specified is larger than 2**32-1 (4294967295) and therefore non-portable between systems. See perlport for more on portability concerns."
+  },
+  {
+    "term": "Ill-formed CRTL environ value \" %s \"",
+    "id": "Ill",
+    "type": "W internal",
+    "description": "A warning peculiar to VMS. Perl tried to read the CRTL's internal environ array, and encountered an element without the \"=\" delimiter used to separate keys from values. The element is ignored."
+  },
+  {
+    "term": "Ill-formed message in prime_env_iter: |%s|",
+    "id": "Ill~2",
+    "type": "W internal",
+    "description": "A warning peculiar to VMS. Perl tried to read a logical name or CLI symbol definition when preparing to iterate over %ENV, and didn't see the expected delimiter between key and value, so the line was ignored."
+  },
+  {
+    "term": "Illegal binary digit %s",
+    "id": "Illegal",
+    "type": "F",
+    "description": "You used a digit other than 0 or 1 in a binary number."
+  },
+  {
+    "term": "Illegal binary digit %s ignored",
+    "id": "Illegal~2",
+    "type": "W digit",
+    "description": "You may have tried to use a digit other than 0 or 1 in a binary number. Interpretation of the binary number stopped before the offending digit."
+  },
+  {
+    "term": "Illegal number of bits in vec",
+    "id": "Illegal~3",
+    "type": "F",
+    "description": "The number of bits in vec() (the third argument) must be a power of two from 1 to 32 (or 64, if your platform supports that)."
+  },
+  {
+    "term": "Integer overflow in %s number",
+    "id": "Integer",
+    "type": "W overflow",
+    "description": "The hexadecimal, octal or binary number you have specified either as a literal or as an argument to hex() or oct() is too big for your architecture, and has been converted to a floating point number. On a 32-bit architecture the largest hexadecimal, octal or binary number representable without overflow is 0xFFFFFFFF, 037777777777, or 0b11111111111111111111111111111111 respectively. Note that Perl transparently promotes all numbers to a floating point representation internally--subject to loss of precision errors in subsequent operations."
+  },
+  {
+    "term": "Invalid %s attribute: %s",
+    "id": "Invalid",
+    "type": null,
+    "description": "The indicated attribute for a subroutine or variable was not recognized by Perl or by a user-supplied handler. See attributes."
+  },
+  {
+    "term": "Invalid %s attributes: %s",
+    "id": "Invalid~2",
+    "type": null,
+    "description": "The indicated attributes for a subroutine or variable were not recognized by Perl or by a user-supplied handler. See attributes."
+  },
+  {
+    "term": "invalid [] range \"%s\" in regexp",
+    "id": "invalid",
+    "type": null,
+    "description": "The offending range is now explicitly displayed."
+  },
+  {
+    "term": "Invalid separator character %s in attribute list",
+    "id": "Invalid~3",
+    "type": "F",
+    "description": "Something other than a colon or whitespace was seen between the elements of an attribute list. If the previous attribute had a parenthesised parameter list, perhaps that list was terminated too soon. See attributes."
+  },
+  {
+    "term": "Invalid separator character %s in subroutine attribute list",
+    "id": "Invalid~4",
+    "type": "F",
+    "description": "Something other than a colon or whitespace was seen between the elements of a subroutine attribute list. If the previous attribute had a parenthesised parameter list, perhaps that list was terminated too soon."
+  },
+  {
+    "term": "leaving effective %s failed",
+    "id": "leaving",
+    "type": "F",
+    "description": "While under the \"use filetest\" pragma, switching the real and effective uids or gids failed."
+  },
+  {
+    "term": "Lvalue subs returning %s not implemented yet",
+    "id": "Lvalue",
+    "type": "F",
+    "description": "Due to limitations in the current implementation, array and hash values cannot be returned in subroutines used in lvalue context. See \"Lvalue subroutines\" in perlsub."
+  },
+  {
+    "term": "Method %s not permitted",
+    "id": "Method",
+    "type": null,
+    "description": "See Server error."
+  },
+  {
+    "term": "Missing %sbrace%s on \\N{}",
+    "id": "Missing",
+    "type": "F",
+    "description": "Wrong syntax of character name literal \"\\N{charname}\" within double-quotish context."
+  },
+  {
+    "term": "Missing command in piped open",
+    "id": "Missing~2",
+    "type": "W pipe",
+    "description": "You used the \"open(FH, \"| command\")\" or \"open(FH, \"command |\")\" construction, but the command was missing or blank."
+  },
+  {
+    "term": "Missing name in \"my sub\"",
+    "id": "Missing~3",
+    "type": "F",
+    "description": "The reserved syntax for lexically scoped subroutines requires that they have a name with which they can be found."
+  },
+  {
+    "term": "No %s specified for -%c",
+    "id": "No",
+    "type": "F",
+    "description": "The indicated command line switch needs a mandatory argument, but you haven't specified one."
+  },
+  {
+    "term": "No package name allowed for variable %s in \"our\"",
+    "id": "No~2",
+    "type": "F",
+    "description": "Fully qualified variable names are not allowed in \"our\" declarations, because that doesn't make much sense under existing semantics. Such syntax is reserved for future extensions."
+  },
+  {
+    "term": "No space allowed after -%c",
+    "id": "No~3",
+    "type": "F",
+    "description": "The argument to the indicated command line switch must follow immediately after the switch, without intervening spaces."
+  },
+  {
+    "term": "no UTC offset information; assuming local time is UTC",
+    "id": "no",
+    "type": "S",
+    "description": "A warning peculiar to VMS. Perl was unable to find the local timezone offset, so it's assuming that local system time is equivalent to UTC. If it's not, define the logical name SYS$TIMEZONE_DIFFERENTIAL to translate to the number of seconds which need to be added to UTC to get local time."
+  },
+  {
+    "term": "Octal number > 037777777777 non-portable",
+    "id": "Octal",
+    "type": "W portable",
+    "description": "The octal number you specified is larger than 2**32-1 (4294967295) and therefore non-portable between systems. See perlport for more on portability concerns. See also perlport for writing portable code."
+  },
+  {
+    "term": "panic: del_backref",
+    "id": "panic:",
+    "type": "P",
+    "description": "Failed an internal consistency check while trying to reset a weak reference."
+  },
+  {
+    "term": "panic: kid popen errno read",
+    "id": "panic:~2",
+    "type": "F",
+    "description": "forked child returned an incomprehensible message about its errno."
+  },
+  {
+    "term": "panic: magic_killbackrefs",
+    "id": "panic:~3",
+    "type": "P",
+    "description": "Failed an internal consistency check while trying to reset all weak references to an object."
+  },
+  {
+    "term": "Parentheses missing around \"%s\" list",
+    "id": "Parentheses",
+    "type": "W parenthesis",
+    "description": "You said something like my $foo, $bar = @_; when you meant my ($foo, $bar) = @_; Remember that \"my\", \"our\", and \"local\" bind tighter than comma."
+  },
+  {
+    "term": "Possible unintended interpolation of %s in string",
+    "id": "Possible",
+    "type": "W ambiguous",
+    "description": "It used to be that Perl would try to guess whether you wanted an array interpolated or a literal @. It no longer does this; arrays are now always interpolated into strings. This means that if you try something like: print \"fred@example.com\"; and the array @example doesn't exist, Perl is going to print \"fred.com\", which is probably not what you wanted. To get a literal \"@\" sign in a string, put a backslash before it, just as you would to get a literal \"$\" sign."
+  },
+  {
+    "term": "Possible Y2K bug: %s",
+    "id": "Possible~2",
+    "type": "W y2k",
+    "description": "You are concatenating the number 19 with another number, which could be a potential Year 2000 problem."
+  },
+  {
+    "term": "pragma \"attrs\" is deprecated, use \"sub NAME : ATTRS\" instead",
+    "id": "pragma",
+    "type": "W deprecated",
+    "description": "You have written something like this: sub doit { use attrs qw(locked); } You should use the new declaration syntax instead. sub doit : locked { ... The \"use attrs\" pragma is now obsolete, and is only provided for backward-compatibility. See \"Subroutine Attributes\" in perlsub."
+  },
+  {
+    "term": "Premature end of script headers",
+    "id": "Premature",
+    "type": null,
+    "description": "See Server error."
+  },
+  {
+    "term": "Repeat count in pack overflows",
+    "id": "Repeat",
+    "type": "F",
+    "description": "You can't specify a repeat count so large that it overflows your signed integers. See \"pack\" in perlfunc."
+  },
+  {
+    "term": "Repeat count in unpack overflows",
+    "id": "Repeat~2",
+    "type": "F",
+    "description": "You can't specify a repeat count so large that it overflows your signed integers. See \"unpack\" in perlfunc."
+  },
+  {
+    "term": "realloc() of freed memory ignored",
+    "id": "realloc()",
+    "type": "S",
+    "description": "An internal routine called realloc() on something that had already been freed."
+  },
+  {
+    "term": "Reference is already weak",
+    "id": "Reference",
+    "type": "W misc",
+    "description": "You have attempted to weaken a reference that is already weak. Doing so has no effect."
+  },
+  {
+    "term": "setpgrp can't take arguments",
+    "id": "setpgrp",
+    "type": "F",
+    "description": "Your system has the setpgrp() from BSD 4.2, which takes no arguments, unlike POSIX setpgid(), which takes a process ID and process group ID."
+  },
+  {
+    "term": "Strange *+?{} on zero-length expression",
+    "id": "Strange",
+    "type": "W regexp",
+    "description": "You applied a regular expression quantifier in a place where it makes no sense, such as on a zero-width assertion. Try putting the quantifier inside the assertion instead. For example, the way to match \"abc\" provided that it is followed by three repetitions of \"xyz\" is \"/abc(?=(?:xyz){3})/\", not \"/abc(?=xyz){3}/\"."
+  },
+  {
+    "term": "switching effective %s is not implemented",
+    "id": "switching",
+    "type": "F",
+    "description": "While under the \"use filetest\" pragma, we cannot switch the real and effective uids or gids."
+  },
+  {
+    "term": "This Perl can't reset CRTL environ elements (%s)",
+    "id": "This",
+    "type": null,
+    "description": ""
+  },
+  {
+    "term": "This Perl can't set CRTL environ elements (%s=%s)",
+    "id": "This~2",
+    "type": null,
+    "description": ""
+  }
+]
+<dd>(W داخلي) تحذيرات خاصة بنظام VMS. لقد حاولت تغيير أو حذف عنصر من مصفوفة بيئة CRTL الداخلية، لكن نسختك من Perl لم يتم بناؤها باستخدام CRTL تحتوي على الدالة <b>setenv()</b>. ستحتاج إلى إعادة بناء Perl باستخدام CRTL تفعل ذلك، أو إعادة تعريف <i>PERL_ENV_TABLES</i> (انظر perlvms) بحيث لا تكون مصفوفة البيئة هدفًا للتغيير إلى <span class="Li">%ENV</span> الذي أنتج التحذير.</dd>
+  <dt id="Too"><a class="permalink" href="#Too">الوقت متأخر جدًا لتشغيل %s
+    كتلة</a></dt>
+  <dd>(W فارغ) يتم تعريف كتلة CHECK أو INIT أثناء وقت التشغيل الفعلي، عندما فات وقت تشغيلها بالفعل. ربما تقوم بتحميل ملف باستخدام <span class="Li">&quot;require&quot;</span> أو <span class="Li">&quot;do&quot;</span> عندما يجب أن تستخدم <span class="Li">&quot;use&quot;</span> بدلاً من ذلك. أو ربما يجب عليك وضع <span class="Li">&quot;require&quot;</span> أو <span class="Li">&quot;do&quot;</span> داخل كتلة BEGIN.</dd>
+  <dt id="Unknown"><a class="permalink" href="#Unknown">وضع <b>open()</b> غير معروف '%s'</a></dt>
+  <dd>(F) الوسيط الثاني للدالة <b>open()</b> ذات 3 وسائط ليس ضمن قائمة الأوضاع الصالحة: <span class="Li">&quot;&lt;&quot;</span>، <span class="Li">&quot;&gt;&quot;</span>، <span class="Li">&quot;&gt;&gt;&quot;</span>، <span class="Li">&quot;+&lt;&quot;</span>، <span class="Li">&quot;+&gt;&quot;</span>، <span class="Li">&quot;+&gt;&gt;&quot;</span>، <span class="Li">&quot;-|&quot;</span>، <span class="Li">&quot;|-&quot;</span>.</dd>
+  <dt id="Unknown~2"><a class="permalink" href="#Unknown~2">عملية غير معروفة %x
+    أرسلت رسالة إلى prime_env_iter: %s</a></dt>
+  <dd>(P) خطأ خاص بنظام VMS. كان Perl يقرأ قيمًا لـ <span class="Li">%ENV</span> قبل المرور عليها، وشخص آخر وضع رسالة في تدفق البيانات الذي كان يتوقعه Perl. شخص ما مرتبك جدًا، أو ربما يحاول تخريب تعبئة Perl لـ <span class="Li">%ENV</span> لأغراض خبيثة.</dd>
+  <dt id="Unrecognized"><a class="permalink" href="#Unrecognized">الهروب غير المعترف به \\%c تم تمريره</a></dt>
+  <dd>(W متنوع) لقد استخدمت مزيجًا من الشرطة المائلة العكسية والحرف غير معترف به بواسطة Perl. تم فهم الحرف حرفيًا.</dd>
+  <dt id="Unterminated"><a class="permalink" href="#Unterminated">معلمة سمة غير منتهية في قائمة السمات</a></dt>
+  <dd>(F) رأى المحلل اللغوي حرف قوس فتح (أيسر) أثناء تحليل قائمة السمات، ولكن لم يتم العثور على حرف القوس الغلق (الأيمن) المطابق. قد تحتاج إلى إضافة (أو إزالة) حرف شرطة مائلة عكسية لموازنة أقواس. انظر السمات.</dd>
+  <dt id="Unterminated~2"><a class="permalink" href="#Unterminated~2">قائمة السمات غير المنتهية</a></dt>
+  <dd>(F) وجد المحلل اللغوي شيئًا آخر غير معرف بسيط في بداية السمة، ولم يكن فاصلة منقوطة أو بداية كتلة. ربما أنهيت قائمة معلمات السمة السابقة مبكرًا جدًا. انظر السمات.</dd>
+  <dt id="Unterminated~3"><a class="permalink" href="#Unterminated~3">معلمة سمة غير منتهية في قائمة سمات الإجراء الفرعي</a></dt>
+  <dd>(F) رأى المحلل اللغوي حرف قوس فتح (أيسر) أثناء تحليل قائمة سمات الإجراء الفرعي، ولكن لم يتم العثور على حرف القوس الغلق (الأيمن) المطابق. قد تحتاج إلى إضافة (أو إزالة) حرف شرطة مائلة عكسية لموازنة أقواس.</dd>
+  <dt id="Unterminated~4"><a class="permalink" href="#Unterminated~4">قائمة سمات الإجراء الفرعي غير المنتهية</a></dt>
+  <dd>(F) وجد المحلل اللغوي شيئًا آخر غير معرف بسيط في بداية سمة الإجراء الفرعي، ولم يكن فاصلة منقوطة أو بداية كتلة. ربما أنهيت قائمة معلمات السمة السابقة مبكرًا جدًا.</dd>
+  <dt id="Value"><a class="permalink" href="#Value">قيمة رمز CLI "%s" طويلة جدًا</a></dt>
+  <dd>(W متنوع) تحذير خاص بنظام VMS. حاول Perl قراءة قيمة عنصر <span class="Li">%ENV</span> من جدول رموز CLI، ووجد أن السلسلة الناتجة أطول من 1024 حرفًا. تم اقتطاع القيمة المرجعة إلى 1024 حرفًا.</dd>
+  <dt id="Version"><a class="permalink" href="#Version">رقم الإصدار يجب أن يكون رقمًا ثابتًا</a></dt>
+  <dd>(P) محاولة ترجمة عبارة <span class="Li">&quot;use Module n.n LIST&quot;</span> إلى ما يعادلها في كتلة <span class="Li">&quot;BEGIN&quot;</span> وجدت عدم اتساق داخلي مع رقم الإصدار.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='New_tests'><a class='permalink' href='#New_tests'>اختبارات   جديدة</a></h1>
+<dl class="Bl-tag">
+  <dt id="lib/attrs"><a class="permalink" href="#lib/attrs">lib/attrs</a></dt>
+  <dd>اختبارات التوافق لـ <span class="Li">&quot;sub : attrs&quot;</span> مقابل <span class="Li">&quot;use attrs&quot;</span> الأقدم.</dd>
+  <dt id="lib/env"><a class="permalink" href="#lib/env">lib/env</a></dt>
+  <dd>اختبارات لقدرة المتغير البيئي الجديد (مثل <span class="Li">&quot;use Env qw($BAR);&quot;</span>).</dd>
+  <dt>lib/env-array</dt>
+  <dd>اختبارات لقدرة مصفوفة البيئة الجديدة (مثل <span class="Li">&quot;use Env qw(@PATH);&quot;</span>).</dd>
+  <dt id="lib/io_const"><a class="permalink" href="#lib/io_const">lib/io_const</a></dt>
+  <dd>ثوابت IO (SEEK_*, _IO*).</dd>
+  <dt id="lib/io_dir"><a class="permalink" href="#lib/io_dir">lib/io_dir</a></dt>
+  <dd>طرق IO المتعلقة بالدليل (جديد، قراءة، إغلاق، تقديم، حذف مرتبط).</dd>
+  <dt id="lib/io_multihomed"><a class="permalink" href="#lib/io_multihomed">lib/io_multihomed</a></dt>
+  <dd>مقابس INET مع مضيفين متعددين.</dd>
+  <dt id="lib/io_poll"><a class="permalink" href="#lib/io_poll">lib/io_poll</a></dt>
+  <dd>IO <b>poll()</b>.</dd>
+  <dt id="lib/io_unix"><a class="permalink" href="#lib/io_unix">lib/io_unix</a></dt>
+  <dd>مقابس UNIX.</dd>
+  <dt id="op/attrs"><a class="permalink" href="#op/attrs">op/attrs</a></dt>
+  <dd>اختبارات الانحدار لـ <span class="Li">&quot;my ($x,@y,%z) :
+      attrs&quot;</span> و <span class="Li">&lt;sub : attrs&gt;</span>.</dd>
+  <dt id="op/filetest"><a class="permalink" href="#op/filetest">op/filetest</a></dt>
+  <dd>عوامل تشغيل اختبار الملفات.</dd>
+  <dt id="op/lex_assign"><a class="permalink" href="#op/lex_assign">op/lex_assign</a></dt>
+  <dd>التحقق من العمليات التي تصل إلى كائنات الوسادة (المحلية والمؤقتة).</dd>
+  <dt id="op/exists_sub"><a class="permalink" href="#op/exists_sub">op/exists_sub</a></dt>
+  <dd>التحقق من عمليات <span class="Li">&quot;exists &amp;sub&quot;</span>.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Incompatible_Changes'><a class='permalink' href='#Incompatible_Changes'>تغييرات   غير متوافقة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Perl_Source_Incompatibilities'><a class='permalink' href='#Perl_Source_Incompatibilities'>عدم توافق مصدر Perl</a></h2>
+<p class="Pp">احذر من أن أي تحذيرات جديدة تمت إضافتها أو قديمة تم تحسينها <b>لا</b> تعتبر تغييرات غير متوافقة.</p>
+<p class="Pp">نظرًا لأنه يجب طلب جميع التحذيرات الجديدة صراحةً عبر المفتاح <span class="Li">&quot;-w&quot;</span> أو التوجيه <span class="Li">&quot;warnings&quot;</span>، فإن مسؤولية المبرمج في النهاية هي ضمان تمكين التحذيرات بحكمة.</p>
+<dl class="Bl-tag">
+  <dt id="CHECK"><a class="permalink" href="#CHECK">CHECK هي كلمة مفتاحية جديدة</a></dt>
+  <dd>جميع تعريفات الإجراءات الفرعية المسماة CHECK أصبحت خاصة الآن. انظر <span class="Li">&quot;/&quot;الدعم لكتل CHECK&quot;&quot;</span> لمزيد من المعلومات.</dd>
+  <dt id="Treatment"><a class="permalink" href="#Treatment">تم تغيير معالجة شرائح القوائم غير المعرفة</a></dt>
+  <dd>هناك عدم توافق محتمل في سلوك شرائح القوائم التي تتكون بالكامل من قيم غير معرفة. انظر &quot;سلوك شرائح القوائم أكثر اتساقًا&quot;.</dd>
+  <dt id="Format"><a class="permalink" href="#Format">تنسيق $English::PERL_VERSION مختلف</a></dt>
+  <dd>يقوم وحدة English الآن بتعيين <span class="Li">$PERL_VERSION</span> إلى $^V (قيمة سلسلة نصية) بدلاً من <span class="Li">$]</span> (قيمة رقمية). هذا عدم توافق محتمل. أرسل لنا تقريرًا عبر perlbug إذا تأثرت بهذا.
+    <p class="Pp">انظر &quot;تحسين نظام ترقيم إصدار Perl&quot; لأسباب هذا التغيير.</p>
+  </dd>
+  <dt id="Literals"><a class="permalink" href="#Literals">تفسير الثوابت من النوع 1.2.3 مختلف</a></dt>
+  <dd>في السابق، كانت الثوابت الرقمية التي تحتوي على أكثر من نقطة واحدة تُفسر على أنها عدد عشري مدمج مع رقم واحد أو أكثر. يتم الآن تحليل هذه &quot;الأرقام&quot; كسلاسل نصية مكونة من الأرقام المحددة.
+    <p class="Pp">على سبيل المثال، <span class="Li">&quot;print
+        97.98.99&quot;</span> كانت تنتج <span class="Li">97.9899</span> في الإصدارات السابقة، ولكنها الآن تطبع
+        <span class="Li">&quot;abc&quot;</span>.</p>
+    <p class="Pp">انظر &quot;دعم السلاسل النصية الممثلة كمتجه من الأرقام&quot;.</p>
+  </dd>
+  <dt id="Possibly"><a class="permalink" href="#Possibly">مولد الأرقام شبه العشوائية قد يكون تغير</a></dt>
+  <dd>قد تنتج برامج Perl التي تعتمد على إعادة إنتاج مجموعة معينة من الأرقام شبه العشوائية الآن مخرجات مختلفة بسبب التحسينات التي تم إجراؤها على الدالة المدمجة <b>rand()</b>. يمكنك استخدام <span class="Li">&quot;sh Configure
+      -Drandfunc=rand&quot;</span> للحصول على السلوك القديم.
+    <p class="Pp">انظر &quot;مولد أرقام شبه عشوائي أفضل&quot;.</p>
+  </dd>
+  <dt id="Hashing"><a class="permalink" href="#Hashing">تغيرت وظيفة التجزئة لمفاتيح الهاش</a></dt>
+  <dd>حتى لو لم تكن تجزئات Perl تحافظ على الترتيب، فإن الترتيب الذي يبدو عشوائيًا عند التكرار على محتويات الهاش يتم تحديده فعليًا بواسطة خوارزمية التجزئة المستخدمة. قد ينتج عن التحسينات في الخوارزمية ترتيب عشوائي <b>مختلف</b> عن ترتيب الإصدارات السابقة، خاصة عند التكرار على الهاش.
+    <p class="Pp">انظر &quot;سلوك أفضل في أسوأ الحالات للتجزئة&quot; لمزيد من المعلومات.</p>
+  </dd>
+  <dt>"undef" fails on read only values</dt>
+  <dd>استخدام العامل <span class="Li">&quot;undef&quot;</span> على قيمة للقراءة فقط (مثل <span class="Li">$1</span>) له نفس تأثير تعيين <span class="Li">&quot;undef&quot;</span> للقيمة للقراءة فقط - فإنه يثير استثناءً.</dd>
+  <dt id="Close"><a class="permalink" href="#Close">قد يتم تعيين بت الإغلاق عند التنفيذ على مقابض الأنابيب والمقابس</a></dt>
+  <dd>تخضع مقابض الأنابيب والمقابس الآن أيضًا لسلوك الإغلاق عند التنفيذ الذي يتم تحديده بواسطة المتغير الخاص $^F.
+    <p class="Pp">انظر &quot;سلوك إغلاق عند التنفيذ أكثر اتساقًا&quot;.</p>
+  </dd>
+  <dt id="Writing"><a class="permalink" href="#Writing">كتابة &quot;$$1&quot;
+    لتعني &quot;${$}1&quot; غير مدعومة</a></dt>
+  <dd>تم إهمال Perl 5.004 تفسير <span class="Li">$$1</span> وما شابه ذلك داخل السلاسل النصية المستبدلة لتعني <span class="Li">&quot;$$
+      . &quot;1&quot;&quot;</span>، ولكن لا يزال يسمح بذلك.
+    <p class="Pp">في Perl 5.6.0 وما بعده،
+        <span class="Li">&quot;$$1&quot;</span> يعني دائمًا
+        <span class="Li">&quot;${$1}&quot;</span>.</p>
+  </dd>
+  <dt id="delete()"><a class="permalink" href="#delete()"><b>delete()</b>،
+    <b>each()</b>، <b>values()</b> و &quot;\(%h)&quot;</a></dt>
+  <dd>تعمل على الأسماء المستعارة للقيم، وليس النسخ.
+    <p class="Pp"><b>delete()</b>، <b>each()</b>، <b>values()</b> والهاش (على سبيل المثال <span class="Li">&quot;\(%h)&quot;</span>) في سياق قائمة تُرجع القيم الفعلية في الهاش، بدلاً من النسخ (كما كانت تستخدم</dd>
+</dl>
+sed to
+        in earlier versions). Typical idioms for using these constructs copy the
+        returned values, but this can make a significant difference when
+        creating references to the returned values. Keys in the hash are still
+        returned as copies when iterating on a hash.</p>
+    <p class="Pp">See also &quot;<b>delete()</b>, <b>each()</b>, <b>values()</b>
+        and hash iteration are faster&quot;.</p>
+  </dd>
+  <dt id="vec(EXPR,OFFSET,BITS)"><a class="permalink" href="#vec(EXPR,OFFSET,BITS)">vec(EXPR,OFFSET,BITS)
+    enforces powers-of-two BITS</a></dt>
+  <dd><b>vec()</b> generates a run-time error if the BITS argument is not a
+      valid power-of-two integer.</dd>
+  <dt id="Text"><a class="permalink" href="#Text">Text of some diagnostic output
+    has changed</a></dt>
+  <dd>Most references to internal Perl operations in diagnostics have been
+      changed to be more descriptive. This may be an issue for programs that may
+      incorrectly rely on the exact text of diagnostics for proper
+    functioning.</dd>
+  <dt>&quot;%@&quot; has been removed</dt>
+  <dd>The undocumented special variable <span class="Li">&quot;%@&quot;</span>
+      that used to accumulate &quot;background&quot; errors (such as those that
+      happen in <b>DESTROY()</b>) has been removed, because it could potentially
+      result in memory leaks.</dd>
+  <dt id="Parenthesized"><a class="permalink" href="#Parenthesized">Parenthesized
+    <b>not()</b> behaves like a list operator</a></dt>
+  <dd>The <span class="Li">&quot;not&quot;</span> operator now falls under the
+      &quot;if it looks like a function, it behaves like a function&quot; rule.
+    <p class="Pp">As a result, the parenthesized form can be used with
+        <span class="Li">&quot;grep&quot;</span> and
+        <span class="Li">&quot;map&quot;</span>. The following construct used to
+        be a syntax error before, but it works as expected now:</p>
+        <pre>grep not($_), @things;
+</pre>
+    <p class="Pp">On the other hand, using
+        <span class="Li">&quot;not&quot;</span> with a literal list slice may
+        not work. The following previously allowed construct:</p>
+        <pre>print not (1,2,3)[0];
+</pre>
+    <p class="Pp">needs to be written with additional parentheses now:</p>
+        <pre>print not((1,2,3)[0]);
+</pre>
+    <p class="Pp">The behavior remains unaffected when
+        <span class="Li">&quot;not&quot;</span> is not followed by
+      parentheses.</p>
+  </dd>
+  <dt id="Semantics"><a class="permalink" href="#Semantics">Semantics of
+    bareword prototype &quot;(*)&quot; have changed</a></dt>
+  <dd>The semantics of the bareword prototype
+      <span class="Li">&quot;*&quot;</span> have changed. Perl 5.005 always
+      coerced simple scalar arguments to a typeglob, which wasn't useful in
+      situations where the subroutine must distinguish between a simple scalar
+      and a typeglob. The new behavior is to not coerce bareword arguments to a
+      typeglob. The value will always be visible as either a simple scalar or as
+      a reference to a typeglob.
+    <p class="Pp">See &quot;More functional bareword prototype (*)&quot;.</p>
+  </dd>
+  <dt id="Semantics~2"><a class="permalink" href="#Semantics~2">Semantics of bit
+    operators may have changed on 64-bit platforms</a></dt>
+  <dd>If your platform is either natively 64-bit or if Perl has been configured
+      to used 64-bit integers, i.e., <span class="Li">$Config</span>{ivsize} is
+      8, there may be a potential incompatibility in the behavior of bitwise
+      numeric operators (&amp; | ^ ~ &lt;&lt; &gt;&gt;). These operators used to
+      strictly operate on the lower 32 bits of integers in previous versions,
+      but now operate over the entire native integral width. In particular, note
+      that unary <span class="Li">&quot;~&quot;</span> will produce different
+      results on platforms that have different
+      <span class="Li">$Config</span>{ivsize}. For portability, be sure to mask
+      off the excess bits in the result of unary
+      <span class="Li">&quot;~&quot;</span>, e.g., <span class="Li">&quot;~$x
+      &amp; 0xffffffff&quot;</span>.
+    <p class="Pp">See &quot;Bit operators support full native integer
+        width&quot;.</p>
+  </dd>
+  <dt id="More"><a class="permalink" href="#More">More builtins taint their
+    results</a></dt>
+  <dd>As described in &quot;Improved security features&quot;, there may be more
+      sources of taint in a Perl program.
+    <p class="Pp">To avoid these new tainting behaviors, you can build Perl with
+        the Configure option
+        <span class="Li">&quot;-Accflags=-DINCOMPLETE_TAINTS&quot;</span>.
+        Beware that the ensuing perl binary may be insecure.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='C_Source_Incompatibilities'><a class='permalink' href='#C_Source_Incompatibilities'>C   Source Incompatibilities</a></h2>
+<dl class="Bl-tag">
+  <dt>&quot;PERL_POLLUTE&quot;</dt>
+  <dd>Release 5.005 grandfathered old global symbol names by providing
+      preprocessor macros for extension source compatibility. As of release
+      5.6.0, these preprocessor definitions are not available by default. You
+      need to explicitly compile perl with
+      <span class="Li">&quot;-DPERL_POLLUTE&quot;</span> to get these
+      definitions. For extensions still using the old symbols, this option can
+      be specified via MakeMaker:
+        <pre>perl Makefile.PL POLLUTE=1
+</pre>
+  </dd>
+  <dt>&quot;PERL_IMPLICIT_CONTEXT&quot;</dt>
+  <dd>This new build option provides a set of macros for all API functions such
+      that an implicit interpreter/thread context argument is passed to every
+      API function. As a result of this, something like
+      <span class="Li">&quot;sv_setsv(foo,bar)&quot;</span> amounts to a macro
+      invocation that actually translates to something like
+      <span class="Li">&quot;Perl_sv_setsv(my_perl,foo,bar)&quot;</span>. While
+      this is generally expected to not have any significant source
+      compatibility issues, the difference between a macro and a real function
+      call will need to be considered.
+    <p class="Pp">This means that there <b>is</b> a source compatibility issue
+        as a result of this if your extensions attempt to use pointers to any of
+        the Perl API functions.</p>
+    <p class="Pp">Note that the above issue is not relevant to the default build
+        of Perl, whose interfaces continue to match those of prior versions (but
+        subject to the other options described here).</p>
+    <p class="Pp">See &quot;Background and PERL_IMPLICIT_CONTEXT&quot; in
+        perlguts for detailed information on the ramifications of building Perl
+        with this option.</p>
+        <pre>NOTE: PERL_IMPLICIT_CONTEXT is automatically enabled whenever Perl is built
+with one of -Dusethreads, -Dusemultiplicity, or both.  It is not
+intended to be enabled by users at this time.
+</pre>
+  </dd>
+  <dt>&quot;PERL_POLLUTE_MALLOC&quot;</dt>
+  <dd>Enabling Perl's malloc in release 5.005 and earlier caused the namespace
+      of the system's malloc family of functions to be usurped by the Perl
+      versions, since by default they used the same names. Besides causing
+      problems on platforms that do not allow these functions to be cleanly
+      replaced, this also meant that the system versions could not be called in
+      programs that used Perl's malloc. Previous versions of Perl have allowed
+      this behaviour to be suppressed with the HIDEMYMALLOC and EMBEDMYMALLOC
+      preprocessor definitions.
+    <p class="Pp">As of release 5.6.0, Perl's malloc family of functions have
+        default names distinct from the system versions. You need to explicitly
+        compile perl with
+        <span class="Li">&quot;-DPERL_POLLUTE_MALLOC&quot;</span> to get the
+        older behaviour. HIDEMYMALLOC and EMBEDMYMALLOC have no effect, since
+        the behaviour they enabled is now the default.</p>
+    <p class="Pp">Note that these functions do <b>not</b> constitute Perl's
+        memory allocation API. See &quot;Memory Allocation&quot; in perlguts for
+        further information about that.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Compatible_C_Source_API_Changes'><a class='permalink' href='#Compatible_C_Source_API_Changes'>Compatible   C Source API Changes</a></h2>
+<dl class="Bl-tag">
+  <dt>&quot;PATCHLEVEL&quot; is now &quot;PERL_VERSION&quot;</dt>
+  <dd>The cpp macros <span class="Li">&quot;PERL_REVISION&quot;</span>,
+      <span class="Li">&quot;PERL_VERSION&quot;</span>, and
+      <span class="Li">&quot;PERL_SUBVERSION&quot;</span> are now available by
+      default from perl.h, and reflect the base revision, patchlevel, and
+      subversion respectively. <span class="Li">&quot;PERL_REVISION&quot;</span>
+      had no prior equivalent, while
+      <span class="Li">&quot;PERL_VERSION&quot;</span> and
+      <span class="Li">&quot;PERL_SUBVERSION&quot;</span> were previously
+      available as <span class="Li">&quot;PATCHLEVEL&quot;</span> and
+      <span class="Li">&quot;SUBVERSION&quot;</span>.
+    <p class="Pp">The new names cause less pollution of the <b>cpp</b> namespace
+        and reflect what the numbers have come to stand for in common practice.
+        For compatibility, the old names are still supported when
+        <i>patchlevel.h</i> is explicitly included (as required before), so
+        there is no source incompatibility from the change.</p>
+  </dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Binary_Incompatibilities'><a class='permalink' href='#Binary_Incompatibilities'>Binary   Incompatibilities</a></h2>
+<p class="Pp">In general, the default build of this release is expected to be
+    binary compatible for extensions built with the 5.005 release or its
+    maintenance versions. However, specific platforms may have broken binary
+    compatibility due to changes in the defaults used in hints files. Therefore,
+    please be sure to always check the platform-specific README files for any
+    notes to the contrary.</p>
+<p class="Pp">The usethreads or usemultiplicity builds are <b>not</b> binary
+    compatible with the corresponding builds in 5.005.</p>
+<p class="Pp">On platforms that require an explicit list of exports (AIX, OS/2
+    and Windows, among others), purely internal symbols such as parser functions
+    and the run time opcodes are not exported by default. Perl 5.005 used to
+    export all functions irrespective of whether they were considered part of
+    the public API or not.</p>
+<p class="Pp">For the full list of public API functions, see perlapi.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Known_Problems'><a class='permalink' href='#Known_Problems'>Known   Problems</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Thread_test_failures'><a class='permalink' href='#Thread_test_failures'>Thread   test failures</a></h2>
+<p class="Pp">The subtests 19 and 20 of lib/thr5005.t test are known to fail due
+    to fundamental problems in the 5.005 threading implementation. These are not
+    new failures--Perl 5.005_0x has the same bugs, but didn't have these
+  tests.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='EBCDIC_platforms_not_supported'><a class='permalink' href='#EBCDIC_platforms_not_supported'>EBCDIC   platforms not supported</a></h2>
+<p class="Pp">In earlier releases of Perl, EBCDIC environments like OS390 (also
+    known as Open Edition MVS) and VM-ESA were supported. Due to changes
+    required by the UTF-8 (Unicode) support, the EBCDIC platforms are not
+    supported in Perl 5.6.0.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='In_64-bit_HP-UX_the_lib/io_multihomed_test_may_hang'><a class='permalink' href='#In_64-bit_HP-UX_the_lib/io_multihomed_test_may_hang'>In 64-bit HP-UX the   lib/io_multihomed test may hang</a></h2>
+
+            <p>الموقع متاح بموجب شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

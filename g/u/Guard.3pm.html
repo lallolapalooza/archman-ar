@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Guard(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Guard(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perl-guard/">perl-guard</a></p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Guard(3)</td>
+    <td class="head-vol">وثائق Perl المساهمة من المستخدم</td>
+    <td class="head-rtitle">Guard(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Guard - عمليات تنظيف آمنة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>use Guard;
+
+# قم بتغيير الدليل مؤقتًا إلى الدليل "/etc"، ولكن تأكد من
+# العودة إلى "/" بغض النظر عن كيفية انتهاء myfun:
+sub myfun {
+   scope_guard { chdir "/" };
+   chdir "/etc";
+
+   code_that_might_die_or_does_other_fun_stuff;
+}
+# أنشئ كائنًا، عند اختفاء آخر مرجع إليه،
+# يستدعي كتلة الكود المعطاة:
+my $guard = guard { print "destroyed!\n" };
+undef $guard; # ربما تم تدميره هنا</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تطبق هذه الوحدة ما يسمى بـ "الحراس" (guards). الحارس هو
+    شيء (عادة كائن) "يحرس" موردًا، مما يضمن
+    تنظيفه عند المتوقع.</p>
+<p class="Pp">على وجه التحديد، تدعم هذه الوحدة نوعين مختلفين من الحراس:
+    كائنات الحراسة، التي تنفذ كتلة كود معينة عند تدميرها، وحراس النطاق،
+    التي ترتبط بانتهاء النطاق.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الوظائف</a></h1>
+<p class="Pp">تُصدّر هذه الوحدة حاليًا الوظيفتين
+    <span class="Li">"scope_guard"</span> و
+    <span class="Li">"guard"</span> افتراضيًا.</p>
+<dl class="Bl-tag">
+  <dt id="scope_guard"><a class="permalink" href="#scope_guard">scope_guard
+    BLOCK</a></dt>
+  <dd></dd>
+  <dt id="scope_guard~2"><a class="permalink" href="#scope_guard~2">scope_guard
+    ($coderef)</a></dt>
+  <dd>تسجل كتلة يتم تنفيذها عند انتهاء النطاق الحالي (كتلة،
+      دالة، طريقة، تقييم، إلخ).
+    <p class="Pp">انظر قسم الاستثناءات لشرح كيفية التعامل مع الاستثناءات
+        (أي <span class="Li">"die"</span>) داخل كتل الحراسة.</p>
+    <p class="Pp">الوصف أدناه يبدو معقدًا بعض الشيء، ولكن هذا فقط لأن
+        <span class="Li">"scope_guard"</span> يحاول الحصول على حتى الحالات
+        القصوى "بشكل صحيح": الهدف هو تزويدك بأداة تنظيف قوية.</p>
+    <p class="Pp">السلوك مشابه لمقتطف الكود هذا:</p>
+        <pre>eval ... code following scope_guard ...
+{
+   local $@;
+   eval BLOCK;
+   eval { $Guard::DIED-&gt;() } if $@;
+}
+die if $@;
+</pre>
+    <p class="Pp">باستثناء أنها أسرع بكثير، ويتم تنفيذ كل شيء حتى عندما تستدعي الكتلة
+        <span class="Li">"exit"</span> أو
+        <span class="Li">"goto"</span> أو
+        <span class="Li">"last"</span> أو تهرب بطرق أخرى.</p>
+    <p class="Pp">إذا تم تسجيل كتل متعددة لنفس النطاق، فسيتم تنفيذها بترتيب عكسي.
+        يتم إدارة أشياء أخرى متعلقة بالنطاق مثل
+        <span class="Li">"local"</span> عبر نفس الآلية، لذلك سيتم استعادة المتغيرات
+        التي تم جعلها <span class="Li">"local"</span> *بعد* استدعاء
+        <span class="Li">"scope_guard"</span> عند تشغيل الحارس.</p>
+    <p class="Pp">مثال: تغيير المنطقة الزمنية مؤقتًا للعملية الحالية، مع ضمان
+        إعادة تعيينها عند انتهاء نطاق
+        <span class="Li">"if"</span>:</p>
+        <pre>use Guard;
+use POSIX ();
+if ($need_to_switch_tz) {
+   # تأكد من استدعاء tzset بعد استعادة $ENV{TZ}
+   scope_guard { POSIX::tzset };
+   # اجعل محليًا بعد scope_guard، لذلك سيتم إلغاؤه في الوقت المناسب
+   local $ENV{TZ} = "Europe/London";
+   POSIX::tzset;
+   # افعل شيئًا بالمنطقة الزمنية الجديدة
+}
+</pre>
+  </dd>
+  <dt id="my"><a class="permalink" href="#my">my $guard = guard BLOCK</a></dt>
+  <dd></dd>
+  <dt id="my~2"><a class="permalink" href="#my~2">my $guard = guard
+    ($coderef)</a></dt>
+  <dd>يتصرف بنفس طريقة
+      <span class="Li">"scope_guard"</span>،
+      باستثناء أنه بدلاً من تنفيذ الكتلة عند انتهاء النطاق، فإنه يعيد كائنًا
+      يحدد عمره وقت تنفيذ الكتلة: عند تدمير آخر مرجع للكائن، يتم تنفيذ الكتلة
+      كما هو الحال مع
+      <span class="Li">"scope_guard"</span>.
+    <p class="Pp">انظر قسم الاستثناءات لشرح كيفية التعامل مع الاستثناءات
+        (أي <span class="Li">"die"</span>) داخل كتل الحراسة.</p>
+    <p class="Pp">مثال: اكتساب Coro::Semaphore لمدة ثانية عن طريق تسجيل مؤقت.
+        دالة رد استدعاء المؤقت تشير إلى الحارس المستخدم لإلغاء قفله مرة أخرى.
+        (يرجى تجاهل حقيقة أن
+        <span class="Li">"Coro::Semaphore"</span> لديه طريقة
+        <span class="Li">"guard"</span> تقوم بذلك بالفعل):</p>
+        <pre>use Guard;
+use Coro::AnyEvent;
+use Coro::Semaphore;
+my $sem = new Coro::Semaphore;
+sub lock_for_a_second {
+   $sem->down;
+   my $guard = guard { $sem->up };
+   Coro::AnyEvent::sleep 1;
+   # سيتم تنفيذ $sem->up عند العودة
+}
+</pre>
+    <p class="Pp">الميزة في القيام بذلك مع حارس بدلاً من مجرد استدعاء
+        <span class="Li">"$sem->down"</span> في دالة رد الاستدعاء هي أنه يمكنك
+        اختيار عدم إنشاء المؤقت، أو يمكن للكود الخاص بك إلقاء استثناء قبل أن يتمكن
+        من إنشاء المؤقت (أو تم إلغاء الخيط)، أو يمكنك إنشاء مؤقتات متعددة أو
+        مشاهدات أحداث أخرى وفقط عندما يتم تنفيذ آخرها سيتم فتح القفل. باستخدام
+        <span class="Li">"guard"</span>، لا داعي للقلق بشأن التقاط جميع الأماكن
+        التي يجب عليك فيها فتح قفل السيمفور.</p>
+  </dd>
+  <dt>$guard-&gt;cancel</dt>
+  <dd>سيؤدي استدعاء هذه الوظيفة إلى "تعطيل" كائن الحارس الذي أعادته وظيفة
+      <span class="Li">"guard"</span>، أي أنه سيحرر الكتلة التي تم تمريرها
+      أصلاً إلى <span class="Li">"guard"</span> وسيرتب بحيث لا يتم تنفيذ الكتلة.
+    <p class="Pp">يمكن أن يكون هذا مفيدًا عندما تستخدم
+        <span class="Li">"guard"</span> لإنشاء معالج تنظيف ليتم استدعاؤه في ظروف
+        كارثية وتقرر لاحقًا أنه لم يعد ضروريًا.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXCEPTIONS'><a class='permalink' href='#EXCEPTIONS'>الاستثناءات</a></h1>
+<p class="Pp">لا ينبغي لكتل الحراسة أن تلقي استثناءات بشكل طبيعي (أي
+        <span class="Li">"die"</span>). في النهاية، يتم استخدامها عادة للتنظيف بعد
+        مثل هذه الاستثناءات. ومع ذلك، إذا كان هناك شيء استثنائي حقًا يحدث، فيجب
+        بالطبع السماح لكتلة الحراسة بالموت. أيضًا، أخطاء البرمجة هي مصدر كبير
+        للاستثناءات، والمبرمج بالتأكيد يريد معرفة تلك الأخطاء.</p>
+<p class="Pp">نظرًا لأنه في معظم الحالات، الكتلة التي يتم تنفيذها عندما يتم تنفيذ
+    الحارس لا تعرف أو لا تهتم بكتل الحراسة، فإنه لا معنى له تقريبًا للسماح
+    للكود الحاوي بمعالجة الاستثناء.</p>
+<p class="Pp">لذلك، كلما ألقت كتلة حراسة استثناءً، سيتم التقاطها بواسطة Guard،
+    يليه استدعاء مرجع الكود المخزن في
+        <span class="Li">$Guard::DIED</span> (مع تعيين <span class="Li">$@</span>
+    إلى الاستثناء الفعلي)، وهو مشابه لكيفية تعامل معظم حلقات الأحداث مع هذه
+    الحالة.</p>
+<p class="Pp">القيمة الافتراضية لـ
+        <span class="Li">$Guard::DIED</span> هي استدعاء
+        <span class="Li">"warn "$@""</span>، أي يتم طباعة الخطأ كتحذير ويستمر البرنامج.</p>
+<p class="Pp">سيتم استعادة المتغير <span class="Li">$@</span> إلى قيمته قبل استدعاء
+    الحارس في جميع الحالات، لذلك لن تزعج الحراس
+        <span class="Li">$@</span> بأي شكل من الأشكال.</p>
+<p class="Pp">مرجع الكود المخزن في <span class="Li">$Guard::DIED</span>
+    لا ينبغي أن يموت (السلوك غير مضمون، ولكن في الوقت الحالي، سيتم تجاهل الاستثناء
+    ببساطة).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<pre>Marc Lehmann &lt;schmorp@schmorp.de&gt;
+http://home.schmorp.de/</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THANKS'><a class='permalink' href='#THANKS'>شكر</a></h1>
+<p class="Pp">شكرًا لـ Marco Maisenhelder، الذي ذكّرني بحل
+        <span class="Li">$Guard::DIED</span> لمشكلة الاستثناءات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">Scope::Guard و Sub::ScopeFinalizer، التي تنفذ بالفعل حراس النطاق الديناميكي فقط، وليس حراس النطاق المعجمي التي تعد بها وثائقها، ولديها نفقات أعلى بكثير لوحدة المعالجة المركزية والذاكرة والكتابة.</p>
+<p class="Pp">Hook::Scope، الذي لم يكتمل على ما يبدو ويمكن أن يفسد الذاكرة عند استخدامه.</p>
+<p class="Pp">يبدو أن Scope::Guard يحتوي على قسم كبير من "انظر أيضًا" لمزيد من الوحدات المشابهة له.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perl-guard/">extra/perl-guard</a></dd>
+        <dt>الإصدار:</dt>
+</section>
+
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+    <dd>1.023-18</dd>
+        <dt>الأعلى:</dt>
+        <dd><a href="https://metacpan.org/release/Guard">https://metacpan.org/release/Guard</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL، PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-guard/">/listing/extra/perl-guard/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#FUNCTIONS">الوظائف</a></li>
+        
+            <li><a href="#EXCEPTIONS">الاستثناءات</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#THANKS">شكر</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/Guard.3pm.en.txt">txt</a>، 
+        
+            <a href="/man/Guard.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

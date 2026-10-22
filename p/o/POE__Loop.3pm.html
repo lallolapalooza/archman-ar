@@ -1,0 +1,527 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "value": "D، التي تبدأ\n    "
+    },
+    {
+      "type": "bold",
+      "value": "waitpid()"
+    },
+    {
+      "type": "text",
+      "value": " حلقة استقصاء بدلاً من ذلك.\n</p>\n<p class=\"Pp\">\n    في وقت كتابة هذه السطور، تسجل جميع الفئات الفرعية لـ POE::Loop معالجات الإشارات الخاصة بها من خلال POE::Loop::PerlSignals.\n</p>\n<p class=\"Pp\">\n    هناك ثلاثة أنواع من معالجات الإشارات:\n</p>\n<p class=\"Pp\">\n    معالجات CHLD/CLD، عند إدارتها بواسطة الجسور نفسها، تستقصي الأطفال الذين انتهوا. يقوم POE::Kernel بمعظم هذا، ولكن\n    "
+    },
+    {
+      "type": "bold",
+      "value": "loop_watch_signal()"
+    },
+    {
+      "type": "text",
+      "value": " لا يزال بحاجة إلى بدء العملية.\n</p>\n<p class=\"Pp\">\n    معالجات PIPE. يجب إرسال حدث إشارة PIPE إلى الجلسة النشطة عند حدوث الإشارة.\n</p>\n<p class=\"Pp\">\n    كل شيء آخر. يتم إرسال أحداث الإشارة لكل شيء آخر إلى POE::Kernel، حيث يتم توزيعها على كل جلسة.\n</p>\n<p class=\"Pp\">\n    تميل الأساليب \"loop_watch_signal()\" إلى أن تكون طويلة جدًا، لذلك لا يتم تقديم مثال هنا. تحتوي جسور \"Event\" و \"Select\" على أمثلة جيدة.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_ignore_signal SIGNAL_NAME"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    توقف عن مراقبة SIGNAL_NAME. يقوم POE::Loop::PerlSignals بذلك عن طريق إعادة تعيين <span class=\"Li\">%SIG</span> لـ SIGNAL_NAME إلى قيمة سليمة.\n</p>\n<p class=\"Pp\">\n    يتم ترك <span class=\"Li\">$SIG</span>{CHLD} بمفرده لتجنب التداخل مع "
+    },
+    {
+      "type": "bold",
+      "value": "system()"
+    },
+    {
+      "type": "text",
+      "value": " وأشياء أخرى.\n</p>\n<p class=\"Pp\">\n    SIGPIPE غير ضار بشكل عام نظرًا لأن POE يولد أحداثًا لهذا الشرط. لذلك يتم تعيين <span class=\"Li\">$SIG</span>{PIPE} إلى \"IGNORE\" عندما لا يتم التعامل معها.\n</p>\n<p class=\"Pp\">\n    تكون جميع معالجات الإشارات الأخرى افتراضيًا إلى \"DEFAULT\" عندما لا تكون قيد الاستخدام.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_attach_uidestroy WIDGET"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    يجب على POE، عند استخدامه مع مجموعة أدوات رسومية، إيقاف التشغيل عند إغلاق واجهة المستخدم. يتم استخدام "
+    },
+    {
+      "type": "bold",
+      "value": "loop_attach_uidestroy()"
+    },
+    {
+      "type": "text",
+      "value": " لإيقاف POE عند تدمير WIDGET معين.\n</p>\n<p class=\"Pp\">\n    يتم إيقاف التشغيل عن طريق إطلاق إشارة UIDESTROY عند استدعاء رد اتصال إغلاق أو تدمير WIDGET. يضمن UIDESTROY إنهاء البرنامج بحكم كونه نهائيًا وغير قابل للإخفاء.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "bold",
+      "value": "loop_attach_uidestroy()"
+    },
+    {
+      "type": "text",
+      "value": " له معنى فقط في الفئات الفرعية لـ POE::Loop التي تربط بواجهات المستخدم. تترك جميع الفئات الفرعية الأخرى الطريقة فارغة.\n</p>\n<p class=\"Pp\">\n    إليك Gtk:\n</p>\n<pre>sub loop_attach_uidestroy {
+  my ($self, $window) = @_;
+  $window-&gt;signal_connect(
+    delete_event =&gt; sub {
+      if ($self-&gt;_data_ses_count()) {
+        $self-&gt;_dispatch_event(
+          $self, $self,
+          EN_SIGNAL, ET_SIGNAL, [ 'UIDESTROY' ],
+          __FILE__, __LINE__, undef, monotime(), -__LINE__
+        );
+      }
+      return 0;
+    }
+  );
+}</pre>\n</section>\n<section class=\"Ss\">\n<h2 class=\"Ss\" id='Alarm_and_Time_Management_Methods'><a class='permalink' href='#Alarm_and_Time_Management_Methods'>أساليب إدارة التنبيه والوقت</a></h2>\n<p class=\"Pp\">\n    تمكّن هذه الأساليب وتعطّل مراقب وقت أو تنبيهًا في حلقة الأحداث الأساسية. يتطلب POE واحدًا فقط، والذي تتم إعادة استخدامه أو إعادة إنشائه حسب الحاجة.\n</p>\n<p class=\"Pp\">\n    تُشغّل معظم حلقات الأحداث ردود اتصال عند مرور الوقت. تقع على عاتق الجسر مسؤولية تسجيل وإلغاء تسجيل رد اتصال حسب الحاجة. عند استدعائها، يجب على رد الاتصال إرسال الأحداث التي استحقّت وربما إعداد رد اتصال جديد للحدث التالي ليتم إرساله.\n</p>\n<p class=\"Pp\">\n    قد تقبل أساليب إدارة الوقت NEXT_EVENT_TIME. هذا هو الوقت الذي سيستحق فيه الحدث التالي، بوقت حقبة يونكس. NEXT_EVENT_TIME هو رقم حقيقي وقد يحتوي على دقة أقل من الثانية. تقع على عاتق الجسر مسؤولية تحويل هذه القيمة إلى شيء تتطلبه حلقة الأحداث الأساسية.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_resume_time_watcher NEXT_EVENT_TIME"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    استئناف مراقب وقت نشط بالفعل. يتم استخدامه مع "
+    },
+    {
+      "type": "bold",
+      "value": "loop_pause_time_watcher()"
+    },
+    {
+      "type": "text",
+      "value": " لتوفير تبديل مؤقت أقل تكلفة لحالات الاستخدام المتكررة. كما ذكرنا أعلاه، NEXT_EVENT_TIME بوقت حقبة يونكس وقد يحتوي على دقة أقل من الثانية.\n</p>\n<p class=\"Pp\">\n    يتم استخدام "
+    },
+    {
+      "type": "bold",
+      "value": "loop_resume_time_watcher()"
+    },
+    {
+      "type": "text",
+      "value": " بواسطة الجسور التي تضبط مراقبيها في حلقة الأحداث الأساسية. على سبيل المثال، يقوم POE::Loop::Gtk بتنفيذه بهذه الطريقة:\n</p>\n<pre>sub loop_resume_time_watcher {
+  my ($self, $next_time) = @_;
+  $next_time -= time();
+  $next_time *= 1000;
+  $next_time = 0 if $next_time &lt; 0;
+  $_watcher_timer = Gtk-&gt;timeout_add(
+    $next_time, \&amp;_loop_event_callback
+  );
+}</pre>\n<p class=\"Pp\">\n    عادة ما تكون هذه الطريقة فارغة في الجسور التي تنفذ حلقات الأحداث الخاصة بها.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_reset_time_watcher NEXT_EVENT_TIME"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    إعادة تعيين مراقب وقت، غالبًا عن طريق إيقاف أو تدمير مراقب موجود وإنشاء واحد جديد بدلاً منه. غالبًا ما يكون غلافًا لـ "
+    },
+    {
+      "type": "bold",
+      "value": "loop_resume_time_watcher()"
+    },
+    {
+      "type": "text",
+      "value": " والذي يدمر أولاً مراقبًا موجودًا. على سبيل المثال، تنفيذ POE::Loop::Gkt:\n</p>\n<pre>sub loop_reset_time_watcher {
+  my ($self, $next_time) = @_;
+  Gtk-&gt;timeout_remove($_watcher_timer);
+  undef $_watcher_timer;
+  $self-&gt;loop_resume_time_watcher($next_time);
+}</pre>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_pause_time_watcher"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    إيقاف مراقب وقت مؤقتًا دون تدميره، إذا كانت حلقة الأحداث الأساسية تدعم مثل هذا الشيء. يدعم POE::Loop::Event ذلك:\n</p>\n<pre>sub loop_pause_time_watcher {
+  $_watcher_timer or return;
+  $_watcher_timer-&gt;stop();
+}</pre>\n</section>\n<section class=\"Ss\">\n<h2 class=\"Ss\" id='File_Activity_Management_Methods'><a class='permalink' href='#File_Activity_Management_Methods'>أساليب إدارة نشاط الملف</a></h2>\n<p class=\"Pp\">\n    تمكّن هذه الأساليب وتعطّل مراقبي نشاط الملف. هناك أربعة أساليب: "
+    },
+    {
+      "type": "bold",
+      "value": "loop_watch_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": "، "
+    },
+    {
+      "type": "bold",
+      "value": "loop_ignore_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": "، "
+    },
+    {
+      "type": "bold",
+      "value": "loop_pause_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": "، و "
+    },
+    {
+      "type": "bold",
+      "value": "loop_resume_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": ". تمثل أساليب \"pause\" و \"resume\" إصدارات خفيفة الوزن من أساليب \"ignore\" و \"watch\" على التوالي.\n</p>\n<p class=\"Pp\">\n    تأخذ جميع الأساليب نفس المعاملين: مقبض ملف (HANDLE) ووضع وصول للملف (MODE). قد تكون الأوضاع MODE_RD، MODE_WR، أو MODE_EX. يتم تعريف هذه الثوابت بواسطة POE::Kernel وتتوافق مع دلالات أساليب POE::Kernel \"select_read()\"، \"select_write()\"، و \"select_expedite()\".\n</p>\n<p class=\"Pp\">\n    يسمي POE MODE_EX \"expedited\" لأنه غالبًا ما يشير إلى أن الملف جاهز لمعلومات خارج النطاق. لا تدعم جميع حلقات الأحداث MODE_EX. على سبيل المثال، Tk:\n</p>\n<pre>sub loop_watch_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+  my $tk_mode;
+  if ($mode == MODE_RD) {
+    $tk_mode = 'readable';
+  }
+  elsif ($mode == MODE_WR) {
+    $tk_mode = 'writable';
+  }
+  else {
+    # The Tk documentation implies by omission that expedited
+    # filehandles aren't, uh, handled.  This is part 1 of 2.
+    confess &quot;Tk does not support expedited filehandles&quot;;
+  }
+  # ... rest omitted ....
+}</pre>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_watch_filehandle FILE_HANDLE, IO_MODE"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    راقب FILE_HANDLE بحثًا عن نشاط في IO_MODE معين. اعتمادًا على حلقة الأحداث الأساسية، سيتم تسجيل مراقب أو رد اتصال لـ FILE_HANDLE. سيؤدي النشاط في IO_MODE المحدد (قراءة، كتابة، أو خارج النطاق) إلى تشغيل إرسال الحدث المناسب في مساحة التطبيق.\n</p>\n<p class=\"Pp\">\n    يقوم POE::Loop::Select بتعيين بت "
+    },
+    {
+      "type": "bold",
+      "value": "fileno()"
+    },
+    {
+      "type": "text",
+      "value": " في متجه بت "
+    },
+    {
+      "type": "bold",
+      "value": "select()"
+    },
+    {
+      "type": "text",
+      "value": " المناسب. كما أنه يتتبع واصفات الملفات النشطة.\n</p>\n<pre>sub loop_watch_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+  vec($loop_vectors[$mode], $fileno, 1) = 1;
+  $loop_filenos{$fileno} |= (1&lt;&lt;$mode);
+}</pre>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_ignore_filehandle FILE_HANDLE, IO_MODE"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    توقف عن مراقبة FILE_HANDLE في IO_MODE معين. يوقف (ويحتمل أن يدمر) مراقب حدث يتوافق مع FILE_HANDLE و IO_MODE.\n</p>\n<p class=\"Pp\">\n    يدير "
+    },
+    {
+      "type": "bold",
+      "value": "loop_ignore_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": " الخاص بـ POE::Loop::IO_Poll بتات الواصف/الوضع لطريقته \"_poll()\" هنا. كما يقوم ببعض التنظيف إذا لم يعد الواصف مراقبًا بعد مكالمة التجاهل هذه.\n</p>\n<pre>sub loop_ignore_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+  my $type = mode_to_poll($mode);
+  my $current = $poll_fd_masks{$fileno} || 0;
+  my $new = $current &amp; ~$type;
+  if (TRACE_FILES) {
+    POE::Kernel::_warn(
+      sprintf(
+        &quot;&lt;fh&gt; Ignore $fileno: &quot; .
+        &quot;: Current mask: 0x%02X - removing 0x%02X = 0x%02X\n&quot;,
+        $current, $type, $new
+      )
+    );
+  }
+  if ($new) {
+    $poll_fd_masks{$fileno} = $new;
+  }
+  else {
+    delete $poll_fd_masks{$fileno};
+  }
+}</pre>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_pause_filehandle FILE_HANDLE, IO_MODE"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    هذا شكل خفيف الوزن من "
+    },
+    {
+      "type": "bold",
+      "value": "loop_ignore_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": ". يتم استخدامه مع "
+    },
+    {
+      "type": "bold",
+      "value": "loop_resume_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": " لتبديل حالة المراقب مؤقتًا لـ FILE_HANDLE في IO_MODE معين.\n</p>\n<p class=\"Pp\">\n    تدعم بعض حلقات الأحداث، مثل Event.pm، تعطيل مراقبي الملفات الخاصة بها وإعادة تمكينها دون الحاجة إلى تدمير وإعادة إنشاء كائنات المراقب.\n</p>\n<pre>sub loop_pause_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+  $fileno_watcher[$fileno]-&gt;[$mode]-&gt;stop();
+}</pre>\n<p class=\"Pp\">\n    بالمقارنة، تقوم طريقة "
+    },
+    {
+      "type": "bold",
+      "value": "loop_ignore_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": " الخاصة بـ Event بإلغاء وتدمير كائن المراقب.\n</p>\n<pre>sub loop_ignore_filehandle {
+  my ($self, $handle, $mode) = @_;
+  my $fileno = fileno($handle);
+  if (defined $fileno_watcher[$fileno]-&gt;[$mode]) {
+    $fileno_watcher[$fileno]-&gt;[$mode]-&gt;cancel();
+    undef $fileno_watcher[$fileno]-&gt;[$mode];
+  }
+}</pre>\n<p class=\"Pp\">\n    تجاهل وإعادة إنشاء المراقبين مكلف نسبيًا، لذا فإن أساليب POE::Kernel \"select_pause_read()\" و \"select_resume_read()\" (والأساليب المقابلة للكتابة والإرسال السريع) تستخدم الإصدارات الأسرع.\n</p>\n<p class=\"Pp\">\n    "
+    },
+    {
+      "type": "code",
+      "value": "loop_resume_filehandle FILE_HANDLE, IO_MODE"
+    },
+    {
+      "type": "text",
+      "value": "\n</p>\n<p class=\"Pp\">\n    هذا شكل خفيف الوزن من "
+    },
+    {
+      "type": "bold",
+      "value": "loop_watch_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": ". يتم استخدامه مع "
+    },
+    {
+      "type": "bold",
+      "value": "loop_pause_filehandle()"
+    },
+    {
+      "type": "text",
+      "value": " لتبديل حالة المراقب مؤقتًا لـ FILE_HANDLE في IO_MODE معين.\n</p>\n</section>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='HOW_POE_FINDS_EVENT_LOOP_BRIDGES'><a class='permalink' href='#HOW_POE_FINDS_EVENT_LOOP_BRIDGES'>كيف يجد POE جسور حلقة الأحداث</a></h1>\n<p class=\"Pp\">\n    هذه إعادة صياغة لـ \"استخدام POE مع حلقات الأحداث الأخرى\" في POE::Kernel.\n</p>\n<p class=\"Pp\">\n    أولاً، إذا تم تحميل فئة فرعية من POE::Loop يدويًا قبل POE::Kernel، فسيتم استخدامها. انتهت القصة.\n</p>\n<p class=\"Pp\">\n    إذا لم يكن الأمر كذلك، يبحث POE::Kernel عن وحدة حلقة أحداث خارجية في <span class=\"Li\">%INC</span>. لكل وحدة في <span class=\"Li\">%INC</span>، تتم محاولة فئات POE::XS::Loop و POE::Loop الفرعية المقابلة.\n</p>\n<p class=\"Pp\">\n    على سبيل المثال، إذا تم تحميل IO::Poll، يحاول POE::Kernel\n</p>\n<pre>use POE::XS::Loop::IO_Poll;
+use POE::Loop::IO_Poll;</pre>\n<p class=\"Pp\">\n    هذا مكلف نسبيًا، ولكنه يضمن أن POE::Kernel يمكنه العثور على فئات فرعية جديدة لـ POE::Loop دون تعريفها في سجل مركزي.\n</p>\n<p class=\"Pp\">\n    POE::Loop::Select هي حلقة الأحداث الاحتياطية. يتم تحميلها إذا لم يتمكن أي حلقة أحداث أخرى من العثور عليها في <span class=\"Li\">%INC</span>.\n</p>\n<p class=\"Pp\">\n    لا يمكن تكرار ذلك بما فيه الكفاية أن حلقات الأحداث يجب أن يتم تحميلها قبل POE::Kernel. وإلا فلن تكون موجودة في <span class=\"Li\">%INC</span>، ولن يكتشفها POE::Kernel.\n</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>\n<p class=\"Pp\">\n    POE، POE::Loop::Event، POE::Loop::Gtk، POE::Loop::IO_Poll، POE::Loop::Select، POE::Loop::Tk.\n</p>\n<p class=\"Pp\">\n    POE::Test::Loops هي اختبارات حلقة الأحداث الخاصة بـ POE التي تم إصدارها كتوزيع منفصل وقابل لإعادة الاستخدام.\n"
+    }
+  ]
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>POE::Loop(3pm) — Arch Linux Man Pages</title>
+        
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Loop(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main>
+            <article>
+                <section class="Sh">
+<h1><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><code class="Nm">POE::Loop</code> — an event loop interface.</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp">This module is intended for use as a base class.</p>
+<pre>
+    package My::Event::Loop;
+
+    use base 'POE::Loop';
+
+    sub new { ... }
+    sub pause { ... }
+    sub run { ... }
+    sub stop { ... }
+    sub yield { ... }
+
+    # ... and so on.
+</pre>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp"><code class="Nm">POE::Loop</code> is a base class for creating POE event
+    loops. It defines the methods that POE expects an event loop to have.</p>
+<p class="Pp">A POE event loop is responsible for handling and dispatching
+    events. It is the heart of a POE-based application.</p>
+<p class="Pp">POE will look for a suitable event loop at startup time. If you
+    have installed a module that provides an event loop (e.g. <code class="Nm">POE::Loop::Poll</code>
+    or <code class="Nm">POE::Loop::Select</span>), POE will use it. Otherwise, it
+    will fall back to its default event loop.</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#GENERAL_NOTES">GENERAL NOTES</a></h1>
+<p class="Pp">POE's event loop is an abstract interface. Implementations of this
+    interface are expected to perform event loop operations such as running,
+    stopping, yielding, and pausing.</p>
+<p class="Pp">Event loop implementations should aim to be as efficient as
+    possible. POE relies heavily on the performance of its event loop.</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#PUBLIC_INTERFACE">PUBLIC INTERFACE</a></h1>
+<dl class="Bl-tag">
+<dt><a name="new"><code class="nf">new</code></a></dt>
+<dd></dd>
+<dt><a name="pause"><code class="nf">pause</code></a></dt>
+<dd></dd>
+<dt><a name="run"><code class="nf">run</code></a></dt>
+<dd></dd>
+<dt><a name="stop"><code class="nf">stop</code></a></dt>
+<dd></dd>
+<dt><a name="yield"><code class="nf">yield</code></a></dt>
+<dd></dd>
+</dl>
+<p class="Pp">This module does not expose a public interface beyond the standard
+    methods expected of an event loop. Please refer to the POE documentation for
+    details on these methods.</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#HOW_POE_FINDS_EVENT_LOOP_BRIDGES">HOW POE FINDS EVENT LOOP BRIDGES</a></h1>
+<p class="Pp">When POE starts, it consults the value of the
+    <code class="Fv">$POE::Loop::Default</code> variable. If this variable is set to
+    an event loop class name, POE will attempt to use that class.</p>
+<p class="Pp">If <code class="Fv">$POE::Loop::Default</code> is not set, POE will
+    search for installed event loop modules in a predefined order. The first one
+    found will be used.</p>
+<p class="Pp">The search order is as follows:</p>
+<ol class="Il-dash">
+<li><code class="Nm">POE::Loop::Poll</code></li>
+<li><code class="Nm">POE::Loop::Select</code></li>
+<li><code class="Nm">POE::Loop::Wheel</code> (if available)</li>
+</ol>
+<p class="Pp">If none of these are found, POE will use its built-in default
+    event loop.</p>
+<p class="Pp">You can explicitly specify an event loop class when starting POE:</p>
+<pre>
+    POE::Kernel-&gt;runall( Loop =&gt; 'My::Event::Loop' );
+</pre>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+<p class="Pp"><code class="Nm">POE</code>(3pm), <code class="Nm">POE::Kernel</code>(3pm).</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">None known.</p>
+</section>
+<section class="Sh">
+<h1><a class="permalink" href="#AUTHORS_&amp;amp;_LICENSING">AUTHORS &amp; LICENSING</a></h1>
+<p class="Pp">Please see POE for more information about authors, contributors,
+    and POE's licensing.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>Version:</dt>
+        <dd>1.370-2</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#GENERAL_NOTES">GENERAL NOTES</a></li>
+        
+            <li><a href="#PUBLIC_INTERFACE">PUBLIC INTERFACE</a></li>
+        
+            <li><a href="#HOW_POE_FINDS_EVENT_LOOP_BRIDGES">HOW POE FINDS EVENT LOOP BRIDGES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_LICENSING">AUTHORS &amp; LICENSING</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/POE::Loop.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/POE::Loop.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

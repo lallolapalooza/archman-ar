@@ -1,0 +1,664 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlperf.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+ قم بالاطلاع على التقرير الناتج عن الوحدة
+    <span class="Li">&quot;Benchmark&quot;</span>، لمعرفة النهج الأكثر فعالية.</p>
+<pre>$&gt; perl dereference
+Benchmark: timing 1000000 iterations of dereference, direct...
+dereference:  2 wallclock secs ( 1.59 usr +  0.00 sys =  1.59 CPU) @ 628930.82/s (n=1000000)
+    direct:  1 wallclock secs ( 1.20 usr +  0.00 sys =  1.20 CPU) @ 833333.33/s (n=1000000)</pre>
+<p class="Pp">الفرق واضح ويمكن رؤيته، ونهج إلغاء المرجع أبطأ. بينما تمكن من تنفيذ
+    متوسط 628,930 مرة في الثانية خلال اختبارنا، تمكن النهج المباشر من العمل
+    204,403 مرة إضافية، لسوء الحظ. لسوء الحظ، لأن هناك العديد من الأمثلة
+    على الأكواد المكتوبة باستخدام الوصول المباشر متعدد الطبقات للمتغيرات،
+    وهو عادة ما يكون مروعًا. ومع ذلك، فهو أسرع بشكل طفيف. يبقى السؤال ما إذا
+    كانت المكاسب الطفيفة تستحق بالفعل إجهاد العين، أو فقدان قابلية الصيانة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Search_and_replace_or_tr'><a class='permalink' href='#Search_and_replace_or_tr'>البحث والاستبدال أو tr</a></h2>
+<p class="Pp">إذا كان لدينا سلسلة نصية تحتاج إلى تعديل، فبينما سيكون التعبير
+    المنتظم (regex) دائمًا أكثر مرونة بكثير، فإن <span class="Li">&quot;tr&quot;</span>،
+    وهي أداة غالبًا ما تكون غير مستخدمة، لا تزال مفيدة. قد يكون أحد السيناريوهات
+    هو استبدال جميع حروف العلة بحرف آخر. قد يبدو حل التعبير المنتظم
+    هكذا:</p>
+<pre>$str =~ s/[aeiou]/x/g</pre>
+<p class="Pp">البديل <span class="Li">&quot;tr&quot;</span> قد يبدو
+    هكذا:</p>
+<pre>$str =~ tr/aeiou/xxxxx/</pre>
+<p class="Pp">يمكننا وضع ذلك في ملف اختبار يمكننا تشغيله للتحقق من النهج الأسرع،
+    باستخدام متغير <span class="Li">$STR</span> عام لتعيين قيمة لمتغير
+    <span class="Li">&quot;my $str&quot;</span> لتجنب محاولة Perl تحسين أي
+    من العمل من خلال ملاحظة أنه يتم تعيينه مرة واحدة فقط.</p>
+<p class="Pp"># regex-transliterate</p>
+<pre>#!/usr/bin/perl
+use v5.36;
+use Benchmark;
+my $STR = &quot;$$-this and that&quot;;
+timethese(1000000, {
+'sr'  =&gt; sub { my $str = $STR; $str =~ s/[aeiou]/x/g; return $str; },
+'tr'  =&gt; sub { my $str = $STR; $str =~ tr/aeiou/xxxxx/; return $str; },
+});</pre>
+<p class="Pp">تشغيل الكود يعطينا النتائج:</p>
+<pre>$&gt; perl regex-transliterate
+Benchmark: timing 1000000 iterations of sr, tr...
+        sr:  2 wallclock secs ( 1.19 usr +  0.00 sys =  1.19 CPU) @ 840336.13/s (n=1000000)
+        tr:  0 wallclock secs ( 0.49 usr +  0.00 sys =  0.49 CPU) @ 2040816.33/s (n=1000000)</pre>
+<p class="Pp">إصدار <span class="Li">&quot;tr&quot;</span> هو الفائز الواضح.
+    حل واحد مرن، والآخر سريع - وهو بحق اختيار المبرمج لمن يستخدمه.</p>
+<p class="Pp">تحقق من وثائق <span class="Li">&quot;Benchmark&quot;</span>
+    للمزيد من التقنيات المفيدة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PROFILING_TOOLS'><a class='permalink' href='#PROFILING_TOOLS'>أدوات التحليل</a></h1>
+<p class="Pp">قطعة كود أكبر قليلاً ستوفر شيئًا يمكن لأداة التحليل إنتاج إحصائيات
+    تقارير أكثر تفصيلاً بشأنه. يستخدم هذا المثال برنامج
+    <span class="Li">&quot;wordmatch&quot;</span> المبسط الذي يحلل ملف إدخال
+    معين وينتج تقريرًا قصيرًا عن المحتويات.</p>
+<p class="Pp"># wordmatch</p>
+<pre>#!/usr/bin/perl
+use v5.36;
+=head1 NAME
+filewords - word analysis of input file
+=head1 SYNOPSIS
+    filewords -f inputfilename [-d]
+=head1 DESCRIPTION
+This program parses the given filename, specified with C&lt;-f&gt;, and
+displays a simple analysis of the words found therein.  Use the C&lt;-d&gt;
+switch to enable debugging messages.
+=cut
+use FileHandle;
+use Getopt::Long;
+my $debug   =  0;
+my $file    = '';
+my $result = GetOptions (
+    'debug'         =&gt; \$debug,
+    'file=s'        =&gt; \$file,
+);
+die(&quot;invalid args&quot;) unless $result;
+unless ( -f $file ) {
+    die(&quot;Usage: $0 -f filename [-d]&quot;);
+}
+my $FH = FileHandle-&gt;new(&quot;&lt; $file&quot;)
+                              or die(&quot;unable to open file($file): $!&quot;);
+my $i_LINES = 0;
+my $i_WORDS = 0;
+my %count   = ();
+my @lines = &lt;$FH&gt;;
+foreach my $line ( @lines ) {
+    $i_LINES++;
+    $line =~ s/\n//;
+    my @words = split(/ +/, $line);
+    my $i_words = scalar(@words);
+    $i_WORDS = $i_WORDS + $i_words;
+    debug(&quot;line: $i_LINES supplying $i_words words: @words&quot;);
+    my $i_word = 0;
+    foreach my $word ( @words ) {
+        $i_word++;
+        $count{$i_LINES}{spec} += matches($i_word, $word,
+                                          '[^a-zA-Z0-9]');
+        $count{$i_LINES}{only} += matches($i_word, $word,
+                                          '^[^a-zA-Z0-9]+$');
+        $count{$i_LINES}{cons} += matches($i_word, $word,
+                                    '^[(?i:bcdfghjklmnpqrstvwxyz)]+$');
+        $count{$i_LINES}{vows} += matches($i_word, $word,
+                                          '^[(?i:aeiou)]+$');
+        $count{$i_LINES}{caps} += matches($i_word, $word,
+                                          '^[(A-Z)]+$');
+    }
+}
+print report( %count );
+sub matches {
+    my $i_wd  = shift;
+    my $word  = shift;
+    my $regex = shift;
+    my $has = 0;
+    if ( $word =~ /($regex)/ ) {
+        $has++ if $1;
+    }
+    debug( &quot;word: $i_wd &quot;
+          . ($has ? 'matches' : 'does not match')
+          . &quot; chars: /$regex/&quot;);
+    return $has;
+}
+sub report {
+    my %report = @_;
+    my %rep;
+    foreach my $line ( keys %report ) {
+        foreach my $key ( keys $report{$line}-&gt;%* ) {
+            $rep{$key} += $report{$line}{$key};
+        }
+    }
+    my $report = qq|
+$0 report for $file:
+lines in file: $i_LINES
+words in file: $i_WORDS
+words with special (non-word) characters: $i_spec
+words with only special (non-word) characters: $i_only
+words with only consonants: $i_cons
+words with only capital letters: $i_caps
+words with only vowels: $i_vows
+|;
+    return $report;
+}
+sub debug {
+    my $message = shift;
+    if ( $debug ) {
+        print STDERR &quot;DBG: $message\n&quot;;
+    }
+}
+exit 0;</pre>
+<section class="Ss">
+<h2 class="Ss" id='Devel::DProf'><a class='permalink' href='#Devel::DProf'>Devel::DProf</a></h2>
+<p class="Pp">هذه الوحدة العريقة كانت المعيار الفعلي لتحليل كود Perl لأكثر من
+    عقد من الزمان، ولكن تم استبدالها بعدد من الوحدات الأخرى التي أعادتنا إلى
+    القرن الحادي والعشرين. على الرغم من أنه يوصى بتقييم أداتك من بين عدة أدوات
+    مذكورة هنا ومن قائمة CPAN في أسفل هذه الوثيقة، (وحاليًا يبدو أن
+    Devel::NYTProf هي الأداة المفضلة - انظر أدناه)، سنلقي نظرة سريعة على
+    الناتج من Devel::DProf أولاً، لوضع خط أساس لأدوات تحليل Perl. قم بتشغيل
+    البرنامج أعلاه تحت سيطرة <span class="Li">&quot;Devel::DProf&quot;</span>
+    باستخدام الخيار <span class="Li">&quot;-d&quot;</span> على سطر الأوامر.</p>
+<pre>$&gt; perl -d:DProf wordmatch -f perl5db.pl
+&lt;...multiple lines snipped...&gt;
+wordmatch report for perl5db.pl:
+lines in file: 9428
+words in file: 50243
+words with special (non-word) characters: 20480
+words with only special (non-word) characters: 7790
+words with only consonants: 4801
+words with only capital letters: 1316
+words with only vowels: 1701</pre>
+<p class="Pp">تنتج <span class="Li">&quot;Devel::DProf&quot;</span> ملفًا
+    خاصًا، يسمى <i>tmon.out</i> افتراضيًا، ويتم قراءة هذا الملف بواسطة برنامج
+    <span class="Li">&quot;dprofpp&quot;</span>، والذي تم تثبيته بالفعل كجزء من
+    توزيع <span class="Li">&quot;Devel::DProf&quot;</span>. إذا قمت بتشغيل
+    <span class="Li">&quot;dprofpp&quot;</span> بدون خيارات، فسيقرأ ملف
+    <i>tmon.out</i> في الدليل الحالي وينتج تقرير إحصائيات قابل للقراءة
+    للبشر لتشغيل برنامجك. لاحظ أن هذا قد يستغرق بعض الوقت.</p>
+<pre>$&gt; dprofpp
+Total Elapsed Time = 2.951677 Seconds
+  User+System Time = 2.871677 Seconds
+Exclusive Times
+%Time ExclSec CumulS #Calls sec/call Csec/c  Name
+ 102.   2.945  3.003 251215   0.0000 0.0000  main::matches
+ 2.40   0.069  0.069 260643   0.0000 0.0000  main::debug
+ 1.74   0.050  0.050      1   0.0500 0.0500  main::report
+ 1.04   0.030  0.049      4   0.0075 0.0123  main::BEGIN
+ 0.35   0.010  0.010      3   0.0033 0.0033  Exporter::as_heavy
+ 0.35   0.010  0.010      7   0.0014 0.0014  IO::File::BEGIN
+ 0.00       - -0.000      1        -      -  Getopt::Long::FindOption
+ 0.00       - -0.000      1        -      -  Symbol::BEGIN
+ 0.00       - -0.000      1        -      -  Fcntl::BEGIN
+ 0.00       - -0.000      1        -      -  Fcntl::bootstrap
+ 0.00       - -0.000      1        -      -  warnings::BEGIN
+ 0.00       - -0.000      1        -      -  IO::bootstrap
+ 0.00       - -0.000      1        -      -  Getopt::Long::ConfigDefaults
+ 0.00       - -0.000      1        -      -  Getopt::Long::Configure
+ 0.00       - -0.000      1        -      -  Symbol::gensym</pre>
+<p class="Pp"><span class="Li">&quot;dprofpp&quot;</span> سينتج بعض التقارير
+    المفصلة جدًا حول نشاط برنامج
+    <span class="Li">&quot;wordmatch&quot;</span>. أوقات الساعة الحائطية، المستخدم،
+    والنظام، موجودة في أعلى التحليل، وبعد ذلك تأتي الأعمدة الرئيسية التي تحدد
+    التقرير. تحقق من وثائق
+    <span class="Li">&quot;dprofpp&quot;</span> لتفاصيل العديد من الخيارات التي
+    يدعمها.</p>
+<p class="Pp">انظر أيضًا <span class="Li">&quot;Apache::DProf&quot;</span>
+    الذي يربط <span class="Li">&quot;Devel::DProf&quot;</span> بـ
+    <span class="Li">&quot;mod_perl&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Devel::Profiler'><a class='permalink' href='#Devel::Profiler'>Devel::Profiler</a></h2>
+<p class="Pp">لنلق نظرة على نفس البرنامج باستخدام أداة تحليل مختلفة:
+    <span class="Li">&quot;Devel::Profiler&quot;</span>، وهو بديل مباشر
+    خاص بـ Perl لـ <span class="Li">&quot;Devel::DProf&quot;</span>. الاستخدام
+    مختلف قليلاً جدًا من حيث أنه بدلاً من استخدام العلامة الخاصة
+    <span class="Li">&quot;-d:&quot;</span>، تقوم بسحب
+    <span class="Li">&quot;Devel::Profiler&quot;</span> مباشرة كوحدة نمطية
+    باستخدام <span class="Li">&quot;-M&quot;</span>.</p>
+<pre>$&gt; perl -MDevel::Profiler wordmatch -f perl5db.pl
+&lt;...multiple lines snipped...&gt;
+wordmatch report for perl5db.pl:
+lines in file: 9428
+words in file: 50243
+words with special (non-word) characters: 20480
+words with only special (non-word) characters: 7790
+words with only consonants: 4801
+words with only capital letters: 1316
+words with only vowels: 1701</pre>
+<p class="Pp"><span class="Li">&quot;Devel::Profiler&quot;</span> ينشئ ملف
+    tmon.out متوافق مع برنامج
+    <span class="Li">&quot;dprofpp&quot;</span>، مما يوفر بناء برنامج قارئ
+    إحصائيات مخصص. لذلك، استخدام
+    <span class="Li">&quot;dprofpp&quot;</span> مطابق للمثال أعلاه.</p>
+<pre>$&gt; dprofpp
+Total Elapsed Time =   20.984 Seconds
+  User+System Time =   19.981 Seconds
+Exclusive Times
+%Time ExclSec CumulS #Calls sec/call Csec/c  Name
+ 49.0   9.792 14.509 251215   0.0000 0.0001  main::matches
+ 24.4   4.887  4.887 260643   0.0000 0.0000  main::debug
+ 0.25   0.049  0.049      1   0.0490 0.0490  main::report
+ 0.00   0.000  0.000      1   0.0000 0.0000  Getopt::Long::GetOptions
+ 0.00   0.000  0.000      2   0.0000 0.0000  Getopt::Long::ParseOptionSpec
+ 0.00   0.000  0.000      1   0.0000 0.0000  Getopt::Long::FindOption
+ 0.00   0.000  0.000      1   0.0000 0.0000  IO::File::new
+ 0.00   0.000  0.000      1   0.0000 0.0000  IO::Handle::new
+ 0.00   0.000  0.000      1   0.0000 0.0000  Symbol::gensym
+ 0.00   0.000  0.000      1   0.0000 0.0000  IO::File::open</pre>
+<p class="Pp">من المثير للاهتمام أننا نحصل على نتائج مختلفة قليلاً،</p>
+</section>
+</section>
+(+http://search.msn.com/msnbot.htm)&quot;
+livebot-207-46-98-57.search.live.com - - [08/Feb/2007:14:12:04 +0000] &quot;GET /html/oracle.html HTTP/1.0&quot; 404 214 &quot;-&quot; &quot;msnbot/1.0 (+http://search.msn.com/msnbot.htm)&quot;
+dslb-088-064-005-154.pools.arcor-ip.net - - [08/Feb/2007:14:12:15 +0000] &quot;GET / HTTP/1.1&quot; 200 3309 &quot;-&quot; &quot;www.clamav.net&quot;
+196.201.92.41 - - [08/Feb/2007:14:15:01 +0000] &quot;GET / HTTP/1.1&quot; 200 3309 &quot;-&quot; &quot;MOT-L7/08.B7.DCR MIB/2.2.1 Profile/MIDP-2.0 Configuration/CLDC-1.1&quot;</pre>
+<p class="Pp">المهمة المحددة هنا هي فرز 286,525 سطرًا من هذا الملف
+    حسب رمز الاستجابة، والاستعلام، والمتصفح، ورابط الإحالة، وأخيرًا التاريخ. قد يكون أحد الحلول هو استخدام الكود التالي، الذي يتكرر فوق الملفات
+    المعطاة في سطر الأوامر.</p>
+<p class="Pp"># sort-apache-log</p>
+<pre>#!/usr/bin/perl -n
+use v5.36;
+my @data;
+LINE:
+while ( &lt;&gt; ) {
+    my $line = $_;
+    if (
+        $line =~ m/^(
+            ([\w\.\-]+)             # client
+            \s*-\s*-\s*\[
+            ([^]]+)                 # date
+            \]\s*&quot;\w+\s*
+            (\S+)                   # query
+            [^&quot;]+&quot;\s*
+            (\d+)                   # status
+            \s+\S+\s+&quot;[^&quot;]*&quot;\s+&quot;
+            ([^&quot;]*)                 # browser
+            &quot;
+            .*
+        )$/x
+    ) {
+        my @chunks = split(/ +/, $line);
+        my $ip      = $1;
+        my $date    = $2;
+        my $query   = $3;
+        my $status  = $4;
+        my $browser = $5;
+        push(@data, [$ip, $date, $query, $status, $browser, $line]);
+    }
+}
+my @sorted = sort {
+    $a-&gt;[3] cmp $b-&gt;[3]
+            ||
+    $a-&gt;[2] cmp $b-&gt;[2]
+            ||
+    $a-&gt;[0] cmp $b-&gt;[0]
+            ||
+    $a-&gt;[1] cmp $b-&gt;[1]
+            ||
+    $a-&gt;[4] cmp $b-&gt;[4]
+} @data;
+foreach my $data ( @sorted ) {
+    print $data-&gt;[5];
+}
+exit 0;</pre>
+<p class="Pp">عند تشغيل هذا البرنامج، قم بإعادة توجيه
+    <span class="Li">&quot;STDOUT&quot;</span> حتى يكون من الممكن التحقق من صحة
+    الإخراج من الاختبارات التالية واستخدام أداة
+    <span class="Li">&quot;time&quot;</span> الخاصة بالنظام للتحقق من وقت التشغيل
+    الإجمالي.</p>
+<pre>$&gt; time ./sort-apache-log logfile &gt; out-sort
+real    0m17.371s
+user    0m15.757s
+sys     0m0.592s</pre>
+<p class="Pp">استغرق البرنامج أكثر من 17 ثانية بالتوقيت الفعلي للتشغيل. لاحظ
+    القيم المختلفة التي تخرجها <span class="Li">&quot;time&quot;</span> ، من
+    المهم دائمًا استخدام نفس القيمة، وعدم الخلط بين ما يعنيه كل منها.</p>
+<dl class="Bl-tag">
+  <dt id="Elapsed"><a class="permalink" href="#Elapsed">الوقت الفعلي المنقضي
+    Time</a></dt>
+  <dd>الوقت الإجمالي، أو وقت الساعة، بين وقت استدعاء
+      <span class="Li">&quot;time&quot;</span> ووقت انتهائه. يشمل الوقت المنقضي
+      أوقات المستخدم والنظام، والوقت المستغرق في انتظار المستخدمين والعمليات
+      الأخرى على النظام. حتمًا، هذا هو الأكثر تقريبًا للقياسات المعطاة.</dd>
+  <dt id="User"><a class="permalink" href="#User">وقت وحدة المعالجة المركزية للمستخدم
+    CPU Time</a></dt>
+  <dd>وقت المستخدم هو مقدار الوقت الذي استغرقه كامل العملية نيابة عن
+      المستخدم على هذا النظام لتنفيذ هذا البرنامج.</dd>
+  <dt id="System"><a class="permalink" href="#System">وقت وحدة المعالجة المركزية للنظام
+    CPU Time</a></dt>
+  <dd>وقت النظام هو مقدار الوقت الذي استغرقه النواة نفسها في تنفيذ
+      الروتينات، أو استدعاءات النظام، نيابة عن مستخدم هذه العملية.</dd>
+</dl>
+<p class="Pp">تشغيل نفس العملية كـ <span class="Li">&quot;تحويل شفارتز
+    Schwarzian Transform&quot;</span> من الممكن القضاء على مصفوفات الإدخال والإخراج
+    لتخزين جميع البيانات، والعمل على الإدخال مباشرة عند وصوله أيضًا. خلاف ذلك،
+    يبدو الكود مشابهًا إلى حد ما:</p>
+<p class="Pp"># sort-apache-log-schwarzian</p>
+<pre>#!/usr/bin/perl -n
+use v5.36;
+print
+    map $_-&gt;[0] =&gt;
+    sort {
+        $a-&gt;[4] cmp $b-&gt;[4]
+                ||
+        $a-&gt;[3] cmp $b-&gt;[3]
+                ||
+        $a-&gt;[1] cmp $b-&gt;[1]
+                ||
+        $a-&gt;[2] cmp $b-&gt;[2]
+                ||
+        $a-&gt;[5] cmp $b-&gt;[5]
+    }
+    map  [ $_, m/^(
+        ([\w\.\-]+)             # client
+        \s*-\s*-\s*\[
+        ([^]]+)                 # date
+        \]\s*&quot;\w+\s*
+        (\S+)                   # query
+        [^&quot;]+&quot;\s*
+        (\d+)                   # status
+        \s+\S+\s+&quot;[^&quot;]*&quot;\s+&quot;
+        ([^&quot;]*)                 # browser
+        &quot;
+        .*
+    )$/xo ]
+    =&gt; &lt;&gt;;
+exit 0;</pre>
+<p class="Pp">قم بتشغيل الكود الجديد على نفس ملف السجل، كما هو موضح أعلاه،
+    للتحقق من الوقت الجديد.</p>
+<pre>$&gt; time ./sort-apache-log-schwarzian logfile &gt; out-schwarz
+real    0m9.664s
+user    0m8.873s
+sys     0m0.704s</pre>
+<p class="Pp">تم خفض الوقت إلى النصف، وهو تحسن كبير في السرعة بأي معيار.
+    بالطبع، من المهم التحقق من اتساق الإخراج مع تشغيل البرنامج الأول، وهذا هو
+    المكان الذي تأتي فيه أداة <span class="Li">&quot;cksum&quot;</span> الخاصة
+    بنظام Unix.</p>
+<pre>$&gt; cksum out-sort out-schwarz
+3044173777 52029194 out-sort
+3044173777 52029194 out-schwarz</pre>
+<p class="Pp">بالمناسبة. احذر أيضًا من ضغط المديرين الذين يرونك تسرع برنامجًا
+    بنسبة 50٪ من وقت التشغيل مرة واحدة، فقط لتلقي طلب بعد شهر لتكرار ذلك
+    (قصة حقيقية) - سيكون عليك فقط الإشارة إلى أنك مجرد إنسان، حتى لو كنت
+    مبرمج Perl، وسترى ما يمكنك فعله...</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LOGGING'><a class='permalink' href='#LOGGING'>التسجيل</a></h1>
+<p class="Pp">جزء أساسي من أي عملية تطوير جيدة هو معالجة الأخطاء المناسبة مع
+    رسائل إعلامية مناسبة، ومع ذلك هناك مدرسة فكرية تقترح أن ملفات السجل يجب أن
+    تكون <i>ثرثارة</i>، كما لو أن سلسلة الإخراج غير المنقطعة تضمن بقاء
+    البرنامج. إذا كانت السرعة قضية بأي شكل من الأشكال، فهذا النهج خاطئ.</p>
+<p class="Pp">المشهد الشائع هو كود يبدو شيئًا كهذا:</p>
+<pre>logger-&gt;debug( &quot;A logging message via process-id: $$ INC: &quot;
+                                                      . Dumper(\%INC) )</pre>
+<p class="Pp">المشكلة هي أن هذا الكود سيتم تحليله وتنفيذه دائمًا، حتى عندما
+    يكون مستوى التصحيح المحدد في ملف إعدادات التسجيل صفرًا. بمجرد دخول
+    التابع الفرعي <b>debug()</b> ، وتأكيد أن المتغير الداخلي
+    <span class="Li">$debug</span> يساوي صفرًا، على سبيل المثال، سيتم تجاهل
+    الرسالة التي تم إرسالها وسيستمر البرنامج. في المثال المعطى، سيتم بالفعل
+    إلقاء تجزئة
+    <span class="Li">&quot;\%INC&quot;</span>، وسيتم بناء سلسلة الرسالة، وكل هذا
+    العمل يمكن تجاوزه بواسطة متغير تصحيح على مستوى العبارة، مثل هذا:</p>
+<pre>logger-&gt;debug( &quot;A logging message via process-id: $$ INC: &quot;
+                                           . Dumper(\%INC) ) if $DEBUG;</pre>
+<p class="Pp">يمكن إظهار هذا التأثير عن طريق إعداد برنامج نصي اختباري بكلتا
+    الصيغتين، بما في ذلك تابع فرعي <span class="Li">debug()</span> لمحاكاة
+    وظائف <span class="Li">logger()</span> النموذجية.</p>
+<p class="Pp"># ifdebug</p>
+<pre>#!/usr/bin/perl
+use v5.36;
+use Benchmark;
+use Data::Dumper;
+my $DEBUG = 0;
+sub debug {
+    my $msg = shift;
+    if ( $DEBUG ) {
+        print &quot;DEBUG: $msg\n&quot;;
+    }
+};
+timethese(100000, {
+        'debug'       =&gt; sub {
+            debug( &quot;A $0 logging message via process-id: $$&quot; . Dumper(\%INC) )
+        },
+        'ifdebug'  =&gt; sub {
+            debug( &quot;A $0 logging message via process-id: $$&quot; . Dumper(\%INC) ) if $DEBUG
+        },
+});</pre>
+<p class="Pp">دعنا نرى ما الذي تفعله <span class="Li">&quot;Benchmark&quot;</span>
+    بهذا:</p>
+<pre>$&gt; perl ifdebug
+Benchmark: timing 100000 iterations of constant, sub...
+   ifdebug:  0 wallclock secs ( 0.01 usr +  0.00 sys =  0.01 CPU) @ 10000000.00/s (n=100000)
+            (warning: too few iterations for a reliable count)
+     debug: 14 wallclock secs (13.18 usr +  0.04 sys = 13.22 CPU) @ 7564.30/s (n=100000)</pre>
+<p class="Pp">في حالة واحدة، الكود، الذي يفعل بالضبط نفس الشيء فيما يتعلق بإخراج
+    أي معلومات تصحيح، أي لا شيء، يستغرق 14 ثانية، وفي الحالة الأخرى، الكود
+    يستغرق جزء من مائة من الثانية. يبدو الأمر حاسمًا. استخدم متغير
+    <span class="Li">$DEBUG</span> قبل استدعاء التابع الفرعي، بدلاً من الاعتماد
+    على الوظائف الذكية بداخله.</p>
+<section class="Ss">
+<h2 class="Ss" id='Logging_if_DEBUG_(constant)'><a class='permalink' href='#Logging_if_DEBUG_(constant)'>التسجيل إذا كان DEBUG (ثابت)</a></h2>
+<p class="Pp">من الممكن أخذ الفكرة السابقة إلى أبعد قليلاً، باستخدام ثابت
+    <span class="Li">&quot;DEBUG&quot;</span> وقت الترجمة.</p>
+<p class="Pp"># ifdebug-constant</p>
+<pre>#!/usr/bin/perl
+use v5.36;
+use Benchmark;
+use Data::Dumper;
+use constant
+    DEBUG =&gt; 0
+;
+sub debug {
+    if ( DEBUG ) {
+        my $msg = shift;
+        print &quot;DEBUG: $msg\n&quot;;
+    }
+};
+timethese(100000, {
+        'debug'       =&gt; sub {
+            debug( &quot;A $0 logging message via process-id: $$&quot; . Dumper(\%INC) )
+        },
+        'constant'  =&gt; sub {
+            debug( &quot;A $0 logging message via process-id: $$&quot; . Dumper(\%INC) ) if DEBUG
+        },
+});</pre>
+<p class="Pp">تشغيل هذا البرنامج ينتج الإخراج التالي:</p>
+<pre>$&gt; perl ifdebug-constant
+Benchmark: timing 100000 iterations of constant, sub...
+  constant:  0 wallclock secs (-0.00 usr +  0.00 sys = -0.00 CPU) @ -7205759403792793600000.00/s (n=100000)
+            (warning: too few iterations for a reliable count)
+       sub: 14 wallclock secs (13.09 usr +  0.00 sys = 13.09 CPU) @ 7639.42/s (n=100000)</pre>
+<p class="Pp">الثابت <span class="Li">&quot;DEBUG&quot;</span> يتفوق على متغير
+    <span class="Li">$debug</span> ، حيث يسجل بوقت سالب صفر ثانية، ويولد رسالة
+    &quot;تحذير: عدد تكرارات قليل جدًا لعدد موثوق&quot; كدفعة إضافية. لرؤية ما
+    يحدث حقًا، ولماذا كان لدينا عدد قليل جدًا من التكرارات عندما اعتقدنا أننا
+    طلبنا 100000، يمكننا استخدام <span class="Li">&quot;B::Deparse&quot;</span>
+    المفيد جدًا لفحص الكود الجديد:</p>
+<pre>$&gt; perl -MO=Deparse ifdebug-constant
+use Benchmark;
+use Data::Dumper;
+use constant ('DEBUG', 0);
+sub debug {
+    use warnings;
+    use strict 'refs';
+    0;
+}
+use warnings;
+use strict 'refs';
+timethese(100000, {'sub', sub {
+    debug &quot;A $0 logging message via process-id: $$&quot; . Dumper(\%INC);
+}
+, 'constant', sub {
+    0;
+}
+});
+ifdebug-constant syntax OK</pre>
+<p class="Pp">يوضح الإخراج أن التابع الفرعي <b>constant()</b> الذي نختبره يتم
+    استبداله بقيمة الثابت
+    <span class="Li">&quot;DEBUG&quot;</span>: صفر. تم تحسين سطر الاختبار بالكامل،
+    ولا يمكنك الحصول على أكثر كفاءة من ذلك.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='POSTSCRIPT'><a class='permalink' href='#POSTSCRIPT'>ملاحظة ختامية</a></h1>
+<p class="Pp">قدمت هذه الوثيقة عدة طرق لتحديد النقاط الساخنة، والتحقق مما إذا
+    كانت أي تعديلات قد حسنت وقت تشغيل الكود.</p>
+<p class="Pp">كفكرة أخيرة، تذكر أنه ليس من الممكن (في وقت كتابة هذا التقرير)
+    إنتاج برنامج مفيد يعمل في وقت صفر أو سالب وهذا المبدأ الأساسي يمكن كتابته
+    كالتالي: <i>البرامج المفيدة بطيئة</i> بحكم تعريفها. من الممكن بالطبع كتابة
+    برنامج فوري تقريبًا، ولكنه لن يفعل الكثير، إليك برنامج فعال للغاية:</p>
+<pre>$&gt; perl -e 0</pre>
+<p class="Pp">تحسين ذلك أي زيادة هو مهمة لـ
+    <span class="Li"p5p".</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضاً</a></h1>
+<p class="Pp">يمكن العثور على قراءات إضافية باستخدام الوحدات والروابط أدناه.</p>
+<section class="Ss">
+<h2 class="Ss" id='PERLDOCS'><a class='permalink' href='#PERLDOCS'>وثائق بيرل</a></h2>
+<p class="Pp">على سبيل المثال: <span class="Li">"perldoc -f sort"</span>.</p>
+<p class="Pp">perlfaq4.</p>
+<p class="Pp">perlfork، perlfunc، perlretut، perlthrtut.</p>
+<p class="Pp">threads.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='MAN_PAGES'><a class='permalink' href='#MAN_PAGES'>صفحات الدليل</a></h2>
+<p class="Pp"><span class="Li">"time"</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='MODULES'><a class='permalink' href='#MODULES'>الوحدات</a></h2>
+<p class="Pp">من المستحيل عرض كل التعليمات البرمجية المتعلقة بالأداء لـ Perl بشكل فردي هنا، بالطبع، ولكن هذه قائمة قصيرة بالوحدات من CPAN التي تستحق مزيدًا من الاهتمام.</p>
+<pre>Apache::DProf
+Apache::SmallProf
+Benchmark
+DBIx::Profile
+Devel::AutoProfiler
+Devel::DProf
+Devel::DProfLB
+Devel::FastProf
+Devel::GraphVizProf
+Devel::NYTProf
+Devel::NYTProf::Apache
+Devel::Profiler
+Devel::Profile
+Devel::Profit
+Devel::SmallProf
+Devel::WxProf
+POE::Devel::Profiler
+Sort::Key
+Sort::Maker</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='URLS'><a class='permalink' href='#URLS'>روابط</a></h2>
+<p class="Pp">مواد مرجعية مفيدة جداً على الإنترنت:</p>
+<pre>https://web.archive.org/web/20120515021937/http://www.ccl4.org/~nick/P/Fast_Enough/
+https://web.archive.org/web/20050706081718/http://www-106.ibm.com/developerworks/library/l-optperl.html
+https://perlbuzz.com/2007/11/14/bind_output_variables_in_dbi_for_speed_and_safety/
+http://en.wikipedia.org/wiki/Performance_analysis
+http://apache.perl.org/docs/1.0/guide/performance.html
+http://perlgolf.sourceforge.net/
+http://www.sysarch.com/Perl/sort_paper.html</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Richard Foley &lt;richard.foley@rfi.net&gt; Copyright (c) 2008</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#OVERVIEW">نظرة عامة</a></li>
+        
+            <li><a href="#GENERAL_GUIDELINES">إرشادات عامة</a></li>
+        
+            <li><a href="#BENCHMARKS">المقارنات المعيارية</a></li>
+        
+            <li><a href="#PROFILING_TOOLS">أدوات التوصيف</a></li>
+        
+            <li><a href="#SORTING">الفرز</a></li>
+        
+            <li><a href="#LOGGING">التسجيل</a></li>
+        
+            <li><a href="#POSTSCRIPT">ملاحظات لاحقة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perlperf.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlperf.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

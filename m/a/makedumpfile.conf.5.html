@@ -1,0 +1,213 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">makedumpfile.conf(5)</h1>
+<link rel="stylesheet" href="basic.css">
+<div class="manual-content">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Nm">makedumpfile.conf - Configuration file for makedumpfile(8)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">The makedumpfile.conf file is used to specify the filtering rules
+    for the crash dump. Each rule is used to identify and filter specific fields
+    from the kernel memory during the dump generation process. This can be used
+    to reduce the size of the dump file or to exclude sensitive information.</p>
+<p class="Pp">The file consists of filter commands, which are processed in the
+    order they appear. The available filter commands are:</p>
+<p class="Pp"><b>Memory access commands</b></p>
+<dl class="Bl-tag">
+<dt>&lt;<i>id</i>&gt;</dt>
+<dd>اسم عشوائي يستخدم للإشارة مؤقتًا إلى عناصر القائمة. يُطلق عليه أيضًا متغير التكرار.</dd>
+<dt>&lt;<i>ArrayVar</i>&gt;</dt>
+<dd>تعبير بسيط في شكل &lt;<i>Symbol</i>&gt;[.<i>member</i>[...]] ينتج عنه متغير مصفوفة.</dd>
+<dt>&lt;<i>StructVar</i>&gt;</dt>
+<dd>تعبير بسيط في شكل &lt;<i>Symbol</i>&gt;[.<i>member</i>[...]] ينتج عنه متغير يشير إلى بنية.</dd>
+<dt>&lt;<i>NextMember</i>&gt;</dt>
+<dd>عضو داخل &lt;<i>StructVar</i>&gt; يشير إلى كائن من نفس نوع &lt;<i>StructVar</i>&gt;.</dd>
+<dt>&lt;<i>ListHeadVar</i>&gt;</dt>
+<dd>تعبير بسيط في شكل &lt;<i>Symbol</i>&gt;[.<i>member</i>[...]] ينتج عنه متغير من نوع struct list_head.</dd>
+<dt>&lt;<i>StructName</i>&gt;</dt>
+<dd>اسم نوع البنية التي يمكن اجتيازها باستخدام متغير HEAD &lt;<i>ListHeadVar</i>&gt; ويحتوي على عضو يسمى &lt;<i>ListHeadMember</i>&gt;.</dd>
+<dt>&lt;<i>ListHeadMember</i>&gt;</dt>
+<dd>اسم عضو في &lt;<i>StructName</i>&gt;، من نوع struct list_head.</dd>
+<dt>&lt;<i>MemberExpression</i>&gt;</dt>
+<dd>تعبير بسيط في شكل [.<i>member</i>[...]] لتحديد عضو أو مكون لعنصر في &lt;<i>ArrayVar</i>&gt; أو &lt;<i>StructVar</i>&gt; أو &lt;<i>StructName</i>&gt;.</dd>
+<dt>&lt;<i>SizeExpression</i>&gt;</dt>
+<dd>قيمة الحجم في شكل &lt;<i>SizeValue</i>&gt;، &lt;<i>id</i>&gt;[.<i>MemberExpression</i>] أو &lt;<i>Symbol</i>&gt;[.<i>member</i>[...]].</dd>
+</dl>
+<p class="Pp">يسمح بناء حلقة <b>for</b> بالتكرار على قائمة العناصر في مصفوفة أو قوائم مرتبطة. يتم تعيين كل عنصر في القائمة لمتغير التكرار &lt;<i>id</i>&gt;. يتم تحديد نوع متغير التكرار بواسطة نوع عناصر القائمة. يُطلق على الإدخال المحدد بعد الطرف '<b>in</b>' إدخال LIST. يمكن أن يكون إدخال LIST متغير مصفوفة، متغير/مؤشر بنية، أو متغير من نوع struct list_head. سيتم تنفيذ مجموعة أوامر <b>erase</b> المحددة بين <b>for</b> و <b>endfor</b> لكل عنصر في إدخال LIST.</p>
+<p class="Pp">إذا كان إدخال LIST المحدد هو متغير مصفوفة، فسيتم تنفيذ الحلقة لكل عنصر مصفوفة. سيتم تحديد حجم المصفوفة باستخدام معلومات dwarf.</p>
+<p class="Pp">إذا كان إدخال LIST المحدد هو متغير/مؤشر بنية، فيجب تحديد عضو اجتياز (&lt;<i>NextMember</i>&gt;) باستخدام الطرف '<b>via</b>'. ستستمر حلقة <b>for</b> حتى تكون قيمة عضو الاجتياز NULL أو تتطابق مع عنوان العقدة الأولى &lt;<i>StructVar</i>&gt; إذا كانت قائمة مرتبطة دائرية.</p>
+<p class="Pp">إذا تم تحديد إدخال LIST باستخدام متغير من نوع struct list_head، فيجب استخدام الطرف <b>within</b> لتحديد اسم البنية &lt;<i>StructName</i>&gt; التي تحيط به مع عضو نوع struct list_head بعد '<b>:</b>' وهو جزء من القائمة المرتبطة. في عبارة erase، يمثل &lt;<i>id</i>&gt; البنية التي تحتوي على list_head (ELEMENT_OF).</p>
+<p class="Pp">يوضح المثال أدناه كيفية استخدام بناء الحلقة لاجتياز المصفوفة، والقائمة المرتبطة عبر العضو التالي، و list_head.</p>
+<p class="Pp"><b>مثال:</b></p>
+<p class="Pp">بافتراض أن المقطع التالي من الكود هو من الوحدة النمطية 'mymodule':</p>
+<p class="Pp">struct s1 {
+  <br/>
+  	struct *next;
+  <br/>
+  	struct list_head list;
+  <br/>
+  	char private[100];
+  <br/>
+  	void *key;
+  <br/>
+  	long key_size;
+  <br/>
+  };</p>
+<p class="Pp">/* Global symbols */
+  <br/>
+  struct s1 mystruct1;
+  <br/>
+  static LIST_HEAD(s1_list_head);
+  <br/>
+  struct s1 myarray[100];</p>
+<p class="Pp">void foo()
+  <br/>
+  {
+  <br/>
+  	struct s1 *s1_ptr;
+  <br/>
+  	...
+  <br/>
+  	...
+  <br/>
+  	s1_ptr = malloc(...);
+  <br/>
+  	...
+  <br/>
+  	...
+  <br/>
+  	list_add(&amp;s1_ptr-&gt;list, &amp;s1_list_head);
+  <br/>
+  	...
+  <br/>
+  }</p>
+<p class="Pp"><b>makedumpfile.conf:</b>
+  <br/>
+  [mymodule]
+  <br/>
+  # erase private fields from list starting with mystruct1 connected via
+  <br/>
+  # 'next' member:
+  <br/>
+  for mys1 in mystruct1 via next
+  <br/>
+  	erase mys1.private
+  <br/>
+  	erase mys1.key size mys1.key_size
+  <br/>
+  endfor</p>
+<p class="Pp"># erase private fields from list starting with list_head variable
+  <br/>
+  # s1_list_head.
+  <br/>
+  for mys1 in s1_list_head.next within s1:list
+  <br/>
+  	erase mys1.private
+  <br/>
+  	erase mys1.key size mys1.key_size
+  <br/>
+  endfor</p>
+<p class="Pp"># erase private fields from all elements of the array myarray:
+  <br/>
+  for mys1 in myarray
+  <br/>
+  	erase mys1.private
+  <br/>
+  	erase mys1.key size mys1.key_size
+  <br/>
+  endfor
+  <br/>
+  <b>EOF</b></p>
+<p class="Pp">في المثال أعلاه، يجتاز بناء <b>for</b> الأول القائمة المرتبطة من خلال متغير بنية محدد <b>mystruct1</b> من نوع <b>struct s1</b>. يمكن اجتياز القائمة المرتبطة باستخدام العضو '<b>next</b>' من <b>mystruct1</b>. لذلك تم استخدام طرف <b>via</b> لتحديد اسم عضو الاجتياز '<b>next</b>'.</p>
+<p class="Pp">يجتاز بناء <b>for</b> الثاني القائمة المرتبطة من خلال متغير struct list_head محدد <b>s1_list_head.next</b>. الرمز العام <b>s1_list_head</b> هو عنوان بداية القائمة المرتبطة وعضوه <b>next</b> يشير إلى عنوان العضو من نوع struct list_head '<b>list</b>' من <b>struct s1</b>. لذلك يتم استخدام طرف <b>within</b> لتحديد اسم البنية '<b>s1</b>' التي يمكن اجتيازها باستخدام متغير <b>s1_list_head.next</b> مع اسم عضو نوع struct list_head '<b>list</b>' الذي هو جزء من القائمة المرتبطة التي تبدأ من الرمز العام <b>s1_list_head</b>.</p>
+<p class="Pp">يجتاز بناء <b>for</b> الثالث عناصر المصفوفة المحددة من خلال متغير مصفوفة <b>myarray</b>.
+  <br/>
+</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILE_FORMAT'><a class='permalink' href='#FILE_FORMAT'>FILE FORMAT</a></h1>
+<p class="Pp">The configuration file consists of a sequence of filter commands.
+    Each command is on a single line and can be followed by comments starting with
+    '#'. Blank lines are ignored.</p>
+<p class="Pp">The filter commands can be grouped under module names. When makedumpfile
+    is invoked with a module name, only the rules specified under that module name
+    are applied.</p>
+<p class="Pp"><b>General syntax:</b></p>
+<p class="Pp"><b>[</b><i>module_name</i><b>]</b>
+  <br/>
+  *<b>for</b> <i>id</i> <b>in</b> <i>LIST_ENTRY</i> [<b>via</b> <i>NextMember</i>] [<b>within</b> <i>StructName</i><b>:</b><i>ListHeadMember</i>]
+  <br/>
+  	*<i>filter_command1</i>
+  <br/>
+  	*<i>filter_command2</i>
+  <br/>
+  	...
+  <br/>
+  *<b>endfor</b></p>
+<p class="Pp"><b>module_name</b>: Optional name of the kernel module. If specified,
+    the enclosed filter commands are only applied when processing the specified
+    module.</p>
+<p class="Pp"><b>for</b>: Keyword to start a loop.</p>
+<p class="Pp"><i>id</i>: Iteration variable name. Each element in the LIST_ENTRY
+    will be assigned to this variable during iteration.</p>
+<p class="Pp"><b>in</b>: Keyword to specify the list or array to iterate on.</p>
+<p class="Pp"><i>LIST_ENTRY</i>: Can be an array variable, a structure variable/pointer,
+    or a struct list_head type variable.</p>
+<p class="Pp"><b>via</b>: Optional keyword used when iterating over a linked list
+    represented by a structure variable/pointer. It specifies the member name
+    (&lt;<i>NextMember</i>&gt;) used to traverse the list.</p>
+<p class="Pp"><b>within</b>: Optional keyword used when iterating over a linked
+    list represented by a struct list_head type variable. It specifies the name
+    of the structure (&lt;<i>StructName</i>&gt;) containing the list_head and the
+    name of the list_head member (&lt;<i>ListHeadMember</i>&gt;).</p>
+<p class="Pp"><b>endfor</b>: Keyword to end the loop.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILTER_COMMANDS'><a class='permalink' href='#FILTER_COMMANDS'>FILTER COMMANDS</a></h1>
+<p class="Pp">The following commands can be used within a <b>for</b> loop to
+    filter memory regions:</p>
+<dl class="Bl-tag">
+<dt><b>erase</b> <i>MemberExpression</i></dt>
+<dd>Erase the specified member of the current element. The size of the member
+        is determined automatically.</dd>
+<dt><b>erase</b> <i>MemberExpression</i> <b>size</b> <i>SizeExpression</i></dt>
+<dd>Erase the specified member with the given size. This is useful when the
+        member's size cannot be determined automatically or when you want to
+        erase a portion of the member.</dd>
+<dt><b>fill</b> <i>MemberExpression</i> <b>with</b> <i>Value</i></dt>
+<dd>Fill the specified member with the given value. The value can be a hexadecimal
+        number (e.g., 0x00).</dd>
+<dt><b>fill</b> <i>MemberExpression</i> <b>size</b> <i>SizeExpression</i> <b>with</b> <i>Value</i></dt>
+<dd>Fill the specified member with the given size and value.</dd>
+</dl>
+<p class="Pp"><b>Special Symbols:</b></p>
+<dl class="Bl-tag">
+<dt><b>ELEMENT_OF</b></dt>
+<dd>Represents the current element being processed in the loop. Used in conjunction
+        with the <b>within</b> keyword to specify the structure containing the
+        list head.</dd>
+</dl>
+<p class="Pp"><b>Example:</b></p>
+<p class="Pp">The following example erases the 'private' field and a portion
+    of the 'key' field from each element of the 'myarray' array:</p>
+<p class="Pp"><b>for</b> mys1 <b>in</b> myarray
+  <br/>
+  	<b>erase</b> mys1.private
+  <br/>
+  	<b>erase</b> mys1.key <b>size</b> mys1.key_size
+  <br/>
+  <b>endfor</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp">makedumpfile(8)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">30 Oct 2025</td>
+    <td class="foot-os">makedumpfile v1.7.8</td>
+  </tr>
+</table>

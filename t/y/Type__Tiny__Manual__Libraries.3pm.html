@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <title>Type::Tiny::Manual::Libraries(3pm)</title>
+        <link rel="stylesheet" href="/css/style.css" type="text/css" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Type::Tiny manual page" />
+        <link rel="alternate" type="application/rss+xml" title="Arch Linux Packages" href="https://www.archlinux.org/feeds/packages/" />
+        <link rel="alternate" type="application/rss+xml" title="Arch Linux News" href="https://www.archlinux.org/feeds/news/" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Type__Tiny__Manual__Libraries(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-type-tiny/">perl-type-tiny</a></p>
+<p class="lic">التراخيص: PerlArtistic, GPL</p>
+
+        
+        <main>
+            
+            <article>
+                <div class="manual-page">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">Type::Tiny::Manual::Libraries - A guide to creating and using type
+    libraries.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MANUAL'><a class='permalink' href='#MANUAL'>MANUAL</a></h1>
+<p class="Pp">This manual page covers a few more advanced topics regarding type
+    libraries.</p>
+<section class="Ss">
+<h2 class="Ss" id='Parameterizable_Subroutines'><a class='permalink' href='#Parameterizable_Subroutines'>Parameterizable   Subroutines</a></h2>
+<p class="Pp">By default, when you define a subroutine constraint, you just get
+    a coderef back:</p>
+<pre>my $subref_type = Type::Tiny-&gt;new(
+  name       =&gt; 'SubRef',
+  parent     =&gt; Item,
+  constraint =&gt; 'subref',
+);</pre>
+<p class="Pp">This works fine. But if you try to create a type that's like
+    <span class="Li">SubRef[Integer]</span>, it won't work. To make your type
+    constraint parameterisable, you need to use
+    <span class="Li">constraint_generator</span>.</p>
+<pre>my $subref_type = Type::Tiny-&gt;new(
+  name       =&gt; 'SubRef',
+  parent     =&gt; Item,
+  constraint =&gt; 'subref',
+  constraint_generator =&gt; sub {
+    my $arg = shift;
+    # assert_valid_type_constraint $arg; # You can also pass in
+                                       # other type constraints here.
+    return sub {
+      my $value = shift;
+      return subref($value) and ($arg ? $arg-&gt;check($value) : 1);
+    };
+  },
+);</pre>
+<p class="Pp">The <span class="Li">constraint_generator</span> coderef is passed
+    the parameters from the square brackets, in a list. The generated coderef
+    is passed the value to check.</p>
+<p class="Pp">You can also provide an <span class="Li">inline_generator</span>
+    too. This should behave exactly like the main
+    <span class="Li">constraint_generator</span>, except that it returns a
+    list of strings to be joined together with &amp;&amp;.</p>
+<pre>my $subref_type = Type::Tiny-&gt;new(
+  name       =&gt; 'SubRef',
+  parent     =&gt; Item,
+  constraint =&gt; 'subref',
+  constraint_generator =&gt; sub {
+    my $arg = shift;
+    return sub {
+      my $value = shift;
+      return subref($value) and ($arg ? $arg-&gt;check($value) : 1);
+    };
+  },
+  inline_generator =&gt; sub {
+    my $arg = shift;
+    my $varnum = $_[0]; # e.g. $_[0] is '$ARG', $_[1] is '$ARG' for a SubRef[Int]
+    my $varname = $_[1]; # e.g. $arg might be represented as Types::Standard::Int
+                         # or 'int'
+
+    return (
+      'subref('.$varname.')',
+      ($arg ? $arg-&gt;inline_check($varname) : ())
+    );
+  },
+);</pre>
+<p class="Pp">The first element of the list returned by
+    <span class="Li">inline_generator</span> is special. If it's undef, the
+    parent type's inlined string is used instead.</p>
+<p class="Pp">A reasonable default <span class="Li">inline_generator</span>
+    is often hard to write. You might consider using a coderef for the
+    <span class="Li">constraint</span>, and just letting the default inlining
+    take over. Or, if your constraint is simple, you might consider writing
+    a specific <span class="Li">inline_generator</span>.</p>
+<p class="Pp">For example, if you have a type for positive integers:</p>
+<pre>my $positive_int_type = Type::Tiny-&gt;new(
+  name       =&gt; 'PositiveInt',
+  parent     =&gt; Types::Standard::Int,
+  constraint =&gt; sub { $_ &gt; 0 },
+);</pre>
+<p class="Pp">The default inlining for this is:</p>
+<pre>defined($_) and int($_) and $_ &gt; 0</pre>
+<p class="Pp">Which is okay. But it could be simplified to:</p>
+<pre>int($_) and $_ &gt; 0</pre>
+<p class="Pp">To achieve this, you can provide an <span class="Li">inline_generator</span>:</p>
+<pre>my $positive_int_type = Type::Tiny-&gt;new(
+  name       =&gt; 'PositiveInt',
+  parent     =&gt; Types::Standard::Int,
+  constraint =&gt; sub { $_ &gt; 0 },
+  inlined    =&gt; sub {
+    my $varname = pop;
+    return &quot;$varname &gt; 0&quot;;
+  },
+);</pre>
+<p class="Pp">This uses the simplified check. Note that the inline coderef may
+    receive arguments - these are typically variable names.</p>
+<p class="Pp">However, a more common approach is to let Type::Tiny generate the
+    code for you, and only override it if you have a good reason to.</p>
+<p class="Pp">A common pattern is to have a parent type and then use
+    <span class="Li">inline_generator</span> on the child type to provide a more
+    specific string. For example:</p>
+<pre>my $int_type = Types::Standard::Int;
+my $positive_int_type = Type::Tiny-&gt;new(
+  name       =&gt; 'PositiveInt',
+  parent     =&gt; $int_type,
+  constraint =&gt; sub { $_ &gt; 0 },
+  inlined    =&gt; sub {
+    my $varname = pop;
+    # The parent type's inlined string is represented by the first element
+    # in the returned list. If it's undef, Type::Tiny will use the parent's
+    # inlined string.
+    return (undef, &quot;$varname &gt; 0&quot;);
+  },
+);</pre>
+<p class="Pp">This way, the generated code will be something like:</p>
+<pre>defined($_) and int($_) and $_ &gt; 0</pre>
+<p class="Pp">The <span class="Li">inlined</span> value can be either a coderef
+    or a string. If it's a string, it's used directly. If it's a coderef, it's
+    called with the variable name(s) as arguments.</p>
+<p class="Pp">The default sub should be reasonable.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Inlining'><a class='permalink' href='#Inlining'>Inlining</a></h2>
+<p class="Pp">In Perl, sub calls are relatively expensive in terms of memory and
+    CPU use. The <b>PositiveInt</b> type inherits from <b>Int</b> which inherits
+    from <b>Num</b> which inherits from <b>Str</b> which inherits from
+    <b>Defined</b> which inherits from <b>Item</b> which inherits from
+    <b>Any</b>.</p>
+<p class="Pp">So you might think that to check of <span class="Li">$value</span>
+    is a <b>PositiveInt</b>, it needs to be checked all the way up the
+    inheritance chain. But this is where one of Type::Tiny's big optimizations
+    happens. Type::Tiny can glue together a bunch of checks with a stringy eval,
+    and get a single coderef that can do all the checks in one go.</p>
+<p class="Pp">This is why when Type::Tiny gives you a choice of using a coderef
+    or a string of Perl code, you should usually choose the string of Perl code.
+    A single coderef can &quot;break the chain&quot;.</p>
+<p class="Pp">But these automatically generated strings of Perl code are not
+    always as efficient as they could be. For example, imagine that
+    <b>HashRef</b> is defined as:</p>
+<pre>my $Defined = Type::Tiny-&gt;new(
+  name       =&gt; 'Defined',
+  constraint =&gt; 'defined($_)',
+);
+my $Ref = Type::Tiny-&gt;new(
+  name       =&gt; 'Ref',
+  parent     =&gt; $Defined,
+  constraint =&gt; 'ref($_)',
+);
+my $HashRef = Type::Tiny-&gt;new(
+  name       =&gt; 'HashRef',
+  parent     =&gt; $Ref,
+  constraint =&gt; 'ref($_) eq &quot;HASH&quot;',
+);</pre>
+<p class="Pp">Then the combined check is:</p>
+<pre>defined($_) and ref($_) and ref($_) eq &quot;HASH&quot;</pre>
+<p class="Pp">Actually in practice it's even more complicated, because
+    Type::Tiny needs to localize and set <span class="Li">$_</span> first.</p>
+<p class="Pp">But in practice, the following should be a sufficient check:</p>
+<pre>ref($_) eq &quot;HASH&quot;</pre>
+<p class="Pp">It is possible for the <b>HashRef</b> type to have more control
+    over the string of code generated.</p>
+<pre>my $HashRef = Type::Tiny-&gt;new(
+  name       =&gt; 'HashRef',
+  parent     =&gt; $Ref,
+  constraint =&gt; 'ref($_) eq &quot;HASH&quot;',
+  inlined    =&gt; sub {
+    my $varname = pop;
+    sprintf 'ref(%s) eq &quot;HASH&quot;', $varname;
+  },
+);</pre>
+<p class="Pp">The inlined coderef gets passed the name of a variable to check.
+    This could be <span class="Li">'$_'</span> or <span class="Li">'$var'</span>
+    or <span class="Li">&quot;$some{deep}{thing}[0]&quot;</span>. Because it is
+    passed the name of a variable to check, instead of always checking
+    <span class="Li">$_</span>, this enables very efficient checking for
+    parameterized types.</p>
+<p class="Pp">Although in this case, the inlining coderef is just returning a
+    string, technically it returns a list of strings. If there's multiple
+    strings, Type::Tiny will join them together in a big &quot;&amp;&amp;&quot;
+    statement.</p>
+<p class="Pp">As a special case, if the first item in the returned list of
+    strings is undef, then Type::Tiny will substitute the parent type
+    constraint's inlined string in its place. So an inlieing coderef for even
+    numbers might be:</p>
+<pre>Type::Tiny-&gt;new(
+  name       =&gt; 'EvenNumber',
+  parent     =&gt; Types::Standard::Int,
+  constraint =&gt; sub { $_ % 2 == 0 },
+  inlined    =&gt; sub {
+    my $varname = pop;
+    return (undef, &quot;$varname % 2 == 0&quot;);
+  },
+);</pre>
+<p class="Pp">Even if you provide a coderef as a string, an inlining coderef has
+    the potential to generate more efficient code, so you should consider
+    providing one.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Pre-Declaring_Types'><a class='permalink' href='#Pre-Declaring_Types'>Pre-Declaring   Types</a></h2>
+<pre>use Type::Library -base,
+  -declare =&gt; qw( Foo Bar Baz );</pre>
+<p class="Pp">This declares types <b>Foo</b>, <b>Bar</b>, and <b>Baz</b> at
+    compile time so they can safely be used as barewords in your type
+  library.</p>
+<p class="Pp">This also allows recursively defined types to (mostly) work!</p>
+<pre>use Type::Library -base,
+  -declare =&gt; qw( NumericArrayRef );
+use Types::Standard qw( Num ArrayRef );
+
+__PACKAGE__-&gt;add_type(
+  name     =&gt; NumericArrayRef,
+  parent   =&gt; ArrayRef-&gt;of( Num | NumericArrayRef ),
+);</pre>
+<p class="Pp">(Support for recursive type definitions added in Type::Library
+    1.009_000.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Parameterizable_Types'><a class='permalink' href='#Parameterizable_Types'>Parameterizable   Types</a></h2>
+<p class="Pp">This is probably the most &quot;meta&quot; concept that is going
+    to be covered. Building your own type constraint that can be parameterized
+    like <b>ArrayRef</b> or <b>HasMethods</b>.</p>
+<p class="Pp">The type constraint we'll build will be <b>MultipleOf[$i]</b>
+    which checks that an integer is a multiple of
+  <span class="Li">$i</span>.</p>
+<pre>__PACKAGE__-&gt;add_type(
+  name       =&gt; 'MultipleOf',
+  parent     =&gt; Int,
+
+  # This coderef gets passed the contents of the square brackets.
+  constraint_generator =&gt; sub ( $i ) {
+    assert_Int $i;
+    # needs to return a coderef to use as a constraint for the
+    # parameterized type
+    return sub { $_ % $i == 0 };
+  },
+
+  # optional but recommended
+  inline_generator =&gt; sub ( $i ) {
+    return sub {
+      my $varname = pop;
+      return (undef, &quot;$varname % $i == 0&quot;);
+    };
+  },
+
+  # probably the most complex bit
+  coercion_generator =&gt; sub ( $parent_type, $child_type, $i ) {
+    require Type::Coercion;
+    return Type::Coercion-&gt;new(
+      type_coercion_map =&gt; [
+        Num, qq{ int($i * int(\$_/$i)) }
+      ],
+    );
+  },
+);</pre>
+<p class="Pp">Now we can define an even number like this:</p>
+<pre>__PACKAGE__-&gt;add_type(
+  name     =&gt; 'EvenNumber',
+  parent   =&gt; __PACKAGE__-&gt;get_type('MultipleOf')-&gt;of(2),
+  coercion =&gt; 1,  # inherit from parent
+);</pre>
+<p class="Pp">Note that it is possible for a type constraint to have a
+    <span class="Li">&quot;constraint&quot;</span> <i>and</i> a
+    <span class="Li">&quot;constraint_generator&quot;</span>.</p>
+<pre>BaseType          # uses the constraint
+BaseType[]        # constraint_generator with no arguments
+BaseType[$x]      # constraint_generator with an argument</pre>
+<p class="Pp">In the <b>MultipleOf</b> example above, <b>MultipleOf[]</b> with
+    no number would throw an error because of
+    <span class="Li">assert_Int(shift)</span> not finding an integer.</p>
+<p class="Pp">But it is certainly possible for <b>BaseType[]</b> to be
+    meaningful and distinct from
+  <span class="Li">&quot;BaseType&quot;</span>.</p>
+<p class="Pp">For example, <b>Tuple</b> is just the same as <b>ArrayRef</b> and
+    accepts any arrayref as being valid. But <b>Tuple[]</b> will only accept
+    arrayrefs with zero elements in them. (Just like <b>Tuple[Any,Any]</b> will
+    only accept arrayrefs with two elements.)</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NEXT_STEPS'><a class='permalink' href='#NEXT_STEPS'>NEXT   STEPS</a></h1>
+<p class="Pp">After that last example, probably have a little lie down. Once
+    you're recovered, here's your next step:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>Type::Tiny::Manual::UsingWithMoose
+    <p class="Pp">How to use Type::Tiny with Moose, including the advantages of
+        Type::Tiny over built-in type constraints, and Moose-specific
+      features.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
+<p class="Pp">Toby Inkster &lt;tobyink@cpan.org&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENCE'><a class='permalink' href='#COPYRIGHT_AND_LICENCE'>COPYRIGHT   AND LICENCE</a></h1>
+<p class="Pp">This software is copyright (c) 2013-2014, 2017-2025 by Toby
+    Inkster.</p>
+<p class="Pp">This is free software; you can redistribute it and/or modify it
+    under the same terms as the Perl 5 programming language system itself.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DISCLAIMER_OF_WARRANTIES'><a class='permalink' href='#DISCLAIMER_OF_WARRANTIES'>DISCLAIMER   OF WARRANTIES</a></h1>
+<p class="Pp">THIS PACKAGE IS PROVIDED &quot;AS IS&quot; AND WITHOUT ANY EXPRESS
+    OR IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES
+    OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-02</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-type-tiny/">extra/perl-type-tiny</a></dd>
+        <dt>Version:</dt>
+        <dd>2.008004-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://metacpan.org/release/Type-Tiny">https://metacpan.org/release/Type-Tiny</a></dd>
+        <dt>Licenses:</dt>
+        <dd>PerlArtistic, GPL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-type-tiny/">/listing/extra/perl-type-tiny/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#MANUAL">MANUAL</a></li>
+        
+            <li><a href="#NEXT_STEPS">NEXT STEPS</a></li>
+        
+            <li><a href="#AUTHOR">AUTHOR</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENCE">COPYRIGHT AND LICENCE</a></li>
+        
+            <li><a href="#DISCLAIMER_OF_WARRANTIES">DISCLAIMER OF WARRANTIES</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Type::Tiny::Manual::Libraries.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Type::Tiny::Manual::Libraries.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

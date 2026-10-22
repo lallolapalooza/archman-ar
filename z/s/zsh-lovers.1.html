@@ -1,0 +1,901 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">zsh-lovers(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/zsh-lovers/">zsh-lovers</a></p>
+<p class="lic">التراخيص: GPL-2.0-only</p>
+<link rel="stylesheet" href="basic.css">
+  $ rm -i *(.L0) *.bak(.)
+# طباعة الملفات التي ليس لها امتدادات
+  $ printf '%s\n' ^?*.*
+  $ printf '%s\n' ^?*.[^.]*(D)
+  $ ls -d -- ^?*.*(D)
+# البحث عن الملفات التي لا تحتوي على سلسلة نصية معينة
+  $ print -rl file* | comm -2 -3 - &lt;(grep -l string file*)'
+  $ for f (file*(N)) grep -q string $f || print -r $f'
+# عرض/التحقق مما إذا كان خيار معين معينًا أم لا. يعمل مع $options وكذلك
+# مع $builtins
+  $ echo $options[correct]
+  off
+  $ $options[zle]
+  on
+# حساب عدد المجلدات في المكدس
+  $ print $((${${(z)${(f)&quot;$(dirs -v)&quot;}[-1]}[1]} + 1)) # أو
+  $ dirs -v | awk '{n=$1}END{print n+1}'
+# مطابقة جميع الملفات التي لا تحتوي على نقطة في اسمها
+  $ ls *~*.*(.)
+# عرض عنوان IP فقط من ``ifconfig device''
+  # ifconfig من net-tools (Linux)
+  $ print ${${$(LC_ALL=C /sbin/ifconfig eth0)[7]}:gs/addr://}
+  # ifconfig من 4.2BSD {Free,Net,Open}BSD
+  $ print ${$(/sbin/ifconfig tun0)[6]}
+# اختبار الاتصال بجميع عناوين IP في فئة C أو جميع المضيفين
+# في /etc/hosts
+  $ for i in {1..254}; do ping -c 1 192.168.13.$i; done
+  أو
+  $ I=1
+  $ while ( [[ $I -le 255 ]] ) ; do ping -1 2 150.150.150.$I; let I++; done
+  أو
+  $ for i in $(sed 's/#.*//' &gt; /etc/hosts | awk '{print $2}')
+  : do
+  :    echo &quot;Trying $i ... &quot;
+  :    ping -c 1 $i ;
+  :    echo '============================='
+  : done
+# تحميل جميع الوحدات المتاحة عند بدء التشغيل
+  $ typeset -U m
+  $ m=()
+  $ for md ($module_path) m=($m $md/**/*(*e:'REPLY=${REPLY#$md/}'::r))
+  $ zmodload -i $m
+# إعادة تسمية جميع الملفات داخل مجلد بحيث تحصل أسماؤها على بادئة رقمية
+# بترتيب الفرز الافتراضي.
+  $ i=1; for j in *; do mv $j $i.$j; ((i++)); done
+  $ i=1; for f in *; do mv $f $(echo $i | \
+    awk '{ printf(&quot;%03d&quot;, $0)}').$f; ((i++)); done
+  $ integer i=0; for f in *; do mv $f $[i+=1].$f; done
+# البحث (وطباعة) عن جميع الروابط الرمزية التي ليس لها هدف في شجرة الدلائل الحالية.
+  $ $ file **/*(D@) | fgrep broken
+  $ for i in **/*(D@); [[ -f $i || -d $i ]] || echo $i
+  $ echo **/*(@-^./=%p)
+  $ print -l **/*(-@)
+# سرد جميع الملفات العادية التي ليس لها امتدادات مدرجة في `fignore'
+  $ ls **/*~*(${~${(j/|/)fignore}})(.)
+  # انظر أعلاه، ولكن الآن استبعاد الملفات التنفيذية
+  $ ls **/*~*(${~${(j/|/)fignore}})(.^*)
+# طباعة الملفات التي ليس لها امتدادات (تتطلب *setopt extendedglob*
+# و *setopt dotglob*)
+  $ printf '%s\n' ^?*.*
+# سرد الملفات بترتيب عكسي مرتبة حسب الاسم
+  $ print -rl -- *(On)
+  أو
+  $ print -rl -- *(^on)
+# مرادف لـ ``ps ax | awk '{print $1}'''
+  $ print -l /proc/*/cwd(:h:t:s/self//)
+# الحصول على PID لعملية (بدون ``ps'', ``sed'', ``pgrep'', ..
+# (تحت Linux)
+  $ pid2 () {
+  &gt;   local i
+  &gt;   for i in /proc/&lt;-&gt;/stat
+  &gt; do
+  &gt;   [[ &quot;$(&lt; $i)&quot; = *\((${(j:|:)~@})\)* ]] &amp;&amp; echo $i:h:t
+  &gt; done
+  &gt; }
+# لـ X في 'n' 'o' 'p' 'q' 'r' 's' 't' 'u' 'v' 'w' 'x' 'y'; do ...
+  $ for (( i = 36#n; i &lt;= 36#y; i++ )); do
+  &gt;   print ${$(([##36]i)):l}
+  &gt; done
+# أو بالاشتراك مع ``dc''
+  $ print {$((##n))..$((##y))}P\ 10P | dc
+# أو مع ``eval''
+  $ eval print '${$(([##36]'{$((36#n))..$((36#y))}')):l}'
+# foreach في سطر واحد من الصدفة
+  $ for f (*) print -r -- $f
+# نسخ مجلد بشكل متكرر بدون بيانات/ملفات
+  $ dirs=(**/*(/))
+  $ cd -- $dest_root
+  $ mkdir -p -- $dirs
+# أو بدون zsh
+  $ find . -type d -exec env d=&quot;$dest_root&quot; \
+    sh -c ' exec mkdir -p -- &quot;$d/$1&quot;' '{}' '{}' \;
+# إذا كان `foo=23''، فطباعة مع 10 أرقام مع '0' بادئة.
+  $ foo=23
+  $ print ${(r:10::0:)foo}
+# البحث عن اسم جميع الملفات في مجلد المنزل الخاص بهم والتي تحتوي
+# أسماؤها على 20 حرفًا أو أكثر
+  print -rl $HOME/${(l:20::?:)~:-}*
+# حفظ المصفوفات
+  $ print -r -- ${(qq)m} &gt; $nameoffile      # حفظها
+  $ eval &quot;m=($(cat -- $nameoffile)&quot;            # أو استخدام
+  $ m=(&quot;${(@Q)${(z)&quot;$(cat -- $nameoffile)&quot;}}&quot;) # لاستعادتها
+# الحصول على ``ls -l'' لجميع الملفات في الشجرة التي هي أحدث من
+# عمر محدد (على سبيل المثال، ``ls -l'' لجميع الملفات في الشجرة التي تم
+# تعديلها في اليومين الماضيين)
+  $ ls -tld **/*(m-2)
+# سيعطيك هذا قائمة بملف واحد لكل سطر (ليس مثل ls -R).
+# فكر في طريقة سهلة للحصول على إخراج بأسلوب ``ls -R'' مع
+# الملفات الأحدث من يومين فقط.
+  $ for d (. ./**/*(/)) {
+  &gt;   print -r -- $'\n'${d}:
+  &gt;   cd $d &amp;&amp; {
+  &gt;       l=(*(Nm-2))
+  &gt;       (($#l)) &amp;&amp; ls -ltd -- $l
+  &gt;       cd ~-
+  &gt;   }
+  &gt; }
+# إذا كنت تريد أيضًا تضمين المجلدات حتى لو كان وقت تعديلها
+# أكثر من يومين:
+  $ for d (. ./**/*(/)) {
+  &gt;   print -r -- $'\n'${d}:
+  &gt;   cd $d &amp;&amp; {
+  &gt;      l=(*(N/,m-2))
+  &gt;      (($#l)) &amp;&amp; ls -ltd -- $l
+  &gt;      cd ~-
+  &gt;   }
+  &gt; }
+# وإذا كنت تريد فقط إدراج المجلدات التي يكون وقت تعديلها &lt; يومين:
+  $ for d (. ./**/*(N/m-2)) {
+  &gt;   print -r -- $'\n'${d}:
+  &gt;   cd $d &amp;&amp; {
+  &gt;      l=(*(Nm-2))
+  &gt;      (($#l)) &amp;&amp; ls -ltd -- $l
+  &gt;      cd ~-
+  &gt;   }
+  &gt; }
+# طباعة 42 ``-''
+  $ echo ${(l:42::-:)}
+# أو استخدام ``$COLUMS''
+  $ echo ${(l:$COLUMNS::-:)}
+# والآن مع الألوان (تتطلب autoload colors ;colors)
+  $ echo &quot;$bg[red]$fg[black]${(l:42::-:)}&quot;
+# إعادة توجيه STDERR إلى أمر مثل xless دون إعادة توجيه STDOUT أيضًا.
+  $ foo 2&gt;&gt;(xless)
+# ولكن هذا ينفذ الأمر بشكل غير متزامن. للقيام بذلك بشكل متزامن:
+  $ { { foo 1&gt;&amp;3 } 2&gt;&amp;1 | xless } 3&gt;&amp;1
+# إعادة تسمية جميع ملفات MP3 من اسم مع مسافات.mp3 إلى اسم مع مسافات.mp3
+  $ for i in *.mp3; do
+  &gt;     mv $i ${${(C)i}:s/Mp3/mp3/}
+  &gt; done
+# مطابقة أسماء الملفات التي تحتوي فقط على أرقام وتنتهي بـ .xml (تتطلب
+# *setopt kshglob*)
+  $ ls -l [0-9]##.xml
+  $ ls -l &lt;0-&gt;.xml
+# إزالة جميع الملفات "غير النصية"
+  $ rm ./^*.txt
+# نقل 200 ملف من دليل إلى آخر
+  $ mv -- *([1,200]) /another/Dir
+# تحويل الصور (foo.gif = &gt; foo.png):
+  $ for i in **/*.gif; convert $i $i:r.png
+# تحويل مجموعة من ملفات mp3 إلى wave أو cdr،
+# على سبيل المثال file.wav -&gt; file.mp3)
+  $ for i (./*.mp3){mpg321 --w - $i &gt; ${i:r}.wav}
+# تنزيل الملفات التي تم إنشاؤها بواسطة LaTeX2HTML (على سبيل المثال، ZSH-Guide):
+  $ for f in https://zsh.sourceforge.io/Guide/zshguide{,{01..08}}.html; do
+  &gt;     lynx -source $f &gt;${f:t}
+  &gt; done
+# نقل جميع الملفات في dir1 و dir2 التي يزيد عدد أسطرها عن 10 إلى
+# دليل آخر مثل "/more10"
+  $ mv dir[12]/**/*.cr(-.e{'((`wc -l &lt; $REPLY` &gt; 10))'}) /more10
+# إنشاء قائمة رئيسية باستخدام dpkg لكل ملف قام بتثبيته
+  $ diff &lt;(find / | sort) &lt;(cat /var/lib/dpkg/info/*.list | sort)
+# استبدال تسلسلات الهروب المزعجة هذه:
+  $ autoload colors ; colors
+  $ print &quot;$bg[cyan]$fg[blue]You are a idiot&quot; &gt;&gt; /dev/pts/3
+# الحصول على قيمة ASCII لحرف
+  $ char=N ; print $((#char))
+# اسم الملف "Erweiterung"
+# ملاحظة: (N) يعني استخدام خيار nullglob لهذا النمط المحدد.
+  $ for i in *.o(N); do
+  &gt;     rm $i
+  &gt; done
+# إعادة تسمية الملفات؛ أي FOO إلى foo و bar إلى BAR
+  $ for i in *(.); mv $i ${i:l} # `FOO' إلى `foo'
+  $ for i in *(.); mv $i ${i:u} # `bar إلى `BAR'
+# عرض جميع ملفات suid في $PATH
+  $ ls -latg ${(s.:.)PATH} | grep '^...s'
+# أو أكثر تعقيدًا ;)
+  $ print -l ${^path}/*(Ns,S)
+# أو عرض فقط الملفات التنفيذية مع نمط يحدده المستخدم
+  $ print -l ${^path}/*vim*(*N)
+# ضغط الملفات عندما تحتوي على سلسلة نصية معينة
+  $ gzip ${(ps:\0:)&quot;$(grep -lZ foobar ./*.txt(.))&quot;}
+# سطر واحد صغير يقرأ من stdin ويطبع إلى stdout السطر الفريد الأول، أي
+# لا يطبع الأسطر التي تم طباعتها من قبل
+# (هذا مشابه لأمر unique، ولكن unique يمكنه التعامل فقط مع
+# الأسطر المجاورة).
+  $ IFS=$'\n\n'; print -rl -- ${(Oau)${(Oa)$(cat file;echo .)[1,-2]}}
+# يسرد كل ملف تنفيذي في PATH
+  $ print -l ${^path}/*(-*N)
+# مطابقة جميع ملفات .c في جميع الدلائل الفرعية، _باستثناء_ أي دلائل فرعية SCCS؟
+  $ ls **/*.c~(*/)#SCCS/*
+# سرد جميع ملفات `README' غير حساسة لحالة الأحرف مع خطأ واحد على الأكثر
+  $ ls **/*(#ia2)readme
+# التحقق غير الحساس لحالة الأحرف للمتغيرات
+  $ if [[ $OSTYPE == (#i)LINUX*(#I) ]]; then
+  &gt;    echo &quot;Penguin on board.&quot;
+  &gt; else
+  &gt;    echo &quot;Not a Linux.&quot;
+  &gt; fi</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='(Recursive)_Globbing_-_Examples'><a class='permalink' href='#(Recursive)_Globbing_-_Examples'>(Recursive)   Globbing - Examples</a></h2>
+<p class="Pp">يمكن العثور على قائمة بمؤهلات glob الصالحة في zshexpn(1).
+    <b>ملاحظة:</b> **/ يعادل (*/)#! على سبيل المثال:</p>
+<div class="Bd-indent">
+<pre>$ print (*/)#zsh_us.ps
+zsh-4.2.3/Doc/zsh_us.ps
+$ print **/zsh_us.ps
+zsh-4.2.3/Doc/zsh_us.ps</pre>
+</div>
+<div class="Bd-indent">
+<pre># البحث عن `README' في جميع الدلائل الفرعية
+  $ ls -l **/README
+# البحث عن الدلائل التي تحتوي على كل من "index.php" و "index.html"، أو بشكل عام،
+# الدلائل التي تحتوي على أكثر من ملف واحد يطابق "index.*"
+  $ ls **/*(D/e:'[[ -e $REPLY/index.php &amp;&amp; -e $REPLY/index.html ]]':)
+  # أو
+  $ ls **/*(D/e:'l=($REPLY/index.*(N)); (( $#l &gt;= 2 ))':)
+# أمر البحث للبحث عن اسم الدليل بدلاً من الاسم الأساسي
+  $ print -rl /**/*~^*/path(|/*)
+  # أو - بدون Zsh
+  $ find / | grep -e /path/ -e '/path$'
+# طباعة مسار الدلائل التي تحتوي على أكبر 10 ملفات C عادية
+# في الدليل الحالي والدلائل الفرعية.
+  $ print -rl -- **/*.c(D.OL[1,10]:h) | sort -u
+# البحث عن الملفات بحجم == 0 وإرسال بريد إلكتروني
+  $ files=(**/*(ND.L0m+0m-2))
+  &gt; (( $#files &gt; 0 )) &amp;&amp; print -rl -- $files | \
+    mailx -s &quot;empty files&quot; foo@bar.tdl
+# chmod متكرر
+  $ chmod 700 **/(.) # الملفات فقط
+  $ chmod 700 **/(/) # المجلدات فقط
+# طباعة جميع الملفات في هذا الدليل في عمودين
+  $ print -rC2 -- ${1:[...]}/*(D:t)
+#            ^- عدد الأعمدة
+# أو - إذا كنت قلقًا بشأن الأحرف الخاصة - استخدم
+  $ list=(${1:[...]}/*(ND:t))
+  $ (($#list)) &amp;&amp; print -rC2 -- ${(V)list}
+# البحث عن جميع الملفات في /home/*/*-mail/ مع علامة ``chmod -s''
+# (متكرر، تضمين الملفات المخفية) إزالة علامة setgid/setuid وطباعة
+# رسالة
+  $ chmod -s /home/*/*-mail(DNs,S) /home/*/*-mail/**/*(DNs,S))
+# أو مع برنامج نصي صغير
+  $ for file (/home/*/*-mail(DNs,S) /home/*/*-mail/**/*(DNs,S)) {
+  &gt;    print -r -- $file
+  &gt;    chmod -s $file &amp;&amp; print -r fixed $file
+  &gt; }
+# أو استخدام ``zargs'' (تتطلب autoload zargs) منع قائمة الوسيط الطويلة جدًا
+  $ zargs /home/*/*-mail(DNs,S) /home/*/*-mail/**/*(DNs,S)) -- chmod -s
+# سرد الملفات بدءًا من `foo23' وما فوق (foo23، foo24، foo25، ..)
+  $ ls -l foo&lt;23-&gt;
+# الحصول على جميع الملفات التي تبدأ بسلاسل التاريخ من 4 يونيو إلى
+# 9 يونيو 2004
+  $ ls -l 200406{04..10}*(N)
+# أو إذا كانت على شكل 200406XX (تتطلب ``setopt extended_glob''
+  $ ls -l 200306&lt;4-10&gt;.*
+# إزالة المسافات من أسماء الملفات
+  $ for a in ./**/*\ *(Dod); do mv $a ${a:h}/${a:t:gs/ /_}; done
+# عرض جميع ملفات *.c و *.h فقط
+  $ ls -l *.(c|h)
+# عرض جميع ملفات *.c فقط وتجاهل `foo.c'
+  $ ls *.c~foo.c
+# عرض البيانات بتنسيق ثنائي *فعلي*
+  $ zsh -ec 'while {} {printf %.8x $n;repeat 8 \
+  &gt; {read -ku0 a printf \ %.8d $(([##2]#a))};print;((n+=8))}' &lt; binary
+# عرض الملفات التي يمكن قراءتها من قبل الجميع فقط
+  $ ls -l *(R)
+# سرد الملفات في الدليل الحالي غير قابلة للكتابة بواسطة المالك
+  $ print -l ~/*(ND.^w)
+# البحث وحذف الملفات التي أقدم من معلمة معينة
+# (ثواني/دقائق/ساعات)
+  # يحذف جميع الملفات العادية في /Dir التي أقدم من 3 ساعات
+   $ rm -f /Dir/**/*(.mh+3)
+  # يحذف جميع الروابط الرمزية في /Dir التي أقدم من 3 دقائق
+   $ rm -f /Dir/**/*(@mm+3)
+  # يحذف جميع الملفات غير المجلدات في /Dir التي أقدم من 30 ثانية
+   $ rm -f /Dir/**/*(ms+30^/)
+  # يحذف جميع المجلدات والمجلدات الفرعية والملفات الأقدم من ساعة واحدة
+   $ rm ./**/*(.Dmh+1,.DL0)
+  # يحذف جميع الملفات الأقدم من 6 ساعات
+   $ rm -f **/*(mh+6)
+  # يزيل جميع الملفات باستثناء أحدث عشرة (يحذف كل شيء باستثناء آخر 10
+  {(l:4::0:)2}.jpg' # بشكل متكرر</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Module-Examples'><a class='permalink' href='#Module-Examples'>أمثلة الوحدات (Module Examples)</a></h2>
+<p class="Pp">الرجاء قراءة zshmodules(1) أولاً!</p>
+<p class="Pp"><b>zsh/pcre (يتطلب zmodload zsh/pcre)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># نسخ الملفات لفترة معينة (التاريخ المشار إليه في أسماء الملفات)
+  $ zmodload zsh/pcre
+  $ ls -d -- *(e:'[[ $REPLY -pcre-match pcre-regexp ]]':)
+  # أو
+  $ m() { [[ $1 -pcre-match pcre-regexp ]] }
+  $ ls -d -- *(+m)</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/clone (يتطلب zmodload zsh/clone)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># إنشاء نسخة متفرعة من الصدفة الحالية ($! يتم تعيينها إلى صفر) وتنفيذ
+# "command" على /dev/tty8 (لهذا المثال).
+  $ zmodload zsh/clone
+  $ clone /dev/tty8 &amp;&amp; (($! == 0)) &amp;&amp; exec command</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/datetime (يتطلب zmodload zsh/datetime)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>  $ zmodload zsh/datetime
+  $ alias datereplacement='strftime &quot;%Y-%m-%d&quot; $EPOCHSECONDS'
+  $ export DATE=`datereplacement`
+  $ echo $DATE
+#  إزالة التاريخ من اسم الملف
+  $ $ zmodload zsh/datetime
+  $ setopt extendedglob
+  $ touch aaa_bbb_20041212_c.dat eee_fff_20051019_g.dat
+  $ strftime -s pattern \
+    '???_???_&lt;0-%Y%m%d&gt;_?.dat' $((EPOCHSECONDS - 365 * 24 * 60 * 60 / 2))
+  $ print -rl -- $~pattern
+  aaa_bbb_20041212_c.dat
+  $ print -rl -- $pattern
+  ???_???_&lt;0-20050815&gt;_?.dat
+# البحث عن الملفات ذات الحجم == 0، بناءً على اسم الملف الذي يحتوي على تاريخ
+# بدلاً من تاريخ "آخر تعديل" للملف
+  $ zmodload -i zsh/datetime
+  $ strftime -s file &quot;abc_de_%m%d%Y.dat&quot; $((EPOCHSECONDS - 24 * 60 * 60 ))
+  $ files=(**/$file(N.L0))
+  $ (( $#files &gt; 0 )) &amp;&amp; print -rl -- $files | \
+    mailx -s &quot;empty files&quot;  foo@bar.tdl</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/stat (يتطلب zmodload zsh/stat)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># اختبار ما إذا كان رابط رمزي يشير إلى ملف معين
+  $ zmodload -i zsh/stat
+  $ ! stat -LH s foo.ln || [[ $s[link] != &quot;foo.exe&quot; ]] || ln -sf foo.exe foo.ln
+# مقارنة تواريخ الملفات
+  $ zmodload zsh/stat
+  $ file1=foo
+  $ file2=bar
+  $ touch bar &amp; sleep 5 &amp; touch foo
+  $ echo $file1 is $(($(stat +mtime $file2) - \
+    $(stat +mtime $file1))) seconds older than $file2.
+  bar is 5 seconds older than foo
+# سرد الملفات على قرص أصغر من ملف آخر
+  $ zmodload zsh/stat
+  $ stat -A max +size some-other-file
+  $ print -rl ./**/*(D.L-$max)
+# سرد أكبر 100 ملف على قرص
+  $ zmodload zsh/stat
+  $ ls -fld ./**/*(d`stat +device .`OL[1,100])
+# الحصول فقط على اسم المستخدم وأسماء الملفات (مثل
+# ls -l * | awk '{print $3&quot; &quot; $8}')
+  $ zmodload zsh/stat
+  $ for file; do
+  &gt;   stat -sA user +uid -- &quot;$file&quot; &amp;&amp;
+  &gt;     print -r -- &quot;$user&quot; &quot;$file&quot;
+  &gt; done
+# الحصول على الفرق بين البايتات الفعلية للملف والبايتات المخصصة للملف
+  $ zmodload zsh/stat
+  $ print $(($(stat +block -- file) * 512 - $(stat +size -- file)))
+# البحث عن أكبر ملف
+# ``D''  : لتضمين الملفات المخفية (d صغيرة لأنواع الأجهزة)
+# ``O''  : مرتبة عكسياً (o صغيرة لترتيب غير عكسي)
+# ``L''  : حسب طول الملف (l لعدد الروابط)
+# ``[1]'': إرجاع الأول فقط
+  $ zmodload zsh/stat
+  $ stat +size ./*(DOL[1])
+# حجم الملف بالبايت
+  $ zmodload zsh/stat
+  $ stat -L +size ~/.zshrc
+  4707
+# حذف الملفات في مجلد لم يتم الوصول إليه في الأيام العشرة الماضية
+# وإرسال بريد إلكتروني واحد إلى مالك الملفات لإبلاغه بحذف الملفات.
+  $ zmodload zsh/stat zsh/files
+  $ typeset -A f; f=()
+  $ rm -f /path/**/*(.a+10e{'stat -sA u +uidr $REPLY; f[$u]=&quot;$f[$u]$REPLY&quot;'})
+  $ for user (${(k)f}) {print -rn $f[$user]|mailx -s &quot;...&quot; $user}
+# الحصول على "ls -l" لجميع الملفات في الشجرة الأحدث من عمر محدد
+  $ zmodload zsh/stat
+  $ for d (. ./**/*(N/m-2))
+  &gt;   print -r -- $'\n'$d: &amp;&amp; cd $d &amp;&amp; {
+  &gt;      for f (*(Nm-2om))
+  &gt;   stat -F '%b %d %H:%M' -LsAs -- $f &amp;&amp;
+  &gt;   print -r -- $s[3] ${(l:4:)s[4]} ${(l:8:)s[5]} \
+  &gt;   ${(l:8:)s[6]} ${(l:8:)s[8]} $s[10] $f ${s[14]:+-&gt; $s[14]}
+  &gt;   cd ~-
+  &gt; }
+# الحصول على تاريخ إنشاء الملف
+  $ zmodload zsh/stat
+  $ stat -F '%d %m %Y' +mtime ~/.zshrc
+  30 06 2004
+  $ stat -F '%D' +mtime ~/.zshrc
+  06/30/04</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/files (يتطلب zmodload zsh/files)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># البحث في مجلد عن الملفات التي تحتوي على سلسلة معينة ثم نسخ تلك
+# الملفات إلى مجلد آخر.
+  $ zmodload zsh/files
+  $ IFS=$'\0'
+  $ cp $(grep -lZr foobar .) otherdirectory</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/mapfile (يتطلب zmodload zsh/mapfile)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># البحث عن نمطين
+  $ zmodload zsh/mapfile
+  $ pattern1=&quot;foo&quot;
+  $ pattern2=&quot;bar foo&quot;
+  $ print -l ./**/*(DN.e{'z=$mapfile[$REPLY] &amp;&amp; [[ $z = *$pattern1* &amp;&amp; \
+    $z = *$pattern2* ]]'})
+# أو حل بالاشتراك مع zsh/pcre
+  $ zmodload -i zsh/mapfile zsh/pcre
+  $ pattern1=&quot;foo&quot;
+  $ pattern2=&quot;bar foo&quot;
+  $ pcre_compile &quot;(?s)(?=.*?$pattern1).*?$pattern2&quot;
+  $ pcre_study
+  $ print -l ./**/*(DN.e{'pcre_match $mapfile[$REPLY]'})
+# مكافئ لـ "less /etc/passwd | grep -v root"
+  $ zmodload zsh/mapfile
+  $ IFS=$'\n\n'
+  $ print -rl -- ${${=mapfile[/etc/passwd]}:#*root*}
+# أو - للبحث غير الحساس لحالة الأحرف
+  $ setopt extendedglob
+  $ print -rl -- ${${=mapfile[/etc/passwd]}:#*(#i)root*}
+# إذا كان ملف XML يحتوي على أشياء مثل ``&lt;TAGA/&gt;'' و ``&lt;TAGB/&gt;'', قم بترقيم
+# هذه العلامات الفارغة (التي تنتهي بـ '/&gt;') بحيث إذا تم العثور عليها بنفس
+# الترتيب، تصبح العلامات السابقة ``&lt;TAGA/&gt;1&lt;/TAGA&gt;'' و
+# ``&lt;TAGB/&gt;2&lt;/TAGB&gt;''
+  $ zmodload zsh/mapfile
+  $ cnt=0
+  $ apfile[data.xml.new]=${(S)mapfile[data.xml]//\
+  &gt; (#im)&lt;TAGA&gt;*&lt;\/TAGA&gt;/&lt;TAGA&gt;$((++cnt))&lt;\/TAGA&gt;}
+# إزالة جميع الملفات في Maildir/new للمستخدمين التي تحتوي على "filename=&quot;gone.src"
+  $ zmodload zsh/{files,mapfile}
+  $ rm -f /u1/??/*/Maildir/new/100*(.e{'[[ $mapfile[$REPLY] == \
+    *filename=\&quot;gone.scr\&quot;* ]]'})
+# استخراج العنوان من ملف postscript وإلحاق هذه القيمة بنهاية اسم الملف
+  $ autoload -U zmv
+  $ zmodload zsh/mapfile
+  $ zmv '(*).ps' '$1-${${${mapfile[$f]##*%%Title: }%% *}//[^a-zA-Z0-9_]/}.ps'</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/mathfunc (يتطلب zmodload zsh/mathfunc)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ zmodload zsh/mathfunc
+$ echo $(( sin(1/4.0)**2 + cos(1/4.0)**2 - 1 ))
+  -1.1102230246251565e-16
+$ echo $(( pi = 4.0 * atan(1.0) ))
+  3.1415926535897931
+$ echo $(( f = sin(0.3) ))
+  0.29552020666133955
+$ print $((1e12 * rand48()))
+  847909677310.23413
+$ print $(( rand48(seed) ))
+  0.01043488334700271</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/termcap (يتطلب zmodload zsh/termcap)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> $ zmodload -ab zsh/termcap echotc
+ $ GREEN=`echotc AF 2`
+ $ YELLOW=`echotc AF 3`
+ $ RED=`echotc AF 1`
+ $ BRIGHTRED=`echotc md ; echotc AF 1`
+ $ print -l ${GREEN}green ${YELLOW}yellow ${RED}red ${BRIGHTRED}brightred</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/zpty (يتطلب zmodload zsh/zpty)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>  $ zmodload zsh/zpty
+  $ zpty PW passwd $1
+  $ zpty PW passwd $1
+# ``-r'': قراءة مخرجات أمر باسم.
+# ``z'' : متغير
+  $ zpty -r PW z '*password:'
+# إرسال السلاسل المعطاة كمدخلات إلى أمر باسم
+  $ zpty -w PW $2
+  $ zpty -r PW z '*password:'
+  $ zpty -w PW $2
+# يتم استخدام الشكل الثاني، مع الخيار -d، لحذف الأوامر التي بدأت سابقًا،
+# عن طريق توفير قائمة بأسمائها. إذا لم يتم توفير أسماء، يتم حذف جميع الأوامر.
+# يؤدي حذف أمر إلى إرسال إشارة HUP إلى العملية المقابلة.
+  $ zpty -d PW</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/net/socket (يتطلب zmodload zsh/net/socket)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># ``-l'': فتح مقبس يستمع على اسم ملف
+# ``-d'': سيتم أخذ الوسيط كموصّل ملف للاتصال
+# ``3'' : موصّل الملف. انظر "دليل مستخدم Z-Shell"
+#         (3.7.2: موصلات الملفات)
+  $ zmodload zsh/net/socket
+  $ zsocket -l -d 3
+# ``-a'': قبول اتصال وارد إلى المقبس
+  $ zsocket -a -d 4 3
+  $ zsocket -a -d 5 3 # قبول اتصال
+  $ echo foobar &gt;&amp;4
+  $ echo barfoo &gt;&amp;5
+  $ 4&gt;&amp;- 5&gt;&amp;- 3&gt;&amp;-</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/zftp (يتطلب zmodload zsh/zftp)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre> $ autoload -U zfinit
+ $ zfinit
+ $ zfparams www.example.invalid myuserid mypassword
+ $ zfopen
+ $ zfcd tips
+ $ zfls -l zshtips.html
+ $ zfput zshtips.html
+ $ zfls -l zshtips.html
+# نقل الملفات تلقائيًا باستخدام FTP مع التحقق من الأخطاء
+  $ autoload -U zfinit ; zfinit
+  $ zftp open host.name.invalid user passwd || exit
+  $ zftp get /remote/file &gt; /local/file; r=$?
+  $ zftp close &amp;&amp; exit r
+# ضغط ونقل عبر FTP أثناء التنقل
+  $ autoload -U zfinit ; zfinit
+  $ zftp open host.name.invalid user password
+  $ zftp get $file | bzip2 &gt; ${file}.bz2
+  $ zftp close
+# "get" بشكل متكرر
+  $ autoload -U zfinit ; zfinit
+  $ zfanon cr.yp.to
+  $ zfcd daemontools
+  $ for file in `zfls` ; do
+  &gt;     zfget $file
+  $ done
+  $ zfclose
+# تحميل جميع الملفات العادية في $HOME/foobar (بشكل متكرر) الأحدث من
+# ساعتين إلى ftp.foobar.invalid/path/to/upload
+  $ autoload -U zfinit ; zfinit
+  $ zfopen ftp.foobar.invalid/path/to/upload
+  $ cd $HOME/foobar
+  $ zfput -r **/*(.mh-2)
+  $ zfclose
+# قائمة طويلة بالملفات على ftp
+  $ autoload -U zfinit ; zfinit
+  $ zfopen some-host
+  $ zfcd /some/remote/Dir
+  $ cd /some/local/Dir
+# إذا كان list.txt موجودًا على المضيف البعيد، قم بتغييره إلى
+# zfget ${(f)&quot;$(zftp get /path/to/remote/list.txt)&quot;}
+  $ zfget ${(f)&quot;$(cat list.txt)&quot;}
+  $ zfclose</pre>
+</div>
+</div>
+<p class="Pp"><b>zsh/zselect (يتطلب zmodload zsh/zselect)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># إنه مشابه لـ
+ ,----
+ | $ sg=$(stty -g)
+ | $ stty -icanon min 0 time 50
+ | $ read yesno
+ | $ stty &quot;$sg&quot;
+ | $ case &quot;$yesno&quot; in
+ | &gt;  yes) command1;;
+ | &gt;  *) command2;;
+ | &gt; esac
+ `----
+$ zmodload zsh/zselect
+$ if zselect -t 500 -r 0 &amp;&amp; read yesno &amp;&amp; [ yes = &quot;$yesno&quot; ]; then
+&gt;    command1
+&gt; else
+&gt;    command1
+&gt; fi</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>الخيارات (OPTIONS)</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Navigation_options'><a class='permalink' href='#Navigation_options'>خيارات التنقل (Navigation options)</a></h2>
+<p class="Pp"><b>auto_cd</b> (يسمح بتغيير الدليل عن طريق إدخاله كأمر).
+    <b>auto_pushd</b> (إضافة الأدلة تلقائيًا إلى قائمة push/pop)
+    pushd_ignore_dups (وعدم تكرارها).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Misc'><a class='permalink' href='#Misc'>متفرقات (Misc)</a></h2>
+<p class="Pp"><b>no_hup</b> (لا ترسل إشارة HUP إلى المهام الخلفية عند الخروج من ZSH).
+    <b>print_exit_value</b> (عرض رسالة برمز الخروج عندما يعود أمر ما برمز خروج غير صفري)</p>
+<p class="Pp"><b>خيارات السجل (History options)</b>
+  <br/>
+</p>
+<div class="Bd-indent">
+<p class="Pp"><b>hist_verify</b> (اسمح للمستخدم بتحرير سطر الأوامر بعد توسيع السجل
+    (مثل !ls) بدلاً من تشغيله فورًا) استخدم نفس ملف السجل لجميع الـ</p>
+</div>
+<div>
+<p class="Pp"><b>setopt SHARE_HISTORY</b></p>
+</div>
+<p class="Pp"><b>الخصوصية / الأمان</b> <br/></p>
+<div class="Bd-indent">
+<p class="Pp"><b>no_clobber</b> (أو set -C؛ لمنع إعادة توجيه <i>&gt;</i> من اقتطاع الملف المحدد إذا كان موجودًا بالفعل)</p>
+</div>
+<p class="Pp"><b>تصحيح الإملاء</b> <br/></p>
+<div class="Bd-indent">
+<p class="Pp"><b>correct</b> (تصحيح الإملاء للأوامر تلقائيًا). <b>correct_all</b> (تصحيح الإملاء لكل كلمة في سطر الأوامر تلقائيًا) <b>dvorak</b> (تخطيط لوحة المفاتيح dvorak)</p>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='UNSORTED/MISC'><a class='permalink' href='#UNSORTED/MISC'>غير مرتبة/متفرقات</a></h1>
+<p class="Pp">مسار البريد: مسار بريد متعدد بسيط:</p>
+<div class="Bd-indent">
+<pre>mailpath=($HOME/Mail/mbox'?new mail in mbox'
+          $HOME/Mail/tux.u-strasbg'?new mail in tux'
+          $HOME/Mail/lilo'?new mail in lilo'
+          $HOME/Mail/ldap-fr'?new mail in ldap-fr')</pre>
+</div>
+<p class="Pp">مسار البريد: مسار بريد ديناميكي:</p>
+<div class="Bd-indent">
+<pre>typeset -a mailpath
+for i in ~/Mail/Lists/*(.); do
+   mailpath[$#mailpath+1]=&quot;${i}?You have new mail in ${i:t}.&quot;
+done</pre>
+</div>
+<p class="Pp">تجنب التجميع على الأوامر الخاصة:</p>
+<div class="Bd-indent">
+<pre>for com in alias expr find mattrib mcopy mdir mdel which;
+alias $com=&quot;noglob $com&quot;</pre>
+</div>
+<p class="Pp">لترحيل bashprompt الخاص بك إلى zsh، استخدم البرنامج النصي bash2zshprompt الموجود في توزيعة مصدر zsh ضمن <i>Misc</i>.</p>
+<p class="Pp">للترحيل من (t)csh إلى zsh، استخدم أداة c2z التي تحول أسماء المستعارات ومتغيرات البيئة والصدفة في csh إلى zsh. يتم ذلك عن طريق تشغيل csh، وجعل csh يبلغ عن أسماء المستعارات والمتغيرات. ثم يقوم البرنامج النصي بتحويلها إلى ملفات بدء تشغيل zsh. لديه بعض المشكلات ومعلومات الاستخدام التي تم توثيقها في أعلى هذا البرنامج النصي.</p>
+<p class="Pp">إليك وظائف لتعيين عنوان و status صعب لـ <b>XTerm</b> أو <b>GNU Screen</b> إلى <i>zsh</i> والدليل الحالي، على التوالي، عند عرض المطالبة، وإلى اسم الأمر وبقية سطر الأوامر، على التوالي، عند تنفيذ أمر:</p>
+<div class="Bd-indent">
+<pre>function title {
+      if [[ $TERM == &quot;screen&quot; ]]; then
+        # Use these two for GNU Screen:
+        print -nR $' 33k'$1$' 33'\
+        print -nR $' 33]0;'$2$''
+      elif [[ $TERM == &quot;xterm&quot; || $TERM == &quot;rxvt&quot; ]]; then
+        # Use this one instead for XTerms:
+        print -nR $' 33]0;'$*$''
+      fi
+}
+function precmd { title zsh &quot;$PWD&quot; }
+function preexec {
+    emulate -L zsh
+    local -a cmd; cmd=(${(z)1})
+    title $cmd[1]:t &quot;$cmd[2,-1]&quot;
+}</pre>
+</div>
+<p class="Pp">ضع السطر التالي في ~/.screenrc الخاص بك لرؤية هذا الـ hardstatus الرائع:</p>
+<div class="Bd-indent">
+<pre>caption always &quot;%3n %t%? (%u)%?%?: %h%?&quot;</pre>
+</div>
+<p class="Pp">المتغيرات الخاصة التي تم تعيينها:</p>
+<div class="Bd-indent">
+<pre>$LINENO $RANDOM $SECONDS $COLUMNS $HISTCHARS $UID
+$EUID $GID $EGID $USERNAME $fignore $mailpath $cdpath</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LINKS'><a class='permalink' href='#LINKS'>روابط</a></h1>
+<p class="Pp">الموقع الأساسي</p>
+<div class="Bd-indent"><a href='http://www.zsh.org/'>http://www.zsh.org/</a></div>
+<p class="Pp">صفحات Zsh على الويب</p>
+<div class="Bd-indent"><a href='https://zsh.sourceforge.io/'>https://zsh.sourceforge.io/</a></div>
+<p class="Pp">صفحة المشروع</p>
+<div class="Bd-indent"><a href='http://sourceforge.net/projects/zsh/'>http://sourceforge.net/projects/zsh/</a></div>
+<p class="Pp">من Bash إلى Z Shell: غزو سطر الأوامر - الكتاب</p>
+<div class="Bd-indent"><a href='http://www.bash2zsh.com/'>http://www.bash2zsh.com/</a></div>
+<p class="Pp">&quot;Zsh - die magische Shell&quot; (كتاب ألماني عن Zsh) بقلم Sven Guckes و Julius Plenz</p>
+<div class="Bd-indent"><a href='http://zshbuch.org/'>http://zshbuch.org/</a></div>
+<p class="Pp">أرشيف القائمة البريدية</p>
+<div class="Bd-indent"><a href='http://www.zsh.org/mla/'>http://www.zsh.org/mla/</a></div>
+<p class="Pp">الأسئلة الشائعة حول ZSH</p>
+<div class="Bd-indent"><a href='https://zsh.sourceforge.io/FAQ/zshfaq.html'>https://zsh.sourceforge.io/FAQ/zshfaq.html</a></div>
+<p class="Pp">دليل المستخدم</p>
+<div class="Bd-indent"><a href='https://zsh.sourceforge.io/Guide/'>https://zsh.sourceforge.io/Guide/</a></div>
+<p class="Pp">ZSH-Wiki (رابط مؤرشف)</p>
+<div class="Bd-indent"><a href='https://web.archive.org/web/20160304135622/http://zshwiki.org/home/'>https://web.archive.org/web/20160304135622/http://zshwiki.org/home/</a></div>
+<p class="Pp">دعم الفأرة ؛)</p>
+<div class="Bd-indent"><a href='http://stchaz.free.fr/mouse.zsh'>http://stchaz.free.fr/mouse.zsh</a></div>
+<p class="Pp">مقدمة لمطالبة ZSH</p>
+<div class="Bd-indent"><a href='http://aperiodic.net/phil/prompt/'>http://aperiodic.net/phil/prompt/</a></div>
+<p class="Pp">منشورات مدونة ft حول zsh</p>
+<div class="Bd-indent"><a href='http://bewatermyfriend.org/tag/zsh/'>http://bewatermyfriend.org/tag/zsh/</a></div>
+<p class="Pp">تكوين zsh الخاص بـ ft</p>
+<div class="Bd-indent"><a href='https://gitlab.com/ft/etc-zsh'>https://gitlab.com/ft/etc-zsh</a></div>
+<p class="Pp">صفحة Adam's ZSH</p>
+<div class="Bd-indent"><a href='http://www.adamspiers.org/computing/zsh/'>http://www.adamspiers.org/computing/zsh/</a></div>
+<p class="Pp">أفضل نصائح ZSH من Zzappers (رابط مؤرشف)</p>
+<div class="Bd-indent"><a href='https://web.archive.org/web/20190517011103/http://www.rayninfo.co.uk/tips/zshtips.html'>https://web.archive.org/web/20190517011103/http://www.rayninfo.co.uk/tips/zshtips.html</a></div>
+<p class="Pp">صفحة Zsh بواسطة Christian Schneider</p>
+<div class="Bd-indent"><a href='http://www.strcat.de/zsh/'>http://www.strcat.de/zsh/</a></div>
+<p class="Pp">صفحة محبي Zsh</p>
+<div class="Bd-indent"><a href='http://grml.org/zsh/'>http://grml.org/zsh/</a></div>
+<p class="Pp">قناة IRC</p>
+<div class="Bd-indent"><b>#zsh على irc.freenode.org</b></div>
+<p class="Pp">بطاقة مرجع Z shell (مضمنة في حزمة zsh-lovers debian)</p>
+<div class="Bd-indent"><a href='http://www.bash2zsh.com/zsh_refcard/refcard.pdf'>http://www.bash2zsh.com/zsh_refcard/refcard.pdf</a></div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">تمت كتابة صفحة الدليل هذه بواسطة Michael Prokop و Christian <i>strcat</i> Schneider و Matthias Kopfermann. ولكن تم أخذ العديد من الأفكار من zsh-geeks على سبيل المثال من القوائم البريدية لـ zsh (zsh-users و zsh-workers) و Google ومجموعات الأخبار و Zsh-Wiki. شكراً لكم على نصائحكم الرائعة والمذهلة. تعلمنا الكثير منكم!</p>
+<p class="Pp">بالترتيب الأبجدي:</p>
+<div class="Bd-indent">
+<pre>Andrew 'zefram' Main  - http://www.fysh.org/~zefram/
+Barton E. Schaefer    - http://www.well.com/user/barts/
+Matthias Kopfermann   - http://www.guckes.net/zsh/lover.html
+Oliver Kiddle         - http://people.freenet.de/opk/
+Paul Falstad          - http://www.falstad.com/
+Peter Stephenson      - http://homepage.ntlworld.com/p.w.stephenson/
+Richard Coleman
+Stephane Chazelas     - http://stephane.chazelas.free.fr/
+Sven Guckes           - http://www.guckes.net/
+Sven Wischnowsky      - http://w9y.de/</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">صفحات الدليل لـ zsh:</p>
+<div class="Bd-indent">
+<pre>       zsh          نظرة عامة على Zsh
+       zshall       صفحة الدليل الوصفية لـ Z shell
+       zshbuiltins  أوامر Zsh المدمجة
+       zshcalsys    نظام تقويم zsh
+       zshcompctl   إكمال Zsh القابل للبرمجة
+       zshcompsys   نظام إكمال Zsh
+       zshcompwid   أدوات إكمال Zsh
+       zshcontrib   مساهمات المستخدم في zsh
+       zshexpn      توسيع واستبدال Zsh
+       zshmisc      أي شيء لا يناسب الأقسام الأخرى
+       zshmodules   وحدات Zsh القابلة للتحميل
+       zshoptions   خيارات Zsh
+       zshparam     معلمات Zsh
+       zshroadmap   مقدمة غير رسمية لدليل zsh
+       zshtcpsys    نظام TCP الخاص بـ Zsh
+       zshzle       تحرير سطر الأوامر في Zsh
+       zshzftpsys   عميل FTP المدمج في Zsh
+       zshall       صفحة الدليل الوصفية التي تحتوي على كل ما سبق</pre>
+</div>
+<p class="Pp">ملاحظة: وخاصة <i>man zshcontrib</i> تغطي مواضيع مفيدة جدًا! كتاب: <b>From Bash to Z Shell</b> بقلم Oliver Kiddle و Jerry Peck و Peter Stephenson. <b>ISBN: 1590593766</b>. - <b>bash2zsh.com</b> انظر أيضًا إلى قسم <b>LINKS</b> في صفحة الدليل هذه.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">ربما. قد لا تكون صفحة الدليل هذه كاملة أبدًا. لذا يرجى الإبلاغ عن الأخطاء والملاحظات والاقتراحات عبر <a href='https://github.com/grml/zsh-lovers'>https://github.com/grml/zsh-lovers</a> شكرا لك!</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright (C) Michael Prokop, Christian Schneider و Matthias Kopfermann.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">12/04/2024</td>
+    <td class="foot-os">&#x00A0;</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/zsh-lovers/">extra/zsh-lovers</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>0.11.0-1</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://grml.org/zsh/#zshlovers">https://grml.org/zsh/#zshlovers</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-only</dd>
+        <dt>أدلة المستخدم:</dt>
+        <dd><a href="/listing/extra/zsh-lovers/">/listing/extra/zsh-lovers/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">ملخص</a></li>
+        
+            <li><a href="#OVERVIEW">نظرة عامة</a></li>
+        
+            <li><a href="#SHELL-SCRIPTING">البرمجة النصية للصدفة</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#OPTIONS">خيارات</a></li>
+        
+            <li><a href="#UNSORTED/MISC">غير مرتبة/متفرقات</a></li>
+        
+            <li><a href="#LINKS">روابط</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/zsh-lovers.1.en.txt">txt</a>, 
+        
+            <a href="/man/zsh-lovers.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</ht>
+ml>

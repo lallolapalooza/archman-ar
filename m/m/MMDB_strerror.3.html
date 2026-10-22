@@ -1,0 +1,398 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">MMDB_strerror(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/libmaxminddb/">libmaxminddb</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+<link rel="stylesheet" href="basic.css">
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_string()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_string(
+    MMDB_s *const mmdb,
+    const char *const ipstr,
+    int *const gai_error,
+    int *const mmdb_error);</pre>
+<p class="Pp">يبحث هذا التابع عن عنوان IP يتم تمريره كسلسلة نصية منتهية بالصفر. يقوم داخليًا باستدعاء <span class="Li">getaddrinfo()</span> لحل العنوان إلى شكله الثنائي. ثم يقوم باستدعاء <span class="Li">MMDB_lookup_sockaddr()</span> للبحث عن العنوان في قاعدة البيانات. إذا كنت قد قمت بالفعل بحل عنوان، يمكنك استدعاء <span class="Li">MMDB_lookup_sockaddr()</span> مباشرة دون حلها مرتين.</p>
+<pre>int gai_error, mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_string(&amp;mmdb, &quot;1.2.3.4&quot;, &amp;gai_error, &amp;mmdb_error);
+if (0 != gai_error) { ... }
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+<p class="Pp">يعيد هذا التابع دائمًا هيكل <span class="Li">MMDB_lookup_result_s</span>، ولكن يجب عليك أيضًا التحقق من معاملي <span class="Li">gai_error</span> و <span class="Li">mmdb_error</span>. إذا أشار أي منهما إلى خطأ، فإن الهيكل المعاد يكون غير فعال.</p>
+<p class="Pp">إذا لم يحدث أي خطأ، فلا يزال يتعين عليك التأكد من أن العضو <span class="Li">found_entry</span> في النتيجة المعاد صحيح. إذا لم يكن كذلك، فهذا يعني أن عنوان IP ليس له سجل في قاعدة البيانات.</p>
+<p class="Pp">يعمل هذا التابع مع عناوين IPv4 حتى لو كانت قاعدة البيانات تحتوي على بيانات لكل من IPv4 و IPv6. سيتم البحث عن عنوان IPv4 كـ ::xxx.xxx.xxx.xxx، وليس كـ ::ffff:xxx.xxx.xxx.xxx.</p>
+<p class="Pp">إذا قمت بتمرير عنوان IPv6 إلى قاعدة بيانات تحتوي فقط على بيانات IPv4، فسيكون العضو <span class="Li">found_entry</span> خاطئًا، ولكن سيظل حالة <span class="Li">mmdb_error</span> هي <span class="Li">MMDB_SUCCESS</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_sockaddr()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_sockaddr(
+    MMDB_s *const mmdb,
+    const struct sockaddr *const sockaddr,
+    int *const mmdb_error);</pre>
+<p class="Pp">يبحث هذا التابع عن عنوان IP تم حله بالفعل بواسطة <span class="Li">getaddrinfo()</span>.</p>
+<p class="Pp">بدون استدعاء <span class="Li">getaddrinfo()</span> بنفسه، فإن هذا التابع مطابق للتابع <span class="Li">MMDB_lookup_string()</span>.</p>
+<pre>int mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_Lookup_Functions'><a class='permalink' href='#Data_Lookup_Functions'>وظائف البحث عن البيانات</a></h2>
+<p class="Pp">هناك ثلاثة توابع للبحث عن البيانات المرتبطة بعنوان IP.</p>
+<pre>int MMDB_get_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    ...);
+int MMDB_vget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    va_list va_path);
+int MMDB_aget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    const char *const *const path);</pre>
+<p class="Pp">تسمح التوابع الثلاثة بثلاثة أنماط استدعاء مختلفة قليلاً، ولكنها جميعًا تقوم بنفس المهمة.</p>
+<p class="Pp">المعلمة الأولى هي قيمة من <span class="Li">MMDB_entry_s</span>. في معظم الحالات، ستأتي هذه من قيمة <span class="Li">MMDB_lookup_result_s</span> التي أعادها <span class="Li">MMDB_lookup_string()</span> أو <span class="Li">MMDB_lookup_sockaddr()</span>.</p>
+<p class="Pp">المعلمة الثانية هي مؤشر إلى هيكل <span class="Li">MMDB_entry_data_s</span>. سيتم ملء هذا بالبيانات التي يتم البحث عنها، إذا تم العثور على أي بيانات. إذا لم تكن هناك بيانات، فسيكون العضو <span class="Li">has_data</span> لهذا الهيكل خاطئًا. إذا كان <span class="Li">has_data</span> صحيحًا، يمكنك فحص العضو <span class="Li">data_type</span>.</p>
+<p class="Pp">المعلمة الأخيرة هي مسار بحث. يتكون المسار من سلسلة من السلاسل النصية التي تمثل مفاتيح الخريطة (على سبيل المثال، "city") أو فهارس المصفوفة (على سبيل المثال، "0"، "1"، "-1") لاستخدامها في البحث.</p>
+<p class="Pp">تعامل فهارس المصفوفة السالبة كإزاحة من نهاية المصفوفة. على سبيل المثال، "-1" يشير إلى العنصر الأخير في المصفوفة.</p>
+<p class="Pp">يسمح مسار البحث بالتنقل عبر هيكل معقد. على سبيل المثال، بالنظر إلى هذه البيانات:</p>
+<pre>{
+    &quot;names&quot;: {
+        &quot;en&quot;: &quot;Germany&quot;,
+        &quot;de&quot;: &quot;Deutschland&quot;
+    },
+    &quot;cities&quot;: [ &quot;Berlin&quot;, &quot;Frankfurt&quot; ]
+}</pre>
+<p class="Pp">يمكننا البحث عن الاسم باللغة الإنجليزية باستخدام هذا الكود:</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_s entry_data;
+int status =
+    MMDB_get_value(&amp;result.entry, &amp;entry_data,
+                   &quot;names&quot;, &quot;en&quot;, NULL);
+if (MMDB_SUCCESS != status) { ... }
+if (entry_data.has_data) { ... }</pre>
+<p class="Pp">إذا أردنا العثور على المدينة الأولى، فسيكون مسار البحث هو "cities"، "0". إذا لم تقدم مسار بحث، فستحصل على السجل المقابل للخريطة الجذرية. يجب أن ينتهي مسار البحث دائمًا بـ <span class="Li">NULL</span>، بغض النظر عن التابع الذي تستدعيه.</p>
+<p class="Pp">يأخذ التابع <span class="Li">MMDB_get_value</span> عددًا متغيرًا من المعاملات. جميع المعاملات بعد المؤشر إلى <span class="Li">MMDB_entry_data_s</span> هي مسار البحث. يجب أن تكون المعاملة الأخيرة <span class="Li">NULL</span>.</p>
+<p class="Pp">يستقبل التابع <span class="Li">MMDB_vget_value</span> قائمة <span class="Li">va_list</span> كمسار بحث. يجب أن تكون العنصر الأخير المسترد بواسطة <span class="Li">va_arg()</span> هو <span class="Li">NULL</span>.</p>
+<p class="Pp">أخيرًا، يستقبل التابع <span class="Li">MMDB_aget_value</span> مصفوفة من السلاسل النصية كمسار بحث. يجب أن يكون العنصر الأخير في المصفوفة <span class="Li">NULL</span>.</p>
+<p class="Pp">إذا كنت ترغب في الحصول على جميع البيانات من الإدخال دفعة واحدة، يمكنك استدعاء <span class="Li">MMDB_get_entry_data_list()</span>.</p>
+<p class="Pp">لكل من التوابع الثلاثة، القيمة المعاد هي رمز حالة كما هو معرف أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_entry_data_list()</span></h2>
+<pre>int MMDB_get_entry_data_list(
+    MMDB_entry_s *start,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">يسمح لك هذا التابع بالحصول على جميع البيانات من هيكل معقد دفعة واحدة، بدلاً من البحث عن كل جزء عبر استدعاءات متكررة لـ <span class="Li">MMDB_get_value()</span>.</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_list_s *entry_data_list, *first;
+int status =
+    MMDB_get_entry_data_list(&amp;result.entry, &amp;entry_data_list);
+if (MMDB_SUCCESS != status) { ... }
+// احفظ هذا حتى تتمكن من تحرير هذه البيانات لاحقًا
+first = entry_data_list;
+while (1) {
+    MMDB_entry_data_list_s *next = entry_data_list = entry_data_list-&gt;next;
+    if (NULL == next) {
+        break;
+    }
+    switch (next-&gt;entry_data.type) {
+        case MMDB_DATA_TYPE_MAP: { ... }
+        case MMDB_DATA_TYPE_UTF8_STRING: { ... }
+        ...
+    }
+}
+MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">تقع على عاتقك مسؤولية تفسير هيكل <span class="Li">entry_data_list</span>. القائمة مرتبطة بعمق. سنستخدم هذا الهيكل كمثال:</p>
+<pre>{
+    &quot;names&quot;: {
+        &quot;en&quot;: &quot;Germany&quot;,
+        &quot;de&quot;: &quot;Deutschland&quot;
+    },
+    &quot;cities&quot;: [ &quot;Berlin&quot;, &quot;Frankfurt&quot; ]
+}</pre>
+<p class="Pp">ستحتوي القائمة على العناصر التالية:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>MAP - الخريطة الجذرية</dd>
+  <dt>2.</dt>
+  <dd>UTF8_STRING - المفتاح "names"</dd>
+  <dt>3.</dt>
+  <dd>MAP - الخريطة للمفتاح "names"</dd>
+  <dt>4.</dt>
+  <dd>UTF8_STRING - المفتاح "en"</dd>
+  <dt>5.</dt>
+  <dd>UTF8_STRING - قيمة المفتاح "en"</dd>
+  <dt>6.</dt>
+  <dd>UTF8_STRING - المفتاح "de"</dd>
+  <dt>7.</dt>
+  <dd>UTF8_STRING - قيمة المفتاح "de"</dd>
+  <dt>8.</dt>
+  <dd>UTF8_STRING - المفتاح "cities"</dd>
+  <dt>9.</dt>
+  <dd>ARRAY - قيمة المفتاح "cities"</dd>
+  <dt>10.</dt>
+  <dd>UTF8_STRING - array[0]</dd>
+  <dt>11.</dt>
+  <dd>UTF8_STRING - array[1]</dd>
+</dl>
+<p class="Pp">القيمة المعاد للتابع هي رمز حالة كما هو معرف أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_free_entry_data_list()</span></h2>
+<pre>void MMDB_free_entry_data_list(
+    MMDB_entry_data_list_s *const entry_data_list);</pre>
+<p class="Pp">تخصص التوابع <span class="Li">MMDB_get_entry_data_list()</span> و <span class="Li">MMDB_get_metadata_as_entry_data_list()</span> هيكل القائمة المرتبطة من ذاكرة الكومة. استدعِ هذا التابع لتحرير هيكل <span class="Li">MMDB_entry_data_list_s</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_metadata_as_entry_data_list()</span></h2>
+<pre>int MMDB_get_metadata_as_entry_data_list(
+    MMDB_s *const mmdb,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">يسمح لك هذا التابع بالحصول على البيانات الوصفية لقاعدة البيانات كقائمة من هياكل <span class="Li">MMDB_entry_data_list_s</span>. قد يكون هذا أكثر ملاءمة من استخدام هيكل البيانات الوصفية مباشرة.</p>
+<pre>    MMDB_entry_data_list_s *entry_data_list, *first;
+    int status =
+        MMDB_get_metadata_as_entry_data_list(&amp;mmdb, &amp;entry_data_list);
+    if (MMDB_SUCCESS != status) { ... }
+    first = entry_data_list;
+    ... // فعل شيء بالبيانات
+    MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">القيمة المعاد للتابع هي رمز حالة كما هو معرف أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_dump_entry_data_list()</span></h2>
+<pre>int MMDB_dump_entry_data_list(
+    FILE *const stream,
+    MMDB_entry_data_list_s *const entry_data_list,
+    int indent);</pre>
+<p class="Pp">يأخذ هذا التابع قائمة من هياكل <span class="Li">MMDB_entry_data_list_s</span> ويقوم بتسلسلها إلى التدفق المحدد. المعلمة <span class="Li">indent</span> هي مستوى المسافة البادئة الأولي للمخرجات المنتجة. يتم زيادتها للهياكل المتداخلة (الخرائط، المصفوفات، إلخ).</p>
+<p class="Pp">يجب أن يكون <span class="Li">stream</span> مقبض ملف (<span class="Li">stdout</span>، إلخ). إذا كانت منصتك توفر شيئًا مثل <span class="Li">open_memstream()</span> من GNU، يمكنك استخدامه لالتقاط الإخراج كسلسلة نصية.</p>
+<p class="Pp">المخرجات بتنسيق شبيه بـ JSON، ولكن القيم تمييز بنوع بياناتها (ما لم يتم عرض الخرائط والمصفوفات كـ "{}" و "[]" على التوالي).</p>
+<p class="Pp">قد يتغير التنسيق المحدد للمخرجات في الإصدارات المستقبلية.</p>
+</section>
+<div class="section">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>اسم</a></h1>
+<p class="Pp">MMDB_read_node()</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<pre>int MMDB_read_node(
+    MMDB_s *const mmdb,
+    uint32_t node_number,
+    MMDB_search_node_s *const node);</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>وصف</a></h1>
+<p class="Pp">تقوم هذه الدالة بقراءة عقدة محددة في شجرة البحث. الوسيط الثالث هو مرجع إلى بنية <span class="Li">MMDB_search_node_s</span> التي سيتم ملؤها بواسطة هذه الدالة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DATA_STRUCTURES'><a class='permalink' href='#DATA_STRUCTURES'>هياكل البيانات</a></h1>
+<p class="Pp">القيمة المرجعة هي رمز حالة. إذا قمت بتمرير <span class="Li">node_number</span> أكبر من عدد العقد في قاعدة البيانات، فسترجع هذه الدالة <span class="Li">MMDB_INVALID_NODE_NUMBER_ERROR</span>، وإلا فإنها سترجع <span class="Li">MMDB_SUCCESS</span>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STATUS_CODES'><a class='permalink' href='#STATUS_CODES'>رموز الحالة</a></h1>
+<p class="Pp">العقدة الأولى في شجرة البحث هي دائمًا العقدة 0. إذا كنت ترغب في المرور عبر شجرة البحث بأكملها، فستبدأ بقراءة العقدة 0 ثم تتبع الإدخالات التي تشكل هذه العقدة، بناءً على نوع كل إدخال. إذا كان النوع هو <span class="Li">MMDB_RECORD_TYPE_SEARCH_NODE</span>، فسوف يحتوي السجل على عدد صحيح للعقدة التالية للبحث عنها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الدوال</a></h1>
+<p class="Pp">العقدة الأولى في شجرة البحث هي دائمًا العقدة 0. إذا كنت ترغب في المرور عبر شجرة البحث بأكملها، فستبدأ بقراءة العقدة 0 ثم تتبع الإدخالات التي تشكل هذه العقدة، بناءً على نوع كل إدخال. إذا كان النوع هو <span class="Li">MMDB_RECORD_TYPE_SEARCH_NODE</span>، فسوف يحتوي السجل على عدد صحيح للعقدة التالية للبحث عنها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<pre>#include &lt;errno.h&gt;
+#include &lt;maxminddb.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+int main(int argc, char **argv)
+{
+    char *filename = argv[1];
+    char *ip_address = argv[2];
+    MMDB_s mmdb;
+    int status = MMDB_open(filename, MMDB_MODE_MMAP, &amp;mmdb);
+    if (MMDB_SUCCESS != status) {
+        fprintf(stderr, &quot;\n  Can't open %s - %s\n&quot;,
+                filename, MMDB_strerror(status));
+        if (MMDB_IO_ERROR == status) {
+            fprintf(stderr, &quot;    IO error: %s\n&quot;, strerror(errno));
+        }
+        exit(1);
+    }
+    int gai_error, mmdb_error;
+    MMDB_lookup_result_s result =
+        MMDB_lookup_string(&amp;mmdb, ip_address, &amp;gai_error, &amp;mmdb_error);
+    if (0 != gai_error) {
+        fprintf(stderr,
+                &quot;\n  Error from getaddrinfo for %s - %s\n\n&quot;,
+                ip_address, gai_strerror(gai_error));
+        exit(2);
+    }
+    if (MMDB_SUCCESS != mmdb_error) {
+        fprintf(stderr,
+                &quot;\n  Got an error from libmaxminddb: %s\n\n&quot;,
+                MMDB_strerror(mmdb_error));
+        exit(3);
+    }
+    MMDB_entry_data_list_s *entry_data_list = NULL;
+    int exit_code = 0;
+    if (result.found_entry) {
+        int status = MMDB_get_entry_data_list(&amp;result.entry,
+                                              &amp;entry_data_list);
+        if (MMDB_SUCCESS != status) {
+            fprintf(
+                stderr,
+                &quot;Got an error looking up the entry data - %s\n&quot;,
+                MMDB_strerror(status));
+            exit_code = 4;
+            goto end;
+        }
+        if (NULL != entry_data_list) {
+            MMDB_dump_entry_data_list(stdout, entry_data_list, 2);
+        }
+    } else {
+        fprintf(
+            stderr,
+            &quot;\n  No entry for this IP address (%s) was found\n\n&quot;,
+            ip_address);
+        exit_code = 5;
+    }
+    end:
+        MMDB_free_entry_data_list(entry_data_list);
+        MMDB_close(&amp;mmdb);
+        exit(exit_code);
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REQUIREMENTS'><a class='permalink' href='#REQUIREMENTS'>المتطلبات</a></h1>
+<p class="Pp">تتطلب مكتبة libmaxminddb الحد الأدنى من نظام POSIX.1-2001. إذا لم يتم تحديده أثناء التجميع، فسيتم استخدام نظام POSIX.1-2008 افتراضيًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THREAD_SAFETY'><a class='permalink' href='#THREAD_SAFETY'>السلامة في استخدام الخيوط</a></h1>
+<p class="Pp">هذه المكتبة آمنة للاستخدام مع الخيوط عند تجميعها وربطها مع تطبيق <span class="Li">malloc</span> و <span class="Li">free</span> آمن.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INSTALLATION_AND_SOURCE'><a class='permalink' href='#INSTALLATION_AND_SOURCE'>التثبيت والمصدر</a></h1>
+<p class="Pp">يمكنك تنزيل أحدث إصدار من libmaxminddb <b>من GitHub</b>
+  <a href='https://github.com/maxmind/libmaxminddb/releases'>https://github.com/maxmind/libmaxminddb/releases</a>.</p>
+<p class="Pp"><b>مستودع GitHub الخاص بنا</b>
+    <a href='https://github.com/maxmind/libmaxminddb'>https://github.com/maxmind/libmaxminddb</a> متاح للجمهور. يرجى عمل نسخة متفرعة منه!</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUG_REPORTS_AND_PULL_REQUESTS'><a class='permalink' href='#BUG_REPORTS_AND_PULL_REQUESTS'>تقارير الأخطاء وطلبات السحب</a></h1>
+<p class="Pp">يرجى الإبلاغ عن جميع المشكلات إلى <b>متتبع GitHub</b>
+    <a href='https://github.com/maxmind/libmaxminddb/issues'>https://github.com/maxmind/libmaxminddb/issues</a>. نحن نحب تقارير الأخطاء وطلبات السحب. يرجى ملاحظة أن طلبات السحب مفضلة للغاية على التصحيحات.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">تمت كتابة هذه المكتبة بواسطة Boris Zentner (<i>bzentner@maxmind.com</i>) و Dave Rolsky (<i>drolsky@maxmind.com</i>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENSE'><a class='permalink' href='#COPYRIGHT_AND_LICENSE'>حقوق النشر والترخيص</a></h1>
+<p class="Pp">حقوق النشر 2013-2025 MaxMind, Inc.</p>
+<p class="Pp">مرخص بموجب ترخيص Apache الإصدار 2.0 ("الترخيص")؛ لا يجوز لك استخدام هذا الملف إلا بالامتثال للترخيص. يمكنك الحصول على نسخة من الترخيص في</p>
+<a href='https://www.apache.org/licenses/LICENSE-2.0'>https://www.apache.org/licenses/LICENSE-2.0</a>
+<p class="Pp">لم يتم توزيع هذا الملف ما لم يتطلبه القانون المعمول به أو يتم الاتفاق عليه كتابيًا. يتم توزيع البرنامج الموزع على أساس "كما هو" دون أي ضمانات أو شروط من أي نوع، صريحة أو ضمنية. راجع الترخيص للحصول على الأذونات والقيود المحددة بموجب الترخيص.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">mmdblookup(1)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحات الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب إلى" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/libmaxminddb/">extra/libmaxminddb</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.12.2-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="https://maxmind.github.io/libmaxminddb/">https://maxmind.github.io/libmaxminddb/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>صفحات الدليل:</dt>
+        <dd><a href="/listing/extra/libmaxminddb/">/listing/extra/libmaxminddb/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">اسم</a></li>
+        
+            <li><a href="#SYNOPSIS">ملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">وصف</a></li>
+        
+            <li><a href="#DATA_STRUCTURES">هياكل البيانات</a></li>
+        
+            <li><a href="#STATUS_CODES">رموز الحالة</a></li>
+        
+            <li><a href="#FUNCTIONS">الدوال</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#REQUIREMENTS">المتطلبات</a></li>
+        
+            <li><a href="#THREAD_SAFETY">السلامة في استخدام الخيوط</a></li>
+        
+            <li><a href="#INSTALLATION_AND_SOURCE">التثبيت والمصدر</a></li>
+        
+            <li><a href="#BUG_REPORTS_AND_PULL_REQUESTS">تقارير الأخطاء وطلبات السحب</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENSE">حقوق النشر والترخيص</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details> 
+
+<nav class="other-formats">
+    <p>تنسيقات بديلة:
+        
+            <a href="/man/MMDB_strerror.3.en.txt">txt</a>, 
+        
+            <a href="/man/MMDB_strerror.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

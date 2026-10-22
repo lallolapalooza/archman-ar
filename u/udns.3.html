@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>udns(3) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">udns(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">udns(3)</td>
+    <td class="head-vol">Library Functions Manual</td>
+    <td class="head-rtitle">udns(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">udns - مكتبة محلل DNS احتياطي</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSYS'><a class='permalink' href='#SYNOPSYS'>الهيكل</a></h1>
+<pre>#include &lt;udns.h&gt;
+struct <b>dns_ctx</b>;
+struct <b>dns_query</b>;
+extern struct dns_ctx <b>dns_defctx</b>;
+struct dns_ctx *<i>ctx</i>;
+typedef void <b>dns_query_fn</b>(<i>ctx</i>, void *<i>result</i>, void *<i>data</i>);
+typedef int
+<b>dns_parse_fn</b>(const unsigned char *<i>qnd</i>,
+       const unsigned char *<i>pkt</i>,
+       const unsigned char *<i>cur</i>,
+       const unsigned char *<i>end</i>,
+       void **<i>resultp</i>);
+<b>cc</b> ... -l<b>udns</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">مكتبة DNS، <b>udns</b>، تنفذ وظائف محلل DNS احتياطي آمنة للخيوط، والتي يمكن استخدامها بالطريقة التقليدية المتزامنة وكذلك بشكل غير متزامن، مع حلقة أحداث موفرة من التطبيق.</p>
+<p class="Pp">بينما يعمل DNS مع كل من TCP و UDP، يقوم بإجراء استعلام UDP أولاً وإذا كانت النتيجة لا تتناسب مع مخزن DNS المؤقت (512 بايت كحد أقصى لبروتوكول DNS الأصلي)، يعيد الاستعلام عبر TCP، تستخدم المكتبة UDP فقط، ولكنها تستخدم ملحقات EDNS0 (RFC2671) التي تسمح بمخازن مؤقتة أكبر لـ UDP.</p>
+<p class="Pp">تستخدم المكتبة مقبس UDP واحد لإجراء جميع العمليات حتى عند الاستعلام من خوادم أسماء متعددة. بهذه الطريقة، من السهل جدًا استخدام المكتبة في تطبيقات حلقة الأحداث غير المتزامنة: يجب على التطبيق إضافة مقبس واحد فقط إلى مجموعة واصفات الملفات التي يراقبها للإدخال/الإخراج.</p>
+<p class="Pp">تستخدم المكتبة كائنين رئيسيين، <i>سياق المحلل</i> من النوع <b>struct&#x00A0;dns_ctx</b>، و <i>بنية الاستعلام</i> من النوع <b>struct&#x00A0;dns_query</b>، وكلاهما غير شفاف للتطبيق. يحتفظ سياق المحلل بمعلومات عامة حول المحلل، مثل قائمة خوادم الأسماء المراد استخدامها، وقائمة الطلبات النشطة وما شابه ذلك. تحتفظ كائنات الاستعلام بمعلومات حول استعلام DNS واحد قيد التقدم ويتم تخصيصها/معالجتها/تحريرها بواسطة المكتبة. يمكن التعامل مع مؤشر إلى بنية الاستعلام كمعرف لاستعلام قيد التقدم ويمكن استخدامه لإلغاء الاستعلام غير المتزامن أو الانتظار حتى يكتمل.</p>
+<p class="Pp">تعمل الواجهة غير المتزامنة على النحو التالي. يقوم التطبيق بتهيئة سياق المحلل، ويقدم أي عدد من الاستعلامات له باستخدام إحدى روتينات <b>dns_submit_</b><i>XXX</i>() المقدمة (كل منها يعيد معرف الاستعلام كمؤشر إلى بنية الاستعلام)، وينتظر الإدخال على مقبس UDP المستخدم بواسطة المكتبة، ويعطي بعض التحكم للمكتبة عن طريق استدعاء روتينات <b>dns_ioevent</b>() و <b>dns_timeouts</b>() عند الاقتضاء. تقوم المكتبة بإجراء جميع المعالجات اللازمة وتنفيذ روتين رد اتصال مزود من التطبيق عند اكتمال الاستعلام (بنجاح أو لا)، وتزويده بالنتيجة إن وجدت، ومؤشر إلى سياق المحلل (الذي يمكن الحصول على حالة الاكتمال منه)، ومؤشر البيانات الذي قدمه التطبيق عند تقديم الاستعلام. عند تقديم استعلام، يطلب التطبيق كيفية معالجة الرد - إما إرجاع حزمة DNS خام لمعالجته على مستوى منخفض من قبل التطبيق الخاص به، أو قد يوفر عنوان <i>روتين تحليل</i> من النوع <b>dns_parse_fn</b> لإجراء تحويل التنسيق على السلك إلى هيكل بيانات سهل الاستخدام (توفر المكتبة روتينات تحليل لعدة أنواع سجلات الموارد شائعة الاستخدام، بالإضافة إلى واجهة عالية المستوى آمنة النوع تطلب التحليل تلقائيًا). قد تكون معالجة مراقبة الإدخال/الإخراج والمهلة إما تقليدية تستند إلى select() أو poll()، أو يمكن استخدام أي تقنية مدفوعة رد الاتصال.</p>
+<p class="Pp">بالإضافة إلى ذلك، توفر المكتبة واجهة متزامنة تقليدية، والتي يمكن مزجها مع المكالمات غير المتزامنة (أثناء معالجة الاستعلام المتزامن، استمرت معالجة الاستعلامات غير المتزامنة الأخرى لنفس سياق المحلل كالمعتاد). يستخدم التطبيق إحدى روتينات <b>dns_resolve_</b><i>XXX</i>() العديدة التي توفرها المكتبة لإجراء استعلام. كما هو الحال مع الواجهة غير المتزامنة، قد يطلب التطبيق إما إرجاع حزمة DNS خام أو هيكل بيانات خاص بالنوع عن طريق توفير روتين تحليل لمعالجة الرد. تعيد كل روتينة من سلسلة <b>dns_resolve_</b><i>XXX</i>() مؤشرًا إلى النتيجة أو NULL في حالة حدوث أي خطأ. حالة اكتمال الاستعلام (أو طول حزمة DNS الخام) متاحة من سياق المحلل باستخدام الروتين <b>dns_status</b>()، بنفس الطريقة كما هو الحال مع الواجهة غير المتزامنة.</p>
+<p class="Pp">داخليًا، تستخدم المكتبة تنسيق الأسماء المجالية على السلك، المشار إليها باسم <i>تنسيق DN</i> في صفحة الدليل هذه. هذا عبارة عن سلسلة من <i>التسميات</i> المجالية مع بايت طول مسبق، تنتهي بتسمية طولها صفر وهي جزء لا يتجزأ من تنسيق DN. هناك العديد من الروتينات المقدمة للتحويل من سلسلة نصية تقليدية بتنسيق asciiz إلى DN والعودة. الواجهة ذات المستوى الأعلى الخاصة بالنوع تخفي تنسيق DN عن التطبيق.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COMMON_DEFINITIONS'><a class='permalink' href='#COMMON_DEFINITIONS'>تعريفات مشتركة</a></h1>
+<p class="Pp">كل سجل مورد DNS (RR) له <i>نوع</i> و <i>فئة</i>. تحدد المكتبة العديد من الثوابت الصحيحة، <b>DNS_C_</b><i>XXX</i> و <b>DNS_T_</b><i>XXX</i>، لاستخدامها كأسماء رمزية لفئات وأنواع RR، مثل <b>DNS_C_IN</b> لفئة الإنترنت، <b>DNS_T_A</b> لنوع سجل عنوان IPv4، وما إلى ذلك. راجع ملف الرأس udns.h للحصول على قائمة كاملة بجميع هذه الثوابت.</p>
+<p class="Pp">تم تعريف الثوابت التالية في ملف الرأس udns.h:</p>
+<dl class="Bl-tag">
+  <dt id="DNS_MAXDN"><a class="permalink" href="#DNS_MAXDN"><b>DNS_MAXDN</b>
+    (255 بايت)</a></dt>
+  <dd>الحد الأقصى لطول الاسم المجالي بالتنسيق الداخلي (على السلك) DN.</dd>
+  <dt id="DNS_MAXLABEL"><a class="permalink" href="#DNS_MAXLABEL"><b>DNS_MAXLABEL</b>
+    (63 بايت)</a></dt>
+  <dd>الحد الأقصى لطول التسمية الفردية بتنسيق DN.</dd>
+  <dt id="DNS_MAXNAME"><a class="permalink" href="#DNS_MAXNAME"><b>DNS_MAXNAME</b>
+    (1024 بايت)</a></dt>
+  <dd>الحد الأقصى لطول تنسيق asciiz للاسم المجالي.</dd>
+  <dt id="DNS_HSIZE"><a class="permalink" href="#DNS_HSIZE"><b>DNS_HSIZE</b> (12
+    بايت)</a></dt>
+  <dd>حجم الرأس في حزمة DNS.</dd>
+  <dt id="DNS_PORT"><a class="permalink" href="#DNS_PORT"><b>DNS_PORT</b>
+    (53)</a></dt>
+  <dd>المنفذ الافتراضي للاستخدام عند الاتصال بخادم DNS.</dd>
+  <dt id="DNS_MAXSERV"><a class="permalink" href="#DNS_MAXSERV"><b>DNS_MAXSERV</b>
+    (6 خوادم)</a></dt>
+  <dd>الحد الأقصى لعدد خوادم DNS المراد استخدامها.</dd>
+  <dt id="DNS_MAXPACKET"><a class="permalink" href="#DNS_MAXPACKET"><b>DNS_MAXPACKET</b>
+    (512 بايت)</a></dt>
+  <dd>الحد الأقصى لطول حزمة DNS UDP كما هو محدد في بروتوكول DNS الأصلي.</dd>
+  <dt id="DNS_EDNS0PACKET"><a class="permalink" href="#DNS_EDNS0PACKET"><b>DNS_EDNS0PACKET</b>
+    (4096 بايت)</a></dt>
+  <dd>الطول الافتراضي لحزمة DNS UDP (مع ملحقات EDNS0) التي تستخدمها المكتبة.
+      لاحظ أن خوادم الأسماء المتكررة عادة ما تكون قريبة من العميل الذي يطلب منها حل الأسماء، على سبيل المثال، في نفس قسم LAN أو حتى على نفس المضيف، لذلك لا تعد مشكلة تجزئة حزمة UDP مشكلة في معظم الحالات. لاحظ أيضًا أن حجم الحزم الفعلية سيكون بنفس عدد البايتات التي يتطلبها حجم الرد الفعلي، وهو أقل من هذه القيمة في جميع الحالات تقريبًا.
+      </dd>
+</dl>
+<p class="Pp">بالإضافة إلى ذلك، يتم تعريف العديد من الثوابت لتبسيط العمل مع حزم DNS الخام، مثل رموز استجابة DNS (<b>DNS_R_</b><i>XXX</i>)، وتخطيط رأس DNS (<b>DNS_H_</b><i>XXX</i>) وغيرها. مرة أخرى، راجع udns.h للحصول على قائمة كاملة. يتم وصف رموز خطأ المكتبة (<b>DNS_E_</b><i>XXX</i>) لاحقًا في صفحة الدليل هذه.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RESOLVER_CONTEXT'><a class='permalink' href='#RESOLVER_CONTEXT'>سياق المحلل</a></h1>
+<p class="Pp">سياق المحلل، من النوع <b>struct&#x00A0;dns_ctx</b>، هو كائن غير شفاف للتطبيق. توفر العديد من الروتينات التي توفرها المكتبة لتهيئة، ونسخ، وتحرير سياقات المحلل. تتوقع معظم الروتينات الأخرى عالية المستوى في هذه المكتبة مؤشرًا إلى سياق المحلل، <i>ctx</i>، كوسيطة أولى. يتوفر سياق محلل افتراضي، يسمى <b>dns_defctx</b>. عندما يكون مؤشر السياق <i>ctx</i> الذي تم تمريره إلى روتينة NULL، يتم استخدام <b>dns_defctx</b>. يمكن أن يكون هناك عدة سياقات محلل نشطة في نفس الوقت، على سبيل المثال، عندما يكون التطبيق متعدد الخيوط ويستخدم كل خيط محلل.</p>
+<p class="Pp">لاستخدام المكتبة، يجب على التطبيق تهيئة وفتح كائن سياق محلل واحد أو أكثر. هذه إجراءات منفصلة، يتم تنفيذها بواسطة <b>dns_init</b>() (أو <b>dns_reset</b>())، و <b>dns_open</b>(). بين المكالمتين، يمكن للتطبيق إجراء تهيئة إضافية، مثل تعيين خوادم أسماء مخصصة، أو خيارات، أو قوائم بحث النطاق. اختياريًا، في حالة عدم الحاجة إلى تهيئة مخصصة إضافية، يمكن لـ <b>dns_init</b>() فتح السياق إذا كان الوسيط <i>do_open</i> (انظر أدناه) غير صفري.</p>
+<p class="Pp">عند تهيئة سياق المحلل، تستخدم المكتبة معلومات من ملف النظام /etc/resolv.conf (انظر <a href='/man/resolv.conf.5.en'>resolv.conf(5)</a>)، وتستشير متغيرات البيئة <b>$LOCALDOMAIN</b>، <b>$NSCACHEIP</b>، <b>$NAMESERVERS</b>، و <b>$RES_OPTIONS</b>، واسم المضيف المحلي للحصول على قائمة بخوادم الأسماء المحلية، وقائمة بحث أسماء النطاقات، وخيارات المحلل المختلفة.</p>
+<p class="Pp">الروتينات التالية لتهيئة سياق المحلل متوفرة</p>
+</section>
+</div>
+</section>
+
+            </article>
+        </main>
+    </body>
+</html>
+i>data</i>)
+dns_parse_fn <b>dns_parse_ptr</b><b>;</b>
+<b>struct dns_query *</b>
+<b></b><b>dns_submit_a4ptr</b><b>(</b><i>ctx</i>, const struct in_addr *<b>addr</b>,
+   dns_query_ptr_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_ptr *
+<b>dns_resolve_a4ptr</b><b>(</b><i>ctx</i>, const struct in_addr *<b>addr</b>);
+struct dns_query *
+<b>dns_submit_a6ptr</b><b>(</b><i>ctx</i>, const struct in6_addr *<b>addr</b>,
+   dns_query_ptr_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_ptr *
+<b>dns_resolve_a6ptr</b><b>(</b><i>ctx</i>, const struct in6_addr *<b>addr</b>);</pre>
+<p class="Pp">يحتوي الهيكل <b>dns_rr_ptr</b> على نتيجة استعلام IN PTR، وهو عبارة عن مصفوفة من مؤشرات أسماء النطاقات لعنوان IPv4 أو IPv6 معين. يجب أن يكون روتين الاستدعاء لاستعلامات IN PTR من النوع <b>dns_query_ptr_fn</b>، والذي يتوقع مؤشرًا إلى الهيكل <b>dns_rr_ptr</b> كنتيجة للاستعلام بدلاً من حزمة DNS الأولية. يتم استخدام <b>dns_parse_ptr</b>() لتحويل حزمة الرد DNS الأولية إلى الهيكل <b>dns_rr_ptr</b> (يتم استخدامه داخليًا وقد يتم استخدامه مباشرة أيضًا مع واجهة الاستعلام العامة). تُستخدم الروتينات <b>dns_submit_a4ptr</b>() و <b>dns_resolve_a4ptr</b>() لإجراء استعلامات IN PTR لعناوين IPv4 بطريقة آمنة من حيث النوع. تُستخدم الروتينات <b>dns_submit_a6ptr</b>() و <b>dns_resolve_a6ptr</b>() لإجراء استعلامات IN PTR لعناوين IPv6.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IN_MX_Queries'><a class='permalink' href='#IN_MX_Queries'>استعلامات IN MX</a></h2>
+<pre>struct <b>dns_mx</b> {          /* سجل MX واحد */
+  int <b>priority</b>;          /* قيمة الأولوية لهذا MX */
+  char *<b>name</b>;            /* اسم نطاق هذا MX */
+};
+struct <b>dns_rr_mx</b> {       /* مجموعة سجلات IN MX */
+  char *<b>dnsmx_qname</b>;     /* اسم الاستعلام الأصلي */
+  char *<b>dnsmx_cname</b>;     /* الاسم القانوني */
+  unsigned <b>dnsmx_ttl</b>;    /* قيمة الوقت حتى الانتهاء (TTL) */
+  int <b>dnsmx_nrr</b>;         /* عدد خوادم البريد في المجموعة */
+  struct dns_mx <b>dnsmx_mx</b>[]; /* مصفوفة خوادم البريد */
+};
+typedef void
+  <b>dns_query_mx_fn</b>(<i>ctx</i>, struct dns_rr_mx *<i>result</i>, <i>data</i>)
+dns_parse_fn <b>dns_parse_mx</b><b>;</b>
+<b>struct dns_query *</b>
+<b></b><b>dns_submit_mx</b><b>(</b><i>ctx</i>, const char *<i>name</i>, int <i>flags</i>,
+   dns_query_mx_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_mx *
+<b>dns_resolve_mx</b><b>(</b><i>ctx</i>, const char *<i>name</i>, int <i>flags</i>);</pre>
+<p class="Pp">يحتوي الهيكل <b>dns_rr_mx</b> على نتيجة استعلام IN MX، وهو عبارة عن مصفوفة من خوادم البريد لاسم نطاق معين. يجب أن يكون روتين الاستدعاء لاستعلامات IN MX من النوع <b>dns_query_mx_fn</b>، والذي يتوقع مؤشرًا إلى الهيكل <b>dns_rr_mx</b> كنتيجة للاستعلام بدلاً من حزمة DNS الأولية. يتم استخدام <b>dns_parse_mx</b>() لتحويل حزمة الرد DNS الأولية إلى الهيكل <b>dns_rr_mx</b> (يتم استخدامه داخليًا وقد يتم استخدامه مباشرة أيضًا مع واجهة الاستعلام العامة). تُستخدم الروتينات <b>dns_submit_mx</b>() و <b>dns_resolve_mx</b>() لإجراء استعلامات IN MX بطريقة آمنة من حيث النوع. المعلمة <i>name</i> هي اسم النطاق المعني، و <i>flags</i> هي قناع بت أعلام الاستعلام، مع بت واحد، DNS_NOSRCH، ذي أهمية عملية (إذا كان <i>name</i> مطلقًا، أي أنه ينتهي بنقطة، فسيتم تعيين علامة DNS_NOSRCH تلقائيًا).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='TXT_Queries'><a class='permalink' href='#TXT_Queries'>استعلامات TXT</a></h2>
+<pre>struct <b>dns_txt</b> {          /* سجل TXT واحد */
+  int <b>len</b>;                /* طول النص */
+  unsigned char *<b>txt</b>;     /* مؤشر إلى النص */
+};
+struct <b>dns_rr_txt</b> {       /* مجموعة سجلات TXT */
+  char *<b>dnstxt_qname</b>;     /* اسم الاستعلام الأصلي */
+  char *<b>dnstxt_cname</b>;     /* الاسم القانوني */
+  unsigned <b>dnstxt_ttl</b>;    /* قيمة الوقت حتى الانتهاء (TTL) */
+  int <b>dnstxt_nrr</b>;         /* عدد سجلات النص في المجموعة */
+  struct dns_txt <b>dnstxt_txt</b>[]; /* مصفوفة سجلات TXT */
+};
+typedef void
+  <b>dns_query_txt_fn</b>(<i>ctx</i>, struct dns_rr_txt *<i>result</i>, <i>data</i>)
+dns_parse_fn <b>dns_parse_txt</b><b>;</b>
+<b>struct dns_query *</b>
+<b></b><b>dns_submit_txt</b><b>(</b><i>ctx</i>, const char *<i>name</i>, enum dns_class <i>qcls</i>,
+   int <i>flags</i>, dns_query_txt_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_txt *
+<b>dns_resolve_txt</b><b>(</b><i>ctx</i>, const char *<i>name</i>,
+             enum dns_class <i>qcls</i>, int <i>flags</i>);</pre>
+<p class="Pp">يحتوي الهيكل <b>dns_rr_txt</b> على نتيجة استعلام TXT، وهو عبارة عن مصفوفة من سجلات النص لاسم نطاق معين. يجب أن يكون روتين الاستدعاء لاستعلامات TXT من النوع <b>dns_query_txt_fn</b>، والذي يتوقع مؤشرًا إلى الهيكل <b>dns_rr_txt</b> كنتيجة للاستعلام بدلاً من حزمة DNS الأولية. يتم استخدام <b>dns_parse_txt</b>() لتحويل حزمة الرد DNS الأولية إلى الهيكل <b>dns_rr_txt</b> (يتم استخدامه داخليًا وقد يتم استخدامه مباشرة أيضًا مع واجهة الاستعلام العامة). تُستخدم الروتينات <b>dns_submit_txt</b>() و <b>dns_resolve_txt</b>() لإجراء استعلامات IN MX بطريقة آمنة من حيث النوع. المعلمة <i>name</i> هي اسم النطاق المعني، و <i>flags</i> هي قناع بت أعلام الاستعلام، مع بت واحد، DNS_NOSRCH، ذي أهمية عملية (إذا كان <i>name</i> مطلقًا، أي أنه ينتهي بنقطة، فسيتم تعيين علامة DNS_NOSRCH تلقائيًا). لاحظ أن كل سلسلة TXT يتم تمثيلها بواسطة <b>struct&#x00A0;dns_txt</b>، بينما تكون منتهية بالصفر (ولا يشمل حقل الطول في الهيكل المنتهي)، وقد تحتوي على أحرف null مضمنة -- لا يتم تفسير محتوى سجلات TXT بواسطة المكتبة بأي شكل من الأشكال.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='SRV_Queries'><a class='permalink' href='#SRV_Queries'>استعلامات SRV</a></h2>
+<pre>struct <b>dns_srv</b> {          /* سجل SRV واحد */
+  int <b>priority</b>;           /* أولوية السجل */
+  int <b>weight</b>;             /* وزن السجل */
+  int <b>port</b>;               /* رقم المنفذ للاتصال به */
+  char *<b>name</b>;             /* اسم مضيف الهدف */
+};
+struct <b>dns_rr_srv</b> {       /* مجموعة سجلات SRV */
+  char *<b>dnssrv_qname</b>;     /* اسم الاستعلام الأصلي */
+  char *<b>dnssrv_cname</b>;     /* الاسم القانوني */
+  unsigned <b>dnssrv_ttl</b>;    /* قيمة الوقت حتى الانتهاء (TTL) */
+  int <b>dnssrv_nrr</b>;         /* عدد سجلات النص في المجموعة */
+  struct dns_srv <b>dnssrv_srv</b>[]; /* مصفوفة سجلات SRV */
+};
+typedef void
+  <b>dns_query_srv_fn</b>(<i>ctx</i>, struct dns_rr_srv *<i>result</i>, <i>data</i>)
+dns_parse_fn <b>dns_parse_srv</b><b>;</b>
+<b>struct dns_query *</b>
+<b></b><b>dns_submit_srv</b><b>(</b><i>ctx</i>, const char *<i>name</i>, const char *<i>service</i>, const char *<i>protocol</i>,
+   int <i>flags</i>, dns_query_txt_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_srv *
+<b>dns_resolve_srv</b><b>(</b><i>ctx</i>, const char *<i>name</i>, const char *<i>service</i>, const char *<i>protocol</i>,
+             int <i>flags</i>);</pre>
+<p class="Pp">يحتوي الهيكل <b>dns_rr_srv</b> على نتيجة استعلام IN SRV (rfc2782)، وهو عبارة عن مصفوفة من الخوادم (جنبًا إلى جنب مع أرقام المنافذ) التي تقوم بتنفيذ عمليات لـ <i>service</i> معين باستخدام <i>protocol</i> معين على اسم نطاق هدف <i>name</i>. يجب أن يكون روتين الاستدعاء لاستعلامات IN SRV من النوع <b>dns_query_srv_fn</b>، والذي يتوقع مؤشرًا إلى الهيكل <b>dns_rr_srv</b> كنتيجة للاستعلام بدلاً من حزمة DNS الأولية. يتم استخدام <b>dns_parse_srv</b>() لتحويل حزمة الرد DNS الأولية إلى الهيكل <b>dns_rr_srv</b> (يتم استخدامه داخليًا وقد يتم استخدامه مباشرة أيضًا مع واجهة الاستعلام العامة). تُستخدم الروتينات <b>dns_submit_srv</b>() و <b>dns_resolve_srv</b>() لإجراء استعلامات IN SRV بطريقة آمنة من حيث النوع. المعلمة <i>name</i> هي اسم النطاق المعني، و <i>service</i> و <i>protocol</i> يحددان الخدمة والبروتوكول المعنيين (ستقوم المكتبة ببناء استعلام DN وفقًا لقواعد rfc2782) وقد تكون NULL (في هذه الحالة تفترض المكتبة أن المعلمة <i>name</i> تحتوي على استعلام SRV الكامل)، و <i>flags</i> هي قناع بت أعلام الاستعلام، مع بت واحد، DNS_NOSRCH، ذي أهمية عملية (إذا كان <i>name</i> مطلقًا، أي أنه ينتهي بنقطة، فسيتم تعيين علامة DNS_NOSRCH تلقائيًا).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='NAPTR_Queries'><a class='permalink' href='#NAPTR_Queries'>استعلامات NAPTR</a></h2>
+<pre>struct <b>dns_naptr</b> {        /* سجل NAPTR واحد */
+  int <b>order</b>;              /* ترتيب السجل */
+  int <b>preference</b>;         /* تفضيل هذا السجل */
+  char *<b>flags</b>;            /* أعلام خاصة بالتطبيق */
+  char *<b>service</b>;          /* معلمة الخدمة */
+  char *<b>regexp</b>;           /* تعبير عادي بديل */
+  char *<b>replacement</b>;      /* سلسلة الاستبدال */
+};
+struct <b>dns_rr_naptr</b> {     /* مجموعة سجلات NAPTR */
+  char *<b>dnsnaptr_qname</b>;   /* اسم الاستعلام الأصلي */
+  char *<b>dnsnaptr_cname</b>;   /* الاسم القانوني */
+  unsigned <b>dnsnaptr_ttl</b>;  /* قيمة الوقت حتى الانتهاء (TTL) */
+  int <b>dnsnaptr_nrr</b>;       /* عدد سجلات النص في المجموعة */
+  struct dns_naptr <b>dnsnaptr_naptr</b>[]; /* مصفوفة سجلات NAPTR */
+};
+typedef void
+  <b>dns_query_naptr_fn</b>(<i>ctx</i>, struct dns_rr_naptr *<i>result</i>, <i>data</i>)
+dns_parse_fn <b>dns_parse_naptr</b><b>;</b>
+<b>struct dns_query *</b>
+<b></b><b>dns_submit_naptr</b><b>(</b><i>ctx</i>, const char *<i>name</i>, int <i>flags</i>,
+   dns_query_txt_fn *<i>cbck</i>, <i>data</i>);
+struct dns_rr_naptr *
+<b>dns_resolve_naptr</b><b>(</b><i>ctx</i>, const char *<i>name</i>, int <i>flags</i>);</pre>
+<p class="Pp">يحتوي الهيكل <b>dns_rr_naptr</b> على نتيجة استعلام IN NAPTR (rfc3403). يجب أن يكون روتين الاستدعاء لاستعلامات IN NAPTR من النوع <b>dns_query_naptr_fn</b>، ويتوقع مؤشرًا إلى الهيكل <b>dns_rr_naptr</b> كنتيجة للاستعلام بدلاً من حزمة DNS الأولية. يتم استخدام <b>dns_parse_naptr</b>() لتحويل حزمة الرد DNS الأولية إلى الهيكل <b>dns_rr_naptr</b> (يتم استخدامه داخليًا وقد يتم استخدامه مباشرة أيضًا مع واجهة الاستعلام العامة). تُستخدم الروتينات <b>dns_submit_naptr</b>() و <b>dns_resolve_naptr</b>() لإجراء استعلامات IN NAPTR بطريقة آمنة من حيث النوع. المعلمة <i>name</i> هي اسم النطاق المعني، و <i>flags</i> هي قناع بت أعلام الاستعلام، مع بت واحد، DNS_NOSRCH، ذي أهمية عملية (إذا كان <i>name</i> مطلقًا، أي أنه ينتهي بنقطة، فسيتم تعيين علامة DNS_NOSRCH تلقائيًا).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='DNSBL_Interface'><a class='permalink' href='#DNSBL_Interface'>واجهة DNSBL</a></h2>
+<p class="Pp">تُستخدم قوائم الحظر المستندة إلى DNS، أو DNSBLs، على نطاق واسع هذه الأيام، خاصة لحماية خوادم البريد من البريد العشوائي. توفر المكتبة واجهة DNSBL، وهي مجموعة من الروتينات لإجراء استعلامات ضد DNSBLs. تقبل الروتينات عنوان IP (يتم دعم كل من IPv4 و IPv6) ومنطقة DNSBL أساسية كمعلمات للاستعلام، وتعيد إما الهيكل <b>dns_rr_a4</b> أو <b>dns_rr_txt</b>. لاحظ أن واجهة IPv6 تعيد مجموعة سجلات IPv4.</p>
+<pre>struct dns_query *
+<b>dns_submit_a4dnsbl</b>(<i>ctx</i>,
+  const struct in_addr *<i>addr</i>, const char *<i>dnsbl</i>,
+  dns_query_a4_fn *<i>cbck</i>, void *<i>data</i>);
+struct dns_query *
+<b>dns_submit_a4dnsbl_txt</b>(<i>ctx</i>,
+  const struct in_addr *<i>addr</i>, const char *<i>dnsbl</i>,
+  dns_query_txt_fn *<i>cbck</i>, void *<i>data</i>);
+struct dns_query *
+<b>dns_submit_a6dnsbl</b>(<i>ctx</i>,
+  const struct in6_addr *<i>addr</i>, const char *<i>dnsbl</i>,
+  dns_query_a4_fn *<i>cbck</i>, void *<i>data</i>);
+struct dns_query *
+<b>dns_submit_a6dnsbl_txt</b>(<i>ctx</i>,
+  const struct in6_addr *<i>addr</i>, const char *<i>dnsbl</i>,
+  dns_query_txt_fn *<i>cbck</i>, void *<i>data</i>);
+struct dns_rr_a4 *<b>dns_resolve_a4dnsbl</b>(<i>

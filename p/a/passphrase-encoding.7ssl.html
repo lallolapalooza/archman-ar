@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>passphrase-encoding(7ssl) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">passphrase-encoding(7ssl)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/openssl/">openssl</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PASSPHRASE-ENCODING(7ssl)</td>
+    <td class="head-vol">OpenSSL</td>
+    <td class="head-rtitle">PASSPHRASE-ENCODING(7ssl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">passphrase-encoding - كيفية معالجة ترميز أحرف عبارات المرور في أجزاء مختلفة من OpenSSL</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">في عالم حديث مليء بأنواع مختلفة من ترميز الأحرف، أصبحت معالجة عبارات المرور معقدة بشكل متزايد. تحاول صفحة الدليل هذه تقديم نظرة عامة على كيفية معالجة هذه المشكلة حاليًا في أجزاء مختلفة من مكتبة OpenSSL.</p>
+<section class="Ss">
+<h2 class="Ss" id='The_general_case'><a class='permalink' href='#The_general_case'>الحالة العامة</a></h2>
+<p class="Pp">لا تعالج مكتبة OpenSSL عبارات المرور بأي طريقة خاصة كقاعدة عامة، وتثق في التطبيق أو المستخدم لاختيار مجموعة أحرف مناسبة والالتزام بها طوال فترة الكائنات المتأثرة. هذا يعني أنه بالنسبة لكائن تم تشفيره باستخدام عبارة مرور مشفرة بـ ISO-8859-1، يجب فك تشفير هذا الكائن باستخدام عبارة مرور مشفرة بـ ISO-8859-1. من المتوقع أن يتسبب استخدام الترميز الخاطئ في فشل فك التشفير.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='PKCS#12'><a class='permalink' href='#PKCS#12'>PKCS#12</a></h2>
+<p class="Pp">PKCS#12 مختلف قليلاً فيما يتعلق بترميز عبارة المرور. ينص المعيار على أن عبارة المرور يجب أن تكون مشفرة كسلسلة BMPString من ASN.1، والتي تتكون من نقاط الرموز لمجموعة الأحرف الأساسية، مشفرة بترتيب كبير (UCS-2 BE).</p>
+<p class="Pp">يحاول OpenSSL التكيف مع هذه المتطلبات بإحدى الطرق التالية:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>يعامل عبارة المرور المستلمة كملف مشفر بـ UTF-8 ويحاول إعادة ترميزها إلى UTF-16 (وهو نفس UCS-2 للأحرف U+0000 إلى U+D7FF و U+E000 إلى U+FFFF، ولكنه يصبح توسيعًا لأي حرف آخر)، أو إذا فشل ذلك، ينتقل إلى الخطوة 2.</dd>
+  <dt>2.</dt>
+  <dd>يفترض أن عبارة المرور مشفرة بـ ASCII أو ISO-8859-1 ويضيف بشكل انتهازي بايتًا صفريًا إلى كل بايت للحصول على ترميز UCS-2 للأحرف، والذي يقوم بتخزينه كسلسلة BMPString.
+    <p class="Pp">لاحظ أنه نظرًا لعدم وجود فحص للموقع (locale)، فقد يؤدي هذا إلى إنشاء أحرف UCS-2 / UTF-16 لا تتوافق مع أحرف عبارة المرور الأصلية لمجموعات الأحرف الأخرى، مثل أي ترميز ISO-8859-X بخلاف ISO-8859-1 (أو لنظام Windows، CP 1252 باستثناء الأحرف "الرسومية" الإضافية في النطاق 0x80-0x9F).</p>
+  </dd>
+</dl>
+<p class="Pp">إصدارات OpenSSL الأقدم من 1.1.0 تقوم بالمتغير 2 فقط، وهذا هو السبب في أن OpenSSL لا يزال يقوم بذلك، ليكون قادرًا على قراءة الملفات التي تم إنشاؤها بواسطة إصدارات أقدم.</p>
+<p class="Pp">تجدر الإشارة إلى أن هذا النهج ليس خاليًا تمامًا من العيوب.</p>
+<p class="Pp">يمكن لعبارة مرور مشفرة بـ ISO-8859-2 أن تحتوي على تسلسل مثل 0xC3 0xAF (وهما الحرفان " LATIN CAPITAL LETTER A WITH BREVE" و "LATIN CAPITAL LETTER Z WITH DOT ABOVE" في ترميز ISO-8859-2)، ولكن سيتم تفسيرها بشكل خاطئ على أنها نقطة رمز U+00EF (LATIN SMALL LETTER I WITH DIAERESIS) المشفرة بـ UTF-8 بشكل صحيح <i>إذا لم تحتوي عبارة المرور على أي شيء غير صالح بـ UTF-8</i>. عبارة المرور التي تحتوي على هذا النوع من تسلسل البايت ستعطي نتيجة مختلفة في OpenSSL 1.1.0 والإصدارات الأحدث مقارنة بـ OpenSSL الأقدم من 1.1.0.</p>
+<pre>0x00 0xC3 0x00 0xAF                    # OpenSSL أقدم من 1.1.0
+0x00 0xEF                              # OpenSSL 1.1.0 والإصدارات الأحدث</pre>
+<p class="Pp">بنفس القدر، تم تفسير أي شيء مشفر بـ UTF-8 تم تقديمه إلى OpenSSL الأقدم من 1.1.0 بشكل خاطئ كتسلسلات ISO-8859-1.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='OSSL_STORE'><a class='permalink' href='#OSSL_STORE'>OSSL_STORE</a></h2>
+<p class="Pp"><a href='/man/ossl_store.7.en'>ossl_store(7)</a> يعمل كواجهة عامة للوصول إلى جميع أنواع الكائنات، المحمية المحتملة بعبارة مرور، أو رقم تعريف شخصي (PIN)، أو شيء آخر. تفرض هذه الواجهة (API) أن تكون عبارات المرور مشفرة بـ UTF-8، وأن أي ترميز آخر لعبارة المرور قد يؤدي إلى نتائج غير محددة. تعتمد هذه الواجهة على التطبيق لضمان تشفير UTF-8، ولا تتحقق من أن هذا هو الحال، لذا فإن ما تحصل عليه، ستقوم بتمريره أيضًا إلى المحمل الأساسي.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RECOMMENDATIONS'><a class='permalink' href='#RECOMMENDATIONS'>التوصيات</a></h1>
+<p class="Pp">تفترض هذه القسم أنك تعرف عبارة المرور التي استخدمت للتشفير، ولكن ربما تم ترميزها بترميز أحرف مختلف عن ذاك الذي تستخدمه طريقة الإدخال الحالية لديك. على سبيل المثال، ربما تم استخدام عبارة المرور في وقت كان فيه الترميز الافتراضي لديك هو ISO-8859-1 (أي، &quot;na&#x00EF;ve&quot; ينتج عنه تسلسل البايت 0x6E 0x61 0xEF 0x76 0x65)، وأنت الآن في بيئة حيث الترميز الافتراضي لديك هو UTF-8 (أي، &quot;na&#x00EF;ve&quot; ينتج عنه تسلسل البايت 0x6E 0x61 0xC3 0xAF 0x76 0x65). كلما ذكر أنه يجب عليك استخدام ترميز أحرف معين، يجب فهم أنك إما تقوم بتغيير طريقة الإدخال لاستخدام الترميز المذكور عند كتابة عبارة المرور الخاصة بك، أو تستخدم أداة مناسبة لتحويل عبارة المرور الخاصة بك من الترميز الافتراضي الخاص بك إلى ترميز الوجهة.</p>
+<p class="Pp">لاحظ أيضًا أن الأقسام الفرعية أدناه تناقش عبارات المرور القابلة للقراءة البشرية. هذا مهم بشكل خاص لكائنات PKCS#12، حيث يُفترض وجود عبارات مرور قابلة للقراءة البشرية. بالنسبة للكائنات الأخرى، من المشروع استخدام أي تسلسل بايت (مثل تسلسل بايت من <i>/dev/urandom</i> تم حفظه)، مما يجعل أي مناقشة لترميز الأحرف غير ذات صلة؛ في مثل هذه الحالات، استخدم ببساطة نفس تسلسل البايت كما هو.</p>
+<section class="Ss">
+<h2 class="Ss" id='Creating_new_objects'><a class='permalink' href='#Creating_new_objects'>إنشاء كائنات جديدة</a></h2>
+<p class="Pp">لإنشاء كائنات جديدة محمية بعبارة مرور، تأكد من ترميز عبارة المرور باستخدام UTF-8. هذا هو الافتراضي في معظم أنظمة Unix الحديثة، ولكنه قد يتطلب جهدًا على منصات أخرى. خاصة لنظام Windows، فإن تعيين متغير البيئة <b>OPENSSL_WIN32_UTF8</b> سيؤدي إلى تحويل أي شيء يتم إدخاله في موجه أوامر [Windows] إلى UTF-8 (أمر سطر الأوامر وعبارات المرور التي يُطلب منك إدخالها بشكل منفصل على حد سواء).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Opening_existing_objects'><a class='permalink' href='#Opening_existing_objects'>فتح كائنات موجودة</a></h2>
+<p class="Pp">لفتح كائنات محمية بعبارة مرور حيث تعرف ترميز الأحرف الذي تم استخدامه لعبارة المرور للتشفير، تأكد من استخدام نفس الترميز مرة أخرى.</p>
+<p class="Pp">لفتح كائنات محمية بعبارة مرور حيث ترميز الأحرف الذي تم استخدامه غير معروف، أو حيث التطبيق المنتج غير معروف، جرب أحد الخيارات التالية:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>جرب عبارة المرور التي لديك كما هي في ترميز الأحرف لبيئتك. من الممكن أن يكون تسلسل البايت الخاص بها صحيحًا تمامًا.</dd>
+  <dt>2.</dt>
+  <dd>قم بتحويل عبارة المرور إلى UTF-8 وجرب بالنتيجة. على وجه الخصوص مع PKCS#12، يجب أن يفتح هذا أي كائن تم إنشاؤه وفقًا للمواصفات.</dd>
+  <dt>3.</dt>
+  <dd>قم بتحويل بسيط (أي، رياضي بحت) من ISO-8859-1 إلى UTF-8 وجرب بالنتيجة. يختلف هذا عن المحاولة السابقة لأن ISO-8859-1 يتطابق مباشرة مع U+0000 إلى U+00FF، وهو ما لا تقوم به مجموعات الأحرف الأخرى غير UTF-8.
+    <p class="Pp">هذا يعالج أيضًا الحالة التي تم فيها استخدام سلسلة مشفرة بـ UTF-8 مع OpenSSL الأقدم من 1.1.0. (على سبيل المثال، <span class="Li">&quot;&#x00EF;&quot;</span>، وهي 0xC3 0xAF عند تشفيرها بـ UTF-8، ستصبح 0xC3 0x83 0xC2 0xAF عند إعادة ترميزها بالطريقة البسيطة. ثم سيؤدي التحويل إلى BMPString إلى 0x00 0xC3 0x00 0xA4 0x00 0x00، وهو الترميز الخاطئ/غير المتوافق الذي استخدمه OpenSSL الأقدم من 1.1.0).</p>
+  </dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/evp.7.en'>evp(7)</a>، <a href='/man/ossl_store.7.en'>ossl_store(7)</a>، <a href='/man/EVP_BytesToKey.3.en'>EVP_BytesToKey(3)</a>،
+    <a href='/man/EVP_DecryptInit.3.en'>EVP_DecryptInit(3)</a>، <a href='/man/PEM_do_header.3.en'>PEM_do_header(3)</a>، <a href='/man/PKCS12_parse.3.en'>PKCS12_parse(3)</a>،
+    <a href='/man/PKCS12_newpass.3.en'>PKCS12_newpass(3)</a>، <a href='/man/d2i_PKCS8PrivateKey_bio.3.en'>d2i_PKCS8PrivateKey_bio(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>حقوق النشر</a></h1>
+<p class="Pp">Copyright 2018-2021 The OpenSSL Project Authors. All Rights
+    Reserved.</p>
+<p class="Pp">مرخص بموجب ترخيص Apache 2.0 ("الترخيص"). قد لا تستخدم هذا الملف إلا بالامتثال للترخيص. يمكنك الحصول على نسخة في ملف LICENSE في التوزيعة المصدرية أو على
+    <a href='https://www.openssl.org/source/license.html'>https://www.openssl.org/source/license.html</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-01</td>
+    <td class="foot-os">3.6.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct
+-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/openssl/">core/openssl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>3.6.0-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://www.openssl.org">https://www.openssl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/openssl/">/listing/core/openssl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RECOMMENDATIONS">التوصيات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضا</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/passphrase-encoding.7ssl.en.txt">txt</a>, 
+        
+            <a href="/man/passphrase-encoding.7ssl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

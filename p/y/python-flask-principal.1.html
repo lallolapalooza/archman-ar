@@ -1,0 +1,155 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">python-flask-principal(1)</h1>
+<link rel="stylesheet" href="basic.css">
+- section:
+    title: Protect the endpoint
+    paragraphs:
+      - text: The user model has a list of posts the user has authored, add the needs to the identity
+        code: |
+          if hasattr(current_user, 'posts'):
+              for post in current_user.posts:
+                  identity.provides.add(EditBlogPostNeed(unicode(post.id)))
+      - text: The next step will be to protect the endpoint that allows a user to edit an article. This is done by creating a permission object on the fly using the ID of the resource, in this case the blog post:
+        code: |
+          @app.route('/posts/<post_id>', methods=['PUT', 'PATCH'])
+          def edit_post(post_id):
+              permission = EditBlogPostPermission(post_id)
+              if permission.can():
+                  # Save the edits ...
+                  return render_template('edit_post.html')
+              abort(403)  # HTTP Forbidden
+- section:
+    title: STARTING THE EXTENSION
+    definitions:
+      - term: class flask_principal.Principal(app=None, use_sessions=True, skip_static=False)
+        description: Principal extension
+        parameters:
+          - name: app
+            description: The flask application to extend
+          - name: use_sessions
+            description: Whether to use sessions to extract and store identification.
+          - name: skip_static
+            description: Whether to ignore static endpoints.
+      - term: identity_loader(f)
+        description: Decorator to define a function as an identity loader.
+        paragraphs:
+          - text: An identity loader function is called before request to find any provided identities. The first found identity is used to load from.
+          - text: For example:
+            code: |
+              app = Flask(__name__)
+              principals = Principal(app)
+              @principals.identity_loader
+              def load_identity_from_weird_usecase():
+                  return Identity('ali')
+      - term: identity_saver(f)
+        description: Decorator to define a function as an identity saver.
+        paragraphs:
+          - text: An identity loader saver is called when the identity is set to persist it for the next request.
+          - text: For example:
+            code: |
+              app = Flask(__name__)
+              principals = Principal(app)
+              @principals.identity_saver
+              def save_identity_to_weird_usecase(identity):
+                  my_special_cookie['identity'] = identity
+      - term: set_identity(identity)
+        description: Set the current identity.
+        parameters:
+          - name: identity
+            description: The identity to set
+- section:
+    title: MAIN TYPES
+    definitions:
+      - term: class flask_principal.Permission(*needs)
+        description: Represents needs, any of which must be present to access a resource
+        parameters:
+          - name: needs
+            description: The needs for this permission
+        methods:
+          - name: allows(identity)
+            description: Whether the identity can access this permission.
+            parameters:
+              - name: identity
+                description: The identity
+          - name: can()
+            description: Whether the required context for this permission has access
+            paragraphs:
+              - text: This creates an identity context and tests whether it can access this permission
+          - name: difference(other)
+            description: Create a new permission consisting of requirements in this permission and not in the other.
+          - name: issubset(other)
+            description: Whether this permission needs are a subset of another
+            parameters:
+              - name: other
+                description: The other permission
+          - name: require(http_exception=None)
+            description: Create a principal for this permission.
+            paragraphs:
+              - text: The principal may be used as a context manager, or a decrorator.
+              - text: If <b>http_exception</b> is passed then <b>abort()</b> will be called with the HTTP exception code. Otherwise a <b>PermissionDenied</b> exception will be raised if the identity does not meet the requirements.
+            parameters:
+              - name: http_exception
+                description: the HTTP exception code (403, 401 etc)
+          - name: reverse()
+            description: Returns reverse of current state (needs->excludes, excludes->needs)
+          - name: test(http_exception=None)
+            description: Checks if permission available and raises relevant exception if not. This is useful if you just want to check permission without wrapping everything in a require() block.
+            paragraphs:
+              - text: This is equivalent to:
+                code: |
+                  with permission.require():
+                      pass
+          - name: union(other)
+            description: Create a new permission with the requirements of the union of this and other.
+            parameters:
+              - name: other
+                description: The other permission
+      - term: class flask_principal.Identity(id, auth_type=None)
+        description: Represent the user's identity.
+        paragraphs:
+          - text: The identity is used to represent the user's identity in the system. This object is created on login, or on the start of the request as loaded from the user's session.
+          - text: Once loaded it is sent using the <i>identity-loaded</i> signal, and should be populated with additional required information.
+          - text: Needs that are provided by this identity should be added to the <i>provides</i> set after loading.
+        parameters:
+          - name: id
+            description: The user id
+          - name: auth_type
+            description: The authentication type used to confirm the user's identity.
+        methods:
+          - name: can(permission)
+            description: Whether the identity has access to the permission.
+            parameters:
+              - name: permission
+                description: The permission to test provision for.
+      - term: class flask_principal.AnonymousIdentity
+        description: An anonymous identity
+      - term: class flask_principal.IdentityContext(permission, http_exception=None)
+        description: The context of an identity for a permission.
+        note: The principal is usually created by the flaskext.Permission.require method call for normal use-cases.
+        paragraphs:
+          - text: The principal behaves as either a context manager or a decorator. The permission is checked for provision in the identity, and if available the flow is continued (context manager) or the function is executed (decorator).
+        methods:
+          - name: can()
+            description: Whether the identity has access to the permission
+        attributes:
+          - name: http_exception
+            description: The permission of this principal
+          - name: identity
+            type: property
+            description: The identity of this principal
+- section:
+    title: PREDEFINED NEED TYPES
+    definitions:
+      - term: class flask_principal.Need(method, value)
+        description: A required need
+        paragraphs:
+          - text: This is just a named tuple, and practically any tuple will do.
+          - text: The <b>method</b> attribute can be used to look up element 0, and the <b>value</b> attribute can be used to look up element 1.
+      - term: flask_principal.RoleNeed
+        description: alias of functools.partial(<class 'flask_principal.Need'>, 'role')
+      - term: flask_principal.UserNeed
+        description: alias of functools.partial(<class 'flask_principal.Need'>, 'id')
+      - term: class flask_principal.ItemNeed(method, value, type)
+        description: A required item need
+        paragraphs:
+          - text: An item need is just a named tuple, and practically any tuple will do. In addition to other Needs, there is a typ

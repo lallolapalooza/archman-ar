@@ -1,0 +1,169 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ossl-guide-quic-client-non-block(7ssl)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/openssl/">openssl</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+<link rel="stylesheet" href="basic.css">
+؛);
+    goto end; /* لا يمكن إعادة المحاولة: خطأ */
+}</pre>
+<p class="Pp">عند الكتابة، لا نتوقع رؤية استجابة EOF، لذا نعامل تلك الحالة بنفس طريقة الخطأ الفادح.</p>
+<p class="Pp">قراءة استجابة من الخادم مشابهة:</p>
+<pre>do {
+    /*
+     * الحصول على ما يصل إلى sizeof(buf) بايت من الاستجابة. نستمر في القراءة حتى
+     * يقوم الخادم بإغلاق الاتصال.
+     */
+    while (!eof &amp;&amp; !SSL_read_ex(ssl, buf, sizeof(buf), &amp;readbytes)) {
+        switch (handle_io_failure(ssl, 0)) {
+        case 1:
+            continue; /* إعادة المحاولة */
+        case 0:
+            eof = 1;
+            continue;
+        case -1:
+        default:
+            printf(&quot;فشل قراءة البيانات المتبقية\n&quot;);
+            goto end; /* لا يمكن إعادة المحاولة: خطأ */
+        }
+    }
+    /*
+     * لا تضمن OpenSSL أن البيانات التي تم إرجاعها هي سلسلة نصية أو
+     * أنها منتهية بـ NUL، لذا نستخدم fwrite() لكتابة العدد الدقيق
+     * للبايتات التي قرأناها. يمكن أن تكون البيانات غير قابلة للطباعة أو
+     * تحتوي على أحرف NUL في منتصفها. لهذا المثال البسيط،
+     * سنقوم بطباعتها إلى stdout على أي حال.
+     */
+    if (!eof)
+        fwrite(buf, 1, readbytes, stdout);
+} while (!eof);
+/* في حال لم تنته الاستجابة بسطر جديد، نضيف واحدًا الآن */
+printf(&quot;\n&quot;);</pre>
+<p class="Pp">الفرق الرئيسي هذه المرة هو أنه من الصالح لنا تلقي استجابة EOF عند محاولة قراءة البيانات من الخادم. سيحدث هذا عندما يغلق الخادم الاتصال بعد إرسال جميع البيانات في استجابته.</p>
+<p class="Pp">في هذا العرض التوضيحي، نقوم فقط بطباعة جميع البيانات التي تلقيناها في الاستجابة من الخادم. نستمر في الدوران في الحلقة حتى نواجه خطأ فادحًا، أو نتلقى EOF (مما يشير إلى إنهاء سلس).</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='إغلاق_الاتصال'><a class='permalink' href='#إغلاق_الاتصال'>إغلاق   الاتصال</a></h2>
+<p class="Pp">كما هو الحال في مثال عميل QUIC الحظر، يجب علينا إغلاق الاتصال عندما ننتهي منه.</p>
+<p class="Pp">على الرغم من أننا تلقينا EOF في الدفق الذي كنا نقرأ منه أعلاه، إلا أن هذا لا يخبرنا شيئًا عن حالة الاتصال الأساسي. سيقوم تطبيق العرض التوضيحي الخاص بنا ببدء عملية إغلاق الاتصال عبر <a href='/man/SSL_shutdown.3.en'>SSL_shutdown(3)</a>.</p>
+<p class="Pp">نظرًا لأن تطبيقنا يبدأ عملية الإغلاق، فقد نتوقع رؤية <a href='/man/SSL_shutdown.3.en'>SSL_shutdown(3)</a> يعطي قيمة إرجاع 0، ثم يجب أن نستمر في استدعائه حتى نتلقى قيمة إرجاع 1 (مما يعني أننا أكملنا الإغلاق بنجاح). نظرًا لأننا نستخدم كائن <b>SSL</b> غير حاظر، فقد نتوقع الاضطرار إلى إعادة محاولة هذه العملية عدة مرات. إذا أعادت <a href='/man/SSL_shutdown.3.en'>SSL_shutdown(3)</a> نتيجة سالبة، فيجب علينا استدعاء <a href='/man/SSL_get_error.3.en'>SSL_get_error(3)</a> لمعرفة ما يجب فعله بعد ذلك. نستخدم دالة <b>handle_io_failure()</b> التي طورناها سابقًا لهذا الغرض:</p>
+<pre>/*
+ * استدعاء SSL_shutdown() بشكل متكرر حتى يتم إغلاق الاتصال بالكامل.
+ */
+while ((ret = SSL_shutdown(ssl)) != 1) {
+    if (ret &lt; 0 &amp;&amp; handle_io_failure(ssl, ret) == 1)
+        continue; /* إعادة المحاولة */
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='التنظيف_النهائي'><a class='permalink' href='#التنظيف_النهائي'>التنظيف   النهائي</a></h2>
+<p class="Pp">كما هو الحال مع مثال عميل QUIC الحظر، بمجرد الانتهاء من الاتصال، يجب علينا تحريره. خطوات القيام بذلك لهذا المثال هي نفسها كما هو الحال بالنسبة للمثال الحظر، لذا لن نكررها هنا.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='قراءات_إضافية'><a class='permalink' href='#قراءات_إضافية'>قراءات   إضافية</a></h1>
+<p class="Pp">انظر <a href='/man/ossl-guide-quic-client-block.7.en'>ossl-guide-quic-client-block(7)</a> لقراءة دليل حول كيفية كتابة عميل QUIC حظر. انظر
+    <a href='/man/ossl-guide-quic-multi-stream.7.en'>ossl-guide-quic-multi-stream(7)</a> لرؤية كيفية كتابة عميل QUIC متعدد الدفق.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='انظر_أيضا'><a class='permalink' href='#انظر_أيضا'>انظر   أيضًا</a></h1>
+<p class="Pp"><a href='/man/ossl-guide-introduction.7.en'>ossl-guide-introduction(7)</a>,
+    <a href='/man/ossl-guide-libraries-introduction.7.en'>ossl-guide-libraries-introduction(7)</a>,
+    <a href='/man/ossl-guide-libssl-introduction.7.en'>ossl-guide-libssl-introduction(7)</a>,
+    <a href='/man/ossl-guide-quic-introduction.7.en'>ossl-guide-quic-introduction(7)</a>,
+    <a href='/man/ossl-guide-quic-client-block.7.en'>ossl-guide-quic-client-block(7)</a>,
+    <a href='/man/ossl-guide-quic-multi-stream.7.en'>ossl-guide-quic-multi-stream(7)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='حقوق_النشر'><a class='permalink' href='#حقوق_النشر'>حقوق   النشر</a></h1>
+<p class="Pp">Copyright 2023-2025 The OpenSSL Project Authors. All Rights
+    Reserved.</p>
+<p class="Pp">Licensed under the Apache License 2.0 (the &quot;License&quot;).
+    You may not use this file except in compliance with the License. You can
+    obtain a copy in the file LICENSE in the source distribution or at
+    <a href='https://www.openssl.org/source/license.html'>https://www.openssl.org/source/license.html</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-01</td>
+    <td class="foot-os">3.6.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="انتقل" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/openssl/">core/openssl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>3.6.0-1</dd>
+        <dt>المشروع:</dt>
+        <dd><a href="https://www.openssl.org">https://www.openssl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/openssl/">/listing/core/openssl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SIMPLE_NONBLOCKING_QUIC_CLIENT_EXAMPLE">مثال عميل QUIC غير حاظر بسيط</a></li>
+        
+            <li><a href="#FURTHER_READING">قراءات إضافية</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#COPYRIGHT">حقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/ossl-guide-quic-client-non-block.7ssl.en.txt">txt</a>, 
+        
+            <a href="/man/ossl-guide-quic-client-non-block.7ssl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

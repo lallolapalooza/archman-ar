@@ -1,0 +1,278 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlxstut.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+<link rel="stylesheet" href="basic.css">
+<section class="Ss">
+<h2 class="Ss" id='Getting_the_fat_out_of_XSUBs'><a class='permalink' href='#Getting_the_fat_out_of_XSUBs'>إخراج الدهون من XSUBs</a></h2>
+<p class="Pp">في &quot;المثال 4&quot;، احتوى الجزء الثاني من ملف .xs على الوصف التالي لـ XSUB:</p>
+<pre>double
+foo(a,b,c)
+        int             a
+        long            b
+        const char *    c
+    OUTPUT:
+        RETVAL</pre>
+<p class="Pp">لاحظ أنه على عكس &quot;المثال 1&quot; و &quot;المثال 2&quot; و &quot;المثال 3&quot;، لا يحتوي هذا الوصف على <i>الكود</i> الفعلي لما يتم إجراؤه أثناء استدعاء دالة Perl <b>foo()</b>. لفهم ما يحدث هنا، يمكن للمرء إضافة قسم CODE إلى هذا XSUB:</p>
+<pre>double
+foo(a,b,c)
+        int             a
+        long            b
+        const char *    c
+    CODE:
+        RETVAL = foo(a,b,c);
+    OUTPUT:
+        RETVAL</pre>
+<p class="Pp">ومع ذلك، فإن هذين الـ XSUBs يوفران كود C متولد متطابق تقريبًا: المترجم <b>xsubpp</b> ذكي بما يكفي لمعرفة قسم <span class="Li">&quot;CODE:&quot;</span> من السطرين الأولين لوصف XSUB. ماذا عن قسم <span class="Li">&quot;OUTPUT:&quot;</span>؟ في الواقع، هذا هو نفسه تمامًا! يمكن إزالة قسم <span class="Li">&quot;OUTPUT:&quot;</span> أيضًا، <i>طالما</i> <i>أن قسم</i> <span class="Li">&quot;CODE:&quot;</span> <i>أو قسم</i> <span class="Li">&quot;PPCODE:&quot;</span> <i>غير محدد</i>: يمكن لـ <b>xsubpp</b> رؤية أنه بحاجة إلى إنشاء قسم استدعاء دالة، وسيقوم بتوليد قسم OUTPUT تلقائيًا أيضًا. وبالتالي يمكن اختصار XSUB ليصبح:</p>
+<pre>double
+foo(a,b,c)
+        int             a
+        long            b
+        const char *    c</pre>
+<p class="Pp">هل يمكننا فعل الشيء نفسه مع XSUB</p>
+<pre>int
+is_even(input)
+        int     input
+    CODE:
+        RETVAL = (input % 2 == 0);
+    OUTPUT:
+        RETVAL</pre>
+<p class="Pp">من &quot;المثال 2&quot;؟ للقيام بذلك، يحتاج المرء إلى تعريف دالة C <span class="Li">&quot;int</span> <span class="Li">is_even(int</span> <span class="Li">input)&quot;</span>. كما رأينا في &quot;تشريح ملف .xs&quot;، فإن المكان المناسب لهذا التعريف هو الجزء الأول من ملف .xs. في الواقع، دالة C</p>
+<pre>int
+is_even(int arg)
+{
+        return (arg % 2 == 0);
+}</pre>
+<p class="Pp">ربما يكون مبالغًا فيه لهذا. شيء بسيط مثل <span class="Li">&quot;#define&quot;</span> سيفي بالغرض أيضًا:</p>
+<pre>#define is_even(arg)    ((arg) % 2 == 0)</pre>
+<p class="Pp">بعد وجود هذا في الجزء الأول من ملف .xs، يصبح جزء &quot;Perl glue&quot; بسيطًا مثل</p>
+<pre>int
+is_even(input)
+        int     input</pre>
+<p class="Pp">هذه التقنية لفصل جزء الغراء عن جزء الحصان العمل له مفاضلات واضحة: إذا كنت ترغب في تغيير واجهة Perl، فأنت بحاجة إلى تغيير مكانين في الكود الخاص بك. ومع ذلك، فإنه يزيل الكثير من الفوضى، ويجعل جزء الحصان العمل مستقلًا عن خصوصيات اتفاقية استدعاء Perl. (في الواقع، لا يوجد شيء خاص بـ Perl في الوصف أعلاه، قد يكون إصدار مختلف من <b>xsubpp</b> قد ترجم هذا إلى TCL glue أو Python glue أيضًا.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='More_about_XSUB_arguments'><a class='permalink' href='#More_about_XSUB_arguments'>المزيد حول وسائط XSUB</a></h2>
+<p class="Pp">مع الانتهاء من المثال 4، أصبح لدينا الآن طريقة سهلة لمحاكاة بعض المكتبات الواقعية التي قد لا تكون واجهاتها هي الأنظف في العالم. سنواصل الآن مناقشة الوسائط التي يتم تمريرها إلى مترجم <b>xsubpp</b>.</p>
+<p class="Pp">عند تحديد وسائط للإجراءات في ملف .xs، فإنك تمرر في الواقع ثلاث قطع من المعلومات لكل وسيط مدرج. القطعة الأولى هي ترتيب هذا الوسيط بالنسبة للآخرين (الأول، الثاني، إلخ). الثانية هي نوع الوسيط، وتتكون من تعريف النوع للوسيط (مثل int، char*، إلخ). القطعة الثالثة هي اتفاقية الاستدعاء للوسيط في استدعاء دالة المكتبة.</p>
+<p class="Pp">بينما تمرر Perl الوسائط إلى الدوال عن طريق المرجع، تمرر C الوسائط عن طريق القيمة؛ لتنفيذ دالة C تعدل بيانات أحد &quot;الوسائط&quot;، فإن الوسيط الفعلي لهذه الدالة C سيكون مؤشرًا إلى البيانات. وبالتالي، قد يكون للدالتين C مع التصريحين</p>
+<pre>int string_length(char *s);
+int upper_case_char(char *cp);</pre>
+<p class="Pp">دلالات مختلفة تمامًا: قد تفحص الأولى مصفوفة من المحارف التي يشير إليها s، وقد تقوم الثانية بإلغاء مرجعية <span class="Li">&quot;cp&quot;</span> على الفور ومعالجة <span class="Li">*cp</span> فقط (باستخدام القيمة المرجعة، على سبيل المثال، كمؤشر نجاح). من Perl، سيتم استخدام هذه الدوال بطريقة مختلفة تمامًا.</p>
+<p class="Pp">يقوم المرء بنقل هذه المعلومات إلى <b>xsubpp</b> عن طريق استبدال <span class="Li">&quot;*&quot;</span> قبل الوسيط بـ <span class="Li">&quot;&amp;&quot;</span>. <span class="Li">&quot;&amp;&quot;</span> يعني أن الوسيط يجب تمريره إلى دالة مكتبة عن طريق عنوانه. قد يتم تحويل الدالتين المذكورتين أعلاه إلى XSUBs بالشكل التالي:</p>
+<pre>int
+string_length(s)
+        char *  s
+int
+upper_case_char(cp)
+        char    &amp;cp</pre>
+<p class="Pp">على سبيل المثال، ضع في اعتبارك:</p>
+<pre>int
+foo(a,b)
+        char    &amp;a
+        char *  b</pre>
+<p class="Pp">سيتم التعامل مع الوسيط الأول لـ Perl لهذه الدالة كـ char وتعيينه للمتغير a، وسيتم تمرير عنوانه إلى الدالة foo. سيتم التعامل مع الوسيط الثاني لـ Perl كمؤشر سلسلة وتعيينه للمتغير b. سيتم تمرير <i>قيمة</i> b إلى الدالة foo. سيكون الاستدعاء الفعلي للدالة foo الذي يقوم <b>xsubpp</b> بتوليده على النحو التالي:</p>
+<pre>foo(&amp;a, b);</pre>
+<p class="Pp">سيقوم <b>xsubpp</b> بتحليل قوائم وسائط الدوال التالية بشكل متطابق:</p>
+<pre>char    &amp;a
+char&amp;a
+char    &amp; a</pre>
+<p class="Pp">ومع ذلك، للمساعدة في تسهيل الفهم، يُقترح وضع &quot;&amp;&quot; بجوار اسم المتغير وبعيدًا عن نوع المتغير)، ووضع &quot;*&quot; بالقرب من نوع المتغير، ولكن بعيدًا عن اسم المتغير (كما في استدعاء foo أعلاه). من خلال القيام بذلك، من السهل فهم ما سيتم تمريره إلى دالة C بالضبط؛ سيكون أي شيء في &quot;العمود الأخير&quot;.</p>
+<p class="Pp">يجب عليك بذل قصارى جهد لمحاولة تمرير النوع المطلوب للدالة، عندما يكون ذلك ممكنًا. سيوفر لك هذا الكثير من المتاعب على المدى الطويل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Argument_Stack'><a class='permalink' href='#The_Argument_Stack'>مكدس الوسائط</a></h2>
+<p class="Pp">إذا نظرنا إلى أي من أكواد C التي تم إنشاؤها بواسطة أي من الأمثلة باستثناء المثال 1، ستلاحظ عددًا من الإشارات إلى ST(n)، حيث n عادة ما تكون 0. &quot;ST&quot; هو في الواقع ماكرو يشير إلى الوسيط n في مكدس الوسائط. <a href='/man/ST.0.en'>ST(0)</a> هو بالتالي الوسيط الأول في المكدس وبالتالي الوسيط الأول الذي تم تمريره إلى XSUB، <a href='/man/ST.1.en'>ST(1)</a> هو الوسيط الثاني، وهكذا.</p>
+<p class="Pp">عندما تسرد وسائط XSUB في ملف .xs، فإن ذلك يخبر <b>xsubpp</b> أي وسيط يتوافق مع أي من مكدس الوسائط (أي، الأول المدرج هو الوسيط الأول، وهكذا). أنت تدعو إلى الكارثة إذا لم تسردها بنفس الترتيب الذي تتوقعه الدالة.</p>
+<p class="Pp">القيم الفعلية في مكدس الوسائط هي مؤشرات إلى القيم التي تم تمريرها. عندما يتم سرد وسيط كقيمة OUTPUT، يتم تغيير قيمته المقابلة في المكدس (أي <a href='/man/ST.0.en'>ST(0)</a> إذا كان الوسيط الأول). يمكنك التحقق من ذلك من خلال النظر إلى كود C الذي تم إنشاؤه للمثال 3. يحتوي الكود الخاص بروتين XSUB <b>round()</b> على أسطر تبدو كالتالي:</p>
+<pre>double  arg = (double)SvNV(ST(0));
+/* Round the contents of the variable arg */
+sv_setnv(ST(0), (double)arg);</pre>
+<p class="Pp">يتم تعيين المتغير arg في البداية عن طريق أخذ القيمة من <a href='/man/ST.0.en'>ST(0)</a>، ثم يتم تخزينه مرة أخرى في <a href='/man/ST.0.en'>ST(0)</a> في نهاية الإجراء.</p>
+<p class="Pp">يُسمح لـ XSUBs أيضًا بإرجاع قوائم، وليس مجرد مقاييس. يجب القيام بذلك عن طريق معالجة قيم المكدس <a href='/man/ST.0.en'>ST(0)</a>، <a href='/man/ST.1.en'>ST(1)</a>، إلخ، بطريقة مختلفة بشكل دقيق. انظر perlxs للحصول على التفاصيل.</p>
+<p class="Pp">يُسمح لـ XSUBs أيضًا بتجنب التحويل التلقائي لوسائط دوال Perl إلى وسائط دوال C. انظر perlxs للحصول على التفاصيل. يفضل بعض الأشخاص التحويل اليدوي عن طريق فحص <span class="Li">ST(i)</span> حتى في الحالات التي يقوم فيها التحويل التلقائي بذلك، بحجة أن هذا يجعل منطق استدعاء XSUB أوضح. قارن مع &quot;إخراج الدهون من XSUBs&quot; لمفاضلة مماثلة للفصل الكامل لأجزاء &quot;Perl glue&quot; و &quot;workhorse&quot; لـ XSUB.</p>
+<p class="Pp">بينما قد يجادل الخبراء حول هذه الأساليب، قد يفضل المبتدئ في Perl guts طريقة تكون أقل تخصيصًا لـ Perl guts قدر الإمكان، مما يعني التحويل التلقائي وتوليد الاستدعاء التلقائي، كما في &quot;إخراج الدهون من XSUBs&quot;. هذا النهج له فائدة إضافية تتمثل في حماية كاتب XSUB من التغييرات المستقبلية في واجهة برمجة تطبيقات Perl.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Extending_your_Extension'><a class='permalink' href='#Extending_your_Extension'>توسيع الامتداد الخاص بك</a></h2>
+<p class="Pp">قد ترغب أحيانًا في توفير بعض الطرق الإضافية أو الإجراءات الفرعية للمساعدة في تبسيط الواجهة بين Perl وامتدادك أو جعلها أسهل للفهم. يجب أن تكون هذه الإجراءات موجودة في ملف .pm. سواء تم تحميلها تلقائيًا عند تحميل الامتداد نفسه أو تم تحميلها فقط عند استدعائها يعتمد على مكان تعريف الإجراء الفرعي في ملف .pm. يمكنك أيضًا استشارة AutoLoader لمعرفة طريقة بديلة لتخزين وتحميل الإجراءات الفرعية الإضافية الخاصة بك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Documenting_your_Extension'><a class='permalink' href='#Documenting_your_Extension'>توثيق الامتداد الخاص بك</a></h2>
+<p class="Pp">لا يوجد عذر على الإطلاق لعدم توثيق امتدادك. ينتمي التوثيق إلى ملف .pm. سيتم تغذية هذا الملف إلى pod2man، وسيتم تحويل التوثيق المضمن إلى تنسيق صفحة man، ثم وضعه في دليل blib. سيتم نسخه إلى دليل صفحات man الخاص بـ Perl عند تثبيت الامتداد.</p>
+<p class="Pp">يمكنك تضمين التوثيق وكود Perl داخل ملف .pm. في الواقع، إذا كنت ترغب في استخدام التحميل التلقائي للطرق، فيجب عليك القيام بذلك، كما يشرح التعليق داخل ملف .pm.</p>
+<p class="Pp">انظر perlpod لمزيد من المعلومات حول تنسيق pod.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Installing_your_Extension'><a class='permalink' href='#Installing_your_Extension'>تثبيت الامتداد الخاص بك</a></h2>
+<p class="Pp">بمجرد اكتمال امتدادك واجتيازه لجميع اختباراته، يكون تثبيته بسيطًا جدًا: ما عليك سوى تشغيل &quot;make install&quot;. ستحتاج إما إلى إذن الكتابة في الدلائل التي تم تثبيت Perl فيها، أو أن تطلب من مسؤول النظام الخاص بك تشغيل make لك.</p>
+<p class="Pp">بدلاً من ذلك، يمكنك تحديد الدليل الدقيق لوضع ا</p>
+</section>
+<div>
+<section class="Ss">
+<h2 class="Ss" id='EXAMPLE_7_(Coming_Soon)'><a class='permalink' href='#EXAMPLE_7_(Coming_Soon)'>المثال 7 (قريبًا)</a></h2>
+<p class="Pp">XPUSH الوسائط AND تعيين RETVAL AND تعيين قيمة الإرجاع للمصفوفة</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='EXAMPLE_8_(Coming_Soon)'><a class='permalink' href='#EXAMPLE_8_(Coming_Soon)'>المثال 8 (قريبًا)</a></h2>
+<p class="Pp">تعيين $!</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='EXAMPLE_9_Passing_open_files_to_XSes'><a class='permalink' href='#EXAMPLE_9_Passing_open_files_to_XSes'>المثال 9 تمرير الملفات المفتوحة إلى XSes</a></h2>
+<p class="Pp">قد تعتقد أن تمرير الملفات إلى XS أمر صعب، مع كل الـ typeglobs والأشياء الأخرى. حسنًا، ليس كذلك.</p>
+<p class="Pp">لنفترض أنه لسبب غريب ما نحتاج إلى غلاف حول دالة المكتبة القياسية C <span class="Li">fputs()</span>. هذا كل ما نحتاجه:</p>
+<pre>#define PERLIO_NOT_STDIO 0  /* للتوافق مع stdio فقط */
+#define PERL_NO_GET_CONTEXT /* هذا أكثر كفاءة */
+#include &quot;EXTERN.h&quot;
+#include &quot;perl.h&quot;
+#include &quot;XSUB.h&quot;
+#include &lt;stdio.h&gt;
+int
+fputs(s, stream)
+  char *          s
+  FILE *          stream</pre>
+<p class="Pp">يتم العمل الفعلي في خرائط الأنواع القياسية.</p>
+<p class="Pp">لمزيد من التفاصيل، انظر &quot;التوافق مع stdio&quot; في perlapio.</p>
+<p class="Pp"><b>ولكن</b> تفقد كل الأشياء الرائعة التي تقوم بها طبقات perlio. هذا يستدعي دالة stdio <span class="Li">fputs()</span>، والتي لا تعرف شيئًا عنها.</p>
+<p class="Pp">توفر خرائط الأنواع القياسية ثلاثة أنواع من PerlIO *: <span class="Li">&quot;InputStream&quot;</span> (T_IN)، <span class="Li">&quot;InOutStream&quot;</span> (T_INOUT)، و <span class="Li">&quot;OutputStream&quot;</span> (T_OUT). يعتبر <span class="Li">&quot;PerlIO *&quot;</span> العاري T_INOUT. إذا كان ذلك مهمًا في كودك (انظر أدناه لماذا قد يكون) #define أو typedef أحد الأسماء المحددة واستخدمه كمعامل أو نوع نتيجة في ملف XS الخاص بك.</p>
+<p class="Pp">خريطة الأنواع القياسية لا تحتوي على PerlIO * قبل perl 5.7، ولكنها تحتوي على أنواع التدفق الثلاثة. استخدام PerlIO * مباشرة ليس متوافقًا مع الإصدارات السابقة ما لم توفر خريطة أنواع خاصة بك.</p>
+<p class="Pp">بالنسبة للتدفقات القادمة <i>من</i> perl، فإن الاختلاف الرئيسي هو أن <span class="Li">&quot;OutputStream&quot;</span> ستحصل على إخراج PerlIO * - والذي قد يحدث فرقًا على مقبس. كما في مثالنا...</p>
+<p class="Pp">بالنسبة للتدفقات التي يتم تسليمها <i>إلى</i> perl، يتم إنشاء مقبض ملف جديد (أي مرجع إلى glob جديد) وربطه بـ PerlIO * المقدم. إذا لم تكن حالة القراءة/الكتابة لـ PerlIO * صحيحة، فقد تحصل على أخطاء أو تحذيرات عند استخدام مقبض الملف. لذا إذا فتحت PerlIO * كـ &quot;w&quot; فيجب أن يكون بالفعل <span class="Li">&quot;OutputStream&quot;</span> إذا تم فتحه كـ &quot;r&quot; فيجب أن يكون <span class="Li">&quot;InputStream&quot;</span>.</p>
+<p class="Pp">الآن، لنفترض أنك تريد استخدام طبقات perlio في XS الخاص بك. سنستخدم دالة perlio <span class="Li">PerlIO_puts()</span> كمثال.</p>
+<p class="Pp">في جزء C من ملف XS (أعلى سطر MODULE الأول) لديك</p>
+<pre>    #define OutputStream    PerlIO *
+or
+    typedef PerlIO *        OutputStream;</pre>
+<p class="Pp">وهذا هو كود XS:</p>
+<pre>int
+perlioputs(s, stream)
+        char *          s
+        OutputStream    stream
+CODE:
+        RETVAL = PerlIO_puts(stream, s);
+OUTPUT:
+        RETVAL</pre>
+<p class="Pp">علينا استخدام قسم <span class="Li">&quot;CODE&quot;</span> لأن <span class="Li">PerlIO_puts()</span> لديها معاملات معكوسة مقارنة بـ <span class="Li">fputs()</span>، ونحن نريد الحفاظ على المعاملات كما هي.</p>
+<p class="Pp">رغبة في استكشاف هذا بشكل شامل، نريد استخدام دالة stdio <span class="Li">fputs()</span> على PerlIO *. هذا يعني أننا يجب أن نطلب من نظام perlio الحصول على <span class="Li">&quot;FILE *&quot;</span> من stdio:</p>
+<pre>int
+perliofputs(s, stream)
+        char *          s
+        OutputStream    stream
+PREINIT:
+        FILE *fp = PerlIO_findFILE(stream);
+CODE:
+        if (fp != (FILE*) 0) {
+                RETVAL = fputs(s, fp);
+        } else {
+                RETVAL = -1;
+        }
+OUTPUT:
+        RETVAL</pre>
+<p class="Pp">ملاحظة: <span class="Li">PerlIO_findFILE()</span> سيبحث في الطبقات عن طبقة stdio. إذا لم يتمكن من العثور عليها، فسوف يستدعي <span class="Li">PerlIO_exportFILE()</span> لإنشاء <span class="Li">&quot;FILE&quot;</span> stdio جديد. يرجى استدعاء <span class="Li">PerlIO_exportFILE()</span> فقط إذا كنت تريد <span class="Li">&quot;FILE&quot;</span> <i>جديد</i>. سيقوم بإنشاء واحد في كل استدعاء ودفع طبقة stdio جديدة. لذا لا تستدعيها بشكل متكرر على نفس الملف. <span class="Li">PerlIO_findFILE()</span> سيستعيد طبقة stdio بمجرد إنشائها بواسطة <span class="Li">PerlIO_exportFILE()</span>.</p>
+<p class="Pp">هذا ينطبق على نظام perlio فقط. بالنسبة للإصدارات قبل 5.7، <span class="Li">PerlIO_exportFILE()</span> يعادل <span class="Li">PerlIO_findFILE()</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Troubleshooting_these_Examples'><a class='permalink' href='#Troubleshooting_these_Examples'>استكشاف الأخطاء وإصلاحها لهذه الأمثلة</a></h2>
+<p class="Pp">كما ذكر في بداية هذه الوثيقة، إذا كنت تواجه مشاكل مع هذه الامتدادات التجريبية، فقد ترغب في التحقق مما إذا كان أي من هذه الحلول سيساعدك.</p>
+<ul class="Bl-bullet">
+  <li>في إصدارات 5.002 قبل الإصدار التجريبي، لن يعمل نص الاختبار في المثال 1 بشكل صحيح. تحتاج إلى تغيير سطر &quot;use lib&quot; ليصبح:
+        <pre>use lib './blib';
+</pre>
+  </li>
+  <li>في إصدارات 5.002 قبل الإصدار 5.002b1h، لم يتم إنشاء ملف test.pl تلقائيًا بواسطة h2xs. هذا يعني أنه لا يمكنك قول &quot;make test&quot; لتشغيل نص الاختبار. ستحتاج إلى إضافة السطر التالي قبل عبارة &quot;use extension&quot;:
+        <pre>use lib './blib';
+</pre>
+  </li>
+  <li>في الإصدارات 5.000 و 5.001، بدلاً من استخدام السطر أعلاه، ستحتاج إلى استخدام السطر التالي:
+        <pre>BEGIN { unshift(@INC, &quot;./blib&quot;) }
+</pre>
+  </li>
+  <li>تفترض هذه الوثيقة أن الملف التنفيذي المسمى &quot;perl&quot; هو Perl الإصدار 5. قد تكون بعض الأنظمة قد قامت بتثبيت Perl الإصدار 5 كـ &quot;perl5&quot;.</li>
+</ul>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='See_also'><a class='permalink' href='#See_also'>انظر أيضًا</a></h1>
+<p class="Pp">لمزيد من المعلومات، راجع perlguts، perlapi، perlclib، perlxs، perlmod، perlapio، و perlpod</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Author'><a class='permalink' href='#Author'>المؤلف</a></h1>
+<p class="Pp">Jeff Okamoto &lt;<i>okamoto@corp.hp.com</i>&gt;</p>
+<p class="Pp">تمت المراجعة والمساعدة من قبل Dean Roehrich، Ilya Zakharevich، Andreas Koenig، و Tim Bunce.</p>
+<p class="Pp">تم المساهمة في مادة PerlIO بواسطة Lupe Christoph، مع بعض التوضيحات من Nick Ing-Simmons.</p>
+<p class="Pp">التغييرات على h2xs اعتبارًا من Perl 5.8.x بواسطة Renee Baecker</p>
+<p class="Pp">هذه الوثيقة الآن تتم صيانتها كجزء من Perl نفسه.</p>
+<section class="Ss">
+<h2 class="Ss" id='Last_Changed'><a class='permalink' href='#Last_Changed'>آخر تغيير</a></h2>
+<p class="Pp">2020-10-05</p>
+</section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+</section>
+</article>
+<aside id="sidebar">
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+</section>
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#SPECIAL_NOTES">ملاحظات خاصة</a></li>
+        
+            <li><a href="#TUTORIAL">دليل تعليمي</a></li>
+        
+            <li><a href="#See_also">انظر أيضًا</a></li>
+        
+            <li><a href="#Author">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perlxstut.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlxstut.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+</aside>
+</main>
+<footer>
+    
+    <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+       ، باستثناء محتويات صفحات الدليل، التي لها ترخيص خاص بها محدد في حزمة Arch Linux المقابلة.
+    </p>
+</footer>

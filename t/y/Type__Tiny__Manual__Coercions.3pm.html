@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Type::Tiny::Manual::Coercions(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Type__Tiny__Manual__Coercions(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Type::Tiny::Manual::Coercions(3)</td>
+    <td class="head-vol">وثائق مساهمة المستخدم من Perl</td>
+    <td class="head-rtitle">Type::Tiny::Manual::Coercions(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Type::Tiny::Manual::Coercions - معلومات متقدمة حول التحويلات</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MANUAL'><a class='permalink' href='#MANUAL'>دليل</a></h1>
+<p class="Pp">يفترض هذا القسم من الدليل أنك قرأت بالفعل
+    Type::Tiny::Manual::UsingWithMoo.</p>
+<p class="Pp">تأخذ Type::Tiny نهجًا مختلفًا قليلاً لقيود النوع مقارنة بـ Moose. في Moose، يوجد مساحة اسم مسطحة واحدة لقيود النوع. تعرف Moose قيد النوع المسمى <b>Str</b> للسلاسل النصية وقيد النوع المسمى <b>ArrayRef</b> لمراجع المصفوفات. إذا كنت ترغب في تعريف السلاسل النصية بشكل مختلف (ربما تعتقد أن السلسلة النصية الفارغة لا تُعتبر حقًا سلسلة نصية، أو ربما تعتقد أن الكائنات التي تتجاوز
+    <span class="Li">&quot;q[&quot;&quot;]&quot;</span> يجب أن تُعتبر سلاسل نصية) فيمكنك تسميتها <b>Str</b>؛ تحتاج إلى اختيار اسم مختلف.</p>
+<p class="Pp">مع Type::Tiny، يمكن لمكتبتي أنواع توفير قيد نوع سلسلة نصية بتعريفاتهما الخاصة لما يُعتبر سلسلة نصية، ويمكنك اختيار أيهما تستورد، أو استيرادهما معًا بأسماء مختلفة:</p>
+<pre>use Some::Types qw( Str );
+use Other::Types &quot;Str&quot; =&gt; { -as =&gt; &quot;Str2&quot; };</pre>
+<p class="Pp">قد يبدو هذا ميزة صغيرة لـ Type::Tiny، ولكن حيث تحدث هذه الفلسفة العامة مقابل المحلية فرقًا حقيقيًا هو التحويلات.</p>
+<p class="Pp">لنتخيل أنه لجزء من تطبيقك يتعامل مع قراءة بيانات اسم المستخدم وكلمة المرور، تحتاج إلى سلسلة نصية من نوع &quot;اسم_المستخدم:كلمة_المرور&quot;. قد ترغب في قبول مرجع مصفوفة
+    <span class="Li">&quot;[$username, $password]&quot;</span> وتحويله إلى سلسلة نصية باستخدام
+    <span class="Li">&quot;join &quot;:&quot;, @$arrayref&quot;</span>. ولكن جزءًا آخر من تطبيقك يتعامل مع قراءة ملفات السجل، ويريد تحويل سلسلة نصية من مرجع مصفوفة باستخدام
+    <span class="Li">&quot;join &quot;\n&quot;, @$arrayref&quot;</span>. هذه كلها طرق معقولة تمامًا لتحويل مرجع مصفوفة. في Moose، طريقة نموذجية للقيام بذلك ستكون:</p>
+<pre>package My::UserManager {
+  use Moose;
+  use Moose::Util::TypeConstraints;
+
+  coerce 'Str',
+    from 'ArrayRef', via { join &quot;:&quot;, @$_ };
+
+  ...;
+}
+
+package My::LogReader {
+  use Moose;
+  use Moose::Util::TypeConstraints;
+
+  coerce 'Str',
+    from 'ArrayRef', via { join &quot;\n&quot;, @$_ };
+
+  ...;
+}</pre>
+<p class="Pp">ومع ذلك، نظرًا لأن جميع الأنواع والتحويلات عالمية في Moose، إذا تم تحميل هاتين الفئتين، فستعمل واحدة منهما فقط. ستحل إحدى الفئات محل تحويل الفئة الأخرى. يعتمد الفائز على ترتيب التحميل.</p>
+<p class="Pp">من الممكن حل هذا باستخدام أنواع Moose الأصلية، ولكنه يتطلب عملًا إضافيًا. (الحل هو أن تقوم كل من My::UserManager و My::LogReader بإنشاء نوع فرعي من <b>Str</b> وتحديد التحويل على هذا النوع الفرعي بدلاً من <b>Str</b> مباشرة.)</p>
+<p class="Pp">تحل Type::Tiny هذه المشكلة بطريقتين:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تجعل Type::Tiny من الممكن لمكتبات الأنواع &quot;حماية&quot; قيود أنواعها لمنع الكود الخارجي من إضافة تحويلات جديدة إليها.
+        <pre>$type-&gt;coercion-&gt;freeze();
+</pre>
+    <p class="Pp">يمكنك تجميد التحويلات لمكتبة النوع بأكملها باستخدام:</p>
+        <pre>__PACKAGE__-&gt;make_immutable;
+</pre>
+    <p class="Pp">إذا حاولت إضافة تحويلات إلى قيد نوع لديه تحويلات مجمدة، فسوف يرمي خطأ.</p>
+        <pre>use Types::Standard qw( Str ArrayRef );
+
+Str-&gt;coercion-&gt;add_type_coercions(
+  ArrayRef, sub { join &quot;\n&quot;, @$_ },
+);
+</pre>
+  </dd>
+  <dt>2.</dt>
+  <dd>تجعل Type::Tiny النمط المذكور أعلاه لإضافة التحويلات إلى نوع فرعي أسهل بكثير.
+        <pre>use Types::Standard ( Str ArrayRef );
+
+my $subtype = Str-&gt;plus_coercions(
+  ArrayRef, sub { join &quot;\n&quot;, @$_ },
+);
+</pre>
+    <p class="Pp">تقوم طريقة <span class="Li">&quot;plus_coercions&quot;</span> بإنشاء نوع فرعي جديد، وتضيف إليه تحويلات جديدة، وتنسخ أي تحويلات موجودة من النوع الأصل، ثم تجمد التحويلات للنوع الفرعي الجديد.</p>
+    <p class="Pp">النتيجة النهائية هي أن لديك الآن &quot;نسخة&quot; من <b>Str</b> يمكنها التحويل من <b>ArrayRef</b> ولكن النسخ الأخرى من <b>Str</b> لن تتأثر بتحويلك.</p>
+  </dd>
+</dl>
+<section class="Ss">
+<h2 class="Ss" id='Defining_Coercions_within_Type_Libraries'><a class='permalink' href='#Defining_Coercions_within_Type_Libraries'>تحديد التحويلات داخل مكتبات الأنواع</a></h2>
+<p class="Pp">بعض التحويلات مثل ضم مرجع مصفوفة لإنشاء سلسلة نصية لن تكون تحويلات يتفق عليها الجميع. ضم بفاصل سطر بينهما كما في الأعلى؟ أو بنقطتين رأسيتين، أو بمسافة جدولة، أو بمسافة، أو حرف آخر؟ يعتمد الأمر كثيرًا على تطبيقك.</p>
+<p class="Pp">البعض الآخر، مثل تحويل كائن Path::Tiny من سلسلة نصية، من المحتمل أن يكون واضحًا جدًا. هذا هو النوع من التحويل الذي من المنطقي تعريفه داخل المكتبة نفسها بحيث يكون متاحًا لأي حزم تستخدم المكتبة.</p>
+<pre>my $pt = __PACKAGE__-&gt;add_type(
+  Type::Tiny::Class-&gt;new(
+    name    =&gt; 'Path',
+    class   =&gt; 'Path::Tiny',
+  ),
+);
+
+$pt-&gt;coercion-&gt;add_type_coercions(
+  Str, q{ Path::Tiny::path($_) },
+);
+
+$pt-&gt;coercion-&gt;freeze;</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Tweak_Coercions_Outside_Type_Libraries'><a class='permalink' href='#Tweak_Coercions_Outside_Type_Libraries'>تعديل التحويلات خارج مكتبات الأنواع</a></h2>
+<p class="Pp">تقوم طريقة <span class="Li">&quot;plus_coercions&quot;</span> بإنشاء نوع جديد مع تحويلات إضافية. إذا كان النوع الأصلي يحتوي بالفعل على تحويلات، فإن التحويلات الجديدة لها أولوية أعلى.</p>
+<p class="Pp">هناك أيضًا طريقة
+    <span class="Li">&quot;plus_fallback_coercions&quot;</span> تقوم بنفس الشيء مثل
+    <span class="Li">&quot;plus_coercions&quot;</span> ولكنها تضيف التحويلات الجديدة بأولوية أقل من أي تحويلات موجودة.</p>
+<p class="Pp">توفر Type::Tiny::Class طريقة
+    <span class="Li">&quot;plus_constructors&quot;</span> كاختصار للتحويل عبر طريقة بناء. الاثنان التاليان متماثلان:</p>
+<pre>Path-&gt;plus_constructors( Str, &quot;new&quot; )
+
+Path-&gt;plus_coercions( Str, q{ Path::Tiny-&gt;new($_) } )</pre>
+<p class="Pp">لإنشاء قيد نوع بدون تحويلات موجودة معينة، يمكنك استخدام
+    <span class="Li">&quot;minus_coercions&quot;</span>. يستخدم ما يلي نوع <b>Datetime</b> المعرف في
+    Type::Tiny::Manual::Libraries، ويزيل التحويل من <b>Int</b> ولكنه يحتفظ بالتحويلات من <b>Undef</b> و <b>Dict</b>.</p>
+<pre>use Types::Standard qw( Int );
+use Example::Types qw( Datetime );
+
+has start_date =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; Datetime-&gt;minus_coercions( Int ),
+  coerce  =&gt; 1,
+);</pre>
+<p class="Pp">هناك أيضًا طريقة <span class="Li">&quot;no_coercions&quot;</span>
+    تنشئ نوعًا فرعيًا بدون أي تحويلات على الإطلاق. هذا مفيد للغاية إما لإنشاء &quot;لوحة فارغة&quot; لـ
+    <span class="Li">&quot;plus_coercions&quot;</span>:</p>
+<pre>my $Path = Path-&gt;no_coercions-&gt;plus_coercions( Str, sub { ... } );</pre>
+<p class="Pp">أو لتعطيل التحويلات لـ Type::Params. ستقوم Type::Params دائمًا بتحويل المعلمة تلقائيًا إذا كان هناك تحويل لهذا النوع.</p>
+<pre>use Types::Standard qw( Object );
+use Types::Common::String qw( UpperCaseStr );
+use Type::Params qw( signature_for );
+
+signature_for set_account_name =&gt; (
+  method     =&gt; Object,
+  positional =&gt; [ UpperCaseStr-&gt;no_coercions ],
+);
+
+sub set_account_name ( $self, $name ) {
+  $self-&gt;_account_name( $name );
+  $self-&gt;db-&gt;update( $self );
+  return $self;
+}
+
+# هذا سيموت بدلاً من التحويل من حالة الأحرف الصغيرة
+$robert-&gt;set_account_name( 'bob' );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Named_Coercions'><a class='permalink' href='#Named_Coercions'>تحويلات مسماة</a></h2>
+<p class="Pp">حل وسط بين تحديد تحويل في مكتبة النوع أو تحديده في الحزمة التي تستخدم مكتبة النوع هو أن تحدد مكتبة النوع مجموعة مسماة من التحويلات التي يمكن إضافتها اختياريًا إلى قيد النوع.</p>
+<pre>{
+  package MyApp::Types;
+  use Type::Library
+    -extends =&gt; [ 'Types::Standard' ];
+
+  __PACKAGE__-&gt;add_coercion(
+    name              =&gt; &quot;FromLines&quot;,
+    type_constraint   =&gt; ArrayRef,
+    type_coercion_map =&gt; [
+      Str,     q{ [split /\n/] },
+      Undef,   q{ [] },
+    ],
+  );
+}</pre>
+<p class="Pp">هذه المجموعة من التحويلات لها اسم ويمكن استيرادها واستخدامها:</p>
+<pre>use MyApp::Types qw( ArrayRef FromLines );
+
+has lines =&gt; (
+  is      =&gt; 'ro',
+  isa     =&gt; ArrayRef-&gt;plus_coercions( FromLines ),
+  coerce  =&gt; 1,
+);</pre>
+<p class="Pp">تحدد Types::Standard تحويلًا مسمى <b>MkOpt</b> مصممًا للاستخدام مع
+    <b>OptList</b>.</p>
+<pre>use Types::Standard qw( OptList MkOpt );
+my $OptList = OptList-&gt;plus_coercions( MkOpt );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Parameterized_Coercions'><a class='permalink' href='#Parameterized_Coercions'>تحويلات معلمة</a></h2>
+<p class="Pp">يمكن أيضًا جعل التحويلات المسماة قابلة للمعلمة.</p>
+<pre>my $ArrayOfLines = ArrayRef-&gt;plus_coercions( Split[ qr{\n} ] );</pre>
+<p class="Pp">تحدد Types::Standard تحويلات معلمة <b>Split</b> و <b>Join</b>.</p>
+<p class="Pp">
+</p>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+        </footer>
+    </body>
+</html>

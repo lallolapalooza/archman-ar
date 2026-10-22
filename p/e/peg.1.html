@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>peg(1) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">peg(1)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PEG(1)</td>
+    <td class="head-vol">General Commands Manual</td>
+    <td class="head-rtitle">PEG(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">peg, leg - parser generators</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>peg</b> <b>[-hvV -ooutput]</b> <i>[filename ...]</i></p>
+<p class="Pp"><b>leg</b> <b>[-hvV -ooutput]</b> <i>[filename ...]</i></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp"><i>peg</i> and <i>leg</i> are tools for generating
+    recursive-descent parsers: programs that perform pattern matching on text.
+    They process a Parsing Expression Grammar (PEG) [Ford 2004] to produce a
+    program that recognises legal sentences of that grammar. <i>peg</i>
+    processes PEGs written using the original syntax described by Ford;
+    <i>leg</i> processes PEGs written using slightly different syntax and
+    conventions that are intended to make it an attractive replacement for
+    parsers built with <a href='/man/lex.1.en'>lex(1)</a> and <a href='/man/yacc.1.en'>yacc(1)</a>. Unlike <i>lex</i> and
+    <i>yacc</i>, <i>peg</i> and <i>leg</i> support unlimited backtracking,
+    provide ordered choice as a means for disambiguation, and can combine
+    scanning (lexical analysis) and parsing (syntactic analysis) into a single
+    activity.</p>
+<p class="Pp"><i>peg</i> reads the specified <i>filename</i>s, or standard input
+    if no <i>filename</i>s are given, for a grammar describing the parser to
+    generate. <i>peg</i> then generates a C source file that defines a function
+    <i>yyparse().</i> This C source file can be included in, or compiled and
+    then linked with, a client program. Each time the client program calls
+    <i>yyparse</i>() the parser consumes input text according to the parsing
+    rules, starting from the first rule in the grammar. <i>yyparse</i>() returns
+    non-zero if the input could be parsed according to the grammar; it returns
+    zero if the input could not be parsed.</p>
+<p class="Pp">The prefix 'yy' or 'YY' is prepended to all externally-visible
+    symbols in the generated parser. This is intended to reduce the risk of
+    namespace pollution in client programs. (The choice of 'yy' is historical;
+    see <a href='/man/lex.1.en'>lex(1)</a> and <a href='/man/yacc.1.en'>yacc(1)</a>, for example.)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<p class="Pp"><i>peg</i> and <i>leg</i> provide the following options:</p>
+<dl class="Bl-tag">
+  <dt id="h"><a class="permalink" href="#h"><b>-h</b></a></dt>
+  <dd>prints a summary of available options and then exits.</dd>
+  <dt id="ooutput"><a class="permalink" href="#ooutput"><b>-ooutput</b></a></dt>
+  <dd>writes the generated parser to the file <b>output</b> instead of the
+      standard output.</dd>
+  <dt id="P"><a class="permalink" href="#P"><b>-P</b></a></dt>
+  <dd>suppresses #line directives in the output.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>writes verbose information to standard error while working.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>writes version information to standard error then exits.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="A_SIMPLE_EXAMPLE"><a class="permalink" href="#A_SIMPLE_EXAMPLE">A   SIMPLE EXAMPLE</a></h1>
+<p class="Pp">The following <i>peg</i> input specifies a grammar with a single
+    rule (called 'start') that is satisfied when the input contains the string
+    &quot;username&quot;.</p>
+<pre>    start &lt;- &quot;username&quot;</pre>
+<p class="Pp">(The quotation marks are <i>not</i> part of the matched text; they
+    serve to indicate a literal string to be matched.) In other words,
+    <i>yyparse</i>() in the generated C source will return non-zero only if the
+    next eight characters read from the input spell the word
+    &quot;username&quot;. If the input contains anything else, <i>yyparse</i>()
+    returns zero and no input will have been consumed. (Subsequent calls to
+    <i>yyparse</i>() will also return zero, since the parser is effectively
+    blocked looking for the string &quot;username&quot;.) To ensure progress we
+    can add an alternative clause to the 'start' rule that will match any single
+    character if &quot;username&quot; is not found.</p>
+<pre>    start &lt;- &quot;username&quot;
+           / .</pre>
+<p class="Pp"><i>yyparse</i>() now always returns non-zero (except at the very
+    end of the input). To do something useful we can add actions to the rules.
+    These actions are performed after a complete match is found (starting from
+    the first rule) and are chosen according to the 'path' taken through the
+    grammar to match the input. (Linguists would call this path a 'phrase
+    marker'.)</p>
+<pre>    start &lt;- &quot;username&quot;    { printf(&quot;%s\n&quot;, getlogin()); }
+           / &lt; . &gt;         { putchar(yytext[0]); }</pre>
+<p class="Pp">The first line instructs the parser to print the user's login name
+    whenever it sees &quot;username&quot; in the input. If that match fails, the
+    second line tells the parser to echo the next character on the input the
+    standard output. Our parser is now performing useful work: it will copy the
+    input to the output, replacing all occurrences of &quot;username&quot; with
+    the user's account name.</p>
+<p class="Pp">Note the angle brackets ('&lt;' and '&gt;') that were added to the
+    second alternative. These have no effect on the meaning of the rule, but
+    serve to delimit the text made available to the following action in the
+    variable <i>yytext</i>.</p>
+<p class="Pp">If the above grammar is placed in the file <b>username.peg</b>,
+    running the command</p>
+<pre>    peg -o username.c username.peg</pre>
+will save the corresponding parser in the file <b>username.c</b>. To create a
+  complete program this parser could be included by a C program as follows.
+<pre>    #include &lt;stdio.h&gt;      /* printf(), putchar() */
+    #include &lt;unistd.h&gt;     /* getlogin() */
+    #include &quot;username.c&quot;   /* yyparse() */
+    int main()
+    {
+      while (yyparse())     /* repeat until EOF */
+        ;
+      return 0;
+    }</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="PEG_GRAMMARS"><a class="permalink" href="#PEG_GRAMMARS">PEG   GRAMMARS</a></h1>
+<p class="Pp">A grammar consists of a set of named rules.</p>
+<pre>    name &lt;- pattern</pre>
+<p class="Pp">The <b>pattern</b> contains one or more of the following
+  elements.</p>
+<dl class="Bl-tag">
+  <dt id="name"><a class="permalink" href="#name"><b>name</b></a></dt>
+  <dd>The element stands for the entire pattern in the rule with the given
+      <b>name</b>.</dd>
+  <dt><b>&quot;</b>characters<b>&quot;</b></dt>
+  <dd>A character or string enclosed in double quotes is matched literally. The
+      ANSI C escape sequences are recognised within the <i>characters</i>.</dd>
+  <dt><b>'</b>characters<b>'</b></dt>
+  <dd>A character or string enclosed in single quotes is matched literally, as
+      above.</dd>
+  <dt><b>[</b>characters<b>]</b></dt>
+  <dd>A set of characters enclosed in square brackets matches any single
+      character from the set, with escape characters recognised as above. If the
+      set begins with an uparrow (^) then the set is negated (the element
+      matches any character <i>not</i> in the set). Any pair of characters
+      separated with a dash (-) represents the range of characters from the
+      first to the second, inclusive. A single alphabetic character or
+      underscore is matched by the following set.
+    <pre>    [a-zA-Z_]
+</pre>
+    Similarly, the following matches any single non-digit character.
+    <pre>    [^0-9]
+</pre>
+  </dd>
+  <dt><b>.</b></dt>
+  <dd>A dot matches any character. Note that the only time this fails is at the
+      end of file, where there is no character to match.</dd>
+  <dt><b>(</b>&#x00A0;pattern&#x00A0;<b>)</b></dt>
+  <dd>Parentheses are used for grouping (modifying the precedence of the
+      operators described below).</dd>
+  <dt><b>{</b>&#x00A0;action&#x00A0;<b>}</b></dt>
+  <dd>Curly braces surround actions. The action is arbitrary C source code to be
+      executed at the end of matching. Any braces within the action must be
+      properly nested. Any input text that was matched before the action and
+      delimited by angle brackets (see below) is made available within the
+      action as the contents of the character array <i>yytext</i>. The length of
+      (number of characters in) <i>yytext</i> is available in the variable
+      <i>yyleng</i>. (These variable names are historical; see
+    <a href='/man/lex.1.en'>lex(1)</a>.)</dd>
+  <dt><b>&lt;</b></dt>
+  <dd>An opening angle bracket always matches (consuming no input) and causes
+      the parser to begin accumulating matched text. This text will be made
+      available to actions in the variable <i>yytext</i>.</dd>
+  <dt><b>&gt;</b></dt>
+  <dd>A closing angle bracket always matches (consuming no input) and causes the
+      parser to stop accumulating text for <i>yytext</i>.</dd>
+</dl>
+<p class="Pp">The above <i>element</i>s can be made optional and/or repeatable
+    with the following suffixes:</p>
+<dl class="Bl-tag">
+  <dt>element&#x00A0;<b>?</b></dt>
+  <dd>The element is optional. If present on the input, it is consumed and the
+      match succeeds. If not present on the input, no text is consumed and the
+      match succeeds anyway.</dd>
+  <dt>element&#x00A0;<b>+</b></dt>
+  <dd>The element is repeatable. If present on the input, one or more
+      occurrences of <i>element</i> are consumed and the match succeeds. If no
+      occurrences of <i>element</i> are present on the input, the match
+    fails.</dd>
+  <dt>element&#x00A0;<b>*</b></dt>
+  <dd>The element is zero or more times repeatable. If present on the input,
+      zero or more occurrences of <i>element</i> are consumed and the match
+      succeeds. If no occurrences of <i>element</i> are present on the input,
+      the match succeeds.</dd>
+</dl>
+<p class="Pp">And they can be combined into sequences and choices.</p>
+<dl class="Bl-tag">
+  <dt>pattern1&#x00A0;pattern2</dt>
+  <dd>A sequence matches the input if, when <i>pattern1</i> is applied, the
+      remaining input can be matched by <i>pattern2</i>.</dd>
+  <dt>pattern1&#x00A0;<b>/</b>&#x00A0;pattern2</dt>
+  <dd>A choice matches the input if either <i>pattern1</i> or <i>pattern2</i>
+      matches the input. The first alternative is tried first, and if it fails,
+      the second alternative is tried. If the second alternative also fails, the
+      choice fails.</dd>
+</dl>
+<p class="Pp">The following grammar rules are also provided:</p>
+<dl class="Bl-tag">
+  <dt id="epsilon"><a class="permalink" href="#epsilon"><b>epsilon</b></a></dt>
+  <dd>Always succeeds, consuming no input.</dd>
+  <dt id="end-of-file"><a class="permalink" href="#end-of-file"><b>end-of-file</b></a></dt>
+  <dd>Succeeds only if the end of the input has been reached.</dd>
+</dl>
+<p class="Pp">The following operators are provided for combining patterns.</p>
+<dl class="Bl-tag">
+  <dt id="operator-precedence"><a class="permalink" href="#operator-precedence"><b>Operator precedence</b></a></dt>
+  <dd>
+    <p class="Pp">The operators are:</p>
+    <pre>    sequence (/)</pre>
+    <pre>    choice (&amp;)</pre>
+    <pre>    optional (?)</pre>
+    <pre>    repeat +</pre>
+    <pre>    zero or more *</pre>
+    <pre>    group ()</pre>
+    <pre>    action {}</pre>
+    <p class="Pp">Thus, the rule `a/b*c` is parsed as `a / (b* c)`. Parentheses
+        can be used to alter the precedence, e.g. `(a/b)* c`.</p>
+  </dd>
+</dl>
+<p class="Pp">All rules in the grammar are tried in the order in which they are
+    defined. The first rule is designated the start symbol.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+<p class="Pp"><a href='/man/lex.1.en'>lex(1)</a>, <a href='/man/yacc.1.en'>yacc(1)</a>,
+    <a href="http://www.cs.virginia.edu/~evans/cs655/readings/readable.pdf">&lt;URL:http://www.cs.virginia.edu/~evans/cs655/readings/readable.pdf&gt;</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">AUTHOR</a></h1>
+<p class="Pp">The original version of <i>peg</i> was written by Larry Kwak (larry@cs.ucla.edu).
+    This man page was written by <a href="mailto:adam@outpost.com">Adam Wilson</a>
+    &lt;adam@outpost.com&gt;.</p>
+<p class="Pp">This program is based on the original implementation of <i>peg</i>
+    by Laurence Douglas Ford (laurence@cs.ucla.edu), and benefited from advice and
+    assistance from Adam Wilson (adam@outpost.com).</p>
+<p class="Pp"><i>leg</i> is a modification of <i>peg</i> by <a href="mailto:adam@outpost.com">Adam Wilson</a>
+    &lt;adam@outpost.com&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COLOPHON"><a class="permalink" href="#COLOPHON">COLOPHON</a></h1>
+<p class="Pp">The description of the C language grammar in the original manual page
+    for this program incorrectly stated that the C language grammar was taken
+    from K&amp;R.</p>
+</section>
+</div>
+</section>
+                
+            </article>
+        
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+dd>العنصر اختياري وقابل للتكرار. إذا كان موجوداً في المدخلات، يتم استهلاك
+      occurrence واحد أو أكثر من <i>element</i> وينجح التطابق. إذا لم تكن هناك
+      occurrences من <i>element</i> موجودة في المدخلات، ينجح التطابق على أي حال.</dd>
+</dl>
+<p class="Pp">يمكن تحويل العناصر واللواحق المذكورة أعلاه إلى مُتنبئات (التي
+    تتطابق مع نص مدخلات عشوائي ثم تنجح أو تفشل <i>بدون</i> استهلاك هذه
+    المدخلات) باستخدام البادئات التالية:</p>
+<dl class="Bl-tag">
+  <dt><b>&amp;</b>&#x00A0;element</dt>
+  <dd>ينجح المتنبئ فقط إذا كان يمكن مطابقة <i>element</i>. نص المدخلات الذي
+      يتم مسحه أثناء مطابقة <i>element</i> لا يتم استهلاكه من المدخلات ويظل
+      متاحًا للمطابقة اللاحقة.</dd>
+  <dt><b>!</b>&#x00A0;element</dt>
+  <dd>ينجح المتنبئ فقط إذا كان لا يمكن مطابقة <i>element</i>. نص المدخلات الذي
+      يتم مسحه أثناء مطابقة <i>element</i> لا يتم استهلاكه من المدخلات ويظل
+      متاحًا للمطابقة اللاحقة. صيغة شائعة هي
+    <pre>    !.
+</pre>
+    والتي تطابق نهاية الملف، بعد استهلاك آخر حرف من المدخلات بالفعل.</dd>
+</dl>
+<p class="Pp">يتم توفير شكل خاص من المتنبئ '&amp;':</p>
+<dl class="Bl-tag">
+  <dt><b>&amp;</b>{&#x00A0;expression&#x00A0;}</dt>
+  <dd>في هذا المتنبئ، يتم تقييم <i>expression</i> C البسيط (<b>not</b> statement)
+      فوراً عندما يصل المحلل إلى المتنبئ. إذا أعطى <i>expression</i> قيمة غير
+      صفرية (صحيحة) ينجح 'التطابق' ويواصل المحلل العنصر التالي في النمط. إذا
+      أعطى <i>expression</i> قيمة صفرية (خاطئة) يفشل 'التطابق' ويعود المحلل
+      للوراء للبحث عن تحليل بديل لمدخلات.</dd>
+</dl>
+<p class="Pp">يمكن دمج عدة عناصر (مع أو بدون بادئات ولواحق) في <i>sequence</i>
+    عن طريق كتابتها واحدة تلو الأخرى. ينجح تسلسل كامل فقط إذا تطابق كل عنصر
+    فردي بداخله، من اليسار إلى اليمين.</p>
+<p class="Pp">يمكن فصل التسلسلات إلى بدائل منفصلة بواسطة عامل التناوب '/'.</p>
+<dl class="Bl-tag">
+  <dt>sequence-1&#x00A0;<b>/</b>&#x00A0;sequence-2&#x00A0;<b>/</b>&#x00A0;...&#x00A0;<b>/</b>&#x00A0;sequence-N</dt>
+  <dd>تتم تجربة كل تسلسل بالترتيب حتى يتطابق أحدهم، وعند هذه النقطة ينجح
+      مطابقة النمط العام. إذا لم يتطابق أي من التسلسلات، يفشل تطابق النمط
+      العام.</dd>
+</dl>
+<p class="Pp">أخيرًا، يقدم الرمز "#" تعليقًا (يتم تجاهله) يستمر حتى نهاية
+    السطر.</p>
+<p class="Pp">لتلخيص ما سبق، يحاول المحلل مطابقة نص المدخلات مقابل نمط يحتوي
+    على سلاسل حرفية، أسماء (تمثل قواعد أخرى)، وعوامل مختلفة (مكتوبة كبادئات،
+    لواحق، تجاور للتسلسل، وعامل تناوب في المنتصف) تعدل كيفية مطابقة العناصر
+    داخل النمط. تتم المطابقات من اليسار إلى اليمين، 'نزولاً' إلى القواعد الفرعية
+    المسماة كما تواجهها. إذا فشلت عملية المطابقة، 'يعود' المحلل ('يعيد'
+    المدخلات بشكل مناسب في هذه العملية) للعثور على أقرب 'مسار' بديل عبر
+    القواعد. بعبارة أخرى، يقوم المحلل بإجراء بحث بعمق أول، من اليسار إلى اليمين
+    لأول مسار مطابق بنجاح عبر القواعد. إذا تم العثور عليه، يتم تنفيذ الإجراءات
+    على طول المسار الناجح (بالترتيب الذي تمت مواجهتها به).</p>
+<p class="Pp">لاحظ أنه يتم تقييم المتنبئات <i>فورًا</i> أثناء البحث عن
+    تطابق ناجح، لأنها تساهم في نجاح أو فشل البحث. أما الإجراءات، فتُقيّم فقط
+    بعد العثور على تطابق ناجح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PEG_GRAMMAR_FOR_PEG_GRAMMARS'><a class='permalink' href='#PEG_GRAMMAR_FOR_PEG_GRAMMARS'>قواعد PEG لقواعد PEG</a></h1>
+<p class="Pp">توضح القاعدة الخاصة بقواعد <i>peg</i> أدناه، وسيتم توضيحها
+    وتقنينها.</p>
+<pre>    Grammar         &lt;- Spacing Definition+ EndOfFile
+    Definition      &lt;- Identifier LEFTARROW Expression
+    Expression      &lt;- Sequence ( SLASH Sequence )*
+    Sequence        &lt;- Prefix*
+    Prefix          &lt;- AND Action
+                     / ( AND | NOT )? Suffix
+    Suffix          &lt;- Primary ( QUERY / STAR / PLUS )?
+    Primary         &lt;- Identifier !LEFTARROW
+                     / OPEN Expression CLOSE
+                     / Literal
+                     / Class
+                     / DOT
+                     / Action
+                     / BEGIN
+                     / END
+    Identifier      &lt;- &lt; IdentStart IdentCont* &gt; Spacing
+    IdentStart      &lt;- [a-zA-Z_]
+    IdentCont       &lt;- IdentStart / [0-9]
+    Literal         &lt;- ['] &lt; ( !['] Char  )* &gt; ['] Spacing
+                     / [&quot;] &lt; ( ![&quot;] Char  )* &gt; [&quot;] Spacing
+    Class           &lt;- '[' &lt; ( !']' Range )* &gt; ']' Spacing
+    Range           &lt;- Char '-' Char / Char
+    Char            &lt;- '\\' [abefnrtv'&quot;\[\]\\]
+                     / '\\' [0-3][0-7][0-7]
+                     / '\\' [0-7][0-7]?
+                     / '\\' '-'
+                     / !'\\' .
+    LEFTARROW       &lt;- '&lt;-' Spacing
+    SLASH           &lt;- '/' Spacing
+    AND             &lt;- '&amp;' Spacing
+    NOT             &lt;- '!' Spacing
+    QUERY           &lt;- '?' Spacing
+    STAR            &lt;- '*' Spacing
+    PLUS            &lt;- '+' Spacing
+    OPEN            &lt;- '(' Spacing
+    CLOSE           &lt;- ')' Spacing
+    DOT             &lt;- '.' Spacing
+    Spacing         &lt;- ( Space / Comment )*
+    Comment         &lt;- '#' ( !EndOfLine . )* EndOfLine
+    Space           &lt;- ' ' / '\t' / EndOfLine
+    EndOfLine       &lt;- '\r\n' / '\n' / '\r'
+    EndOfFile       &lt;- !.
+    Action          &lt;- '{' &lt; [^}]* &gt; '}' Spacing
+    BEGIN           &lt;- '&lt;' Spacing
+    END             &lt;- '&gt;' Spacing</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LEG_GRAMMARS'><a class='permalink' href='#LEG_GRAMMARS'>قواعد LEG</a></h1>
+<p class="Pp"><i>leg</i> هو تباين من <i>peg</i> يضيف بعض ميزات
+    <a href='/man/lex.1.en'>lex(1)</a> و <a href='/man/yacc.1.en'>yacc(1)</a>.
+    يختلف عن <i>peg</i> في النقاط التالية.</p>
+<dl class="Bl-tag">
+  <dt><b>%{&#x00A0;</b><i>text...</i><b>&#x00A0;%}</b></dt>
+  <dd>يمكن أن يظهر قسم التصريح في أي مكان يتوقع فيه تعريف قاعدة. يتم نسخ
+      <i>text</i> بين المحددات '%{' و '%}' حرفيًا إلى كود محلل C الذي تم
+      إنشاؤه <i>قبل</i> الكود الذي ينفذ المحلل نفسه.</dd>
+  <dt><i>name&#x00A0;</i><b>=</b><i>&#x00A0;pattern</i></dt>
+  <dd>يحل عامل 'التعيين' محل عامل السهم الأيسر '&lt;-'.</dd>
+  <dt id="rule"><a class="permalink" href="#rule"><b>rule-name</b></a></dt>
+  <dd>يمكن أن تظهر الشرطات كأحرف في أسماء القواعد. يتم تحويل كل شرطة إلى
+      شرطة سفلية في كود مصدر C الذي تم إنشاؤه. شرطة واحدة '-' هي اسم قاعدة
+      قانوني.
+    <pre>    -       = [ \t\n\r]*
+    number  = [0-9]+                 -
+    name    = [a-zA-Z_][a-zA_Z_0-9]* -
+    l-paren = '('                    -
+    r-paren = ')'                    -
+</pre>
+    يوضح هذا المثال كيف يمكن أن تكون المسافات البيضاء المتجاهلة واضحة عند
+      قراءة القواعد، ومع ذلك تكون غير مزعجة عند وضعها بسخاء في نهاية كل قاعدة
+      مرتبطة بعنصر معجمي.</dd>
+  <dt id="seq"><a class="permalink" href="#seq"><i>seq-1&#x00A0;</i><b>|</b><i>&#x00A0;seq-2</i></a></dt>
+  <dd>عامل التناوب هو الخط العمودي '|' بدلاً من الشرطة المائلة '/'. لذلك،
+      تُكتب قاعدة <i>peg</i>
+    <pre>    name &lt;- sequence-1
+          / sequence-2
+          / sequence-3
+</pre>
+      على النحو التالي
+    <pre>    name = sequence-1
+         | sequence-2
+         | sequence-3
+         ;
+</pre>
+      في <i>leg</i> (مع كون الفاصلة المنقوطة النهائية اختيارية، كما هو موضح
+      أدناه).</dd>
+  <dt><i>@{&#x00A0;action&#x00A0;}</i></dt>
+  <dd>سيتم تنفيذ الإجراءات التي تبدأ بحرف '@' أثناء التحليل، في الوقت الذي
+      تتم مواجهتها فيه أثناء مطابقة نص المدخلات مع قاعدة. نظرًا للعودة للخلف في
+      خوارزمية التحليل PEG، قد يتم تنفيذ الإجراءات التي تبدأ بـ '@' عدة مرات
+      لنفس نص المدخلات. (السلوك المعتاد للإجراءات هو أنه يتم تجميعها حتى اكتمال
+      المطابقة، ثم يتم تنفيذ تلك التي تشكل جزءًا من الاستخلاص النهائي بترتيب
+      من اليسار إلى اليمين.) المتغير <i>yytext</i> متاح داخل هذه الإجراءات.</dd>
+  <dt id="exp"><a class="permalink" href="#exp"><i>exp</i><b>&#x00A0;~</b><i>&#x00A0;{&#x00A0;action&#x00A0;}</i></a></dt>
+  <dd>يمكن وضع عامل لاحق <b>~</b><i>{&#x00A0;action&#x00A0;}</i> بعد أي
+      تعبير وسيكون له نفس سلوك الإجراء العادي (كود C عشوائي) باستثناء أنه يتم
+      استدعاؤه فقط عندما يفشل <i>exp</i>. إنه يرتبط بشكل أقل صرامة من أي عامل
+      آخر باستثناء التناوب والتسلسل، وهو مخصص لجعل التعامل مع الأخطاء والتعافي
+      منها أسهل في الكتابة. لاحظ أن <i>yytext</i> و <i>yyleng</i> غير متاحين
+      داخل هذه الإجراءات، ولكن مؤشر المتغير <i>yy</i> متاح لمنح الكود الوصول
+      إلى أي أعضاء معرفة من قبل المستخدم في حالة المحلل (انظر "تخصيص المحلل"
+      أدناه). لاحظ أيضًا أن <i>exp</i> هو دائمًا تعبير واحد؛ لاستدعاء إجراء
+      خطأ لأي فشل ضمن تسلسل، يجب استخدام الأقواس لتجميع التسلسل في تعبير واحد.
+    <pre>    rule = e1 e2 e3 ~{ error(&quot;e[12] ok; e3 has failed&quot;); }
+         | ...
+    rule = (e1 e2 e3) ~{ error(&quot;one of e[123] has failed&quot;); }
+         | ...</pre>
+  </dd>
+  <dt id="pattern"><a class="permalink" href="#pattern"><i>pattern&#x00A0;</i><b>;</b></a></dt>
+  <dd>يمكن للفاصلة المنقوطة أن تنهي <i>pattern</i> اختياريًا.</dd>
+  <dt><b>%%</b><i>&#x00A0;text...</i></dt>
+  <dd>علامة النسبة المئوية المزدوجة '%%' تنهي قسم القواعد (والتصريحات) في
+      القاعدة. يتم نسخ كل <i>text</i> بعد '%%' حرفيًا إلى كود محلل C الذي تم
+      إنشاؤه <i>بعد</i> كود تنفيذ المحلل.</dd>
+  <dt><b>$$&#x00A0;=</b><i>&#x00A0;value</i></dt>
+  <dd>يمكن للقاعدة الفرعية إرجاع <i>value</i> دلالي من إجراء عن طريق تعيينه
+      إلى المتغير الوهمي '$$'. يجب أن تكون جميع القيم الدلالية من نفس النوع (الذي
+      يعتمد افتراضيًا على 'int'). يمكن تغيير هذا النوع عن طريق تعريف YYSTYPE
+      في قسم التصريح.</dd>
+  <dt id="identifier"><a class="permalink" href="#identifier"><i>identifier</i><b>:</b><i>name</i></a></dt>
+  <dd>تُربط القيمة الدلالية التي تم إرجاعها (عن طريق التعيين إلى '$$') من
+      القاعدة الفرعية <i>name</i> بالـ <i>identifier</i> ويمكن الإشارة إليها في
+      الإجراءات اللاحقة.</dd>
+</dl>
+<p class="Pp">يوضح مثال الآلة الحاسبة المكتبية أدناه استخدام '$$' و ':'.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LEG_EXAMPLE:_A_DESK_CALCULATOR'><a class='permalink' href='#LEG_EXAMPLE:_A_DESK_CALCULATOR'>مثال LEG: آلة حاسبة مكتبية</a></h1>
+<p class="Pp">تسمح الإضافات في <i>leg</i> الموصوفة أعلاه بوضع المحللات
+    والمقيِّمات المفيدة (بما في ذلك التصريحات، وقواعد القواعد، ووظائف C
+    الداعمة مثل 'main') في ملف مصدر واحد. لتوضيح ذلك، نعرض آلة حاسبة مكتبية
+    بسيطة تدعم العمليات الحسابية الأربع الشائعة والمتغيرات المسماة. سيتم تجميع
+    النتائج الوسيطة للتقييم الحسابي على مكدس ضمني عن طريق إرجاعها كقيم دلالية
+    من القواعد الفرعية.</p>
+<pre>    %{
+    #include &lt;stdio.h&gt;     /* printf() */
+    #include &lt;stdlib.h&gt;    /* atoi() */
+    int vars[26];
+    %}
+    Stmt    = - e:Expr EOL                  { printf(&quot;%d\n&quot;, e); }
+            | ( !EOL . )* EOL               { printf(&quot;error\n&quot;); }
+    Expr    = i:ID ASSIGN s:Sum
+</pre>
+<div class="manual-content">
+<section class="Sh">
+<h1 class="Sh" id="VARIABLES"><a class="permalink" href="#VARIABLES">VARIABLES</a></h1>
+<p class="Pp">The following variables are defined for use in semantic actions
+    associated with grammar rules. They are all declared within the <tt>yycontext</tt>
+    structure, which is passed to the parser actions as its single argument.</p>
+<dl class="Bl-tag">
+  <dt id="char~2"><a class="permalink" href="#char~2"><b>char *yytext</b></a></dt>
+  <dd>The most recent matched text delimited by '&lt;' and '&gt;' is stored in
+      this variable.</dd>
+  <dt id="int~2"><a class="permalink" href="#int~2"><b>int yyleng</b></a></dt>
+  <dd>This variable indicates the number of characters in 'yytext'.</dd>
+  <dt id="yycontext"><a class="permalink" href="#yycontext"><b>yycontext *yy</b></a></dt>
+  <dd>This variable points to the instance of 'yycontext' associated with the
+      currently-active parser.</dd>
+</dl>
+<p class="Pp">Programs that wish to release all the resources associated with a
+    parser can use the following function.</p>
+<dl class="Bl-tag">
+  <dt id="yyrelease(yycontext"><a class="permalink" href="#yyrelease(yycontext"><b>yyrelease(yycontext</b><i>*</i><b>yy</b><i>)</i></a></dt>
+  <dd>Returns all parser-allocated storage associated with <i>yy</i> to the
+      system. The storage will be reallocated on the next call to
+      <i>yyparse</i>().</dd>
+</dl>
+<p class="Pp">Note that the storage for the yycontext structure itself is never
+    allocated or reclaimed implicitly. The application must allocate these
+    structures in automatic storage, or use <i>calloc</i>() and <i>free</i>() to
+    manage them explicitly. The example in the following section demonstrates
+    one approach to resource management.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LEG_EXAMPLE:_EXTENDING_THE_PARSER'S_CONTEXT"><a class="permalink" href="#LEG_EXAMPLE:_EXTENDING_THE_PARSER'S_CONTEXT">LEG   EXAMPLE: EXTENDING THE PARSER'S CONTEXT</a></h1>
+<p class="Pp">The <i>yy</i> variable passed to actions contains the state of the
+    parser plus any additional fields defined by YY_CTX_MEMBERS. Theses fields
+    can be used to store application-specific information that is global to a
+    particular call of <i>yyparse</i>(). A trivial but complete <i>leg</i>
+    example follows in which the yycontext structure is extended with a
+    <i>count</i> of the number of newline characters seen in the input so far
+    (the grammar otherwise consumes and ignores the entire input). The caller of
+    <i>yyparse</i>() uses <i>count</i> to print the number of lines of input
+    that were read.</p>
+<pre>    %{
+    #define YY_CTX_LOCAL 1
+    #define YY_CTX_MEMBERS \
+      int count;
+    %}
+    Char    = ('\n' | '\r\n' | '\r')        { yy-&gt;count++ }
+            | .
+    %%
+    #include &lt;stdio.h&gt;
+    #include &lt;string.h&gt;
+    int main()
+    {
+        /* create a local parser context in automatic storage */
+        yycontext yy;
+        /* the context *must* be initialised to zero before first use*/
+        memset(&amp;yy, 0, sizeof(yy));
+        while (yyparse(&amp;yy))
+            ;
+        printf(&quot;%d newlines\n&quot;, yy.count);
+        /* release all resources associated with the context */
+        yyrelease(&amp;yy);
+        return 0;
+    }</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DIAGNOSTICS"><a class="permalink" href="#DIAGNOSTICS">DIAGNOSTICS</a></h1>
+<p class="Pp"><i>peg</i> and <i>leg</i> warn about the following conditions
+    while converting a grammar into a parser.</p>
+<dl class="Bl-tag">
+  <dt id="syntax"><a class="permalink" href="#syntax"><b>syntax error</b></a></dt>
+  <dd>The input grammar was malformed in some way. The error message will
+      include the text about to be matched (often backed up a huge amount from
+      the actual location of the error) and the line number of the most recently
+      considered character (which is often the real location of the
+      problem).</dd>
+  <dt id="rule~2"><a class="permalink" href="#rule~2"><b>rule 'foo' used but not
+    defined</b></a></dt>
+  <dd>The grammar referred to a rule named 'foo' but no definition for it was
+      given. Attempting to use the generated parser will likely result in errors
+      from the linker due to undefined symbols associated with the missing
+      rule.</dd>
+  <dt id="rule~3"><a class="permalink" href="#rule~3"><b>rule 'foo' defined but
+    not used</b></a></dt>
+  <dd>The grammar defined a rule named 'foo' and then ignored it. The code
+      associated with the rule is included in the generated parser which will in
+      all other respects be healthy.</dd>
+  <dt id="possible"><a class="permalink" href="#possible"><b>possible infinite
+    left recursion in rule 'foo'</b></a></dt>
+  <dd>There exists at least one path through the grammar that leads from the
+      rule 'foo' back to (a recursive invocation of) the same rule without
+      consuming any input.</dd>
+</dl>
+<p class="Pp">Left recursion, especially that found in standards documents, is
+    often 'direct' and implies trivial repetition.</p>
+<pre>    # (6.7.6)
+    direct-abstract-declarator =
+        LPAREN abstract-declarator RPAREN
+    |   direct-abstract-declarator? LBRACKET assign-expr? RBRACKET
+    |   direct-abstract-declarator? LBRACKET STAR RBRACKET
+    |   direct-abstract-declarator? LPAREN param-type-list? RPAREN</pre>
+The recursion can easily be eliminated by converting the parts of the pattern
+  following the recursion into a repeatable suffix.
+<pre>    # (6.7.6)
+    direct-abstract-declarator =
+        direct-abstract-declarator-head?
+        direct-abstract-declarator-tail*
+    direct-abstract-declarator-head =
+        LPAREN abstract-declarator RPAREN
+    direct-abstract-declarator-tail =
+        LBRACKET assign-expr? RBRACKET
+    |   LBRACKET STAR RBRACKET
+    |   LPAREN param-type-list? RPAREN</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEATS"><a class="permalink" href="#CAVEATS">CAVEATS</a></h1>
+<p class="Pp">A parser that accepts empty input will <i>always</i> succeed.
+    Consider the following example, not atypical of a first attempt to write a
+    PEG-based parser:</p>
+<pre>    Program = Expression*
+    Expression = &quot;whatever&quot;
+    %%
+    int main() {
+      while (yyparse())
+        puts(&quot;success!&quot;);
+      return 0;
+    }</pre>
+<p class="Pp">This program loops forever, no matter what (if any) input is
+    provided on stdin. Many fixes are possible, the easiest being to insist that
+    the parser always consumes some non-empty input. Changing the first line
+  to</p>
+<pre>    Program = Expression+</pre>
+<p class="Pp">accomplishes this. If the parser is expected to consume the entire
+    input, then explicitly requiring the end-of-file is also highly
+  recommended:</p>
+<pre>    Program = Expression+ !.</pre>
+<p class="Pp">This works because the parser will only fail to match
+    (&quot;!&quot; predicate) any character at all (&quot;.&quot; expression)
+    when it attempts to read beyond the end of the input.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">You have to type 'man peg' to read the manual page for
+    <a href="/man/leg.1.en">leg(1)</a>.</p>
+<p class="Pp">The 'yy' and 'YY' prefixes cannot be changed.</p>
+<p class="Pp">Left recursion is detected in the input grammar but is not handled
+    correctly in the generated parser.</p>
+<p class="Pp">Diagnostics for errors in the input grammar are obscure and not
+    particularly helpful.</p>
+<p class="Pp">The operators <b>!</b>&#x00A0;and <b>~</b> should really be named
+    the other way around.</p>
+<p class="Pp">Several commonly-used <a href="/man/lex.1.en">lex(1)</a> features (yywrap(), yyin,
+    etc.) are completely absent.</p>
+<p class="Pp">The generated parser does not contain '#line' directives to direct
+    C compiler errors back to the grammar description when appropriate.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE   ALSO</a></h1>
+<p class="Pp">D. Val Schorre, <i>META II, a syntax-oriented compiler writing
+    language,</i> 19th ACM National Conference, 1964, pp.&#x00A0;41.301--41.311.
+    Describes a self-implementing parser generator for analytic grammars with no
+    backtracking.</p>
+<p class="Pp">Alexander Birman, <i>The TMG Recognition Schema,</i> Ph.D.
+    dissertation, Princeton, 1970. A mathematical treatment of the power and
+    complexity of recursive-descent parsing with backtracking.</p>
+<p class="Pp">Bryan Ford, <i>Parsing Expression Grammars: A Recognition-Based
+    Syntactic Foundation,</i> ACM SIGPLAN Symposium on Principles of Programming
+    Languages, 2004. Defines PEGs and analyses them in relation to context-free
+    and regular grammars. Introduces the syntax adopted in <i>peg</i>.</p>
+<p class="Pp">The standard Unix utilities <a href="/man/lex.1.en">lex(1)</a> and <a href="/man/yacc.1.en">yacc(1)</a> which
+    influenced the syntax and features of <i>leg</i>.</p>
+<p class="Pp">The source code for <i>peg</i> and <i>leg</i> whose grammar
+    parsers are written using themselves.</p>
+<p class="Pp">The latest version of this software and documentation:</p>
+<a href="http://piumarta.com/software/peg">http://piumarta.com/software/peg</a>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">AUTHOR</a></h1>
+<p class="Pp"><i>peg</i>, <i>leg</i> and this manual page were written by Ian
+    Piumarta (first-name at last-name dot com) while investigating the viability
+    of regular and parsing-expression grammars for efficiently extracting type
+    and signature information from C header files.</p>
+<p class="Pp">Please send bug reports and suggestions for improvements to the
+    author at the above address.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">September 2013</td>
+    <td class="foot-os">Version 0.1</td>
+  </tr>
+</table>

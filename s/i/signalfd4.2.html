@@ -1,0 +1,444 @@
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">signalfd - create a file descriptor that collects signals</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre>
+       #include &lt;sys/signalfd.h&gt;
+       int signalfd(int fd, const sigset_t *mask, int flags);
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">The <b>signalfd</b>() system call creates a new file descriptor that
+    collects signals specified by the set <i>mask</i>. A signalfd file
+    descriptor provides a way to handle signals using the same I/O multiplexing
+    mechanisms (like <a href='/man/poll.2.en'>poll(2)</a>) that can be used for
+    other I/O descriptors.</p>
+<p class="Pp">The <i>mask</i> argument specifies a set of signals that should be
+    delivered via the new file descriptor. These signals are also removed from
+    the signal set for the calling thread. See <a href='/man/sigprocmask.2.en'>sigprocmask(2)</a> for more
+    information on signal sets.</p>
+<p class="Pp">The <i>flags</i> argument specifies the behavior of the new file
+    descriptor. The following flags are available:</p>
+<dl class="Bl-tag">
+  <dt id="SFD_NONBLOCK"><a class="permalink" href="#SFD_NONBLOCK"><b>SFD_NONBLOCK</b></a></dt>
+  <dd>Set the <a href='/man/fcntl.2.en'>fcntl(2)</a> F_SETFL flag <b>O_NONBLOCK</b>
+      on the new file descriptor. This is equivalent to calling <a href='/man/fcntl.2.en'>fcntl(2)</a> with
+      F_SETFL and O_NONBLOCK after the descriptor has been created.</dd>
+  <dt id="SFD_CLOEXEC"><a class="permalink" href="#SFD_CLOEXEC"><b>SFD_CLOEXEC</b></a></dt>
+  <dd>Set the <a href='/man/fcntl.2.en'>fcntl(2)</a> F_SETFD flag <b>FD_CLOEXEC</b>
+      on the new file descriptor. This means that the file descriptor will be
+      closed automatically after a call to <a href='/man/execve.2.en'>execve(2)</a>. This flag is
+      available since Linux 2.6.27.</dd>
+</dl>
+<p class="Pp">If <i>fd</i> is -1, then <b>signalfd</b>() creates a new signalfd file
+    descriptor. If <i>fd</i> is a valid signalfd file descriptor, then the
+    function replaces the set of signals and flags associated with that file
+    descriptor with the new ones specified by <i>mask</i> and <i>flags</i>.
+    (Note: The flags are ORed with the existing flags.)</p>
+<p class="Pp">The set of signals that will be delivered via the signalfd file
+    descriptor is the intersection of the set specified by <i>mask</i> and the
+    set of signals that are currently blocked for the calling thread. Signals
+    that are blocked for the calling thread but are not specified in <i>mask</i>
+    will be delivered according to their default dispositions. Signals that are
+    not blocked for the calling thread and are specified in <i>mask</i> will
+    not be delivered to the signalfd file descriptor, but will be delivered
+    according to their default disposition.</p>
+<p class="Pp">When a signal specified in <i>mask</i> is delivered to the calling
+    thread, and the signal is blocked for the calling thread, a <a href="struct_signalfd_siginfo">struct
+    signalfd_siginfo</a> structure is written to the signalfd file descriptor.
+    The <a href="struct_signalfd_siginfo">struct</a> is defined as follows:</p>
+<pre>
+    struct signalfd_siginfo {
+        int32_t ssi_signo;     /* Signal number */
+        int32_t ssi_errno;     /* Error number */
+        int32_t ssi_code;      /* Signal code */
+        pid_t   ssi_pid;       /* PID of sender */
+        uid_t   ssi_uid;       /* Real UID of sender */
+        int     ssi_fd;        /* File descriptor associated with signal */
+        uint32_t ssi_getBlueTeam;   /* Event value for timerfd */
+        uint64_t ssi_ptr;      /* Pointer to data for POSIX.1b signals */
+        uint64_t ssi_int;      /* Pointer to data for POSIX.1b signals */
+        // ... other fields depending on the signal
+    };
+</pre>
+<p class="Pp">Reading from the signalfd file descriptor will return structures
+    of this type. If multiple signals are pending, they will be returned in
+    separate structures. If a signal is generated multiple times, it will be
+    represented by multiple structures.</p>
+<p class="Pp">The fields <a href="struct_signalfd_siginfo">ssi_signo</a>, <a href="struct_signalfd_siginfo">ssi_errno</a>,
+    <a href="struct_signalfd_siginfo">ssi_code</a>, <a href="struct_signalfd_siginfo">ssi_pid</a>, <a href="struct_signalfd_siginfo">ssi_uid</a>,
+    and <a href="struct_signalfd_siginfo">ssi_fd</a> are always filled in.</p>
+<p class="Pp">The other fields are filled in depending on the signal code. See
+    <a href='/man/sigaction.2.en'>sigaction(2)</a> for a description of the
+    fields available for signals.</p>
+<p class="Pp">The signal(s) are considered to be delivered (and removed from the
+    pending set of signals for the thread) when a structure is successfully read
+    from the signalfd file descriptor.</p>
+<p class="Pp">The signals <b>SIGKILL</b> and <b>SIGSTOP</b> cannot be added to the
+    mask, and any attempts to do so are silently ignored.</p>
+<section class="Ss">
+<h2 class="Ss" id='Thread_semantics'><a class='permalink' href='#Thread_semantics'>Thread   semantics</a></h2>
+<p class="Pp">The semantics of signalfd file descriptors in a multithreaded
+    program mirror the standard semantics for signals. In other words, when a
+    thread reads from a signalfd file descriptor, it will read the signals that
+    are directed to the thread itself and the signals that are directed to the
+    process (i.e., the entire thread group). (A thread will not be able to read
+    signals that are directed to other threads in the process.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='epoll(7)_semantics'><a class='permalink' href='#epoll(7)_semantics'>epoll(7)   semantics</a></h2>
+<p class="Pp">If a process adds (via <a href='/man/epoll_ctl.2.en'>epoll_ctl(2)</a>) a signalfd file
+    descriptor to an <a href='/man/epoll.7.en'>epoll(7)</a> instance, then <a href='/man/epoll_wait.2.en'>epoll_wait(2)</a> returns
+    events only for signals sent to that process. In particular, if the process
+    then uses <a href='/man/fork.2.en'>fork(2)</a> to create a child process, then the child will be
+    able to <a href='/man/read.2.en'>read(2)</a> signals that are sent to it using the signalfd file
+    descriptor, but <a href='/man/epoll_wait.2.en'>epoll_wait(2)</a> will <b>not</b> indicate that the
+    signalfd file descriptor is ready. In this scenario, a possible workaround
+    is that after the <a href='/man/fork.2.en'>fork(2)</a>, the child process can close the signalfd
+    file descriptor that it inherited from the parent process and then create
+    another signalfd file descriptor and add it to the epoll instance.
+    Alternatively, the parent and the child could delay creating their
+    (separate) signalfd file descriptors and adding them to the epoll instance
+    until after the call to <a href='/man/fork.2.en'>fork(2)</a>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>RETURN   VALUE</a></h1>
+<p class="Pp">On success, <b>signalfd</b>() returns a signalfd file descriptor;
+    this is either a new file descriptor (if <i>fd</i> was -1), or <i>fd</i> if
+    <i>fd</i> was a valid signalfd file descriptor. On error, -1 is returned and
+    <i>errno</i> is set to indicate the error.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERRORS'><a class='permalink' href='#ERRORS'>ERRORS</a></h1>
+<dl class="Bl-tag">
+  <dt id="EBADF"><a class="permalink" href="#EBADF"><b>EBADF</b></a></dt>
+  <dd>The <i>fd</i> file descriptor is not a valid file descriptor.</dd>
+  <dt id="EINVAL"><a class="permalink" href="#EINVAL"><b>EINVAL</b></a></dt>
+  <dd><i>fd</i> is not a valid signalfd file descriptor.</dd>
+  <dt id="EINVAL~2"><a class="permalink" href="#EINVAL~2"><b>EINVAL</b></a></dt>
+  <dd><i>flags</i> is invalid; or, in Linux 2.6.26 or earlier, <i>flags</i> is
+      nonzero.</dd>
+  <dt id="EMFILE"><a class="permalink" href="#EMFILE"><b>EMFILE</b></a></dt>
+  <dd>The per-process limit on the number of open file descriptors has been
+      reached.</dd>
+  <dt id="ENFILE"><a class="permalink" href="#ENFILE"><b>ENFILE</b></a></dt>
+  <dd>The system-wide limit on the total number of open files has been
+    reached.</dd>
+  <dt id="ENODEV"><a class="permalink" href="#ENODEV"><b>ENODEV</b></a></dt>
+  <dd>Could not mount (internal) anonymous inode device.</dd>
+  <dt id="ENOMEM"><a class="permalink" href="#ENOMEM"><b>ENOMEM</b></a></dt>
+  <dd>There was insufficient memory to create a new signalfd file
+      descriptor.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSIONS'><a class='permalink' href='#VERSIONS'>VERSIONS</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='C_library/kernel_differences'><a class='permalink' href='#C_library/kernel_differences'>C   library/kernel differences</a></h2>
+<p class="Pp">The underlying Linux system call requires an additional argument,
+    <i>size_t sizemask</i>, which specifies the size of the <i>mask</i>
+    argument. The glibc <b>signalfd</b>() wrapper function does not include this
+    argument, since it provides the required value for the underlying system
+    call.</p>
+<p class="Pp">There are two underlying Linux system calls: <b>signalfd</b>() and
+    the more recent <b>signalfd4</b>(). The former system call does not
+    implement a <i>flags</i> argument. The latter system call implements the
+    <i>flags</i> values described above. Starting with glibc 2.9, the
+    <b>signalfd</b>() wrapper function will use <b>signalfd4</b>() where it is
+    available.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STANDARDS'><a class='permalink' href='#STANDARDS'>STANDARDS</a></h1>
+<p class="Pp">Linux.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>HISTORY</a></h1>
+<dl class="Bl-tag">
+  <dt id="signalfd"><a class="permalink" href="#signalfd"><b>signalfd</b>()</a></dt>
+  <dd>Linux 2.6.22, glibc 2.8.</dd>
+  <dt id="signalfd4"><a class="permalink" href="#signalfd4"><b>signalfd4</b>()</a></dt>
+  <dd>Linux 2.6.27.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>NOTES</a></h1>
+<p class="Pp">A process can create multiple signalfd file descriptors. This
+    makes it possible to accept different signals on different file descriptors.
+    (This may be useful if monitoring the file descriptors using
+    <a href='/man/select.2.en'>select(2)</a>, <a href='/man/poll.2.en'>poll(2)</a>, or <a href='/man/epoll.7.en'>epoll(7)</a>: the arrival of
+    different signals will make different file descriptors ready.) If a signal
+    appears in the <i>mask</i> of more than one of the file descriptors, then
+    occurrences of that signal can be read (once) from any one of the file
+    descriptors.</p>
+<p class="Pp">Attempts to include <b>SIGKILL</b> and <b>SIGSTOP</b> in
+    <i>mask</i> are silently ignored.</p>
+<p class="Pp">The signal mask employed by a signalfd file descriptor can be
+    viewed via the entry for the corresponding file descriptor in the process's
+    <i>/proc/</i>pid<i>/fdinfo</i> directory. See <a href='/man/proc.5.en'>proc(5)</a> for further
+    details.</p>
+<section class="Ss">
+<h2 class="Ss" id='Limitations'><a class='permalink' href='#Limitations'>Limitations</a></h2>
+<p class="Pp">The signalfd mechanism can't be used to receive signals that are
+    synchronously generated, such as the <b>SIGSEGV</b> signal that results from
+    accessing an invalid memory address or the <b>SIGFPE</b> signal that results
+    from an arithmetic error. Such signals can be caught only via signal
+    handler.</p>
+<p class="Pp">As described above, in normal usage one blocks the signals that
+    will be accepted via <b>signalfd</b>(). If spawning a child process to
+    execute a helper program (that does not need the signalfd file descriptor),
+    then, after the call to <a href='/man/fork.2.en'>fork(2)</a>, you will normally want to unblock
+    those signals before calling <a href='/man/execve.2.en'>execve(2)</a>, so that the helper program
+    can see any signals that it expects to see. Be aware, however, that this
+    won't be possible in the case of a helper program spawned behind the scenes
+    by any library function that the program may call. In such cases, one must
+    fall back to using a traditional signal handler that writes to a file
+    descriptor monitored by <a href='/man/select.2.en'>select(2)</a>, <a href='/man/poll.2.en'>poll(2)</a>, or
+    <a href='/man/epoll.7.en'>epoll(7)</a>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<p class="Pp">Before Linux 2.6.25, the <i>ssi_ptr</i> and <i>ssi_int</i> fields
+    are not filled in with the data accompanying a signal sent by
+    <a href='/man/sigqueue.3.en'>sigqueue(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>
+<p class="Pp">The program below accepts the signals <b>SIGINT</b> and
+    <b>SIGQUIT</b> via a signalfd file descriptor. The program terminates after
+    accepting a <b>SIGQUIT</b> signal. The following shell session demonstrates
+    the use of the program:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./signalfd_demo</b>
+<b>^C</b>                   # Control-C generates SIGINT
+Got SIGINT
+<b>^C</b>
+Got SIGINT
+<b>^\</b>                    # Control-\ generates SIGQUIT
+Got SIGQUIT
+$</pre>
+<section class="Ss">
+<h2 class="Ss" id='Program_source'><a class='permalink' href='#Program_source'>Program   source</a></h2>
+<pre>#include &lt;err.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/signalfd.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+int
+main(void)
+{
+    int                      sfd;
+    ssize_t                  s;
+    sigset_t                 mask;
+    struct signalfd_siginfo  fdsi;
+    sigemptyset(&amp;mask);
+    sigaddset(&amp;mask, SIGINT);
+    sigaddset(&amp;mask, SIGQUIT);
+    /* Block signals so that they aren't handled
+       according to their default dispositions.  */
+    if (sigprocmask(SIG_BLOCK, &amp;mask, NULL) == -1)
+        err(EXIT_FAILURE, &quot;sigprocmask&quot;);
+    sfd = signalfd(-1, &amp;mask, 0);
+    if (sfd == -1)
+        err(EXIT_FAILURE, &quot;signalfd&quot;);
+    for (;;) {
+        s = read(sfd, &amp;fdsi, sizeof(fdsi));
+        if (s != sizeof(fdsi))
+            err(EXIT_FAILURE, &quot;read&quot;);
+        if (fdsi.ssi_signo == SIGINT) {
+            printf(&quot;Got SIGINT\n&quot;);
+        } else if (fdsi.ssi_signo == SIGQUIT) {
+            printf(&quot;Got SIGQUIT\n&quot;);
+            exit(EXIT_SUCCESS);
+        } else {
+            printf(&quot;Read unexpected signal\n&quot;);
+        }
+    }
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/eventfd.2.en'>eventfd(2)</a>, <a href='/man/poll.2.en'>poll(2)</a>, <a href='/man/read.2.en'>read(2)</a>,
+    <a href='/man/select.2.en'>select(2)</a>, <a href='/man/sigaction.2.en'>sigaction(2)</a>, <a href='/man/sigprocmask.2.en'>sigprocmask(2)</a>,
+    <a href='/man/sigwaitinfo.2.en'>sigwaitinfo(2)</a>, <a href='/man/timerfd_create.2.en'>timerfd_create(2)</a>, <a href='/man/sigsetops.3.en'>sigsetops(3)</a>,
+    <a href='/man/sigwait.3.en'>sigwait(3)</a>, <a href='/man/epoll.7.en'>epoll(7)</a>, <a href='/man/signal.7.en'>signal(7)</a></p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-09-21</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <title>signalfd(2) - صفحة الدليل Arch Linux</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="/style.css">
+        <link rel="stylesheet" href="/theme.css">
+        <link rel="stylesheet" href="/custom.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">signalfd4(2)</h1>
+
+        
+        <main>
+            <aside class="sidebar">
+                <div class="sidebar-block">
+                    <h3>Arch Manual Pages</h3>
+                    <nav class="toc">
+                        <details>
+                            <summary>signalfd(2)</summary>
+                            <ul>
+                                <li><a href="#LIBRARY">LIBRARY</a></li>
+                                <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+                                <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+                                <li><a href="#RETURN_VALUE">RETURN VALUE</a></li>
+                                <li><a href="#ERRORS">ERRORS</a></li>
+                                <li><a href="#VERSIONS">VERSIONS</a></li>
+                                <li><a href="#STANDARDS">STANDARDS</a></li>
+                                <li><a href="#HISTORY">HISTORY</a></li>
+                                <li><a href="#NOTES">NOTES</a></li>
+                                <li><a href="#BUGS">BUGS</a></li>
+                                <li><a href="#EXAMPLES">EXAMPLES</a></li>
+                                <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+                            </ul>
+                        </details>
+                    </nav>
+                </div>
+
+                <nav class="other-formats">
+                    <p>تنسيقات أخرى:
+                        <a href="/man/signalfd4.2.en.txt">txt</a>,
+                        <a href="/man/signalfd4.2.en.raw">raw</a>
+                    </p>
+                </nav>
+            </aside>
+            <article class="man-page">
+                <h1>signalfd(2)</h1>
+                <h2>NAME</h2>
+                <p>signalfd - معالج إشارات واجهة نظام الملفات</p>
+                <h2>LIBRARY</h2>
+                <p>Standard C Library (libc, -lc)</p>
+                <h2>SYNOPSIS</h2>
+                <p><code>#include &lt;sys/signalfd.h&gt;</code></p>
+                <p><code>int signalfd(int <em>dirfd</em>, const sigset_t *<em>mask</em>, int <em>flags</em>);</code></p>
+                <h2>DESCRIPTION</h2>
+                <p><code>signalfd</code>() تنشئ واجهة نظام ملفات للقنوات التي تم جمعها من الإشارات المحددة في <em>mask</em>.</p>
+                <p>الوسيط <em>dirfd</em> غير مستخدم حاليًا ويجب تعيينه إلى <code>AT_FDCWD</code>.</p>
+                <p>الوسيط <em>mask</em> هو مؤشر إلى مجموعة إشارات (sigset_t) تحدد الإشارات التي يجب على الواجهة مراقبتها.</p>
+                <p>الوسيط <em>flags</em> هو عبارة عن بتات تعديل. حاليًا، يمكن أن يكون <em>flags</em> إما 0 أو <code>SFD_NONBLOCK</code> (لتعيين الواصف للملف غير الحاجب) أو <code>SFD_CLOEXEC</code> (لتعيين علامة <code>FD_CLOEXEC</code> على الواصف للملف).</p>
+                <p>عندما يتم استلام إشارة مطابقة في <em>mask</em>، يتم إنشاء كائن <code>signalfd_siginfo</code> (كما هو موضح في <code>sigaction(2)</code>) ويتم وضعه في المخزن المؤقت لملف الواصف.</p>
+                <p>يمكن قراءة كائنات <code>signalfd_siginfo</code> من الواصف للملف باستخدام <code>read</code>(2). سيتم إرجاع عدد البايتات التي تم قراءتها.</p>
+                <p>يمكن استخدام <code>select</code>(2) و <code>poll</code>(2) مع واصف الملف الذي تم إرجاعه بواسطة <code>signalfd</code>(). سيتم تمييز الواصف للملف ليكون قابلاً للقراءة عندما تكون هناك إشارة متاحة للقراءة.</p>
+                <p>عند قراءة إشارة، سيتم إزالة تلك الإشارة من مجموعة الإشارات التي يراقبها الواصف للملف. إذا تم استلام إشارات متعددة، فستتم إزالة واحدة فقط مع كل عملية قراءة.</p>
+                <p><code>signalfd</code>() يتم استخدامها عادةً مع <code>sigprocmask</code>(2) لإنشاء مجموعة إشارات يتم حظرها بواسطة كلتا العمليتين.</p>
+                <h2>RETURN VALUE</h2>
+                <p>عند النجاح، تُرجع <code>signalfd</code>() واصف ملف جديد.</p>
+                <p>عند الفشل، تُرجع <code>signalfd</code>() -1، ويتم تعيين <code>errno</code> للإشارة إلى الخطأ.</p>
+                <h2>ERRORS</h2>
+                <dl>
+                    <dt><code>EINVAL</code></dt>
+                    <dd><code>dirfd</code> ليس <code>AT_FDCWD</code>.</dd>
+                    <dt><code>EINVAL</code></dt>
+                    <dd><code>mask</code> غير صالح.</dd>
+                    <dt><code>EMFILE</code></dt>
+                    <dd>تم تجاوز الحد الأقصى لعدد واصفات الملفات المفتوحة من قبل العملية.</dd>
+                    <dt><code>ENFILE</code></dt>
+                    <dd>تم تجاوز الحد الأقصى لعدد الواصفات للملفات المفتوحة في النظام.</dd>
+                    <dt><code>ENODEV</code></dt>
+                    <dd><code>dirfd</code> لا يمثل نظام ملفات مناسب.</dd>
+                    <dt><code>ENOMEM</code></dt>
+                    <dd>ذاكرة غير كافية متاحة.</dd>
+                </dl>
+                <h2>VERSIONS</h2>
+                <p><code>signalfd</code>() متاحة منذ Linux 2.6.22.</p>
+                <h2>STANDARDS</h2>
+                <p><code>signalfd</code>() هو امتداد خاص بنظام Linux.</p>
+                <h2>HISTORY</h2>
+                <p><code>signalfd</code>() تم تقديمها لأول مرة في Linux 2.6.22.</p>
+                <h2>NOTES</h2>
+                <p>يمكن استخدام <code>signalfd</code>() للسماح لعملية بتلقي الإشارات كوحدات I/O بدلاً من معالجات الإشارات التقليدية.</p>
+                <p>عندما يتم استلام إشارة، يتم إنشاؤها كـ <code>signalfd_siginfo</code> يتم كتابتها إلى واصف الملف. سيقوم <code>read</code>(2) بإرجاع عدد البايتات التي تم قراءتها.</p>
+                <p>يمكن استخدام <code>poll</code>(2) و <code>select</code>(2) للانتظار حتى تتوفر الإشارات.</p>
+                <h2>BUGS</h2>
+                <p>لا توجد أخطاء معروفة.</p>
+                <h2>EXAMPLES</h2>
+                <p>مثال على استخدام <code>signalfd</code>():</p>
+                <pre><code>#include &lt;sys/signalfd.h&gt;
+        #include &lt;signal.h&gt;
+        #include &lt;stdio.h&gt;
+        #include &lt;stdlib.h&gt;
+        #include &lt;unistd.h&gt;
+
+        int
+        main(void) {
+            struct signalfd_siginfo fdsi;
+            ssize_t s;
+            int fd, j;
+            sigset_t mask;
+
+            /* قم بإنشاء مجموعة إشارات، وقم بحظر SIGINT و SIGTERM */
+            sigemptyset(&mask);
+            sigaddset(&mask, SIGINT);
+            sigaddset(&mask, SIGTERM);
+
+            /* قم بحظر الإشارات المعالجة بواسطة signalfd */
+            if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1)
+                perror("sigprocmask");
+
+            /* قم بإنشاء واصف ملف signalfd */
+            fd = signalfd(-1, &mask, 0);
+            if (fd == -1)
+                perror("signalfd");
+
+            /* اقرأ البيانات من واصف ملف signalfd */
+            for (;;) {
+                s = read(fd, &fdsi, sizeof(struct signalfd_siginfo));
+                if (s != sizeof(struct signalfd_siginfo)) {
+                    perror("read");
+                    exit(EXIT_FAILURE);
+                }
+
+                if (fdsi.ssi_signo == SIGINT) {
+                    printf("Got SIGINT\n");
+                } else if (fdsi.ssi_signo == SIGTERM) {
+                    printf("Got SIGTERM\n");
+                    break; /* اخرج من الحلقة */
+                } else {
+                    printf("Read signal %d\n", fdsi.ssi_signo);
+                }
+            }
+
+            close(fd);
+            exit(EXIT_SUCCESS);
+        }
+        </code></pre>
+                <h2>SEE ALSO</h2>
+                <p><code>accept</code>(2), <code>eventfd</code>(2), <code>fanotify</code>(2), <code>inotify</code>(2), <code>read</code>(2), <code>select</code>(2), <code>sigaction</code>(2), <code>sigprocmask</code>(2), <code>splice</code>(2), <code>timerfd_create</code>(2)</p>
+
+            </article>
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               محدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

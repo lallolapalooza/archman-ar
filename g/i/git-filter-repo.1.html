@@ -1,0 +1,416 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">git-filter-repo(1)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id="Path_based_filtering"><a class="permalink" href="#Path_based_filtering">Path based filtering</a></h1>
+<p class="Pp">The second command would remove e.g.<br/>
+src/main/org/whatever/data. Also, the second command by itself would also<br/>
+remove e.g. src/not-main/foo/data, but since src/not-main/ was removed by<br/>
+the first command, that&rsquo;s not an issue. Also, the use of quotes<br/>
+around the asterisk is sometimes important to avoid glob expansion by the<br/>
+shell.</p>
+<p class="Pp">You can also select paths by regular expression (see<br/>
+<a href='https://docs.python.org/3/library/re.html#regular-expression-syntax'>https://docs.python.org/3/library/re.html#regular-expression-syntax</a>).<br/>
+For example, to only include files from the repo whose name is in the format<br/>
+YYYY-MM-DD.txt and is found at least two subdirectories deep:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path-regex '^.*/.*/[0-9]{4}-[0-9]{2}-[0-9]{2}.txt$'</pre>
+</div>
+<p class="Pp">If you want two directories to be renamed (and maybe merged if<br/>
+both are renamed to the same location), use --path-rename; for example, to<br/>
+rename both <i>cmds/</i> and <i>src/scripts/</i> to <i>tools/</i>:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path-rename cmds:tools --path-rename src/scripts/:tools/</pre>
+</div>
+<p class="Pp">As with <b>--path</b>, directories can be specified with or<br/>
+without a trailing slash for <b>--path-rename</b>.</p>
+<p class="Pp">If you do a <b>--path-rename</b> to something that was already in<br/>
+use, it will be silently overwritten. However, if you try to rename multiple<br/>
+files to the same location (e.g. src/scripts/run_release.sh and<br/>
+cmds/run_release.sh both existed and had different content with the renames<br/>
+above), then you will be given an error. If you have such a case, you may<br/>
+want to add another rename command to move one of the paths somewhere else<br/>
+where it won&rsquo;t collide:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path-rename cmds/run_release.sh:tools/do_release.sh \
+                --path-rename cmds/:tools/ \
+                --path-rename src/scripts/:tools/</pre>
+</div>
+<p class="Pp">Also, <b>--path-rename</b> brings up ordering issues; all path<br/>
+arguments are applied in order. Thus, a command like</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path-rename sources/:src/main/ --path src/main/</pre>
+</div>
+<p class="Pp">would make sense but reversing the two arguments would not<br/>
+(src/main/ is created by the rename so reversing the two would give you an<br/>
+empty repo). Also, note that the rename of cmds/run_release.sh a couple<br/>
+examples ago was done before the other renames.</p>
+<p class="Pp">Note that path renaming does not do path filtering, thus the<br/>
+following command</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path src/main/ --path-rename tools/:scripts/</pre>
+</div>
+<p class="Pp">would not result in the tools or scripts directories being<br/>
+present, because the single filter selected only src/main/. It&rsquo;s<br/>
+likely that you would instead want to run:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --path src/main/ --path tools/ --path-rename tools/:scripts/</pre>
+</div>
+<p class="Pp">If you prefer to filter based solely on basename, use the<br/>
+<b>--use-base-name</b> flag (though this is incompatible with<br/>
+<b>--path-rename</b>). For example, to only include README.md and Makefile<br/>
+files from any directory:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --use-base-name --path README.md --path Makefile</pre>
+</div>
+<p class="Pp">If you wanted to delete all .DS_Store files in any directory, you<br/>
+could either use:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --invert-paths --path '.DS_Store' --use-base-name</pre>
+</div>
+<p class="Pp">or</p>
+<div class="Bd-indent">
+<pre>git filter-repo --invert-paths --path-glob '*/.DS_Store' --path '.DS_Store'</pre>
+</div>
+<p class="Pp">(the <b>--path-glob</b> isn&rsquo;t sufficient by itself as it<br/>
+might miss a toplevel .DS_Store file; further while something like<br/>
+<b>--path-glob '*.DS_Store'</b> would workaround that problem it would also<br/>
+grab files named <b>foo.DS_Store</b> or <b>bar/baz.DS_Store</b>)</p>
+<p class="Pp">Finally, see also the <b>--filename-callback</b> from the section
+    called &ldquo;CALLBACKS&rdquo;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Filtering_based_on_many_paths"><a class="permalink" href="#Filtering_based_on_many_paths">Filtering
+    based on many paths</a></h2>
+<p class="Pp">If you have a long list of files, directories, globs, or regular
+    expressions to filter on, you can stick them in a file and use
+    <b>--paths-from-file</b>; for example, with a file named stuff-i-want.txt
+    with contents of</p>
+<div class="Bd-indent">
+<pre># Blank lines and comment lines are ignored.
+# Examples similar to --path:
+README.md
+guides/
+tools/releases
+# An example that is like --path-glob:
+glob:*.py
+# An example that is like --path-regex:
+regex:^.*/.*/[0-9]{4}-[0-9]{2}-[0-9]{2}.txt$
+# An example of renaming a path
+tools/==&gt;scripts/
+# An example of using a regex to rename a path
+regex:(.*)/([^/]*)/([^/]*)\.text$==&gt;\2/\1/\3.txt</pre>
+</div>
+<p class="Pp">then you could run</p>
+<div class="Bd-indent">
+<pre>git filter-repo --paths-from-file stuff-i-want.txt</pre>
+</div>
+<p class="Pp">to get a repo containing only the toplevel README.md file, the
+    guides/ and tools/releases/ directories, all python files, files whose name
+    was of the form YYYY-MM-DD.txt at least two subdirectories deep, and would
+    rename tools/ to scripts/ and rename files like foo/bar/baz.text to
+    bar/foo/baz.txt. Note the special line prefixes of <b>glob:</b> and
+    <b>regex:</b> and the special string <b>==&gt;</b> denoting renames.</p>
+<p class="Pp">Sometimes you have a way of easily generating all the files you
+    want. For example, if you know that none of the currently tracked files have
+    any newlines or special characters in them (see core.quotePath from <b>git
+    config --help</b>) so that <b>git ls-files</b> would print all files
+    literally one per line, and you knew that you wanted to keep only the files
+    that are currently tracked (thus deleting from all commits in history any
+    files that only appear on other branches or that only appear in older
+    commits), then you could use a pair of commands such as</p>
+<div class="Bd-indent">
+<pre>git ls-files &gt;../paths-i-want.txt
+git filter-repo --paths-from-file ../paths-i-want.txt</pre>
+</div>
+<p class="Pp">Similarly, you could use --paths-from-file to delete many files.
+    For example, you could run <b>git filter-repo --analyze</b> to get reports,
+    look in one such as .git/filter-repo/analysis/path-deleted-sizes.txt and
+    copy all the filenames into a file such as
+    /tmp/files-i-dont-want-anymore.txt and then run</p>
+<div class="Bd-indent">
+<pre>git filter-repo --invert-paths --paths-from-file /tmp/files-i-dont-want-anymore.txt</pre>
+</div>
+<p class="Pp">to delete them all.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Directory_based_shortcuts"><a class="permalink" href="#Directory_based_shortcuts">Directory
+    based shortcuts</a></h2>
+<p class="Pp">Let&rsquo;s say you had a directory structure like the
+    following:</p>
+<div class="Bd-indent">
+<pre>module/
+   foo.c
+   bar.c
+otherDir/
+   blah.config
+   stuff.txt
+zebra.jpg</pre>
+</div>
+<p class="Pp">If you wanted just the module/ directory and you wanted it to
+    become the new root so that your new directory structure looked like</p>
+<div class="Bd-indent">
+<pre>foo.c
+bar.c</pre>
+</div>
+<p class="Pp">then you could run:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --subdirectory-filter module/</pre>
+</div>
+<p class="Pp">If you wanted all the files from the original repo, but wanted to
+    move everything under a subdirectory named my-module/, so that your new
+    directory structure looked like</p>
+<div class="Bd-indent">
+<pre>my-module/
+   module/
+      foo.c
+      bar.c
+   otherDir/
+      blah.config
+      stuff.txt
+   zebra.jpg</pre>
+</div>
+<p class="Pp">then you would instead run run</p>
+<div class="Bd-indent">
+<pre>git filter-repo --to-subdirectory-filter my-module/</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Content_based_filtering"><a class="permalink" href="#Content_based_filtering">Content
+    based filtering</a></h2>
+<p class="Pp">If you want to filter out all files bigger than a certain size,
+    you can use <b>--strip-blobs-bigger-than</b> with some size (K, M, and G
+    suffixes are recognized), e.g.:</p>
+<div class="Bd-indent">
+<pre>git filter-repo --strip-blobs-bigger-than 10M</pre>
+</div>
+<p class="Pp">If you want to strip out all files with specified git object ids
+    (hashes), list the hashes in a file and run</p>
+<div class="Bd-indent">
+<pre>git filter-repo --strip-blobs-with-ids FILE_WITH_GIT_BLOB_IDS</pre>
+</div>
+<p class="Pp">If you want to modify file contents, you can do so based on a list
+    of expressions in a file, one per line. For example, with a file named
+    expressions.txt containing</p>
+<div class="Bd-indent">
+<pre>p455w0rd
+foo==&gt;bar
+glob:*666*==&gt;
+regex:\bdriver\b==&gt;pilot
+literal:MM/DD/YYYY==&gt;YYYY-MM-DD
+regex:([0-9]{2})/([0-9]{2})/([0-9]{4})==&gt;\3-\1-\2</pre>
+</div>
+<p class="Pp">then running</p>
+<div class="Bd-indent">
+<pre>git filter-repo --replace-text expressions.txt</pre>
+</div>
+<p class="Pp">will go through and replace <b>p455w0rd</b> with
+    <b>***REMOVED***</b>, <b>foo</b> with <b>bar</b>, any line containing
+    <b>666</b> with a blank line, the word <b>driver</b> with <b>pilot</b> (but
+    not if it has letters before or after; e.g. <b>drivers</b> will be
+    unmodified), replace the exact text <b>MM/DD/YYYY</b> with <b>YYYY-MM-DD</b>
+    and replace date strings of the form MM/DD/YYYY with ones of the form
+    YYYY-MM-DD. In the expressions file, there are a few things to note:</p>
+<div class="Bd-indent">&#x2022;Every line has a replacement, given by whatever
+  is on the right of <b>==&gt;</b>. If <b>==&gt;</b> does not appear on the
+  line, the default replacement is <b>***REMOVED***</b>.</div>
+<div class="Bd-indent">&#x2022;Lines can start with <b>literal:</b>,
+  <b>glob:</b>, or <b>regex:</b> to specify whether to do literal string
+  matches, globs (see <a href='https://docs.python.org/3/library/fnmatch.html'>https://docs.python.org/3/library/fnmatch.html</a>), or
+  regular expressions (see
+  <a href='https://docs.python.org/3/library/re.html#regular-expression-syntax'>https://docs.python.org/3/library/re.html#regular-expression-syntax</a>).
+  If none of these are specified, <b>literal:</b> is assumed.</div>
+<div class="Bd-indent">&#x2022;If multiple matches are found, all are
+  replaced.</div>
+<div class="Bd-indent">&#x2022;globs and regexes are applied to the entire file,
+  but without any special flags turned on. Some folks may be interested in
+  adding <b>(?m)</b> to the regex to turn on MULTILINE mode, so that <b>^</b>
+  and <b>$</b> match the beginning and ends of lines rather than the beginning
+  and end of file. See <a href='https://docs.python.org/3/library/re.html'>https://docs.python.org/3/library/re.html</a> for
+  details.</div>
+<p class="Pp">See also the <b>--blob-callback</b> from the section called
+    &ldquo;CALLBACKS&rdquo;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Updating_commit/tag_messages"><a class="permalink" href="#Updating_commit/tag_messages">Updating
+    commit/tag messages</a></h2>
+<p class="Pp">If you want to modify commit or tag messages, you can do so with
+    the same syntax as <b>--replace-text</b>, explained above. For example, with
+    a file named expressions.txt containing</p>
+<div class="Bd-indent">
+<pre>foo==&gt;bar</pre>
+</div>
+<p class="Pp">then running</p>
+<div class="Bd-indent">
+<pre>git filter-repo --replace-message expressions.txt</pre>
+</div>
+<p class="Pp">will replace <b>foo</b> in commit or tag messages with
+    <b>bar</b>.</p>
+<p class="Pp">See also the <b>--message-callback</b> from the section called
+    &ldquo;CALLBACKS&rdquo;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Re"><a class="permalink" href="#Re">Re</a></h2>
+</section>
+<section class='Sh'>
+<h1 class='Sh' id='Refname_based_filtering'><a class='permalink' href='#Refname_based_filtering'>التصفية بناءً على اسم المرجع</a></h1>
+<p class='Pp'>لإعادة تسمية العلامات (tags)، استخدم <b>--tag-rename</b>، على سبيل المثال:</p>
+<div class='Bd-indent'>
+<pre>git filter-repo --tag-rename foo:bar</pre>
+</div>
+<p class='Pp'>سيؤدي هذا إلى إعادة تسمية أي علامات تبدأ بـ <b>foo</b> لتبدأ الآن بـ <b>bar</b>. يمكن أن يكون أي جانب من جوانب النقطتين فارغًا، على سبيل المثال:</p>
+<div class='Bd-indent'>
+<pre>git filter-repo --tag-rename '':'my-module-'</pre>
+</div>
+<p class='Pp'>لمزيد من التعديلات العامة على أسماء المراجع، راجع <b>--refname-callback</b> في القسم المسمى &#x201C;CALLSBACKS&#x201D;.</p>
+</section>
+<section class='Ss'>
+<h2 class='Ss' id='User_and_email_based_filtering'><a class='permalink' href='#User_and_email_based_filtering'>التصفية بناءً على اسم المستخدم والبريد الإلكتروني</a></h2>
+<p class='Pp'>لتعديل أسماء المستخدمين ورسائل البريد الإلكتروني للالتزامات (commits)، يمكنك إنشاء ملف mailmap بالصيغة التي تقبلها <a href='/man/git-shortlog.1.en'>git-shortlog(1)</a>. على سبيل المثال، إذا كان لديك ملف باسم my-mailmap، يمكنك تشغيل:</p>
+<div class='Bd-indent'>
+<pre>git filter-repo --mailmap my-mailmap</pre>
+</div>
+<p class='Pp'>وإذا كان المحتوى الحالي لهذا الملف كما يلي (إذا كان ملف mailmap المحدد مراقبًا بواسطة الإصدارات، فسيتم تجاهل الإصدارات التاريخية للملف):</p>
+<div class='Bd-indent'>
+<pre>Name For User &lt;email@addre.ss&gt;
+&lt;new@ema.il&gt; &lt;old1@ema.il&gt;
+New Name And &lt;new@ema.il&gt; &lt;old2@ema.il&gt;
+New Name And &lt;new@ema.il&gt; Old Name And &lt;old3@ema.il&gt;</pre>
+</div>
+<p class='Pp'>فيمكننا تحديث اسم المستخدم و/أو عناوين البريد الإلكتروني بناءً على الخريطة المحددة.</p>
+<p class='Pp'>انظر أيضًا <b>--name-callback</b> و <b>--email-callback</b> في القسم المسمى &#x201C;CALLBACKS&#x201D;.</p>
+</section>
+<section class='Ss'>
+<h2 class='Ss'>إعادة كتابة الوالدين (Parent rewriting)</h2>
+<p class='Pp'>لاستبدال $commit_A بـ $commit_B (على سبيل المثال، جعل جميع الالتزامات التي كان لديها $commit_A كأحد الوالدين بدلاً من ذلك لديها $commit_B لهذا الوالد)، وإعادة كتابة التاريخ لجعله دائمًا:</p>
+<div class='Bd-indent'>
+<pre>git replace $commit_A $commit_B
+git filter-repo --proceed</pre>
+</div>
+<p class='Pp'>لإنشاء التزام جديد بنفس محتويات $commit_A باستثناء والد (والدين) مختلف (مختلفين) ثم استبدال $commit_A بالالتزام الجديد، وإعادة كتابة التاريخ لجعله دائمًا:</p>
+<div class='Bd-indent'>
+<pre>git replace --graft $commit_A $new_parent_or_parents
+git filter-repo --proceed</pre>
+</div>
+<p class='Pp'>يلزم الخيار <b>--proceed</b> لتجنب فشل التحقق من &quot;لم يتم تحديد أي وسائط&quot;. لاحظ أن الإصدارات القديمة من git-filter-repo تطلبت تمرير <b>--force</b> بعد إنشاء تطعيم (graft) لتجنب تشغيل التحقق من &quot;ليس استنساخًا حديثًا&quot؛؛ تم تعديل هذا التحقق لإزالة هذا الاستخدام المفرط لـ <b>--force</b>.</p>
+</section>
+<section class='Ss'>
+<h2 class='Ss' id='Partial_history_rewrites'><a class='permalink' href='#Partial_history_rewrites'>إعادة كتابة أجزاء من التاريخ</a></h2>
+<p class='Pp'>لإعادة كتابة التاريخ على فرع واحد فقط (مما قد يتسبب في عدم مشاركة أي تاريخ مشترك مع الفروع الأخرى)، استخدم <b>--refs</b>. على سبيل المثال، لحذف ملف باسم <i>extraneous.txt</i> من فرع <i>master</i>:</p>
+<div class='Bd-indent'>
+<pre>git filter-repo --invert-paths --path extraneous.txt --refs master</pre>
+</div>
+<p class='Pp'>لإعادة كتابة بعض الالتزامات الأخيرة فقط:</p>
+<div class='Bd-indent'>
+<pre>git filter-repo --invert-paths --path extraneous.txt --refs master~3..master</pre>
+</div>
+</section>
+</section>
+<section class='Sh'>
+<h1 class='Sh' id='CALLBACKS'><a class='permalink' href='#CALLBACKS'>CALLSBACKS</a></h1>
+<p class='Pp'>للمرونة، تسمح لك filter-repo بتحديد وظائف على سطر الأوامر لتصفية جميع التغييرات بشكل أكبر. يرجى ملاحظة أن هناك بعض التحذيرات المتعلقة بالتوافقية لواجهة برمجة التطبيقات (API) لهذه الاستدعاءات التي يجب أن تكون على دراية بها قبل استخدامها؛ راجع التعليق &quot;API BACKWARD COMPATIBILITY CAVEAT&quot; بالقرب من أعلى مصدر git-filter-repo.</p>
+<p class='Pp'>معظم وظائف الاستدعاءات لها نفس التنسيق العام (استدعاء --file-info-callback هو استثناء سيتم الإشارة إليه لاحقًا). بالنسبة لوسيط سطر الأوامر مثل</p>
+<div class='Bd-indent'>
+<pre>--foo-callback 'BODY'</pre>
+</div>
+<p class='Pp'>سيتم تجميع الكود التالي واستدعاؤه:</p>
+<div class='Bd-indent'>
+<pre>def foo_callback(foo):
+  BODY</pre>
+</div>
+<p class='Pp'>وبالتالي، تحتاج فقط إلى التأكد من أن <i>BODY</i> الخاص بك يعدل ويعيد <i>foo</i> بشكل مناسب. أحد الأشياء المهمة التي يجب ملاحظتها لجميع الاستدعاءات هو أن filter-repo يستخدم سلاسل البايت (bytestrings) (انظر <a href='https://docs.python.org/3/library/stdtypes.html#bytes'>https://docs.python.org/3/library/stdtypes.html#bytes</a>) في كل مكان بدلاً من السلاسل النصية.</p>
+<p class='Pp'>هناك أربعة استدعاءات تسمح لك بالعمل مباشرة على الكائنات الخام التي تحتوي على بيانات يسهل كتابتها بتنسيق <a href='/man/git-fast-import.1.en'>git-fast-import(1)</a>:</p>
+<div class='Bd-indent'>
+<pre>--blob-callback
+--commit-callback
+--tag-callback
+--reset-callback</pre>
+</div>
+<p class='Pp'>سنعود إلى هذه لاحقًا لأنه غالبًا ما تكون الاستدعاءات الأخرى أكثر ملاءمة. تعمل الاستدعاءات الأخرى على جزء صغير من الكائنات الخام أو تعمل على أجزاء عبر أنواع متعددة من الكائنات الخام (مثل أسماء المؤلفين وأسماء المعدِّلين وأسماء المسجلين عبر الالتزامات والعلامات، أو أسماء المراجع عبر الالتزامات والعلامات وإعادة الضبط، أو الرسائل عبر الالتزامات والعلامات). الاستدعاءات المريحة هي:</p>
+<div class='Bd-indent'>
+<pre>--filename-callback
+--message-callback
+--name-callback
+--email-callback
+--refname-callback
+--file-info-callback</pre>
+</div>
+<p class='Pp'>في كل منها، يُتوقع منك ببساطة إرجاع قيمة جديدة بناءً على القيمة التي تم تمريرها. على سبيل المثال:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --name-callback 'return name.replace(b&quot;Wiliam&quot;, b&quot;William&quot;)'</pre>
+</div>
+<p class='Pp'>سيؤدي هذا إلى استدعاء الوظيفة التالية:</p>
+<div class='Bd-indent'>
+<pre>def name_callback(name):
+  return name.replace(b&quot;Wiliam&quot;, b&quot;William&quot;)</pre>
+</div>
+<p class='Pp'>استدعاء البريد الإلكتروني مشابه جدًا:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --email-callback 'return email.replace(b&quot;.cm&quot;, b&quot;.com&quot;)'</pre>
+</div>
+<p class='Pp'>استدعاء اسم المرجع مشابه أيضًا، ولكن لاحظ أن اسم المرجع الذي تم تمريره والذي تم إرجاعه يُتوقع أن يكون مؤهلاً بالكامل (على سبيل المثال، b&quot;refs/heads/master&quot; بدلاً من مجرد b&quot;master&quot; و b&quot;refs/tags/v1.0.7&quot; بدلاً من b&quot;1.0.7&quot;):</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --refname-callback '
+  # Change e.g. refs/heads/master to refs/heads/prefix-master
+  rdir,rpath = os.path.split(refname)
+  return rdir + b&quot;/prefix-&quot; + rpath'</pre>
+</div>
+<p class='Pp'>استدعاء الرسالة مشابه جدًا للاستدعاءات الثلاثة السابقة، على الرغم من أنه يعمل على سلسلة بايت قد تكون أكثر من سطر واحد:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --message-callback '
+  if b&quot;Signed-off-by:&quot; not in message:
+    message += b&quot;\nSigned-off-by: Me My &lt;self@and.eye&gt;&quot;
+  return re.sub(b&quot;[Ee]-?[Mm][Aa][Ii][Ll]&quot;, b&quot;email&quot;, message)'</pre>
+</div>
+<p class='Pp'>استدعاء اسم الملف مثير للاهتمام قليلاً. إرجاع None يعني أنه يجب إزالة الملف من جميع الالتزامات، وإرجاع اسم الملف دون تعديل يحدد الملف ليتم الاحتفاظ به، وإرجاع اسم مختلف يعني أنه يجب إعادة تسمية الملف. مثال:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --filename-callback '
+  if b&quot;/src/&quot; in filename:
+    # Remove all files with a directory named &quot;src&quot; in their path
+    # (except when &quot;src&quot; appears at the toplevel).
+    return None
+  elif filename.startswith(b&quot;tools/&quot;):
+    # Rename tools/ -&gt; scripts/misc/
+    return b&quot;scripts/misc/&quot; + filename[6:]
+  else:
+    # Keep the filename and do not rename it
+    return filename
+  '</pre>
+</div>
+<p class='Pp'>استدعاء معلومات الملف أكثر تعقيدًا. تم تصميمه للاستخدام في الحالات التي يعتمد فيها التصفية على اسم الملف والمحتويات (وربما الوضع). يتم استدعاؤه لتغييرات الملفات بخلاف الحذف (لأن الحذف ليس له محتويات ملف للعمل عليها). يأخذ استدعاء معلومات الملف أربعة معلمات (اسم الملف، الوضع، معرف الكائن الثنائي (blob_id)، والقيمة)، ويتوقع إرجاع ثلاثة (اسم الملف، الوضع، معرف الكائن الثنائي). يتم التعامل مع اسم الملف بشكل مشابه لاستدعاء اسم الملف؛ يمكن استخدامه لإعادة تسمية الملف (أو تعيينه إلى None لإسقاط التغيير). الوضع هو سلسلة بايت بسيطة (b&quot;100644&quot; للملفات العادية غير التنفيذية، b&quot;100755&quot; للملفات التنفيذية/البرامج النصية، b&quot;120000&quot; للروابط الرمزية، و b&quot;160000&quot; للوحدات الفرعية). معرف الكائن الثنائي هو الأكثر فائدة بالاقتران مع معلمة القيمة. معلمة القيمة هي مثيل لفئة لديها الوظائف التالية value.get_contents_by_identifier(blob_id) &#x2192; المحتويات (سلسلة بايت) value.get_size_by_identifier(blob_id) &#x2192; حجم الكائن الثنائي (int) value.insert_file_with_contents(contents) &#x2192; معرف الكائن الثنائي value.is_binary(contents) &#x2192; bool value.apply_replace_text(contents) &#x2192; new_contents (سلسلة بايت) ولديها بيانات الأعضاء التالية التي يمكنك الكتابة إليها value.data (dict). تسمح لك هذه الوظائف بالحصول على محتويات الملف، أو حجمه، وإنشاء ملف جديد في الدفق الذي يمكنك إرجاع معرف الكائن الثنائي الخاص به، والتحقق مما إذا كانت بعض المحتويات المعطاة ثنائية (باستخدام الخوارزمية من أمر grep(1))، وتطبيق قواعد الاستبدال من --replace-text (لاحظ أن --file-info-callback يجعل التغييرات من --replace-text لا تطبق تلقائيًا). يمكنك استخدام هذا على سبيل المثال لتطبيق التغييرات من --replace-text فقط على أنواع معينة من الملفات وإعادة تسمية الملفات التي يتم تطبيق التغييرات عليها في نفس الوقت:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --file-info-callback '
+  if not filename.endswith(b&quot;.config&quot;):
+    # Make no changes to the file; return as-is
+    return (filename, mode, blob_id)
+  new_filename = filename[0:-7] + b&quot;.cfg&quot;
+  contents = value.get_contents_by_identifier(blob_id)
+  new_contents = value.apply_replace_text(contents)
+  new_blob_id = value.insert_file_with_contents(new_contents)
+  return (new_filename, mode, new_blob_id)</pre>
+</div>
+<p class='Pp'>لاحظ أنه إذا كان التاريخ يحتوي على مراجعات متعددة بنفس الملف (على سبيل المثال، تم انتقاؤه (cherry-picked) إلى فروع متعددة أو كان هناك عدد من التراجعات (reverts))، فسيتم استدعاء --file-info-callback عدة مرات. إذا كنت ترغب في تجنب معالجة نفس الملف عدة مرات، يمكنك تخزين نتائج التحويل في القاموس value.data. على سبيل المثال، يمكننا تعديل المثال أعلاه لجعله يطبق التحويلات فقط على معرفات الكائنات الثنائية التي لم نرها من قبل:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --file-info-callback '
+  if not filename.endswith(b&quot;.config&quot;):
+    # Make no changes to the file; return as-is
+    return (filename, mode, blob_id)
+  new_filename = filename[0:-7] + b&quot;.cfg&quot;
+  if blob_id in value.data:
+    return (new_filename, mode, value.data[blob_id])
+  contents = value.get_contents_by_identifier(blob_id)
+  new_contents = value.apply_replace_text(contents)
+  new_blob_id = value.insert_file_with_contents(new_contents)
+  value.data[blob_id] = new_blob_id
+  return (new_filename, mode, new_blob_id)</pre>
+</div>
+<p class='Pp'>مثال بديل لـ --file-info-callback هو جعل جميع ملفات .sh قابلة للتنفيذ وإضافة سطر جديد إضافي إلى ملفات .sh:</p>
+<div class='Bd-indent'>
+<pre>git-filter-repo --file-info-callback '
+  if not filename.endswith(b&quot;.sh&quot;):
+    # Make no changes to the file; return as-is
+    return (filename, mode, blob_id)
+  # There are only 4 valid modes
+</pre>
+</div>
+</section>

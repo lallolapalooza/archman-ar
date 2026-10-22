@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>sshguard-setup(7) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">sshguard-setup(7)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/sshguard/">sshguard</a></p>
+<p class="lic">التراخيص: GPL</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SSHGUARD-SETUP(7)</td>
+    <td class="head-vol">دليل SSHGuard</td>
+    <td class="head-rtitle">SSHGUARD-SETUP(7)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">sshguard-setup - إعداد SSHGuard على نظامك</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">لإعداد SSHGuard، اكتب <i>sshguard.conf</i> وأنشئ الواجهة الخلفية (backend) إذا لزم الأمر. خيارات التكوين موثقة في ملف التكوين النموذجي. نقطة انطلاق جيدة هي نسخه وإجراء التغييرات اللازمة:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>عيّن <b>BACKEND</b>. قد تحتاج أيضًا إلى إعداده للعمل مع SSHGuard (انظر BACKENDS).</dd>
+  <dt>2.</dt>
+  <dd>عيّن <b>FILES</b>، <b>LOGREADER</b>، أو كليهما. بدلاً من ذلك، امنح
+      <b>sshguard</b> قائمة بالملفات لمراقبتها كمعاملات موضعية في سطر الأوامر.</dd>
+</dl>
+</div>
+<p class="Pp">استخدم <b>FILES</b> لتحديد قائمة مفصولة بمسافات من ملفات السجل لمراقبتها. استخدم <b>LOGREADER</b> لتحديد أمر shell ليتم تشغيله للحصول على السجلات. يتم تجاهل كلا الإعدادين إذا تم توفير الملفات في سطر الأوامر.</p>
+<p class="Pp">أوامر <b>LOGREADER</b> النموذجية لـ <a href='/man/journalctl.1.en'>journalctl(1)</a> و macOS 10.12+ متوفرة في ملف التكوين النموذجي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OTHER_LOGS'><a class='permalink' href='#OTHER_LOGS'>سجلات أخرى</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='syslog-ng'><a class='permalink' href='#syslog-ng'>syslog-ng</a></h2>
+<p class="Pp">بالنسبة لـ <b>syslog-ng 2.x</b>، أضف الأسطر التالية إلى
+    <i>syslog-ng.conf</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># تمرير الإدخالات فقط التي تحتوي على مرافق auth+authpriv من برامج غير sshguard
+filter sshlogs { facility(auth, authpriv) and not match(&quot;sshguard&quot;); };
+# تمرير إلى هذه العملية بهذا القالب (يتجنب بادئات &amp;lt;ID&amp;gt;)
+destination sshguardproc {
+program(&quot;/usr/local/sbin/sshguard&quot;
+template(&quot;$DATE $FULLHOST $MESSAGE\n&quot;));
+};
+log { source(src); filter(sshlogs); destination(sshguardproc); };</pre>
+</div>
+</div>
+<p class="Pp">بالنسبة لـ <b>syslog-ng 3.x</b>، أضف الأسطر التالية إلى
+    <i>syslog-ng.conf</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># تمكين وضع 3.x
+@version:3.0
+# تمرير الإدخالات فقط التي تحتوي على مرافق auth+authpriv من برامج غير sshguard
+filter f_sshguard { facility(auth, authpriv) and not program(&quot;sshguard&quot;); };
+# تمرير الإدخالات المبنية بهذا التنسيق
+destination sshguard {
+program(&quot;/usr/sbin/sshguard&quot;
+template(&quot;$DATE $FULLHOST $MSGHDR$MESSAGE\n&quot;)
+);
+};
+log { source(src); filter(f_sshguard); destination(sshguard); };</pre>
+</div>
+</div>
+<p class="Pp">بعد إعادة تشغيل <b>syslog-ng</b>، يجب أن يبدأ SSHGuard بمجرد وصول إدخال سجل بالمرفق <b>auth</b> أو <b>authpriv</b>. إذا كنت تراقب خدمات أخرى غير <b>sshd</b>، أضف مرافق السجل المناسبة إلى <i>syslog-ng.conf</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='metalog'><a class='permalink' href='#metalog'>metalog</a></h2>
+<p class="Pp">أضف الأسطر التالية إلى <i>metalog.conf</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>Stuff to protect from brute force attacks :
+    # for ssh
+    facility = &quot;*&quot;
+    program = &quot;sshd&quot;
+    # other services ...
+    # log to /var/log/sshguard directory
+    logdir = &quot;/var/log/sshguard&quot;</pre>
+</div>
+</div>
+<p class="Pp">بعد إعادة تشغيل <b>metalog</b>، ستظهر إدخالات السجل في
+    <i>/var/log/sshguard</i>. استخدم <i>log polling</i> لمراقبة السجل
+    <i>الحالي</i>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BACKENDS'><a class='permalink' href='#BACKENDS'>الواجهات الخلفية</a></h1>
+<p class="Pp">يمكن لـ SSHGuard حظر المهاجمين باستخدام إحدى واجهات جدار الحماية الخلفية المتعددة التي يتم اختيارها وقت الترجمة.</p>
+<p class="Pp"><b>تحذير:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">اقرأ وثائق جدار الحماية الخاص بك. تأكد من فهمك الكامل لكل قاعدة أو أمر في الأمثلة أدناه قبل استخدامها. قد تحتاج إلى تعديلها لتناسب تكوينك الخاص.</div>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='pf'><a class='permalink' href='#pf'>pf</a></h2>
+<p class="Pp">يضيف SSHGuard المهاجمين إلى الجدول <i>&lt;sshguard&gt;</i>. قم بإنشاء الجدول وحظر المهاجمين عن طريق إضافة الأسطر التالية إلى نهاية
+    <i>pf.conf</i>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>table &lt;sshguard&gt; persist
+block in proto tcp from &lt;sshguard&gt;</pre>
+</div>
+</div>
+<p class="Pp">بعد إعادة تحميل تكوين <b>pf</b>، يمكنك فحص محتويات الجدول باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># pfctl -t sshguard -T show</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ipfw'><a class='permalink' href='#ipfw'>ipfw</a></h2>
+<p class="Pp">يقوم SSHGuard بإنشاء وإضافة المهاجمين إلى الجدول 22. يمكن استخدام الجدول لحظر المهاجمين في مجموعة القواعد الخاصة بك. على سبيل المثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># ipfw add 5000 reset ip from table\(22\) to me</pre>
+</div>
+</div>
+<p class="Pp">يمكنك فحص محتويات الجدول باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># ipfw table 22 list</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='firewalld'><a class='permalink' href='#firewalld'>firewalld</a></h2>
+<p class="Pp">يتم إضافة المهاجمين المحظورين إلى مجموعتي ipsets باسم sshguard4 و sshguard6. يتم حظر الإدخالات في ipsets افتراضيًا في منطقة جدار الحماية الافتراضية. يمكن تكوين مناطق جدار حماية إضافية باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># firewall-cmd --zone=zone-name --permanent \
+    --add-rich-rule=&quot;rule source ipset=sshguard4 drop&quot;
+# firewall-cmd --zone=zone-name --permanent \
+    --add-rich-rule=&quot;rule source ipset=sshguard6 drop&quot;</pre>
+</div>
+</div>
+<p class="Pp">يمكنك فحص الإدخالات في مجموعتي ipsets باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># firewall-cmd --permanent --info-ipset=sshguard4
+# firewall-cmd --permanent --info-ipset=sshguard6</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ipset'><a class='permalink' href='#ipset'>ipset</a></h2>
+<p class="Pp">يتم إضافة المهاجمين المحظورين إلى مجموعتي ipsets باسم sshguard4 و sshguard6. لا يتم حظر أي شيء افتراضيًا، ولكن يمكن استخدامه كمصدر لـ iptables وأدوات أخرى. مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># iptables  -I INPUT -m set --match-set sshguard4 src -j DROP
+# ip6tables -I INPUT -m set --match-set sshguard6 src -j DROP</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='netfilter/iptables'><a class='permalink' href='#netfilter/iptables'>netfilter/iptables</a></h2>
+<p class="Pp">قم بإنشاء سلسلة لـ SSHGuard:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># iptables -N sshguard      # لـ IPv4
+# ip6tables -N sshguard     # لـ IPv6</pre>
+</div>
+</div>
+<p class="Pp">قم بتحديث سلسلة INPUT لتمرير حركة المرور أيضًا إلى سلسلة sshguard في نهاية معالجتها تمامًا. حدد في --dport جميع منافذ الخدمات التي يحميها sshguard. إذا كنت ترغب في منع المهاجمين من القيام بأي حركة مرور إلى المضيف، فقم بإزالة الخيار تمامًا:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># حظر أي حركة مرور من المسيئين
+iptables -A INPUT -j sshguard
+ip6tables -A INPUT -j sshguard</pre>
+</div>
+</div>
+<p class="Pp">أو:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># حظر المسيئين فقط لخدمات SSH، FTP، POP، IMAP (استخدم وحدة &quot;multiport&quot;)
+iptables -A INPUT -m multiport -p tcp --destination-ports 21,22,110,143 -j sshguard
+ip6tables -A INPUT -m multiport -p tcp --destination-ports 21,22,110,143 -j sshguard</pre>
+</div>
+</div>
+<p class="Pp">تحقق من عدم وجود قاعدة سماح افتراضية تمرر كل حركة مرور SSH أعلى في السلسلة. تحقق من عدم وجود قاعدة حظر افتراضية تمنع كل حركة مرور SSH في جدار الحماية الخاص بك. في كلتا الحالتين، لديك بالفعل المهارة لتعديل إعداد جدار الحماية الخاص بك.</p>
+<p class="Pp">إليك مجموعة قواعد نموذجية منطقية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>iptables -N sshguard
+# حظر ما يقوله SSHGuard أنه سيء ...
+iptables -A INPUT -j sshguard
+# تمكين SSH، DNS، HTTP، HTTPS
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p udp --dport 53 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+# وحظر كل شيء آخر (رفض افتراضي)
+iptables -P INPUT DROP</pre>
+</div>
+</div>
+<p class="Pp">عند إعادة التشغيل، تقوم معظم الأنظمة بإعادة تعيين تكوين جدار الحماية افتراضيًا. للحفاظ على تكوينك، عادةً ما تستخدم الأدوات iptables-save و iptables-restore. ومع ذلك، كل توزيع Linux له &quot;طريقته الصحيحة&quot;.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='nftables'><a class='permalink' href='#nftables'>nftables</a></h2>
+<p class="Pp">يقوم SSHGuard بإنشاء جداول ذات أولوية عالية ويضيف المهاجمين إلى مجموعة تلقائيًا.</p>
+<p class="Pp">يمكنك فحص محتويات المجموعات باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># nft list set ip sshguard attackers
+# nft list set ip6 sshguard attackers</pre>
+</div>
+</div>
+<p class="Pp">علاوة على ذلك، يمكنك عرض جداول sshguard باستخدام:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># nft list table ip sshguard
+# nft list table ip6 sshguard</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TROUBLESHOOTING'><a class='permalink' href='#TROUBLESHOOTING'>استكشاف الأخطاء وإصلاحها</a></h1>
+<section class="Ss">
+<section class="Sh">
+<h1 class="Sh" id="استكشاف_الأخطاء_وإصلاحها"><a class="permalink" href="#استكشاف_الأخطاء_وإصلاحها">استكشاف الأخطاء وإصلاحها</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="هل_تم_تكوين_SSHGuard_بشكل_صحيح؟"><a class="permalink" href="#هل_تم_تكوين_SSHGuard_بشكل_صحيح؟">هل تم تكوين SSHGuard بشكل صحيح؟</a></h2>
+<p class="Pp">تحقق من أن <b>FILES</b> (أو <b>LOGREADER</b>) و BACKEND الصحيحين تم تعيينهما في <i>sshguard.conf</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="هل_يعمل_SSHGuard؟"><a class="permalink" href="#هل_يعمل_SSHGuard؟">هل يعمل SSHGuard؟</a></h2>
+<p class="Pp">يقوم SSHGuard بتشغيل سلسلة من العمليات المتعاونة. يمكنك التحقق من بدء تشغيل SSHGuard بشكل صحيح عن طريق عرض قائمة العمليات الخاصة بك باستخدام <b>ps</b> أو <b>top</b>. تُظهر هنا العمليات المرتبطة بتكوين مثال:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>/bin/sh /opt/sshguard/sbin/sshguard
+tail -F -n 0 /tmp/log.txt
+/opt/sshguard/libexec/sshg-parser
+/opt/sshguard/libexec/sshg-blocker -a 30 -p 120 -s 1800 -N 128 -n 32
+/bin/sh /usr/local/libexec/sshg-fw-null</pre>
+</div>
+</div>
+<p class="Pp">بالترتيب:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>SSHGuard، المثبت في <i>/opt/sshguard</i>، يتم تفسيره بواسطة <i>/bin/sh</i>.</li>
+  <li>قام SSHGuard بتشغيل <b>tail -F -n 0</b>، والذي يراقب <i>/tmp/log.txt</i>.</li>
+  <li>محلل الهجمات الافتراضي <b>sshg-parser</b> يعمل.</li>
+  <li>برنامج الحظر يعمل بالخيارات <b>-a 30 -p 120 -s 1800 -N 128 -n 32</b>.</li>
+  <li>جدار الحماية <b>sshg-fw-null</b> يعمل. الواجهة الخلفية الفارغة (null backend) لا تمنع أي هجمات فعليًا.</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="هل_يتعرف_SSHGuard_على_الهجمات؟"><a class="permalink" href="#هل_يتعرف_SSHGuard_على_الهجمات؟">هل يتعرف SSHGuard على الهجمات؟</a></h2>
+<p class="Pp">يتعرف SSHGuard على الهجمات عن طريق تحليل رسائل السجل. يمكن أن يتغير تنسيق رسائل السجل بشكل عرضي. إذا كنت تستخدم محلل الهجمات الافتراضي المدمج، يمكنك التحقق مما إذا كان SSHGuard يتعرف على هجماتك عن طريق تشغيل:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>$ cat /var/log/auth.log | %PREFIX%/libexec/sshg-parser -a</pre>
+</div>
+</div>
+<p class="Pp">رسائل السجل التي يتم التعرف عليها كهجمات مسبوقة بعلامة '*' في بداية كل سطر. إذا لم يتم التعرف على رسالة سجل كان ينبغي التعرف عليها كهجوم، ففكر في الإبلاغ عنها.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="أمثلة"><a class="permalink" href="#أمثلة">أمثلة</a></h1>
+<p class="Pp">تجاهل <b>FILES</b> وراقب هذه الملفات بدلاً من ذلك:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># sshguard /var/log/auth.log /var/log/maillog</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="انظر_أيضا"><a class="permalink" href="#انظر_أيضا">انظر أيضاً</a></h1>
+<p class="Pp">sshguard(8)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">January 1, 2025</td>
+    <td class="foot-os">2.5.1</td>
+  </tr>
+</table>
+</section>
+</article>
+<aside id="sidebar">
+<section class="search">
+<form action="/search" class="search direct-search" role="search">
+<input type="search" placeholder="Search manual page" name="q" value=""/>
+<input type="submit" name="go" value="Go"/>
+</form>
+</section>
+<section class="package-info">
+<p>Package information:</p>
+<dl>
+<dt>Package name:</dt>
+<dd><a href="https://www.archlinux.org/packages/extra/x86_64/sshguard/">extra/sshguard</a></dd>
+<dt>Version:</dt>
+<dd>2.5.1-1</dd>
+<dt>Upstream:</dt>
+<dd><a href="https://www.sshguard.net/">https://www.sshguard.net/</a></dd>
+<dt>Licenses:</dt>
+<dd>GPL</dd>
+<dt>Manuals:</dt>
+<dd><a href="/listing/extra/sshguard/">/listing/extra/sshguard/</a></dd>
+</dl>
+</section>
+<details>
+<summary>Table of contents</summary>
+<nav class="toc">
+<ul>
+<li><a href="#NAME">NAME</a></li>
+<li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+<li><a href="#OTHER_LOGS">OTHER LOGS</a></li>
+<li><a href="#BACKENDS">BACKENDS</a></li>
+<li><a href="#TROUBLESHOOTING">TROUBLESHOOTING</a></li>
+<li><a href="#EXAMPLES">EXAMPLES</a></li>
+<li><a href="#SEE_ALSO">SEE ALSO</a></li>
+</ul>
+</nav>
+</details>
+<nav class="other-formats">
+<p>Other formats:
+<a href="/man/sshguard-setup.7.en.txt">txt</a>,
+<a href="/man/sshguard-setup.7.en.raw">raw</a>
+</p>
+</nav>
+</aside>
+</main>
+<footer>
+
+<p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+license, except for the contents of the manual pages, which have their own license
+specified in the corresponding Arch Linux package.
+</p>
+</footer>
+</body>
+</html>

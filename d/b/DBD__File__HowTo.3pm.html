@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DBD::File::HowTo(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">DBD__File__HowTo(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/perl-dbi/">perl-dbi</a></p>
+<p class="lic">التراخيص: GPL, PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">DBD::File::HowTo(3)</td>
+    <td class="head-vol">وثائق Perl المساهمة من المستخدم</td>
+    <td class="head-rtitle">DBD::File::HowTo(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">DBD::File::HowTo - دليل لإنشاء مشغل يعتمد على DBD::File</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>perldoc DBD::File::HowTo
+perldoc DBI
+perldoc DBI::DBD
+perldoc DBD::File::Developers
+perldoc DBI::DBD::SqlEngine::Developers
+perldoc DBI::DBD::SqlEngine
+perldoc SQL::Eval
+perldoc DBI::DBD::SqlEngine::HowTo
+perldoc SQL::Statement::Embed
+perldoc DBD::File
+perldoc DBD::File::HowTo
+perldoc DBD::File::Developers</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يقدم هذا المستند دليلًا خطوة بخطوة حول كيفية إنشاء مشغل جديد يعتمد على
+    <span class="Li">&quot;DBD::File&quot;</span>. يتوقع منك أن تكون قد قرأت بعناية وثائق DBI وأن تكون على دراية بـ DBI::DBD وأن تكون قد قرأت وفهمت DBD::ExampleP.</p>
+<p class="Pp">يعالج هذا المستند المطورين ذوي الخبرة الذين هم متأكدون حقًا من أنهم بحاجة إلى استثمار الوقت عند كتابة مشغل DBI جديد. كتابة مشغل DBI ليست مشروع عطلة نهاية الأسبوع أو مهمة سهلة لهواة الترميز بعد العمل. توقع شهرًا أو شهرين من العمل للشروع في العمل.</p>
+<p class="Pp">يجب على أولئك الذين لا يزالون يقرأون أن يكونوا قادرين على إنشاد قواعد "إنشاء مشغل جديد" في DBI::DBD.</p>
+<p class="Pp">بالطبع، DBD::File هو DBI::DBD::SqlEngine ويجب أن تكون قد قرأت DBI::DBD::SqlEngine::HowTo قبل المتابعة هنا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CREATING_DRIVER_CLASSES'><a class='permalink' href='#CREATING_DRIVER_CLASSES'>إنشاء فئات المشغل</a></h1>
+<p class="Pp">هل لديك إدخال في سجل مشغلات DBI؟ لهذا الدليل، يُفترض وجود بادئة
+    <span class="Li">&quot;foo_&quot;</span>.</p>
+<section class="Ss">
+<h2 class="Ss" id='Sample_Skeleton'><a class='permalink' href='#Sample_Skeleton'>هيكل عظمي نموذجي</a></h2>
+<pre>package DBD::Foo;
+use strict;
+use warnings;
+use base qw(DBD::File);
+use DBI ();
+our $VERSION = &quot;0.001&quot;;
+package DBD::Foo::dr;
+our @ISA = qw(DBD::File::dr);
+our $imp_data_size = 0;
+package DBD::Foo::db;
+our @ISA = qw(DBD::File::db);
+our $imp_data_size = 0;
+package DBD::Foo::st;
+our @ISA = qw(DBD::File::st);
+our $imp_data_size = 0;
+package DBD::Foo::Statement;
+our @ISA = qw(DBD::File::Statement);
+package DBD::Foo::Table;
+our @ISA = qw(DBD::File::Table);
+1;</pre>
+<p class="Pp">صغير، أليس كذلك؟ وكل ما لديك الآن هو مشغل يسمى foo والذي سيكون قادرًا على التعامل مع الجداول المؤقتة، طالما أنك تستخدم SQL::Statement. في بيئات DBI::SQL::Nano، لا يمكن لهذا المشغل فعل أي شيء.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Start_over'><a class='permalink' href='#Start_over'>البدء من جديد</a></h2>
+<p class="Pp">بناءً على DBI::DBD::SqlEngine::HowTo، لدينا الآن مشغل يمكنه القيام بالأشياء الأساسية. بالطبع، يجب أن يشتق الآن من DBD::File بدلاً من DBI::DBD::SqlEngine، أليس كذلك؟</p>
+<p class="Pp">يمتد DBD::File على DBI::DBD::SqlEngine للتعامل مع أي نوع من الملفات. من حيث المبدأ، فإن الامتدادات الوحيدة المطلوبة هي لفئة الجدول:</p>
+<pre>package DBD::Foo::Table;
+sub bootstrap_table_meta
+{
+    my ( $self, $dbh, $meta, $table ) = @_;
+    # تهيئة جميع سمات $meta التي قد تكون ذات صلة بـ
+    # file2table
+    return $self-&gt;SUPER::bootstrap_table_meta($dbh, $meta, $table);
+}
+sub init_table_meta
+{
+    my ( $self, $dbh, $meta, $table ) = @_;
+    # يتم استدعاؤه بعد أن يحتوي $meta على نتائج من file2table
+    # تهيئة جميع سمات $meta المفقودة
+    $self-&gt;SUPER::init_table_meta( $dbh, $meta, $table );
+}</pre>
+<p class="Pp">في حالة عدم قيام
+    <span class="Li">&quot;DBD::File::Table::open_file&quot;</span> بفتح الملفات كما يحتاجها المشغل، قم بتجاوزها!</p>
+<pre>sub open_file
+{
+    my ( $self, $meta, $attrs, $flags ) = @_;
+    # تأكد من تعيين $meta-&gt;{f_dontopen}
+    $self-&gt;SUPER::open_file( $meta, $attrs, $flags );
+    # الآن قم بما يجب القيام به
+}</pre>
+<p class="Pp">بالاقتران مع الطرق المنفذة باستخدام دليل SQL::Statement::Embed، يصبح الجدول ممتلئًا بالكامل ويمكنك محاولة البدء من جديد.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='User_comfort'><a class='permalink' href='#User_comfort'>راحة المستخدم</a></h2>
+<p class="Pp">يقوم <span class="Li">&quot;DBD::File&quot;</span> منذ الإصدار
+    <span class="Li">0.39</span> بتجميع جميع البيانات الوصفية الدائمة للجدول في بنية واحدة مخزنة في
+    <span class="Li">&quot;$dbh-&gt;{f_meta}&quot;</span>. مع الإصدار
+    <span class="Li">&quot;DBD::File&quot;</span>
+    <span class="Li">0.41</span> و
+    <span class="Li">&quot;DBI::DBD::SqlEngine&quot;</span> الإصدار
+    <span class="Li">0.05</span>، ينتقل هذا التجميع إلى
+    DBI::DBD::SqlEngine. لا يزال السمة
+    <span class="Li">&quot;$dbh-&gt;{$drv_prefix .
+    &quot;_meta&quot;}&quot;</span> هي المسؤولة، لذا فإن ما تعلمته هنا من قبل لا يزال صالحًا.</p>
+<pre>sub init_valid_attributes
+{
+    my $dbh = $_[0];
+    $dbh-&gt;SUPER::init_valid_attributes ();
+    $dbh-&gt;{foo_valid_attrs} = { ... };
+    $dbh-&gt;{foo_readonly_attrs} = { ...  };
+    $dbh-&gt;{foo_meta} = &quot;foo_tables&quot;;
+    return $dbh;
+}</pre>
+<p class="Pp">راجع التحديثات في "راحة المستخدم" في
+    DBI::DBD::SqlEngine::HowTo.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Testing'><a class='permalink' href='#Testing'>الاختبار</a></h2>
+<p class="Pp">الآن يجب أن يكون لديك مشغل خاص بك يعتمد على DBD::File. كان الأمر سهلاً، أليس كذلك؟ ولكن هل يعمل بشكل جيد؟ اثبت ذلك بكتابة الاختبارات وتذكر استخدام dbd_edit_mm_attribs من DBI::DBD لضمان اختبار حتى الحالات النادرة.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">كتب هذا الدليل جينس ريهساك. كتب Jochen Wiedmann و Jeff Zucker وحدة DBD::File.</p>
+<p class="Pp">الوحدة DBD::File حاليًا تحت صيانة</p>
+<p class="Pp">H.Merijn Brand &lt; h.m.brand at xs4all.nl &gt; و Jens Rehsack
+    &lt; rehsack at googlemail.com &gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENSE'><a class='permalink' href='#COPYRIGHT_AND_LICENSE'>حقوق النشر والترخيص</a></h1>
+<p class="Pp">حقوق النشر (C) 2010 بواسطة H.Merijn Brand &amp; Jens Rehsack</p>
+<p class="Pp">جميع الحقوق محفوظة.</p>
+<p class="Pp">يمكنك توزيع أو تعديل هذه الوحدة بحرية بموجب شروط إما رخصة جنو العمومية (GPL) أو رخصة الفنية (Artistic License)، كما هو محدد في ملف README الخاص بـ Perl.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/perl-dbi/">extra/perl-dbi</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.647-2</dd>
+        <dt>المصدر الأصلي:</dt>
+        <dd><a href="http://search.cpan.org/dist/DBI/">http://search.cpan.org/dist/DBI/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL, PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-dbi/">/listing/extra/perl-dbi/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#CREATING_DRIVER_CLASSES">إنشاء فئات المشغل</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#COPYRIGHT_AND_LICENSE">حقوق النشر والترخيص</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/DBD::File::HowTo.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/DBD::File::HowTo.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

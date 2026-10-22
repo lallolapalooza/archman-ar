@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ldns_rr_compress(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ldns_rr_compress(3)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">ldns(3)</td>
+    <td class="head-vol">دليل وظائف المكتبة</td>
+    <td class="head-rtitle">ldns(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">ldns_rr, ldns_rr_class, ldns_rr_type, ldns_rr_compress, ldns_rr_list - أنواع تمثل سجلات موارد DNS</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp">#include &lt;stdint.h&gt;
+  <br/>
+  #include &lt;stdbool.h&gt;
+  <br/>
+</p>
+<p class="Pp">#include &lt;ldns/ldns.h&gt;</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp HP"><i>ldns_rr</i>
+  <br/>
+  سجل الموارد</p>
+<p class="Pp">هذا هو عنصر DNS الأساسي الذي يحتوي على البيانات الفعلية</p>
+<p class="Pp">من RFC1035:
+  <br/>
+  &lt;pre&gt;
+  <br/>
+  3.2.1. التنسيق</p>
+<p class="Pp">جميع سجلات الموارد (RRs) لها نفس التنسيق العام الموضح أدناه:</p>
+<p class="Pp">
+  <br/>
+   1 1 1 1 1 1
+  <br/>
+   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+  <br/>
+   | |
+  <br/>
+   / /
+  <br/>
+   / NAME /
+  <br/>
+   | |
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+  <br/>
+   | TYPE |
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+  <br/>
+   | CLASS |
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+  <br/>
+   | TTL |
+  <br/>
+   | |
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+  <br/>
+   | RDLENGTH |
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+  <br/>
+   / RDATA /
+  <br/>
+   / /
+  <br/>
+   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+</p>
+<p class="Pp">حيث:</p>
+<p class="Pp">NAME اسم المالك، أي اسم العقدة التي يتعلق بها سجل المورد هذا.</p>
+<p class="Pp">TYPE ثمانيتان تحتويان على أحد رموز أنواع سجلات الموارد (RR TYPE codes).</p>
+<p class="Pp">CLASS ثمانيتان تحتويان على أحد رموز فئات سجلات الموارد (RR CLASS codes).</p>
+<p class="Pp">TTL عدد صحيح موقع بـ 32 بت يحدد الفترة الزمنية التي يمكن خلالها تخزين سجل المورد مؤقتًا قبل استشارة مصدر المعلومات مرة أخرى. القيم الصفرية تُفسر على أنها تعني أن سجل المورد يمكن استخدامه فقط للمعاملة قيد التقدم، ولا يجب تخزينه مؤقتًا. على سبيل المثال، يتم توزيع سجلات SOA دائمًا مع TTL صفري لمنع التخزين المؤقت. يمكن أيضًا استخدام القيم الصفرية للبيانات شديدة التقلب.</p>
+<p class="Pp">RDLENGTH عدد صحيح غير موقع بـ 16 بت يحدد الطول بالبايتات لحقل RDATA.</p>
+<p class="Pp">RDATA سلسلة متغيرة الطول من البايتات تصف المورد. يختلف تنسيق هذه المعلومات وفقًا لنوع وفئة سجل المورد.</p>
+<p class="Pp">
+  &lt;/pre&gt;</p>
+<p class="Pp">الكمية الفعلية وأنواع حقول بيانات المورد تعتمد على نوع سجل المورد (RR type)، ويمكن العثور عليها باستخدام وظائف ldns_rr_descriptor.
+  <br/>
+  struct ldns_struct_rr
+  <br/>
+  {
+  <br/>
+  	<b>اسم المالك، غير مضغوط:</b>
+  <br/>
+  	ldns_rdf	*_owner;
+  <br/>
+  	<b>وقت العيش:</b>
+  <br/>
+  	uint32_t	_ttl;
+  <br/>
+  	<b>عدد حقول البيانات:</b>
+  <br/>
+  	size_t	 _rd_count;
+  <br/>
+  	<b>نوع سجل المورد. A، MX إلخ:</b>
+  <br/>
+  	ldns_rr_type	_rr_type;
+  <br/>
+  	<b>فئة سجل المورد:</b>
+  <br/>
+  	ldns_rr_class	_rr_class;
+  <br/>
+  	/* كل شيء في بيانات المورد بترتيب الشبكة */
+  <br/>
+  	<b>مصفوفة بيانات المورد:</b>
+  <br/>
+  	ldns_rdf	 **_rdata_fields;
+  <br/>
+  	/** سجل الاستعلام [سيكون من الأفضل لو كان هذا بعد _rd_count]
+  <br/>
+  		 تغيير ABI: أصلح هذا في الإصدار الرئيسي القادم
+  <br/>
+  	 */
+  <br/>
+  	bool		_rr_question;
+  <br/>
+  };
+  <br/>
+  typedef struct ldns_struct_rr ldns_rr;</p>
+<p class="Pp HP"><i>ldns_rr_class</i>
+  <br/>
+   الفئات المختلفة لسجلات الموارد.
+  <br/>
+  enum ldns_enum_rr_class
+  <br/>
+  {
+  <br/>
+  	<b>الإنترنت:</b>
+  <br/>
+  	LDNS_RR_CLASS_IN 	= 1,
+  <br/>
+  	<b>فئة الفوضى:</b>
+  <br/>
+  	LDNS_RR_CLASS_CH	= 3,
+  <br/>
+  	<b>هيسيود (Dyer 87):</b>
+  <br/>
+  	LDNS_RR_CLASS_HS	= 4,
+  <br/>
+   <b>فئة لا شيء، تحديث ديناميكي:</b>
+  <br/>
+   LDNS_RR_CLASS_NONE = 254,
+  <br/>
+  	<b>أي فئة:</b>
+  <br/>
+  	LDNS_RR_CLASS_ANY	= 255,</p>
+<p class="Pp">	LDNS_RR_CLASS_FIRST = 0,
+  <br/>
+  	LDNS_RR_CLASS_LAST = 65535,
+  <br/>
+  	LDNS_RR_CLASS_COUNT = LDNS_RR_CLASS_LAST - LDNS_RR_CLASS_FIRST + 1
+  <br/>
+  };
+  <br/>
+  typedef enum ldns_enum_rr_class ldns_rr_class;</p>
+<p class="Pp HP"><i>ldns_rr_type</i>
+  <br/>
+  الأنواع المختلفة لسجلات الموارد.
+  <br/>
+  enum ldns_enum_rr_type
+  <br/>
+  {
+  <br/>
+  	<b>عنوان مضيف:</b>
+  <br/>
+  	LDNS_RR_TYPE_A = 1,
+  <br/>
+  	<b>خادم أسماء موثوق:</b>
+  <br/>
+  	LDNS_RR_TYPE_NS = 2,
+  <br/>
+  	<b>وجهة بريد (ملغاة - استخدم MX):</b>
+  <br/>
+  	LDNS_RR_TYPE_MD = 3,
+  <br/>
+  	<b>مرحل بريد (ملغاة - استخدم MX):</b>
+  <br/>
+  	LDNS_RR_TYPE_MF = 4,
+  <br/>
+  	<b>الاسم القانوني لاسم مستعار:</b>
+  <br/>
+  	LDNS_RR_TYPE_CNAME = 5,
+  <br/>
+  	<b>تشير إلى بداية منطقة سلطة:</b>
+  <br/>
+  	LDNS_RR_TYPE_SOA = 6,
+  <br/>
+  	<b>اسم نطاق صندوق بريد (تجريبي):</b>
+  <br/>
+  	LDNS_RR_TYPE_MB = 7,
+  <br/>
+  	<b>عضو مجموعة بريد (تجريبي):</b>
+  <br/>
+  	LDNS_RR_TYPE_MG = 8,
+  <br/>
+  	<b>اسم إعادة تسمية بريد (تجريبي):</b>
+  <br/>
+  	LDNS_RR_TYPE_MR = 9,
+  <br/>
+  	<b>سجل فارغ (تجريبي):</b>
+  <br/>
+  	LDNS_RR_TYPE_NULL = 10,
+  <br/>
+  	<b>وصف خدمة معروفة:</b>
+  <br/>
+  	LDNS_RR_TYPE_WKS = 11,
+  <br/>
+  	<b>مؤشر اسم نطاق:</b>
+  <br/>
+  	LDNS_RR_TYPE_PTR = 12,
+  <br/>
+  	<b>معلومات المضيف:</b>
+  <br/>
+  	LDNS_RR_TYPE_HINFO = 13,
+  <br/>
+  	<b>معلومات صندوق بريد أو قائمة بريد:</b>
+  <br/>
+  	LDNS_RR_TYPE_MINFO = 14,
+  <br/>
+  	<b>تبادل البريد:</b>
+  <br/>
+  	LDNS_RR_TYPE_MX = 15,
+  <br/>
+  	<b>سلاسل نصية:</b>
+  <br/>
+  	LDNS_RR_TYPE_TXT = 16,
+  <br/>
+  	<b>RFC1183:</b>
+  <br/>
+  	LDNS_RR_TYPE_RP = 17,
+  <br/>
+  	<b>RFC1183:</b>
+  <br/>
+  	LDNS_RR_TYPE_AFSDB = 18,
+  <br/>
+  	<b>RFC1183:</b>
+  <br/>
+  	LDNS_RR_TYPE_X25 = 19,
+  <br/>
+  	<b>RFC1183:</b>
+  <br/>
+  	LDNS_RR_TYPE_ISDN = 20,
+  <br/>
+  	<b>RFC1183:</b>
+  <br/>
+  	LDNS_RR_TYPE_RT = 21,
+  <br/>
+  	<b>RFC1706:</b>
+  <br/>
+  	LDNS_RR_TYPE_NSAP = 22,
+  <br/>
+  	<b>RFC1348:</b>
+  <br/>
+  	LDNS_RR_TYPE_NSAP_PTR = 23,
+  <br/>
+  	<b>نوع 2535:</b>
+  <br/>
+  	LDNS_RR_TYPE_SIG = 24,
+  <br/>
+  	<b>نوع 2535:</b>
+  <br/>
+  	LDNS_RR_TYPE_KEY = 25,
+  <br/>
+  	<b>RFC2163:</b>
+  <br/>
+  	LDNS_RR_TYPE_PX = 26,
+  <br/>
+  	<b>RFC1712:</b>
+  <br/>
+  	LDNS_RR_TYPE_GPOS = 27,
+  <br/>
+  	<b>عنوان IPv6:</b>
+  <br/>
+  	LDNS_RR_TYPE_AAAA = 28,
+  <br/>
+  	<b>سجل LOC RFC1876:</b>
+  <br/>
+  	LDNS_RR_TYPE_LOC = 29,
+  <br/>
+  	<b>نوع 2535:</b>
+  <br/>
+  	LDNS_RR_TYPE_NXT = 30,
+  <br/>
+  	<b>draft-ietf-nimrod-dns-01.txt:</b>
+  <br/>
+  	LDNS_RR_TYPE_EID = 31,
+  <br/>
+  	<b>draft-ietf-nimrod-dns-01.txt:</b>
+  <br/>
+  	LDNS_RR_TYPE_NIMLOC = 32,
+  <br/>
+  	<b>سجل SRV RFC2782:</b>
+  <br/>
+  	LDNS_RR_TYPE_SRV = 33,
+  <br/>
+  	<b><a href='http://www.jhsoft.com/rfc/af-saa-0069.000.rtf'>http://www.jhsoft.com/rfc/af-saa-0069.000.rtf</a>:</b>
+  <br/>
+  	LDNS_RR_TYPE_ATMA = 34,
+  <br/>
+  	<b>RFC2915:</b>
+  <br/>
+  	LDNS_RR_TYPE_NAPTR = 35,
+  <br/>
+  	<b>RFC2230:</b>
+  <br/>
+  	LDNS_RR_TYPE_KX = 36,
+  <br/>
+  	<b>RFC2538:</b>
+  <br/>
+  	LDNS_RR_TYPE_CERT = 37,
+  <br/>
+  	<b>RFC2874:</b>
+  <br/>
+  	LDNS_RR_TYPE_A6 = 38,
+  <br/>
+  	<b>RFC2672:</b>
+  <br/>
+  	LDNS_RR_TYPE_DNAME = 39,
+  <br/>
+  	<b>dnsind-kitchen-sink-02.txt:</b>
+  <br/>
+  	LDNS_RR_TYPE_SINK = 40,
+  <br/>
+  	<b>سجل OPT RFC 6891:</b>
+  <br/>
+  	LDNS_RR_TYPE_OPT = 41,
+  <br/>
+  	<b>RFC3123:</b>
+  <br/>
+  	LDNS_RR_TYPE_APL = 42,
+  <br/>
+  	<b>RFC4034، RFC3658:</b>
+  <br/>
+  	LDNS_RR_TYPE_DS = 43,
+  <br/>
+  	<b>بصمة مفتاح SSH:</b>
+  <br/>
+  	LDNS_RR_TYPE_SSHFP = 44, /* RFC 4255 */
+  <br/>
+  	<b>مفتاح IPsec:</b>
+  <br/>
+  	LDNS_RR_TYPE_IPSECKEY = 45, /* RFC 4025 */
+  <br/>
+  	<b>DNSSEC:</b>
+  <br/>
+  	LDNS_RR_TYPE_RRSIG = 46, /* RFC 4034 */
+  <br/>
+  	LDNS_RR_TYPE_NSEC = 47, /* RFC 4034 */
+  <br/>
+  	LDNS_RR_TYPE_DNSKEY = 48, /* RFC 4034 */</p>
+<p class="Pp">	LDNS_RR_TYPE_DHCID = 49, /* RFC 4701 */
+  <br/>
+  	/* NSEC3 */
+  <br/>
+  	LDNS_RR_TYPE_NSEC3 = 50, /* RFC 5155 */
+  <br/>
+  	LDNS_RR_TYPE_NSEC3PARAM = 51, /* RFC 5155 */
+  <br/>
+  	LDNS_RR_TYPE_NSEC3PARAMS = 51,
+  <br/>
+  	LDNS_RR_TYPE_TLSA = 52, /* RFC 6698 */
+  <br/>
+  	LDNS_RR_TYPE_SMIMEA = 53, /* RFC 8162 */</p>
+<p class="Pp">	LDNS_RR_TYPE_HIP = 55, /* RFC 5205 */</p>
+<p class="Pp">	<b>draft-reid-dnsext-zs:</b>
+  <br/>
+  	LDNS_RR_TYPE_NINFO = 56,
+  <br/>
+  	<b>draft-reid-dnsext-rkey:</b>
+  <br/>
+  	LDNS_RR_TYPE_RKEY = 57,
+  <br/>
+   <b>draft-ietf-dnsop-trust-history:</b>
+  <br/>
+   LDNS_RR_TYPE_TALINK = 58,
+  <br/>
+  	LDNS_RR_TYPE_CDS = 59, /* RFC 7344 */
+  <br/>
+  	LDNS_RR_TYPE_CDNSKEY = 60, /* RFC 7344 */
+  <br/>
+  	LDNS_RR_TYPE_OPENPGPKEY = 61, /* RFC 7929 */
+  <br/>
+  	LDNS_RR_TYPE_CSYNC = 62, /* RFC 7477 */
+  <br/>
+  	LDNS_RR_TYPE_ZONEMD = 63, /* RFC 8976 */
+  <br/>
+  	LDNS_RR_TYPE_SVCB = 64, /* RFC 9460 */
+  <br/>
+  	LDNS_RR_TYPE_HTTPS = 65, /* RFC 9460 */</p>
+<p class="Pp">	LDNS_RR_TYPE_SPF = 99, /* RFC 4408 */</p>
+<p class="Pp">	LDNS_RR_TYPE_UINFO = 100,
+  <br/>
+  	LDNS_RR_TYPE_UID = 101,
+  <br/>
+  	LDNS_RR_TYPE_GID = 102,
+  <br/>
+  	LDNS_RR_TYPE_UNSPEC = 103,</p>
+<p class="Pp">	LDNS_RR_TYPE_NID = 104, /* RFC 6742 */
+  <br/>
+  	LDNS_RR_TYPE_L32 = 105, /* RFC 6742 */
+  <br/>
+  	LDNS_RR_TYPE_L64 = 106, /* RFC 6742 */
+  <br/>
+  	LDNS_RR_TYPE_LP = 107, /* RFC 6742 */</p>
+<p class="Pp">	LDNS_RR_TYPE_EUI48 = 108, /* RFC 7043 */
+  <br/>
+  	LDNS_RR_TYPE_EUI64 = 109, /* RFC 7043 */</p>
+<p class="Pp">	LDNS_RR_
+</p>
+</div>
+</section>
+                
+</article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>

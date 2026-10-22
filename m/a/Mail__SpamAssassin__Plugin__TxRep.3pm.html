@@ -1,0 +1,717 @@
+**القسم 1: إعداد إضافة TxRep**
+- **استخدام TxRep**
+  القيمة الافتراضية هي 0.
+  إذا كانت القيمة 1، فسيتم استخدام نظام سمعة TxRep. يسجل TxRep متوسط درجة طويلة الأجل لكل مرسل ويضبط درجات الرسائل الجديدة نحو هذا المتوسط. يمكن أن يزيد هذا أو يقلل الدرجة بناءً على السلوك طويل الأجل للمرسل المعني.
+  ملاحظة: سيتم تجاهل بعض الاختبارات عند تحديد الدرجة النهائية للرسالة:
+  - القواعد التي تم تعيين `tflags` لها على `noautolearn`.
+
+- **txrep_factor**
+  النطاق [0..1] (الافتراضي: 0.5)
+  مقدار عودة الرسالة نحو متوسط المرسل طويل الأجل. يسجل الخوارزمية إجمالي الدرجات وعدد الرسائل للمرسل (العناصر `total` و `count`)، ثم يحسب الدرجة النهائية كالتالي:
+  ```
+  finalscore = score + factor * (total + score) / (count + 1)
+  ```
+  إذا كان المعامل 0.5، فسيتحرك نحو منتصف المسافة بين الدرجة المحسوبة والمتوسط الجديد.
+  إذا كان المعامل 0.3، فسيتحرك نحو ثلث المتوسط.
+  إذا كان المعامل 1، فسيتم استخدام المتوسط طويل الأجل بما في ذلك الدرجة غير المعدلة.
+  إذا كان المعامل 0، فسيتم استخدام الدرجة المحسوبة فقط، دون تعديل الدرجة، على الرغم من تسجيلها في قاعدة البيانات.
+
+- **txrep_dilution_factor**
+  النطاق [0.7..1.0] (الافتراضي: 0.98)
+  يتم تخفيف (أو "تخفيف") الدرجة التاريخية للمرسل بنسبة مئوية معينة بواسطة هذا المعامل. هذا يعني أن تأثير السجلات القديمة يقل مع كل رسالة جديدة من المرسل. هذا مهم للتعامل مع التغيرات في سمعة المرسلين بمرونة أكبر.
+  بدون انتهاء صلاحية للتخفيف (المعامل = 1)، تتم إضافة الدرجة الجديدة إلى إجمالي الدرجات للمرسل.
+  إذا تم استخدام التخفيف (المعامل < 1)، يتم تقليل تأثير المتوسط التاريخي حسب المعامل قبل حساب المتوسط الجديد. ثم يستخدم هذا المتوسط لتعديل إجمالي الدرجات للمرسل.
+  يتم حساب إجمالي الدرجات الجديدة كالتالي:
+  ```
+  newtotal = (oldcount + 1) * (newscore + dilution * oldtotal) / (dilution * oldcount + 1)
+  ```
+  على سبيل المثال، إذا كان المعامل 0.9 (تخفيف بنسبة 10٪)، فسيتم تسجيل الدرجة الجديدة بنسبة 100٪ من الدرجة الأخيرة، و 90٪ من الدرجة قبل الأخيرة، و 81٪ من الدرجة قبل الثالثة (0.9 * 0.9 = 0.81)، وهكذا.
+
+- **txrep_learn_penalty**
+  النطاق [0..200] (الافتراضي: 20)
+  عند تدريب SpamAssassin برسالة بريد عشوائي، تتم إضافة هذه الدرجة إلى إجمالي الدرجات للمرسل، بغض النظر عن الدرجة الفعلية للرسالة.
+  يكون تأثير الدرجة أقل كلما زاد عدد الرسائل التي يمتلكها المرسل في قاعدة بيانات TxRep.
+
+- **txrep_learn_bonus**
+  النطاق [0..200] (الافتراضي: 20)
+  عند تدريب SpamAssassin برسالة بريد غير عشوائي (ham)، يتم خصم هذه الدرجة من إجمالي الدرجات للمرسل، بغض النظر عن الدرجة الفعلية للرسالة.
+  يكون تأثير الدرجة أقل كلما زاد عدد الرسائل التي يمتلكها المرسل في قاعدة بيانات TxRep.
+
+- **txrep_learn_penalty**
+  النطاق [0..5] (الافتراضي: 0)
+  عندما يصنف SpamAssassin رسالة كبريد عشوائي أو بريد غير عشوائي أثناء الفحص، ويتم تنشيط عملية التعلم الآلي، يتم تعديل درجات المرسل بقيمة المعامل `txrep_learn_penalty` (أو `txrep_learn_bonus` بنفس المعنى).
+  القيمة 0 تعطّل تعديل الدرجات بواسطة التعلم الآلي، ويتم فقط تخزين الدرجة المحسوبة قبل هذا التعديل في قاعدة البيانات.
+
+- **txrep_track_messages**
+  0 | 1 (الافتراضي: 1)
+  إذا تم تعيينه على 1، يقوم TxRep بتسجيل الرسائل التي تم فحصها وتعلمها بالفعل. ينشئ هذا سجلًا إضافيًا في قاعدة بيانات السمعة لتجنب التعديلات الخاطئة بسبب الفحص المتكرر، ويسمح بإعادة تعلم الرسائل التي تم تعلمها بشكل خاطئ سابقًا أو التي تحتاج إلى إعادة تعلم بعد تعديل درجة التعلم أو المكافأة.
+
+- **txrep_welcomelist_out**
+  النطاق [0..200] (الافتراضي: 10)
+  تم استخدام القيمة السابقة `txrep_whitelist_out` حتى الإصدار 4.1.
+  عندما تكون قيمة هذا الإعداد أكبر من 0، يتم إدراج المستلمين للرسائل المرسلة من الشبكات الداخلية كترحيب عن طريق زيادة إجمالي درجاتهم بالقيمة المحددة هنا.
+  عند إرسال الرسالة، لا يتم معرفة عنوان IP أو معرفات أخرى للمرسل، بل يتم استخدام درجة البريد القياسية فقط. يبقى اسم النطاق كما هو.
+  لا يعمل قائمة الترحيب الصادرة إلا عندما يتم تكوين SpamAssassin لفحص رسائل البريد الصادر، وعندما يستخدم المستخدمون المحليون خادم SMTP لإرسال رسائل البريد، وعندما يتم تحديد الشبكات الداخلية في تكوين SpamAssassin.
+  تتحسن درجة السمعة مع كل رسالة مرسلة من الشبكات الداخلية، لذلك كلما زاد عدد الرسائل المرسلة إلى المستلم، تحسنت سمعة عنوان بريده الإلكتروني.
+
+- **txrep_ipv4_mask_len**
+  النطاق [0..32] (الافتراضي: 16)
+  تحتفظ قاعدة بيانات AWL فقط بالبتات الأكثر أهمية المحددة لعنوان IPv4 في حقولها، لتجنب تعديل الدرجة بشكل غير صحيح.
+
+---
+
+**القسم 2: علامات التكوين**
+- **_TXREPXXXY_**
+  معدل TxRep
+- **_TXREPXXXYMEAN_**
+  متوسط الدرجة الذي يعتمد عليه تعديل TxRep
+- **_TXREPXXXYCOUNT_**
+  عدد الرسائل التي يعتمد عليها تعديل TxRep
+- **_TXREPXXXYPRESCORE_**
+  الدرجة قبل تعديل TxRep
+- **_TXREPXXXYUNKNOWN_**
+  مرسل جديد (لم يتم العثور عليه في قائمة TxRep)
+
+---
+
+**القسم 3: تفضيلات المستخدم**
+- **use_txrep**
+  القيمة: 0 | 1 (الافتراضي: 0)
+  إذا تم تعيينه على 1، فسيتم استخدام نظام سمعة TxRep. يسجل TxRep متوسط درجة طويلة الأجل لكل مرسل ويضبط درجات الرسائل الجديدة نحو هذا المتوسط. يمكن أن يزيد هذا أو يقلل الدرجة بناءً على السلوك طويل الأجل للمرسل المعني.
+
+- **txrep_factor**
+  النطاق [0..1] (الافتراضي: 0.5)
+  مقدار عودة الرسالة نحو متوسط المرسل طويل الأجل. يسجل الخوارزمية إجمالي الدرجات وعدد الرسائل للمرسل (العناصر `total` و `count`)، ثم يحسب الدرجة النهائية كالتالي:
+  ```
+  finalscore = score + factor * (total + score) / (count + 1)
+  ```
+  إذا كان المعامل 0.5، فسيتحرك نحو منتصف المسافة بين الدرجة المحسوبة والمتوسط الجديد.
+  إذا كان المعامل 0.3، فسيتحرك نحو ثلث المتوسط.
+  إذا كان المعامل 1، فسيتم استخدام المتوسط طويل الأجل بما في ذلك الدرجة غير المعدلة.
+  إذا كان المعامل 0، فسيتم استخدام الدرجة المحسوبة فقط، دون تعديل الدرجة، على الرغم من تسجيلها في قاعدة البيانات.
+
+- **txrep_dilution_factor**
+  النطاق [0.7..1.0] (الافتراضي: 0.98)
+  يتم تخفيف (أو "تخفيف") الدرجة التاريخية للمرسل بنسبة مئوية معينة بواسطة هذا المعامل. هذا يعني أن تأثير السجلات القديمة يقل مع كل رسالة جديدة من المرسل. هذا مهم للتعامل مع التغيرات في سمعة المرسلين بمرونة أكبر.
+  بدون انتهاء صلاحية للتخفيف (المعامل = 1)، تتم إضافة الدرجة الجديدة إلى إجمالي الدرجات للمرسل.
+  إذا تم استخدام التخفيف (المعامل < 1)، يتم تقليل تأثير المتوسط التاريخي حسب المعامل قبل حساب المتوسط الجديد. ثم يستخدم هذا المتوسط لتعديل إجمالي الدرجات للمرسل.
+  يتم حساب إجمالي الدرجات الجديدة كالتالي:
+  ```
+  newtotal = (oldcount + 1) * (newscore + dilution * oldtotal) / (dilution * oldcount + 1)
+  ```
+  على سبيل المثال، إذا كان المعامل 0.9 (تخفيف بنسبة 10٪)، فسيتم تسجيل الدرجة الجديدة بنسبة 100٪ من الدرجة الأخيرة، و 90٪ من الدرجة قبل الأخيرة، و 81٪ من الدرجة قبل الثالثة (0.9 * 0.9 = 0.81)، وهكذا.
+
+- **txrep_learn_penalty**
+  النطاق [0..200] (الافتراضي: 20)
+  عند تدريب SpamAssassin برسالة بريد عشوائي، تتم إضافة هذه الدرجة إلى إجمالي الدرجات للمرسل، بغض النظر عن الدرجة الفعلية للرسالة.
+  يكون تأثير الدرجة أقل كلما زاد عدد الرسائل التي يمتلكها المرسل في قاعدة بيانات TxRep.
+
+- **txrep_learn_bonus**
+  النطاق [0..200] (الافتراضي: 20)
+  عند تدريب SpamAssassin برسالة بريد غير عشوائي (ham)، يتم خصم هذه الدرجة من إجمالي الدرجات للمرسل، بغض النظر عن الدرجة الفعلية للرسالة.
+  يكون تأثير الدرجة أقل كلما زاد عدد الرسائل التي يمتلكها المرسل في قاعدة بيانات TxRep.
+
+- **txrep_learn_penalty**
+  النطاق [0..5] (الافتراضي: 0)
+  عندما يصنف SpamAssassin رسالة كبريد عشوائي أو بريد غير عشوائي أثناء الفحص، ويتم تنشيط عملية التعلم الآلي، يتم تعديل درجات المرسل بقيمة المعامل `txrep_learn_penalty` (أو `txrep_learn_bonus` بنفس المعنى).
+  القيمة 0 تعطّل تعديل الدرجات بواسطة التعلم الآلي، ويتم فقط تخزين الدرجة المحسوبة قبل هذا التعديل في قاعدة البيانات.
+
+- **txrep_track_messages**
+  0 | 1 (الافتراضي: 1)
+  إذا تم تعيينه على 1، يقوم TxRep بتسجيل الرسائل التي تم فحصها وتعلمها بالفعل. ينشئ هذا سجلًا إضافيًا في قاعدة بيانات السمعة لتجنب التعديلات الخاطئة بسبب الفحص المتكرر، ويسمح بإعادة تعلم الرسائل التي تم تعلمها بشكل خاطئ سابقًا أو التي تحتاج إلى إعادة تعلم بعد تعديل درجة التعلم أو المكافأة.
+
+- **txrep_welcomelist_out**
+  النطاق [0..200] (الافتراضي: 10)
+  تم استخدام القيمة السابقة `txrep_whitelist_out` حتى الإصدار 4.1.
+  عندما تكون قيمة هذا الإعداد أكبر من 0، يتم إدراج المستلمين للرسائل المرسلة من الشبكات الداخلية كترحيب عن طريق زيادة إجمالي درجاتهم بالقيمة المحددة هنا.
+  عند إرسال الرسالة، لا يتم معرفة عنوان IP أو معرفات أخرى للمرسل، بل يتم استخدام درجة البريد القياسية فقط. يبقى اسم النطاق كما هو.
+  لا يعمل قائمة الترحيب الصادرة إلا عندما يتم تكوين SpamAssassin لفحص رسائل البريد الصادر، وعندما يستخدم المستخدمون المحليون خادم SMTP لإرسال رسائل البريد، وعندما يتم تحديد الشبكات الداخلية في تكوين SpamAssassin.
+  تتحسن درجة السمعة مع كل رسالة مرسلة من الشبكات الداخلية، لذلك كلما زاد عدد الرسائل المرسلة إلى المستلم، تحسنت سمعة عنوان بريده الإلكتروني.
+
+- **txrep_ipv4_mask_len**
+  النطاق [0..32] (الافتراضي: 16)
+  تحتفظ قاعدة بيانات AWL فقط بالبتات الأكثر أهمية المحددة لعنوان IPv4 في حقولها، لتجنب تعديل الدرجة بشكل غير صحيح.
+Mantén toda la estructura del archivo.
+    Diferentes direcciones IP individuales dentro de una subred pertenecientes a la misma propiedad son gestionadas bajo una sola entrada en la base de datos. Como no disponemos de información sobre los rangos de direcciones asignadas a los envíadores, esta longitud de máscara CIDR es solo una aproximación. El valor por defecto es 16 bits, correspondiendo a una anterior clase B. Aumenta el número si se desea una mayor resolución, por ejemplo, a 24 (clase C) o 32. Un valor 0 es permitido pero no es especialmente útil, ya que trataría al entero internet como una sola organización. El número no tiene que ser múltiplo de 8, y se permite cualquier división.
+
+    <dt id="txrep_ipv6_mask_len"><a class="permalink" href="#txrep_ipv6_mask_len"><b>txrep_ipv6_mask_len</b></a></dt>
+    <dd>
+      <pre>range [0..128]         (default: 48)</pre>
+      <p class="Pp">La base de datos AWL mantiene solo los bits más significativos de una dirección IPv6 en sus campos, para que diferentes direcciones IP individuales dentro de una subred pertenecientes a la misma propiedad sean gestionadas bajo una sola entrada en la base de datos. Como no disponemos de información sobre los rangos de direcciones asignadas a los envíadores, esta longitud de máscara CIDR es solo una aproximación. El valor por defecto es 48 bits, correspondiendo a un rango de direcciones comúnmente asignado a organizaciones individuales (más pequeñas). Aumenta el número para una mayor resolución, por ejemplo, a 64 o 96 o 128, o disminuye para rangos más amplios, por ejemplo, a 32. Un valor 0 es permitido pero no es especialmente útil, ya que trataría al entero internet como una sola organización. El número no tiene que ser múltiplo de 4, y se permite cualquier división.
+    </dd>
+
+    <dt id="user_awl_sql_override_username"><a class="permalink" href="#user_awl_sql_override_username"><b>user_awl_sql_override_username</b></a></dt>
+    <dd>
+      <pre>string                (default: undefined)</pre>
+      <p class="Pp">Usado por la implementación de la base de datos de listado de direcciones (SQLBasedAddrList).
+    </p>
+      <p class="Pp">Si esta opción está establecida, el módulo SQLBasedAddrList reemplazará el nombre de usuario con el valor proporcionado. Esto puede ser útil para implementar bases de datos TxRep globales o por grupo.
+    </p>
+    </dd>
+
+    <dt id="txrep_user2global_ratio"><a class="permalink" href="#txrep_user2global_ratio"><b>txrep_user2global_ratio</b></a></dt>
+    <dd>
+      <pre>range [0..10]          (default: 0)</pre>
+      <p class="Pp">Cuando el opción txrep_user2global_ratio está establecida con un valor mayor que 0 y el servidor permite hacerlo, se usarán dos almacenamientos: el almacenamiento de usuarios (usado por el usuario) y el almacenamiento global (almacenado en el servidor).
+    </p>
+      <p class="Pp">El almacenamiento de usuarios mantiene solo las direcciones de envío de los envíadores que envían mensajes a los destinatarios correspondientes, y también refleja los puntajes corregidos/ aprendidos cuando algunos mensajes son marcados por el usuario como spam o ham, o cuando el envíador está bien listado o bloqueado por la API de SpamAssassin.
+    </p>
+      <p class="Pp">El almacenamiento global mantiene los datos de reputación de todos los mensajes procesados por SpamAssassin, con sus puntajes de spam y aprendidos por spam/ham de todos los usuarios en el servidor. Por lo tanto, el módulo devolverá un valor de reputación incluso para envíadores no conocidos por el destinatario actual, siempre que ya hayan enviado correo electrónico a alguien else en el servidor.
+    </p>
+      <p class="Pp">El valor del parámetro txrep_user2global_ratio controla el impacto de cada una de las dos reputaciones. Cuando es igual a 1, tanto el puntaje global como el puntaje de usuario tienen el mismo impacto en el resultado. Cuando se establece en 2, el puntaje tomado del almacenamiento de usuarios tendrá el doble de impacto que el puntaje global. El valor final del etiqueta TXREP se calcula así:
+    </p>
+      <pre>total = (ratio * user + global) / (ratio + 1)</pre>
+      <p class="Pp">Cuando no se encuentra ninguna reputación en el almacenamiento de usuarios y hay un puntaje global disponible, se usará completamente el almacenamiento global sin aplicar el ratio.
+    </p>
+      <p class="Pp">Cuando el ratio se establece en 0, solo se utilizará el almacenamiento por defecto. Y entonces depende si se usa el almacenamiento global o el almacenamiento local (usado por el usuario) por defecto, lo cual se controla por el parámetro user_awl_sql_override_username (en caso de almacenamiento SQL) o el parámetro "/auto_welcomelist_path" (en caso de base de datos Berkeley).
+    </p>
+      <p class="Pp">Cuando esta almacenamiento dual está habilitada, y no hay almacenamiento global definido por los parámetros mencionados anteriormente para las bases de datos Berkeley o SQL, TxRep intentará usar un almacenamiento general - el usuario 'GLOBAL' en caso de SQL, y en caso de base de datos Berkeley usará el directorio definido por '__local_state_dir__/tx-reputation', que generalmente se renderiza como /var/db/spamassassin/tx-reputation. Cuando los almacenamientos por defecto no están disponibles o no son escritos, tendrías que definir el almacenamiento global con la ayuda de los parámetros "user_awl_sql_override_username" o "auto_welcomelist_path".
+    </p>
+      <p class="Pp">Por favor, notar que algunas instalaciones de SpamAssassin siempre se ejecutan bajo el mismo usuario ID. En tal caso, es inútil habilitar el almacenamiento dual, ya que resultaría en dos almacenamientos globales idénticos en diferentes ubicaciones.
+    </p>
+      <p class="Pp">Esta función está desactivada por defecto.
+    </p>
+    </dd>
+
+    <dt id="auto_welcomelist_distinguish_signed"><a class="permalink" href="#auto_welcomelist_distinguish_signed"><b>auto_welcomelist_distinguish_signed</b> (default: 1 - enabled)</a></dt>
+    <dd>
+      Antes de auto_welcomelist_distinguish_signed que será compatible hasta 4.1.
+      <p class="Pp">Usado por la implementación de la base de datos de listado de direcciones (SQLBasedAddrList).
+      </p>
+      <p class="Pp">Si esta opción está establecida, el módulo SQLBasedAddrList mantendrá entradas separadas para direcciones de correo electrónico validadas con DKIM y para las no validadas. Sin esta opción, o para dominios que no usan una firma DKIM, el puntaje de correo legítimo puede mezclarse con el puntaje de falsificaciones. Un requisito previo al establecer esta opción es que una columna txrep.signedby exista en una tabla SQL, de lo contrario las operaciones SQL fallarán. También debe estar habilitado un plugin DKIM para que esta opción funcione. Esta opción es altamente recomendada. Excepto si estás usando una base de esquema anterior a 3.3.0 y no puedes actualizar, no hay razón para desactivar esta opción. Si estás actualizando desde AWL y usas una base de esquema anterior a 3.3.0, la columna txrep.signedby no existirá. Se recomienda agregar esta columna, pero si no es posible, debes establecer esta opción a 0 para evitar errores SQL.
+      </p>
+    </dd>
+
+    <dt id="txrep_spf"><a class="permalink" href="#txrep_spf"><b>txrep_spf</b></a></dt>
+    <dd>
+      <pre>0 | 1                 (default: 1)</pre>
+      <p class="Pp">Cuando está activada, TxRep tratará cualquier dirección IP usando un correo electrónico dado como la misma identidad autorizada, y no asociará ninguna dirección IP con ella. (El mismo efecto ocurre con firmas DKIM válidas. No hay opción disponible para DKIM).
+      </p>
+      <p class="Pp">Nota: en dominios que definen SPF útil +all (pasar todo), ningún IP sería asociado con el correo electrónico, y todos los direcciones (incluidas las falsas) serían consideradas como provenientes de la fuente autorizada. Sin embargo, estos dominios son probablemente raros y lo solicitan ya sea así.
+      </p>
+    </dd>
+  </dl>
+
+  <section class="Ss">
+    <h2 class="Ss" id='REPUTATION_WEIGHTS'><a class='permalink' href='#REPUTATION_WEIGHTS'>REPUTACIÓN   PESOS</a></h2>
+    <p class="Pp">La reputación del remitente comprende varios elementos:</p>
+    <dl class="Bl-tag">
+      <dt>1) La reputación de la dirección de correo electrónico "From" asociada a la dirección IP de origen (ver los parámetros de máscara para más detalles)</dt>
+      <dd></dd>
+      <dt>2) La reputación de la dirección de correo electrónico "From" (sin importar la dirección IP actualmente utilizada)</dt>
+      <dd></dd>
+      <dt>3) La reputación del nombre del dominio de la dirección de correo electrónico "From"</dt>
+      <dd></dd>
+      <dt>4) La reputación de la dirección IP de origen, sin importar la dirección de correo electrónico del remitente</dt>
+      <dd></dd>
+      <dt>5) La reputación del nombre de la máquina de inicio (si está disponible)</dt>
+      <dd></dd>
+    </dl>
+    <p class="Pp">Cada una de estas reputaciones parciales se pesa con el ayuda de estos parámetros, y la reputación total se calcula como la suma de las reputaciones individuales dividida por la suma de sus pesos:</p>
+    <pre>sender_reputation = weight_email    * rep_email    +
+                    weight_email_ip * rep_email_ip +
+                    weight_domain   * rep_domain   +
+                    weight_ip        * rep_ip       +
+                    weight_helo      * rep_helo</pre>
+    <p class="Pp">Puedes desactivar las reputaciones parciales individuales estableciendo su peso en 0. Esto reducirá también el tamaño de la base de datos, ya que cada reputación parcial requiere una entrada separada en la tabla de la base de datos. Desactivar algunas de estas reputaciones puede también ayudar con la performance en servidores ocupados, ya que las consultas y procesos de base de datos se omitirán.
+    </p>
+    <dl class="Bl-tag">
+      <dt id="txrep_weight_email"><a class="permalink" href="#txrep_weight_email"><b>txrep_weight_email</b></a></dt>
+      <dd>
+        <pre>range [0..10]          (default: 3)</pre>
+        <p class="Pp">Este factor de influencia controla la influencia de la reputación de la dirección de correo electrónica estándar, independientemente de la dirección IP de origen. Cuando se ajusta el peso, tienes que tener en cuenta que una dirección de correo electrónico puede ser fácilmente falsificada, por lo que los espías pueden usar direcciones de correo "from" pertenecientes a remitentes con buena reputación. Desde este punto de vista, la dirección de correo asociada a la dirección IP de origen es un indicador más confiable para la reputación general.
+        </p>
+        <p class="Pp">Por otro lado, algunos remitentes reputables pueden enviar mensajes desde múltiples direcciones IP, por lo que no tener en cuenta la dirección IP de origen al buscar la reputación de la dirección de correo estándar tiene algún sentido.
+        </p>
+        <p class="Pp">Se recomienda usar un valor relativamente bajo para esta reputación parcial.
+        </p>
+      </dd>
+      <dt id="txrep_weight_email_ip"><a class="permalink" href="#txrep_weight_email_ip"><b>txrep_weight_email_ip</b></a></dt>
+      <dd>
+        <pre>range [0..10]          (default: 10)</pre>
+        <p class="Pp">Este es el peso estándar utilizado en el mismo modo que el original AWL plugin. Cada dirección de correo de un remitente está asociada a la dirección IP de origen, o a su parte según los parámetros txrep_ipv4_mask_len o txrep_ipv6_mask_len.
+        </p>
+        <p class="Pp">Para un usuario que envía desde múltiples ubicaciones, diferentes servidores de correo o desde un rango de IP dinámico fuera del bloque delimitado, su dirección de correo tendrá un valor de reputación separado para cada de las diferentes (parciales) direcciones IP.
+        </p>
+        <p class="Pp">Cuando el opción auto_welcomelist_distinguish_signed está habilitada, en contraste con el módulo original AWL, TxRep no registra la dirección IP cuando se detecta una firma DKIM. La dirección de correo no está asociada a ninguna dirección IP, sino solo al DKIM, ya que se considera que autentifica el remitente más confiable que la dirección IP (la cual también puede variar).
+        </p>
+        <p class="Pp">Este es el puntaje más relevante, y su peso debería ser alto.
+        </p>
+      </dd>
+      <dt id="txrep_weight_domain"><a class="permalink" href="#txrep_weight_domain"><b>txrep_weight_domain</b></a></dt>
+      <dd>
+        <pre>range [0..10]          (default: 2)</pre>
+        <p class="Pp">
+        </p>
+      </dd>
+    </dl>
+  </section><section class="Sh">
+<h1 class="Sh" id="ADMINISTRATOR_SETTINGS"><a class="permalink" href="#ADMINISTRATOR_SETTINGS">إعدادات_المسؤول</a></h1>
+<p class="Pp">تختلف هذه الإعدادات عن تلك المذكورة سابقًا، حيث تعتبر "أكثر امتيازًا" - حتى أكثر من تلك الموجودة في قسم <b>الإعدادات ذات الامتيازات</b>. بغض النظر عن قيمة <span class="Li">&quot;allow_user_rules&quot;</span> التي تم تعيينها، لا يمكن تعيين هذه الإعدادات مطلقًا من ملف <span class="Li">&quot;user_prefs&quot;</span> الخاص بالمستخدم.</p>
+<dl class="Bl-tag">
+<dt id="txrep_factory"><a class="permalink" href="#txrep_factory"><b>وحدة txrep_factory</b></a></dt>
+<dd>
+<pre>(افتراضي: Mail::SpamAssassin::DBBasedAddrList)
+</pre>
+<p class="Pp">يحدد وحدة قاعدة بيانات بديلة لملف سمعة TxRep.</p>
+</dd>
+<dt id="auto_welcomelist_path"><a class="permalink" href="#auto_welcomelist_path"><b>auto_welcomelist_path /path/filename</b></a></dt>
+<dd>
+<pre>(افتراضي: ~/.spamassassin/tx-reputation)
+</pre>
+<p class="Pp">قبل الإصدار 4.1، تم استخدام قيمة <span class="Li">&quot;auto_whitelist_path&quot;</span> لهذه الوظيفة.</p>
+<p class="Pp">هذا هو دليل قاعدة بيانات سمعة TxRep. افتراضيًا، كل مستخدم لديه قاعدة بيانات سمعة خاصة به في <span class="Li">&quot;~/.spamassassin&quot;</span> بوضع 0700. للاستخدام العام لـ SpamAssassin، يوصى بمشاركة هذا بين جميع المستخدمين.</p>
+</dd>
+<dt id="auto_welcomelist_db_modules"><a class="permalink" href="#auto_welcomelist_db_modules"><b>وحدات auto_welcomelist_db_modules Module ...</b></a></dt>
+<dd>
+<pre>(افتراضي: انظر أدناه)
+</pre>
+<p class="Pp">قبل الإصدار 4.1، تم استخدام قيمة <span class="Li">&quot;auto_whitelist_db_modules&quot;</span> لهذه الوظيفة.</p>
+<p class="Pp">ما هي وحدات قاعدة البيانات التي يجب استخدامها لقاعدة بيانات سمعة TxRep. سيتم استخدام الوحدة المذكورة أولاً في القائمة إذا كان يمكن تحميلها من دليل تضمين Perl. التنسيق هو:</p>
+<pre>الاسم الافتراضي ثاني أفضل ثالث أفضل ...
+</pre>
+<p class="Pp">على سبيل المثال، قائمة مفصولة بمسافات لأسماء وحدات Perl. الافتراضي هو:</p>
+<pre>DB_File GDBM_File SDBM_File
+</pre>
+<p class="Pp">وحدة NDBM_File غير مدعومة (انظر مشكلة SpamAssassin 4353).</p>
+</dd>
+<dt id="auto_welcomelist_file_mode"><a class="permalink" href="#auto_welcomelist_file_mode"><b>auto_welcomelist_file_mode</b></a></dt>
+<dd>
+<pre>(افتراضي: 0700)
+</pre>
+<p class="Pp">قبل الإصدار 4.1، تم استخدام قيمة <span class="Li">&quot;auto_whitelist_file_mode&quot;</span> لهذه الوظيفة.</p>
+<p class="Pp">بتات الوضع لدليل أو ملف سمعة TxRep.</p>
+<p class="Pp">تأكد من تحديد هذه الأوضاع مع بتات الوضع 'x' حيث يمكن استخدامها أيضًا لإنشاء الدلائل. ومع ذلك، إذا تم إنشاء ملف، فلن يكون للملف النهائي أي بتات تنفيذ (يتم تعيين umask إلى 0111).</p>
+</dd>
+<dt id="user_awl_dsn"><a class="permalink" href="#user_awl_dsn"><b>user_awl_dsn DBI:databasetype:databasename:hostname:port</b></a></dt>
+<dd>تستخدم بواسطة تطبيق تخزين SQLBasedAddrList.
+<p class="Pp">يعين DSN المستخدم للاتصال. مثال: <span class="Li">&quot;DBI:mysql:spamassassin:localhost&quot;</span></p>
+</dd>
+<dt id="user_awl_sql_username"><a class="permalink" href="#user_awl_sql_username"><b>user_awl_sql_username username</b></a></dt>
+<dd>تستخدم بواسطة تطبيق تخزين SQLBasedAddrList.
+<p class="Pp">اسم المستخدم المصرح له بالاتصال بـ DSN المذكور أعلاه.</p>
+</dd>
+<dt id="user_awl_sql_password"><a class="permalink" href="#user_awl_sql_password"><b>user_awl_sql_password password</b></a></dt>
+<dd>تستخدم بواسطة تطبيق تخزين SQLBasedAddrList.
+<p class="Pp">كلمة المرور لاسم مستخدم قاعدة البيانات، لـ DSN المذكور أعلاه.</p>
+</dd>
+<dt id="user_awl_sql_table"><a class="permalink" href="#user_awl_sql_table"><b>user_awl_sql_table tablename</b></a></dt>
+<dd>
+<pre>(افتراضي: txrep)
+</pre>
+<p class="Pp">تستخدم بواسطة تطبيق تخزين SQLBasedAddrList.</p>
+<p class="Pp">اسم الجدول حيث يتم تخزين السمعة، لـ DSN المذكور أعلاه.</p>
+</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BLOCKLISTING_/_WELCOMELISTING"><a class="permalink" href="#BLOCKLISTING_/_WELCOMELISTING">القائمة_السوداء_/_قائمة_الترحيب</a></h1>
+<p class="Pp">عندما يطلب SpamAssassin حظر مستخدم أو إضافته إلى قائمة الترحيب، يضيف المكون الإضافي TxRep نقاطًا قدرها 100 (للحظر) أو -100 (للقائمة الترحيبية) إلى عنوان البريد الإلكتروني للمرسل. إذا لم يكن هناك عنوان IP، يتم ضرب القيمة بنسبة مجموع نقاط السمعة الإجمالية إلى نقاط السمعة الفردية للبريد.</p>
+<pre>total_weight = weight_email + weight_email_ip + weight_domain + weight_ip + weight_helo
+blocklisted_reputation = 100 * total_weight / weight_email
+</pre>
+<p class="Pp">إذا تم حظر عنوان بريد إلكتروني فردي أو إضافته إلى القائمة الترحيبية، يتم حذف جميع السجلات من قاعدة البيانات المتعلقة بعنوان بريد إلكتروني مرتبط بعنوان IP، أو توقيع DKIM، أو اجتياز SPF. يتم الاحتفاظ بالسجل الفردي فقط.</p>
+<p class="Pp">بالإضافة إلى حظر عناوين البريد الإلكتروني الفردية أو إضافتها إلى قائمة الترحيب، يمكن استخدام نفس الطريقة لحظر عناوين IP أو المجالات أو أسماء HELO (يُسمح فقط بأسماء HELO بدون نقطة) أو إضافتها إلى قائمة الترحيب.</p>
+<p class="Pp">عند إضافة عناوين البريد الإلكتروني أو المجالات إلى قائمة الترحيب أو القائمة السوداء، يمكنك ربطها بتوقيع DKIM محدد أو سجل SPF، بإضافة اسم المجال الذي تم توقيعه أو العلامة 'spf' بعد المعرف على النحو التالي:</p>
+<pre>spamassassin --add-addr-to-blocklist=spamming.biz,spf
+spamassassin --add-addr-to-welcomelist=friend@good.org,good.org
+</pre>
+<p class="Pp">عندما يحتوي البريد على توقيع DKIM واجتياز SPF، يكون لتوقيع DKIM الأولوية، لذلك لن يتم التحقق من السجل المرتبط بالعلامة 'spf'. يمكن ربط عناوين البريد الإلكتروني والمجالات فقط بـ DKIM أو SPF. لا تحتوي سجلات عناوين IP وأسماء HELO على DKIM/SPF.</p>
+<p class="Pp">في حالة التخزين المزدوج، يتم إجراء الحظر أو القائمة الترحيبية على التخزين الافتراضي فقط.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="REPUTATION_LOGICS"><a class="permalink" href="#REPUTATION_LOGICS">منطق_السمعة</a></h1>
+<p class="Pp">1. المعرف الأكثر أهمية هو نفس AWL، أي مزيج من عنوان البريد الإلكتروني وعنوان IP المصدر، أو جزء منه المحدد بواسطة قناع IPv4 أو IPv6.</p>
+<p class="Pp">2. لا يتم التحقق من IP لسمعة البريد الفردية.</p>
+<p class="Pp">3. لا يتم التحقق من التوقيع لسمعة IP أو لسمعة اسم HELO.</p>
+<p class="Pp">4. يتم استخدام وزن سمعة IP للبريد، وليس وزن السمعة الفردية للبريد فقط، عندما لا يكون عنوان IP متاحًا (سمعة IP للبريد هي المؤشر الرئيسي، ولها أعلى وزن).</p>
+<p class="Pp">5. لا يتم التحقق من IP في رسائل البريد الموقعة (التوقيع يصادق على عنوان البريد الإلكتروني بدلاً من عنوان IP).</p>
+<p class="Pp">6. لا يتم التحقق من IP في اجتياز SPF (نفترض أن مالك المجال مسؤول عن جميع عناوين IP التي يسمح بإرسالها، لذلك نستخدم توقيع DKIM/SPF).</p>
+</section>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <title>Mail::SpamAssassin::Plugin::TxRep(3pm) - SpamAssassin Manual</title>
+        <link rel="stylesheet" href="/css/style.css" type="text/css" />
+        <link rel="stylesheet" href="/css/syntax.css" type="text/css" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Mail__SpamAssassin__Plugin__TxRep(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/spamassassin/">spamassassin</a></p>
+<p class="lic">التراخيص: APACHE</p>
+
+        
+        <main>
+            <article>
+                
+<section class="Sh">
+<h1 class="Sh" id="NAME">NAME</h1>
+<p class="Pp">Mail::SpamAssassin::Plugin::TxRep - Track and store sender reputation</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS">SYNOPSIS</h1>
+<p class="Pp">This plugin tracks and stores sender reputation, ie. how often a
+    sender (or domain, or IP address) has been seen sending spam or legitimate
+    mail in the past. It uses this information to score incoming mail.</p>
+<p class="Pp">The plugin requires a database for storing the reputation data.
+    This can be a Berkeley DB file or an SQL database.</p>
+<p class="Pp">In order to use this plugin, you have to load it in your
+    <span class="Li">user_prefs.cf</span> file:</p>
+<pre>loadplugin Mail::SpamAssassin::Plugin::TxRep
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+<p class="Pp">TxRep plugin is designed to keep track of reputation of senders,
+    domains and IP addresses. It stores this information in a database and
+    uses it to score incoming mail. The higher the reputation score, the more
+    likely it is that the sender is a spammer.</p>
+<p class="Pp">The plugin supports several types of reputation tracking:</p>
+<dl class="Bl-tag">
+<dt>EMAIL:</dt>
+<dd>Reputation of the full email address (e.g. <span class="Li">user@example.com</span>).</dd>
+<dt>EMAIL_IP:</dt>
+<dd>Reputation of the combination of email address and the sending IP address.</dd>
+<dt>DOMAIN:</dt>
+<dd>Reputation of the domain part of the email address (e.g. <span class="Li">example.com</span>).</dd>
+<dt>IP:</dt>
+<dd>Reputation of the sending IP address.</dd>
+<dt>HELO:</dt>
+<dd>Reputation of the HELO string used by the sending mail server.</dd>
+</dl>
+<p class="Pp">The plugin uses a combination of these identifiers to determine the
+    reputation of a sender. For example, a specific email address might have a
+    good reputation, but if it's sent from a known spamming IP address, the
+    overall reputation might be lowered.</p>
+<p class="Pp">The plugin's behavior and scoring can be configured through various
+    options in SpamAssassin's configuration files.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="TEMPLATE_TAGS">TEMPLATE TAGS</h1>
+<p class="Pp">The following template tags are available for use in message
+    templates:</p>
+<dl class="Bl-tag">
+<dt><span class="Li">TXREP_EMAIL_SCORE</span>:</dt>
+<dd>The reputation score for the sender's email address.</dd>
+<dt><span class="Li">TXREP_EMAIL_IP_SCORE</span>:</dt>
+<dd>The reputation score for the sender's email address and IP address combination.</dd>
+<dt><span class="Li">TXREP_DOMAIN_SCORE</span>:</dt>
+<dd>The reputation score for the sender's domain.</dd>
+<dt><span class="Li">TXREP_IP_SCORE</span>:</dt>
+<dd>The reputation score for the sender's IP address.</dd>
+<dt><span class="Li">TXREP_HELO_SCORE</span>:</dt>
+<dd>The reputation score for the sender's HELO string.</dd>
+<dt><span class="Li">TXREP_GLOBAL_SCORE</span>:</dt>
+<dd>The overall reputation score calculated by the TxRep plugin.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="USER_PREFERENCES">USER PREFERENCES</h1>
+<p class="Pp">The following options can be set in the user's
+    <span class="Li">user_prefs.cf</span> file:</p>
+<dl class="Bl-tag">
+<dt><span class="Li">txrep_learn_penalty</span></dt>
+<dd>The amount to subtract from a sender's reputation when a message is
+        learned as spam. Default is 1.</dd>
+<dt><span class="Li">txrep_learn_bonus</span></dt>
+<dd>The amount to add to a sender's reputation when a message is learned as
+        ham. Default is 1.</dd>
+<dt><span class="Li">txrep_autolearn_penalty</span></dt>
+<dd>The amount to subtract from a sender's reputation when a message is
+        automatically learned as spam. Default is 1.</dd>
+<dt><span class="Li">txrep_autolearn_bonus</span></dt>
+<dd>The amount to add to a sender's reputation when a message is automatically
+        learned as ham. Default is 1.</dd>
+<dt><span class="Li">txrep_welcomelist_out</span></dt>
+<dd>If set to 1 (default), entries in the welcomelist are used to increase
+        the reputation of senders. If set to 0, welcomelist entries are ignored
+        for reputation purposes.</dd>
+<dt><span class="Li">txrep_welcomelist_distinguish_signed</span></dt>
+<dd>If set to 1 (default), signed messages are treated differently from
+        unsigned messages when calculating reputation based on welcomelist
+        entries. If set to 0, all messages are treated the same.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ADMINISTRATOR_SETTINGS">ADMINISTRATOR SETTINGS</h1>
+<p class="Pp">The following options can be set in the main
+    <span class="Li">local.cf</span> or
+    <span class="Li">v311.pre</span> file:</p>
+<dl class="Bl-tag">
+<dt><span class="Li">use_txrep</span></dt>
+<dd>Enable or disable the TxRep plugin. Default is 1 (enabled).</dd>
+<dt><span class="Li">txrep_db_path</span></dt>
+<dd>Path to the Berkeley DB file used for storing reputation data. If this is
+        not set, TxRep will try to use an SQL database.</dd>
+<dt><span class="Li">txrep_sql_dsn</span></dt>
+<dd>Data Source Name for the SQL database. For example:
+        <span class="Li">DB_File=sqlite:/path/to/txrep.db</span>.</dd>
+<dt><span class="Li">txrep_sql_username</span></dt>
+<dd>Username for connecting to the SQL database.</dd>
+<dt><span class="Li">txrep_sql_password</span></dt>
+<dd>Password for connecting to the SQL database.</dd>
+<dt><span class="Li">txrep_user2global_ratio</span></dt>
+<dd>Ratio of user-specific reputation to global reputation. A value of 1 means
+        user and global reputations are treated equally. A value of 0 disables
+        user-specific reputation tracking. Default is 1.</dd>
+<dt><span class="Li">txrep_track_messages</span></dt>
+<dd>If set to 1 (default), TxRep tracks reputation for individual messages. If
+        set to 0, reputation is tracked based on aggregated data.</dd>
+<dt><span class="Li">txrep_autolearn</span></dt>
+<dd>If set to 1 (default), TxRep automatically learns messages as spam or
+        ham based on scoring. If set to 0, automatic learning is disabled.</dd>
+<dt><span class="Li">txrep_welcomelist_out</span></dt>
+<dd>If set to 1 (default), welcomelist entries are used to boost sender
+        reputation. If set to 0, welcomelist entries are ignored.</dd>
+<dt><span class="Li">auto_welcomelist_distinguish_signed</span></dt>
+<dd>If set to 1 (default), signed messages are treated differently from
+        unsigned messages when calculating reputation from welcomelist entries.
+        This can reduce database size by not storing separate entries for each
+        IP address of signed messages.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BLOCKLISTING_/_WELCOMELISTING">BLOCKLISTING / WELCOMELISTING</h1>
+<p class="Pp">TxRep plugin integrates with SpamAssassin's blocklisting and
+    welcomelisting features. When a message is determined to be spam, the
+    sender's reputation is lowered. Conversely, when a message is determined to
+    be legitimate, the sender's reputation is increased.</p>
+<p class="Pp">The plugin uses the following identifiers for reputation tracking:</p>
+<dl class="Bl-tag">
+<dt>EMAIL:</dt>
+<dd>The full email address (e.g., <span class="Li">user@example.com</span>).</dd>
+<dt>EMAIL_IP:</dt>
+<dd>The combination of the email address and the sending IP address.</dd>
+<dt>DOMAIN:</dt>
+<dd>The domain part of the email address (e.g., <span class="Li">example.com</span>).</dd>
+<dt>IP:</dt>
+<dd>The sending IP address.</dd>
+<dt>HELO:</dt>
+<dd>The HELO string used by the sending mail server.</dd>
+</dl>
+<p class="Pp">The plugin uses the following rules for reputation updates:</p>
+<p class="Pp">1.  When a message is learned as spam, the reputation score for
+    all relevant identifiers (EMAIL, EMAIL_IP, DOMAIN, IP, HELO) is decreased
+    by the value of <span class="Li">&quot;txrep_learn_penalty&quot;</span>.</p>
+<p class="Pp">2.  When a message is learned as ham, the reputation score for
+    all relevant identifiers is increased by the value of
+    <span class="Li">&quot;txrep_learn_bonus&quot;</span>.</p>
+<p class="Pp">3.  When a message is automatically learned as spam (autolearn),
+    the reputation score is decreased by
+    <span class="Li">&quot;txrep_autolearn_penalty&quot;</span>.</p>
+<p class="Pp">4.  When a message is automatically learned as ham, the reputation
+    score is increased by
+    <span class="Li">&quot;txrep_autolearn_bonus&quot;</span>.</p>
+<p class="Pp">5.  If <span class="Li">&quot;txrep_welcomelist_out&quot;</span>
+    is enabled, entries in the welcomelist (both global and user-specific)
+    will increase the reputation scores of the corresponding identifiers.</p>
+<p class="Pp">6.  If
+    <span class="Li">&quot;auto_welcomelist_distinguish_signed&quot;</span>
+    is enabled, and the message is signed, the IP address is ignored for
+    reputation updates. This helps to reduce the database size by avoiding
+    multiple entries for the same sender if they send from different IPs.</p>
+<p class="Pp">7.  No signature is used for standalone EMAIL reputation, as it would
+    be redundant with EMAIL_IP reputation and would result in duplicate
+    entries.</p>
+<p class="Pp">8.  When available, the DKIM signer is used instead of the domain
+    name for DOMAIN reputation.</p>
+<p class="Pp">9.  No IP address or signature is used for HELO reputation, even if
+    multiple computers might share the same HELO string.</p>
+<p class="Pp">10. The full (unmasked IP) address is used in the address field
+    (instead of the IP field) for standalone IP reputation.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="REPUTATION_LOGICS">REPUTATION LOGICS</h1>
+<p class="Pp">The plugin calculates reputation scores based on the following logic:</p>
+<p class="Pp">1.  **EMAIL reputation:** Based on the full sender email address.
+    This is the most specific identifier.</p>
+<p class="Pp">2.  **EMAIL_IP reputation:** Based on the combination of sender
+    email address and the sending IP address. This is more specific than
+    EMAIL or IP reputation alone.</p>
+<p class="Pp">3.  **DOMAIN reputation:** Based on the domain part of the sender
+    email address. This is useful for tracking reputation of entire domains.</p>
+<p class="Pp">4.  **IP reputation:** Based on the sending IP address. This is a
+    general indicator of sender reputation.</p>
+<p class="Pp">5.  **HELO reputation:** Based on the HELO string used by the sending
+    mail server. This can help identify mail servers with suspicious HELO
+    names.</p>
+<p class="Pp">The plugin prioritizes more specific identifiers when available.
+    For example, if both EMAIL_IP and IP reputations are available, the
+    EMAIL_IP reputation might be given more weight.</p>
+<p class="Pp">The plugin also supports dual storage, where reputation is tracked
+    both globally and per user. The
+    <span class="Li">&quot;txrep_user2global_ratio&quot;</span> setting
+    controls the balance between user-specific and global reputation.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LEARNING_SPAM_/_HAM">LEARNING SPAM / HAM</h1>
+<p class="Pp">When SpamAssassin is instructed to learn (or relearn) a message as
+    spam or ham, all relevant reputations for the message (email, email_ip,
+    domain, ip, helo) in both global and user storages are updated using the
+    <span class="Li">&quot;txrep_learn_penalty&quot;</span> and
+    <span class="Li">&quot;rxrep_learn_bonus&quot;</span> values, respectively.
+    The new reputation for a given sender property (email, domain, etc.) will be
+    the result of one of the following formulas:</p>
+<pre>new_reputation = old_reputation + learn_penalty
+new_reputation = old_reputation - learn_bonus</pre>
+<p class="Pp">The TxRep plugin currently tracks each message individually. This means
+    it does not detect when a message is learned repeatedly. It will add/subtract
+    the penalty/bonus score each time the message is fed to the spam learner.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIMIZING_TXREP">OPTIMIZING TXREP</h1>
+<p class="Pp">TxRep can be optimized for speed and simplicity, or for precision
+    in assigning reputation scores.</p>
+<p class="Pp">First, TxRep can be quickly disabled and re-enabled using the
+    option
+    <span class="Li">&quot;use_txrep&quot;</span>. This can be done globally or
+    individually in each respective
+    <span class="Li">&quot;user_prefs&quot;</span>. Disabling TxRep does not
+    destroy the database, so it can be re-enabled at any time later.</p>
+<p class="Pp">On many systems, SQL-based storage may perform faster than the
+    default Berkeley DB storage, so consider setting it up.</p>
+<p class="Pp">There are also multiple settings that can reduce the number of
+    records stored in the database, thus reducing storage size and processing
+    time:</p>
+<p class="Pp">1.  Setting
+        <span class="Li">&quot;txrep_user2global_ratio&quot;</span> to zero
+        disables dual storage, effectively halving disk space requirements and
+        plugin processing times.</p>
+<p class="Pp">2.  You can disable all but one of the &quot;REPUTATION
+        WEIGHTS&quot;. EMAIL_IP is the most specific option, making it the most
+        likely choice in such a scenario, but the reputation system could be
+        based on any of the remaining scores. Each enabled reputation adds a new
+        entry to the database for each new identifier. Therefore, while the number
+        of recorded and scored domains might be large, the number of stored IP
+        addresses will likely be higher, requiring more storage space.</p>
+<p class="Pp">3.  Disabling
+        <span class="Li">&quot;txrep_track_messages&quot;</span> avoids storing
+        a separate entry for every scanned message, thus reducing disk space
+        requirements and processing time.</p>
+<p class="Pp">4.  Disabling the
+        <span class="Li">&quot;txrep_autolearn&quot;</span> option saves processing
+        time on messages that trigger the auto-learning process.</p>
+<p class="Pp">5.  Disabling
+        <span class="Li">&quot;txrep_welcomelist_out&quot;</span> reduces processing
+        time on outbound connections.</p>
+<p class="Pp">6.  Keeping the option
+        <span class="Li">&quot;auto_welcomelist_distinguish_signed&quot;</span>
+        enabled may slightly help reduce the database size. For signed messages,
+        the originating IP address is ignored, thus eliminating the need for
+        additional database entries for each separate IP address (or a masked
+        block of IP addresses).</p>
+<p class="Pp">Since TxRep reuses the storage architecture of the former AWL
+    plugin, the same instructions apply for initializing the SQL storage for
+    TxRep. Although the old AWL table can be reused for TxRep, TxRep expects the
+    SQL table to be named &quot;txrep&quot; by default.</p>
+<p class="Pp">To install a new SQL table for TxRep, run the appropriate SQL file
+    for your system under the /sql directory.</p>
+<p class="Pp">If you encounter a syntax error on an older MySQL version, use
+    TYPE=MyISAM instead of ENGINE=MyISAM at the end of the command. You can also
+    use other ENGINE types (depending on what is available on your system). For
+    example, the MEMORY engine stores the entire table in server memory, achieving
+    performance similar to Redis. You would need to ensure replication of the RAM
+    table to disk via a cronjob to avoid data loss upon reboot. The InnoDB engine
+    is used by default, offering high scalability (database size and access
+    concurrency). In conjunction with a high value for innodb_buffer_pool or
+    with the memcached plugin (MySQL v5.6+), it can also offer performance
+    comparable to Redis.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-14</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/spamassassin/">extra/spamassassin</a></dd>
+        <dt>Version:</dt>
+        <dd>4.0.1-5</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://spamassassin.apache.org">https://spamassassin.apache.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>APACHE</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/spamassassin/">/listing/extra/spamassassin/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#TEMPLATE_TAGS">TEMPLATE TAGS</a></li>
+        
+            <li><a href="#USER_PREFERENCES">USER PREFERENCES</a></li>
+        
+            <li><a href="#ADMINISTRATOR_SETTINGS">ADMINISTRATOR SETTINGS</a></li>
+        
+            <li><a href="#BLOCKLISTING_/_WELCOMELISTING">BLOCKLISTING / WELCOMELISTING</a></li>
+        
+            <li><a href="#REPUTATION_LOGICS">REPUTATION LOGICS</a></li>
+        
+            <li><a href="#LEARNING_SPAM_/_HAM">LEARNING SPAM / HAM</a></li>
+        
+            <li><a href="#OPTIMIZING_TXREP">OPTIMIZING TXREP</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Mail::SpamAssassin::Plugin::TxRep.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Mail::SpamAssassin::Plugin::TxRep.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

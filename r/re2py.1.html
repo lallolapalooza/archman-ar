@@ -1,0 +1,2537 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>re2py(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">re2py(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/re2c/">re2c</a></p>
+<p class="lic">التراخيص: LicenseRef-re2c</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">RE2PY(1)</td>
+    <td class="head-vol"></td>
+    <td class="head-rtitle">RE2PY(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">re2py - توليد محللات معجمية سريعة لـ Python</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp">re2py <b>[ خيارات ]</b> <b>[ تحذيرات ]</b> <b>الإدخال</b></p>
+<p class="Pp">يمكن أن يكون الإدخال إما ملفًا أو <b>-</b> للإدخال القياسي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>مقدمة</a></h1>
+<p class="Pp">يعمل re2py كمُعالج مسبق. يقرأ ملف الإدخال (وهو عادةً برنامج بلغة Python، ولكنه يمكن أن يكون أي شيء) ويبحث عن كتل من التعليمات البرمجية محاطة بعلامات بدء/إنهاء ذات تنسيق خاص. يتم نسخ النص خارج هذه الكتل كما هو إلى ملف الإخراج. تتم معالجة محتويات الكتل بواسطة re2py. يقوم بترجمتها إلى تعليمات برمجية بلغة Python ويخرج التعليمات البرمجية المُنشأة في مكان الكتلة.</p>
+<p class="Pp">هذا مثال لبرنامج صغير يتحقق مما إذا كانت سلسلة معينة تحتوي على رقم عشري:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+def lex(yyinput):
+    yycursor = 0
+%{
+    re2c:yyfill:enable = 0;
+    re2c:indent:top = 1;
+    [1-9][0-9]* { return True }
+    *           { return False }
+%}
+assert lex(b&quot;1234\0&quot;)</pre>
+</div>
+</div>
+<p class="Pp">في الإخراج، استبدل re2py الكتلة في المنتصف بالتعليمات البرمجية المُنشأة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># تم الإنشاء بواسطة re2py
+# re2py $INPUT -o $OUTPUT
+def lex(yyinput):
+    yycursor = 0
+    yystate = 0
+    while True:
+        match yystate:
+            case 0:
+                yych = yyinput[yycursor]
+                yycursor += 1
+                if yych &lt;= 0x30:
+                    yystate = 1
+                    continue
+                if yych &lt;= 0x39:
+                    yystate = 2
+                    continue
+                yystate = 1
+                continue
+            case 1:
+                return False
+            case 2:
+                yych = yyinput[yycursor]
+                if yych &lt;= 0x2F:
+                    yystate = 3
+                    continue
+                if yych &lt;= 0x39:
+                    yycursor += 1
+                    yystate = 2
+                    continue
+                yystate = 3
+                continue
+            case 3:
+                return True
+            case _:
+                raise &quot;خطأ داخلي في المحلل المعجمي&quot;
+assert lex(b&quot;1234\0&quot;)</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BASICS'><a class='permalink' href='#BASICS'>الأساسيات</a></h1>
+<p class="Pp">يتكون برنامج re2py من تسلسل من <i>الكتل</i> المتداخلة مع التعليمات البرمجية في اللغة الهدف. قد تحتوي الكتلة على <i>تعريفات</i>، <i>تكوينات</i>، <i>قواعد</i>، <i>إجراءات</i> و <i>توجيهات</i> بأي ترتيب:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="name"><a class="permalink" href="#name"><b><b>الاسم =
+    تعبير-عادي ;</b></b></a></dt>
+  <dd>يقوم <i>التعريف</i> بربط <b>الاسم</b> بـ <b>التعبير-العادي</b>. قد تحتوي الأسماء على أحرف أبجدية رقمية وشرطة سفلية. يعطي قسم <i>التعبيرات-العادية</i> نظرة عامة على بناء جمل re2py للتعبيرات العادية. بمجرد تعريفه، يمكن استخدام <b>الاسم</b> في تعبيرات عادية أخرى وفي القواعد. لا يُسمح بالعودية في التعريفات المسماة، ويجب تعريف كل اسم قبل استخدامه. ترث الكتلة التعريفات المسماة من النطاق العام. إعادة تعريف اسم موجود في النطاق الحالي هو خطأ.</dd>
+  <dt id="configuration"><a class="permalink" href="#configuration"><b><b>التكوين
+    = قيمة ;</b></b></a></dt>
+  <dd>يسمح <i>التكوين</i> بتغيير سلوك re2py وتخصيص التعليمات البرمجية المُنشأة. للحصول على قائمة كاملة بالتكوينات التي يدعمها re2py، راجع قسم <i>التكوينات</i>. اعتمادًا على تكوين معين، يمكن أن تكون <b>القيمة</b> كلمة مفتاحية، أو رقم صحيح غير سالب، أو سلسلة نصية من سطر واحد يجب أن تكون محاطة بعلامات اقتباس مزدوجة أو مفردة ما لم تكن تتكون من أحرف أبجدية رقمية. ترث الكتلة التكوينات من النطاق العام وقد تعيد تعريفها أو تضيف تكوينات جديدة. تؤثر التكوينات المعرفة داخل الكتلة على الكتلة بأكملها، حتى لو ظهرت في نهايتها.</dd>
+  <dt id="regular"><a class="permalink" href="#regular"><b><b>تعبير-عادي
+    تعليمة برمجية</b></b></a></dt>
+  <dd>تقوم <i>القاعدة</i> بربط <b>التعبير-العادي</b> بإجراءها الدلالي (كتلة من التعليمات البرمجية بين قوسين معقوفين، أو كتلة من التعليمات البرمجية تبدأ بـ <b>:=</b> وتنتهي بسطر جديد متبوع بأي حرف غير مسافة بيضاء). إذا تطابق <b>التعبير-العادي</b>، يتم تنفيذ <b>التعليمة البرمجية</b> المرتبطة به. إذا تطابقت عدة قواعد، فإن أطول تطابق له الأسبقية. إذا تطابقت عدة قواعد مع نفس السلسلة، فإن الأسبق له الأسبقية. هناك قاعدتان خاصتان: القاعدة الافتراضية <b>*</b> وقاعدة نهاية الإدخال <b>$</b>. يجب تعريف القاعدة الافتراضية دائمًا، ولها الأولوية الأقل بغض النظر عن مكانها في الكتلة، وتطابق أي وحدة رمز (ليس بالضرورة حرفًا صالحًا، انظر قسم <i>دعم الترميز</i>). يجب تعريف قاعدة نهاية الإدخال إذا تم استخدام الطريقة المقابلة لـ <i>معالجة نهاية الإدخال</i>. مع <i>حالات البدء</i>، تتمتع القواعد ببناء جمل أكثر تعقيدًا.</dd>
+  <dt><b><b>!تعليمة برمجية</b></b></dt>
+  <dd>تربط <i>الإجراء</i> كتلة <b>تعليمة برمجية</b> معرفة من قبل المستخدم بمكان معين في الآلة الحالة المحدودة المُنشأة (بنفس طريقة ربط الإجراءات الدلالية التعليمات البرمجية بالحالات النهائية). انظر قسم <i>الإجراءات</i> للحصول على قائمة كاملة بالإجراءات المعرفة مسبقًا.</dd>
+  <dt><b><b>!توجيه ;</b></b></dt>
+  <dd><i>التوجيه</i> هو أحد العبارات الخاصة المعرفة مسبقًا. لكل توجيه غرض فريد. انظر قسم <i>التوجيهات</i> للحصول على التفاصيل.</dd>
+</dl>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Blocks'><a class='permalink' href='#Blocks'>الكتل</a></h2>
+<p class="Pp">علامات بدء وإنهاء الكتلة هي إما <b>/*!re2c</b> و <b>*/</b>، أو <b>%{</b> و <b>%}</b> (كلا النمطين مدعومين). بدءًا من الإصدار 2.2، قد تحتوي الكتل على أسماء اختيارية تسمح بالإشارة إليها في كتل أخرى. هناك أنواع مختلفة من الكتل:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>/*!re2c[:&lt;name&gt;] ... */</b> أو <b>%{[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>تحتوي <i>الكتلة العامة</i> على تعريفات وتكوينات وقواعد وتوجيهات. يقوم re2py بتجميع التعبيرات العادية المرتبطة بكل قاعدة في آلة حالة محددة، ويقوم بتشفيرها على شكل قفزات شرطية في اللغة الهدف، ويستبدل الكتلة بالتعليمات البرمجية المُنشأة. تتم إضافة الأسماء والتكوينات المعرفة في كتلة عامة إلى النطاق العام وتصبح مرئية للكتل اللاحقة. في بداية البرنامج، تتم تهيئة النطاق العام بـ <i>خيارات</i> سطر الأوامر.</dd>
+  <dt><b><b>/*!local:re2c[:&lt;name&gt;] ... */</b> أو <b>%{local[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>الكتلة المحلية</i> تشبه الكتلة العامة، ولكن الأسماء والتكوينات فيها لها نطاق محلي (لا تؤثر على الكتل الأخرى).</dd>
+  <dt><b><b>/*!rules:re2c[:&lt;name&gt;] ... */</b> أو <b>%{rules[:&lt;name&gt;]
+    ... %}</b></b></dt>
+  <dd><i>كتلة القواعد</i> تشبه الكتلة المحلية، ولكنها لا تنشئ أي تعليمات برمجية بنفسها، ولا تضيف أي تعريفات إلى النطاق العام - إنها مخصصة لإعادة استخدامها في كتل أخرى. هذه طريقة لمشاركة التعليمات البرمجية (مزيد من التفاصيل في قسم <i>الكتل القابلة لإعادة الاستخدام</i>). قبل الإصدار 2.2 من re2py، كانت كتل القواعد تتطلب خيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!use:re2c[:&lt;name&gt;] ... */</b> أو <b>%{use[:&lt;name&gt;] ...
+    %}</b></b></dt>
+  <dd>كتلة استخدام تشير إلى كتلة قواعد معرفة مسبقًا. إذا تم تحديد الاسم، يبحث re2py عن كتل قواعد بهذا الاسم. بخلاف ذلك، يتم استخدام أحدث كتلة قواعد (مسماة أو غير مسماة). يمكن لكتلة الاستخدام إضافة تعريفات وتكوينات وقواعد خاصة بها، والتي تضاف إلى تلك الموجودة في كتلة القواعد المشار إليها. قبل الإصدار 2.2 من re2py، كانت كتل الاستخدام تتطلب خيار <b>-r --reusable</b>.</dd>
+  <dt><b><b>/*!max:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{max[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تنشئ تعريف <b>YYMAXFILL</b>. تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب قيمة <b>YYMAXFILL</b> (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، التعليمات البرمجية المُنشأة هي تعريف ماكرو لـ C (<b>#define
+      YYMAXFILL &lt;n&gt;</b>)، أو متغير عام لـ Go (<b>var YYMAXFILL
+      int = &lt;n&gt;</b>). يمكن تخصيصها بتكوين اختياري <b>format</b> يحدد قالب سلسلة حيث يتم استبدال <b>@@{max}</b> (أو
+      <b>@@</b> باختصار) بالقيمة الرقمية لـ
+      <b>YYMAXFILL</b>.</dd>
+  <dt><b><b>/*!maxnmatch:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{maxnmatch[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تنشئ تعريف <b>YYMAXNMATCH</b> (تتطلب خيار <b>-P --posix-captures</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب قيمة <b>YYMAXNMATCH</b> (إذا كانت القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، التعليمات البرمجية المُنشأة هي تعريف ماكرو لـ C (<b>#define YYMAXNMATCH &lt;n&gt;</b>)،
+      أو متغير عام لـ Go (<b>var YYM</dd>
+</dl>
+</div>
+</section>
+</div>
+</section>
+
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+AXNMATCH int = &lt;n&gt;</b>). يمكن تخصيصه باستخدام تكوين اختياري <b>format</b>
+      الذي يحدد سلسلة قوالب يتم فيها استبدال <b>@@{max}</b> (أو <b>@@</b> اختصارًا)
+      بالقيمة الرقمية لـ <b>YYMAXNMATCH</b>.</dd>
+  <dt><b><b>/*!stags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!mtags:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{stags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>,
+    <b>%{mtags[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b></dt>
+  <dd>كتل تحدد جزء قالب من التعليمات البرمجية يتم توسيعه لكل متغير
+      s-tag/m-tag تم إنشاؤه بواسطة re2py. تحدد قائمة اختيارية بأسماء الكتل أي الكتل
+      يجب تضمينها عند حساب مجموعة متغيرات العلامات (إذا كانت القائمة فارغة، يتم تضمين
+      جميع الكتل). يوجد تكوينان اختياريان: <b>format</b> و <b>separator</b>. يحدد التكوين
+      <b>format</b> سلسلة قوالب يتم فيها استبدال <b>@@{tag}</b> (أو <b>@@</b> اختصارًا)
+      باسم كل متغير علامة. يحدد التكوين <b>separator</b> جزءًا من التعليمات البرمجية
+      يستخدم لربط قطع <b>format</b> التي تم إنشاؤها لمتغيرات العلامات المختلفة.</dd>
+  <dt><b><b>/*!svars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!mvars:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{svars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>,
+    <b>%{mvars[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %{</b></b></dt>
+  <dd>كتل تحدد جزء قالب من التعليمات البرمجية يتم توسيعه لكل s-tag/m-tag
+      مذكور صراحةً بواسطة القواعد (مع الخيار <b>--tags</b>) أو تم إنشاؤه ضمنيًا
+      بواسطة re2py (مع خيارات <b>--captvars</b> أو <b>--posix-captvars</b>). تحدد قائمة
+      اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب مجموعة العلامات (إذا كانت
+      القائمة فارغة، يتم تضمين جميع الكتل). يوجد تكوينان اختياريان: <b>format</b>
+      و <b>separator</b>. يحدد التكوين <b>format</b> سلسلة قوالب يتم فيها استبدال
+      <b>@@{tag}</b> (أو <b>@@</b> اختصارًا) باسم كل علامة. يحدد التكوين
+      <b>separator</b> جزءًا من التعليمات البرمجية يستخدم لربط قطع <b>format</b>
+      التي تم إنشاؤها للعلامات المختلفة.</dd>
+  <dt><b><b>/*!getstate:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b> أو
+    <b>%{getstate[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b></b></dt>
+  <dd>كتلة تنشئ تفريغًا شرطيًا لحالة المصنف (يتطلب الخيار
+      <b>--storable-state</b>). تحدد قائمة اختيارية بأسماء الكتل أي الكتل يجب
+      تضمينها في تفريغ الحالة. ينتقل الانتقال الافتراضي إلى تسمية البداية للكتلة
+      الأولى في القائمة. إذا كانت القائمة فارغة، يتم تضمين جميع الكتل، وينتقل الانتقال
+      الافتراضي إلى الكتلة الأولى في الملف التي لها تسمية بداية. هذه الكتلة غير متوافقة
+      مع الخيار <b>--loop-switch</b>، لأنها تتطلب انتقالات عبر الكتل غير مدعومة
+      بدون <b>goto</b> أو استدعاءات دالة.</dd>
+  <dt><b><b>/*!conditions:re2c[:&lt;name1&gt;[:&lt;name2&gt;...]] ... */</b>,
+    <b>/*!types:re2c... */</b> أو
+    <b>%{conditions[:&lt;name1&gt;[:&lt;name2&gt;...]] ... %}</b>, <b>%{types...
+    %}</b></b></dt>
+  <dd>كتلة تنشئ تعداد الشروط (تتطلب الخيار <b>--conditions</b>). تحدد قائمة
+      اختيارية بأسماء الكتل أي الكتل يجب تضمينها عند حساب مجموعة الشروط (إذا كانت
+      القائمة فارغة، يتم تضمين جميع الكتل). افتراضيًا، التعليمات البرمجية التي تم
+      إنشاؤها هي تعداد <b>YYCONDTYPE</b>. يمكن تخصيصها بتكوينات اختيارية
+      <b>format</b> و <b>separator</b>. يحدد التكوين <b>format</b> سلسلة قوالب يتم
+      فيها استبدال <b>@@{cond}</b> (أو <b>@@</b> اختصارًا) باسم كل شرط، ويتم
+      استبدال <b>@@{num}</b> بالفهرس الرقمي لهذا الشرط. يحدد التكوين
+      <b>separator</b> جزءًا من التعليمات البرمجية يستخدم لربط قطع <b>format</b>
+      التي تم إنشاؤها للشروط المختلفة.</dd>
+  <dt><b><b>/*!include:re2c &lt;file&gt; */</b> أو <b>%{include &lt;file&gt;
+    %}</b></b></dt>
+  <dd>تسمح هذه الكتلة بتضمين <b>&lt;file&gt;</b>، والتي يجب أن تكون مسار ملف محاط
+      بعلامتي اقتباس مزدوجة. يتم استبدال محتويات الملف حرفيًا في مكان الكتلة، بنفس
+      الطريقة التي يعمل بها <b>#include</b> في C/C++. يمكن استخدام هذه الكتلة مع
+      الخيار <b>--depfile</b> لإنشاء تبعيات نظام البناء على الملفات المضمنة.</dd>
+  <dt><b><b>/*!header:re2c:on*/</b> أو <b>%{header:on %}</b></b></dt>
+  <dd>تحدد هذه الكتلة بداية ملف الرأس. كل شيء بعدها وحتى كتلة
+      <b>header:off</b> التالية يتم معالجته بواسطة re2py ويتم كتابته إلى ملف الرأس
+      المحدد بالخيار <b>-t --type-header</b>.</dd>
+  <dt><b><b>/*!header:re2c:off*/</b> أو <b>%{header:off %}</b></b></dt>
+  <dd>تحدد هذه الكتلة نهاية ملف الرأس الذي بدأ بكتلة
+      <b>header:on*/</b>.</dd>
+  <dt><b><b>/*!ignore:re2c ... */</b> أو <b>%{ignore ... %}</b></b></dt>
+  <dd>كتلة يتم تجاهل محتوياتها وإزالتها من ملف الإخراج.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Configurations'><a class='permalink' href='#Configurations'>التكوينات</a></h2>
+<p class="Pp">هذه قائمة كاملة بالتكوينات التي يدعمها re2py:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="re2c:api"><a class="permalink" href="#re2c:api"><b><b>re2c:api</b>,
+    <b>re2c:input</b></b></a></dt>
+  <dd>نفس الخيار <b>--api</b>.</dd>
+  <dt id="re2c:api:sigil"><a class="permalink" href="#re2c:api:sigil"><b><b>re2c:api:sigil</b></b></a></dt>
+  <dd>تحديد العلامة ( "sigil") المستخدمة لمواضع الوسائط في بدائيات API. القيمة الافتراضية
+      هي <b>@@</b>. يبدأ موضع الوسيط بالعلامة متبوعة باسم الوسيط في أقواس متعرجة.
+      على سبيل المثال، إذا تم تعيين العلامة إلى <b>$</b>، فإن مواضع الوسائط ستكون
+      بالشكل <b>${name}</b>. قد تستخدم واجهات API ذات الوسيط الواحد صيغة مختصرة
+      بدون الاسم في أقواس. يمكن تجاوز هذا الخيار بواسطة خيارات بدائيات API الفردية،
+      مثل <b>re2c:YYFILL@len</b> لـ <b>YYFILL</b>.</dd>
+  <dt id="re2c:api:style"><a class="permalink" href="#re2c:api:style"><b><b>re2c:api:style</b></b></a></dt>
+  <dd>تحديد نمط API. القيم الممكنة هي <b>functions</b> (الافتراضي لـ C) و
+      <b>free-form</b> (الافتراضي لـ Go و Rust). في نمط <b>functions</b>، يتم إنشاء
+      بدائيات API مع قائمة وسائط بين قوسين بعد اسم البدائي. يتم توفير الوسائط فقط
+      للبارامترات المولدة تلقائيًا (مثل عدد الأحرف الممررة إلى <b>YYFILL</b>)، ولكن
+      ليس لسياق المصنف العام، لذا تتصرف البدائيات بشكل أقرب إلى الماكرو في C/C++ أو
+      الإغلاقات في Go و Rust. في نمط <b>free-form</b>، لا تحتوي بدائيات API على
+      شكل ثابت: يجب تعريفها كسلاسل تحتوي على قطع تعليمات برمجية حرة الشكل مع متغيرات
+      مستبدلة بالشكل <b>@@{var}</b> أو <b>@@</b> (تتوافق مع الوسائط في النمط
+      شبيه بالدالة). يمكن تجاوز هذا التكوين لبدائيات API الفردية، انظر على سبيل
+      المثال تكوين <b>re2c:YYFILL:naked</b> لـ <b>YYFILL</b>.</dd>
+  <dt id="re2c:bit"><a class="permalink" href="#re2c:bit"><b><b>re2c:bit-vectors</b>,
+    <b>re2c:flags:bit-vectors</b>, <b>re2c:flags:b</b></b></a></dt>
+  <dd>نفس الخيار <b>--bit-vectors</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:captures"><a class="permalink" href="#re2c:captures"><b><b>re2c:captures</b>,
+    <b>re2c:leftmost-captures</b></b></a></dt>
+  <dd>نفس الخيار <b>--leftmost-captures</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:captvars"><a class="permalink" href="#re2c:captvars"><b><b>re2c:captvars</b>,
+    <b>re2c:leftmost-captvars</b></b></a></dt>
+  <dd>نفس الخيار <b>--leftmost-captvars</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case"><a class="permalink" href="#re2c:case"><b><b>re2c:case-insensitive</b>,
+    <b>re2c:flags:case-insensitive</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-insensitive</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case~2"><a class="permalink" href="#re2c:case~2"><b><b>re2c:case-inverted</b>,
+    <b>re2c:flags:case-inverted</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-inverted</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:case~3"><a class="permalink" href="#re2c:case~3"><b><b>re2c:case-ranges</b>,
+    <b>re2c:flags:case-ranges</b></b></a></dt>
+  <dd>نفس الخيار <b>--case-ranges</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed"><a class="permalink" href="#re2c:computed"><b><b>re2c:computed-gotos</b>,
+    <b>re2c:flags:computed-gotos</b>, <b>re2c:flags:g</b></b></a></dt>
+  <dd>نفس الخيار <b>--computed-gotos</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed~2"><a class="permalink" href="#re2c:computed~2"><b><b>re2c:computed-gotos:relative</b>,
+    <b>re2c:cgoto:relative</b></b></a></dt>
+  <dd>نفس الخيار <b>--computed-gotos-relative</b>، ولكن يمكن تكوينه على أساس كل كتلة.</dd>
+  <dt id="re2c:computed~3"><a class="permalink" href="#re2c:computed~3"><b><b>re2c:computed-gotos:threshold</b>,
+    <b>re2c:cgoto:threshold</b></b></a></dt>
+  <dd>إذا تم استخدام <b>goto</b> المحسوب، يحدد هذا التكوين عتبة التعقيد التي تؤدي
+      إلى إنشاء جداول قفز بدلاً من عبارات <b>if</b> متداخلة وخرائط بت. القيمة
+      الافتراضية هي <b>9</b>.</dd>
+  <dt id="re2c:cond:abort"><a class="permalink" href="#re2c:cond:abort"><b><b>re2c:cond:abort</b></b></a></dt>
+  <dd>إذا تم تعيينها إلى قيمة عدد صحيح موجبة، فإن الحالة الافتراضية في تفريغ الشرط
+      الذي تم إنشاؤه تنهي تنفيذ البرنامج.</dd>
+  <dt id="re2c:cond:goto"><a class="permalink" href="#re2c:cond:goto"><b><b>re2c:cond:goto</b></b></a></dt>
+  <dd>يحدد جزءًا من التعليمات البرمجية المستخدم لل قواعد الاختصار المولدة تلقائيًا
+      <b>:=&gt;</b> في الشروط. الافتراضي هو <b>goto @@;</b>. يتم استبدال موضع
+      الوسيط <b>@@</b> باسم الشرط (انظر تكوينات
+      <b>re2c:api:sigil</b> و <b>re2c:cond:goto@cond</b>).</dd>
+  <dt id="re2c:cond:goto@cond"><a class="permalink" href="#re2c:cond:goto@cond"><b><b>re2c:cond:goto@cond</b></b></a></dt>
+  <dd>يحدد العلامة المستخدمة لاستبدال الوسائط في تعريف
+      <b>re2c:cond:goto</b>. القيمة الافتراضية هي <b>@@</b>. تتجاوز التكوين
+      العام <b>re2c:api:sigil</b>.</dd>
+  <dt id="re2c:cond:divider"><a class="permalink" href="#re2c:cond:divider"><b><b>re2c:cond:divider</b></b></a></dt>
+  <dd>يحدد الفاصل للشروط. القيمة الافتراضية هي <b>/*
+      *********************************** */</b>. يتم استبدال مواضع الوسائط
+      باسم الشرط (انظر <b>re2c:api;sigil</b> و
+      <b>re2c:cond:divider@cond</b>).</dd>
+  <dt id="re2c:cond:divider@cond"><a class="permalink" href="#re2c:cond:divider@cond"><b><b>re2c:cond:divider@cond</b></b></a></dt>
+  <dd>يحدد العلامة المستخدمة لاستبدال الوسائط في تعريف
+      <b>re2c:cond:divider</b>. الافتراضي هو <b>@@</b>. تتجاوز التكوين
+      العام <b>re2c:api:sigil</b>.</dd>
+  <dt id="re2c:cond:prefix"><a class="permalink" href="#re2c:cond:prefix"><b><b>re2c:cond:prefix</b>,
+    <b>re2c:condprefix</b></b></a></dt>
+  <dd>يحدد البادئة المستخدمة لتسميات الشروط. الافتراضي هو
+      <b>yyc_</b>.</dd>
+  <dt id="re2c:cond:enumprefix"><a class="permalink" href="#re2c:cond:enumprefix"><b><b>re2c:cond:enumprefix</b>,
+    <b>re2c:condenumprefix</b></b></a></dt>
+  <dd>يحدد البادئة المستخدمة لمعرفات الشروط. الافتراضي هو
+      <b>yyc</b>.</dd>
+  <dt id="re2c:debug"><a class="permalink" href="#re2c:debug"><b><b>re2c:debug-output</b>,
+    <b>re2c</b>
+{
+  "c:flags:debug-output": {
+    "title": "<b><b>c:flags:debug-output</b>, <b>re2c:flags:d</b></b>",
+    "description": "Same as the <b>--debug-output</b> option, but can be configured on per-block basis."
+  },
+  "re2c:empty-class": {
+    "title": "<b><b>re2c:empty-class</b>, <b>re2c:flags:empty-class</b></b>",
+    "description": "Same as the <b>--empty-class</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding:ebcdic": {
+    "title": "<b><b>re2c:encoding:ebcdic</b>, <b>re2c:flags:ecb</b>, <b>re2c:flags:e</b></b>",
+    "description": "Same as the <b>--ebcdic</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding:ucs2": {
+    "title": "<b><b>re2c:encoding:ucs2</b>, <b>re2c:flags:wide-chars</b>, <b>re2c:flags:w</b></b>",
+    "description": "Same as the <b>--ucs2</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding:utf8": {
+    "title": "<b><b>re2c:encoding:utf8</b>, <b>re2c:flags:utf-8</b>, <b>re2c:flags:8</b></b>",
+    "description": "Same as the <b>--utf8</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding:utf16": {
+    "title": "<b><b>re2c:encoding:utf16</b>, <b>re2c:flags:utf-16</b>, <b>re2c:flags:x</b></b>",
+    "description": "Same as the <b>--utf16</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding:utf32": {
+    "title": "<b><b>re2c:encoding:utf32</b>, <b>re2c:flags:unicode</b>, <b>re2c:flags:u</b></b>",
+    "description": "Same as the <b>--utf32</b> option, but can be configured on per-block basis."
+  },
+  "re2c:encoding": {
+    "title": "<b><b>re2c:encoding-policy</b>, <b>re2c:flags:encoding-policy</b></b>",
+    "description": "Same as the <b>--encoding-policy</b> option, but can be configured on per-block basis."
+  },
+  "re2c:eof": {
+    "title": "<b><b>re2c:eof</b></b>",
+    "description": "Specifies the sentinel symbol used with the end-of-input rule <b>$</b>. The default value is <b>-1</b> (<b>$</b> rule is not used). Other possible values include all valid code units. Only decimal numbers are recognized."
+  },
+  "re2c:header": {
+    "title": "<b><b>re2c:header</b>, <b>re2c:flags:type-header</b>, <b>re2c:flags:t</b></b>",
+    "description": "Specifies the name of the generated header file relative to the directory of the output file. Same as the <b>--header</b> option except that the file path is relative."
+  },
+  "re2c:indent:string": {
+    "title": "<b><b>re2c:indent:string</b></b>",
+    "description": "Specifies the string used for indentation. The default is a single tab character <b>&quot;\t&quot;</b>. Indent string should contain whitespace characters only. To disable indentation entirely, set this configuration to an empty string."
+  },
+  "re2c:indent:top": {
+    "title": "<b><b>re2c:indent:top</b></b>",
+    "description": "Specifies the minimum amount of indentation to use. The default value is zero. The value should be a non-negative integer number."
+  },
+  "re2c:invert": {
+    "title": "<b><b>re2c:invert-captures</b></b>",
+    "description": "Same as the <b>--invert-captures</b> option, but can be configured on per-block basis."
+  },
+  "re2c:label:prefix": {
+    "title": "<b><b>re2c:label:prefix</b>, <b>re2c:labelprefix</b></b>",
+    "description": "Specifies the prefix used for DFA state labels. The default is <b>yy</b>."
+  },
+  "re2c:label:start": {
+    "title": "<b><b>re2c:label:start</b>, <b>re2c:startlabel</b></b>",
+    "description": "Controls the generation of a block start label. The default value is zero, which means that the start label is generated only if it is used. An integer value greater than zero forces the generation of start label even if it is unused by the lexer. A string value also forces start label generation and sets the label name to the specified string. This configuration applies only to the current block (it is reset to default for the next block)."
+  },
+  "re2c:label:yyFillLabel": {
+    "title": "<b><b>re2c:label:yyFillLabel</b></b>",
+    "description": "Specifies the prefix of <b>YYFILL</b> labels used with <b>re2c:eof</b> and in storable state mode."
+  },
+  "re2c:label:yyloop": {
+    "title": "<b><b>re2c:label:yyloop</b></b>",
+    "description": "Specifies the name of the label marking the start of the lexer loop with <b>--loop-switch</b> option. The default is <b>yyloop</b>."
+  },
+  "re2c:label:yyNext": {
+    "title": "<b><b>re2c:label:yyNext</b></b>",
+    "description": "Specifies the name of the optional label that follows <b>YYGETSTATE</b> switch in storable state mode (enabled with <b>re2c:state:nextlabel</b>). The default is <b>yyNext</b>."
+  },
+  "re2c:lookahead": {
+    "title": "<b><b>re2c:lookahead</b>, <b>re2c:flags:lookahead</b></b>",
+    "description": "Deprecated (see the deprecated <b>--no-lookahead</b> option)."
+  },
+  "re2c:monadic": {
+    "title": "<b><b>re2c:monadic</b></b>",
+    "description": "If set to non-zero, the generated lexer will use monadic notation (this configuration is specific to Haskell)."
+  },
+  "re2c:nested": {
+    "title": "<b><b>re2c:nested-ifs</b>, <b>re2c:flags:nested-ifs</b>, <b>re2c:flags:s</b></b>",
+    "description": "Same as the <b>--nested-ifs</b> option, but can be configured on per-block basis."
+  },
+  "re2c:posix": {
+    "title": "<b><b>re2c:posix-captures</b>, <b>re2c:flags:posix-captures</b>, <b>re2c:flags:P</b></b>",
+    "description": "Same as the <b>--posix-captures</b> option, but can be configured on per-block basis."
+  },
+  "re2c:posix~2": {
+    "title": "<b><b>re2c:posix-captvars</b></b>",
+    "description": "Same as the <b>--posix-captvars</b> option, but can be configured on per-block basis."
+  },
+  "re2c:tags": {
+    "title": "<b><b>re2c:tags</b>, <b>re2c:flags:tags</b>, <b>re2c:flags:T</b></b>",
+    "description": "Same as the <b>--tags</b> option, but can be configured on per-block basis."
+  },
+  "re2c:tags:expression": {
+    "title": "<b><b>re2c:tags:expression</b></b>",
+    "description": "Specifies the expression used for tag variables. By default re2py generates expressions of the form <b>yyt&lt;N&gt;</b>. This might be inconvenient, for example if tag variables are defined as fields in a struct. All occurrences of <b>@@{tag}</b> or <b>@@</b> are replaced with the actual tag name. For example, <b>re2c:tags:expression = \"s.@@\";</b> results in expressions of the form <b>s.yyt&lt;N&gt;</b> in the generated code. See also <b>re2c:api:sigil</b> configuration."
+  },
+  "re2c:tags:negative": {
+    "title": "<b><b>re2c:tags:negative</b></b>",
+    "description": "Specifies the constant expression that is used for negative tag value (typically this would be <b>-1</b> if tags are integer offsets in the input string, or null pointer if they are pointers)."
+  },
+  "re2c:tags:prefix": {
+    "title": "<b><b>re2c:tags:prefix</b></b>",
+    "description": "Specifies the prefix for tag variable names. The default is <b>yyt</b>."
+  },
+  "re2c:sentinel": {
+    "title": "<b><b>re2c:sentinel</b></b>",
+    "description": "Specifies the sentinel symbol used for the end-of-input checks (when bounds checks are disabled with <b>re2c:yyfill:enable = 0;</b> and <b>re2c:eof</b> is not set). This configuration does not affect code generation: its purpose is to verify that the sentinel is not allowed in the middle of a rule, and ensure that the lexer won't read past the end of buffer. The default value is <i>-1`</i> (in that case re2py assumes that the sentinel is zero, which is the most common case). Only decimal numbers are recognized."
+  },
+  "re2c:state:abort": {
+    "title": "<b><b>re2c:state:abort</b></b>",
+    "description": "If set to a positive integer value, the default case in the generated state dispatch aborts program execution, and an explicit <b>-1</b> case contains transition to the start of the block."
+  },
+  "re2c:state:nextlabel": {
+    "title": "<b><b>re2c:state:nextlabel</b></b>",
+    "description": "Controls if the <b>YYGETSTATE</b> switch is followed by an <b>yyNext</b> label (the default value is zero, which corresponds to no label). Alternatively one can use <b>re2c:label:start</b> to generate a specific start label, or an explicit <b>getstate</b> block to generate the <b>YYGETSTATE</b> switch separately from the lexer block."
+  },
+  "re2c:unsafe": {
+    "title": "<b><b>re2c:unsafe</b>, <b>re2c:flags:unsafe</b></b>",
+    "description": "Same as the <b>--no-unsafe</b> option, but can be configured on per-block basis. If set to zero, it suppresses the generation of <b>unsafe</b> wrappers around <b>YYPEEK</b>. The default is non-zero (wrappers are generated). This configuration is specific to Rust."
+  },
+  "re2c:YYBACKUP": {
+    "title": "<b><b>re2c:YYBACKUP</b>, <b>re2c:define:YYBACKUP</b></b>",
+    "description": "Defines generic API primitive <b>YYBACKUP</b>."
+  },
+  "re2c:YYBACKUPCTX": {
+    "title": "<b><b>re2c:YYBACKUPCTX</b>, <b>re2c:define:YYBACKUPCTX</b></b>",
+    "description": "Defines generic API primitive <b>YYBACKUPCTX</b>."
+  },
+  "re2c:YYCONDTYPE": {
+    "title": "<b><b>re2c:YYCONDTYPE</b>, <b>re2c:define:YYCONDTYPE</b></b>",
+    "description": "Defines API primitive <b>YYCONDTYPE</b>."
+  },
+  "re2c:YYCTYPE": {
+    "title": "<b><b>re2c:YYCTYPE</b>, <b>re2c:define:YYCTYPE</b></b>",
+    "description": "Defines API primitive <b>YYCTYPE</b>."
+  },
+  "re2c:YYCTXMARKER": {
+    "title": "<b><b>re2c:YYCTXMARKER</b>, <b>re2c:define:YYCTXMARKER</b></b>",
+    "description": "Defines API primitive <b>YYCTXMARKER</b>."
+  },
+  "re2c:YYCURSOR": {
+    "title": "<b><b>re2c:YYCURSOR</b>, <b>re2c:define:YYCURSOR</b></b>",
+    "description": "Defines API primitive <b>YYCURSOR</b>."
+  },
+  "re2c:YYDEBUG": {
+    "title": "<b><b>re2c:YYDEBUG</b>, <b>re2c:define:YYDEBUG</b></b>",
+    "description": "Defines API primitive <b>YYDEBUG</b>."
+  },
+  "re2c:YYFILL": {
+    "title": "<b><b>re2c:YYFILL</b>, <b>re2c:define:YYFILL</b></b>",
+    "description": "Defines API primitive <b>YYFILL</b>."
+  },
+  "re2c:YYFILL@len": {
+    "title": "<b><b>re2c:YYFILL@len</b>, <b>re2c:define:YYFILL@len</b></b>",
+    "description": "Specifies the sigil used for argument substitution in <b>YYFILL</b> definition. Defaults to <b>@@</b>. Overrides the more generic <b>re2c:api:sigil</b> configuration."
+  },
+  "re2c:YYFILL:naked": {
+    "title": "<b><b>re2c:YYFILL:naked</b>, <b>re2c:define:YYFILL:naked</b></b>",
+    "description": "Overrides the more generic <b>re2c:api:style</b> configuration for <b>YYFILL</b>. Zero value corresponds to free-form API style."
+  },
+  "re2c:YYFN": {
+    "title": "<b><b>re2c:YYFN</b></b>",
+    "description": "Defines API primitive <b>YYFN</b>."
+  },
+  "re2c:YYINPUT": {
+    "title": "<b><b>re2c:YYINPUT</b></b>",
+    "description": "Defines API primitive <b>YYINPUT</b>."
+  }
+}
+rmalink" href="#re2c:YYINPUT"><b><b>re2c:YYINPUT</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYINPUT</b>.</dd>
+  <dt id="re2c:YYGETCOND"><a class="permalink" href="#re2c:YYGETCOND"><b><b>re2c:YYGETCOND</b>,
+    <b>re2c:define:YYGETCONDITION</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYGETCOND</b>.</dd>
+  <dt id="re2c:YYGETCOND:naked"><a class="permalink" href="#re2c:YYGETCOND:naked"><b><b>re2c:YYGETCOND:naked</b>,
+    <b>re2c:define:YYGETCONDITION:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETCOND</b>. القيمة الصفرية تقابل أسلوب واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYGETSTATE"><a class="permalink" href="#re2c:YYGETSTATE"><b><b>re2c:YYGETSTATE</b>,
+    <b>re2c:define:YYGETSTATE</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYGETSTATE</b>.</dd>
+  <dt id="re2c:YYGETSTATE:naked"><a class="permalink" href="#re2c:YYGETSTATE:naked"><b><b>re2c:YYGETSTATE:naked</b>,
+    <b>re2c:define:YYGETSTATE:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYGETSTATE</b>. القيمة الصفرية تقابل أسلوب واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYGETACCEPT"><a class="permalink" href="#re2c:YYGETACCEPT"><b><b>re2c:YYGETACCEPT</b>,
+    <b>re2c:define:YYGETACCEPT</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYGETACCEPT</b>.</dd>
+  <dt id="re2c:YYLESSTHAN"><a class="permalink" href="#re2c:YYLESSTHAN"><b><b>re2c:YYLESSTHAN</b>,
+    <b>re2c:define:YYLESSTHAN</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYLESSTHAN</b>.</dd>
+  <dt id="re2c:YYLIMIT"><a class="permalink" href="#re2c:YYLIMIT"><b><b>re2c:YYLIMIT</b>,
+    <b>re2c:define:YYLIMIT</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYLIMIT</b>.</dd>
+  <dt id="re2c:YYMARKER"><a class="permalink" href="#re2c:YYMARKER"><b><b>re2c:YYMARKER</b>,
+    <b>re2c:define:YYMARKER</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYMARKER</b>.</dd>
+  <dt id="re2c:YYMTAGN"><a class="permalink" href="#re2c:YYMTAGN"><b><b>re2c:YYMTAGN</b>,
+    <b>re2c:define:YYMTAGN</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYMTAGN</b>.</dd>
+  <dt id="re2c:YYMTAGP"><a class="permalink" href="#re2c:YYMTAGP"><b><b>re2c:YYMTAGP</b>,
+    <b>re2c:define:YYMTAGP</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYMTAGP</b>.</dd>
+  <dt id="re2c:YYPEEK"><a class="permalink" href="#re2c:YYPEEK"><b><b>re2c:YYPEEK</b>,
+    <b>re2c:define:YYPEEK</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYPEEK</b>.</dd>
+  <dt id="re2c:YYRESTORE"><a class="permalink" href="#re2c:YYRESTORE"><b><b>re2c:YYRESTORE</b>,
+    <b>re2c:define:YYRESTORE</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYRESTORE</b>.</dd>
+  <dt id="re2c:YYRESTORECTX"><a class="permalink" href="#re2c:YYRESTORECTX"><b><b>re2c:YYRESTORECTX</b>,
+    <b>re2c:define:YYRESTORECTX</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYRESTORECTX</b>.</dd>
+  <dt id="re2c:YYRESTORETAG"><a class="permalink" href="#re2c:YYRESTORETAG"><b><b>re2c:YYRESTORETAG</b>,
+    <b>re2c:define:YYRESTORETAG</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYRESTORETAG</b>.</dd>
+  <dt id="re2c:YYSETCOND"><a class="permalink" href="#re2c:YYSETCOND"><b><b>re2c:YYSETCOND</b>,
+    <b>re2c:define:YYSETCONDITION</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYSETCOND</b>.</dd>
+  <dt id="re2c:YYSETCOND@cond"><a class="permalink" href="#re2c:YYSETCOND@cond"><b><b>re2c:YYSETCOND@cond</b>,
+    <b>re2c:define:YYSETCONDITION@cond</b></b></a></dt>
+  <dd>يحدد الرمز المستخدم لاستبدال الوسيطات في تعريف <b>YYSETCOND</b>. القيمة الافتراضية هي <b>@@</b>. يتجاوز إعداد <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETCOND:naked"><a class="permalink" href="#re2c:YYSETCOND:naked"><b><b>re2c:YYSETCOND:naked</b>,
+    <b>re2c:define:YYSETCONDITION:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETCOND</b>. القيمة الصفرية تقابل أسلوب واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYSETSTATE"><a class="permalink" href="#re2c:YYSETSTATE"><b><b>re2c:YYSETSTATE</b>,
+    <b>re2c:define:YYSETSTATE</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYSETSTATE</b>.</dd>
+  <dt id="re2c:YYSETSTATE@state"><a class="permalink" href="#re2c:YYSETSTATE@state"><b><b>re2c:YYSETSTATE@state</b>,
+    <b>re2c:define:YYSETSTATE@state</b></b></a></dt>
+  <dd>يحدد الرمز المستخدم لاستبدال الوسيطات في تعريف <b>YYSETSTATE</b>. القيمة الافتراضية هي <b>@@</b>. يتجاوز إعداد <b>re2c:api:sigil</b> الأكثر عمومية.</dd>
+  <dt id="re2c:YYSETSTATE:naked"><a class="permalink" href="#re2c:YYSETSTATE:naked"><b><b>re2c:YYSETSTATE:naked</b>,
+    <b>re2c:define:YYSETSTATE:naked</b></b></a></dt>
+  <dd>يتجاوز إعداد <b>re2c:api:style</b> الأكثر عمومية لـ
+      <b>YYSETSTATE</b>. القيمة الصفرية تقابل أسلوب واجهة برمجة التطبيقات المجاني.</dd>
+  <dt id="re2c:YYSETACCEPT"><a class="permalink" href="#re2c:YYSETACCEPT"><b><b>re2c:YYSETACCEPT</b>,
+    <b>re2c:define:YYSETACCEPT</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>YYSETACCEPT</b>.</dd>
+  <dt id="re2c:YYSKIP"><a class="permalink" href="#re2c:YYSKIP"><b><b>re2c:YYSKIP</b>,
+    <b>re2c:define:YYSKIP</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSKIP</b>.</dd>
+  <dt id="re2c:YYSHIFT"><a class="permalink" href="#re2c:YYSHIFT"><b><b>re2c:YYSHIFT</b>,
+    <b>re2c:define:YYSHIFT</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSHIFT</b>.</dd>
+  <dt id="re2c:YYCOPYMTAG"><a class="permalink" href="#re2c:YYCOPYMTAG"><b><b>re2c:YYCOPYMTAG</b>,
+    <b>re2c:define:YYCOPYMTAG</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYCOPYMTAG</b>.</dd>
+  <dt id="re2c:YYCOPYSTAG"><a class="permalink" href="#re2c:YYCOPYSTAG"><b><b>re2c:YYCOPYSTAG</b>,
+    <b>re2c:define:YYCOPYSTAG</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYCOPYSTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTMTAG"><a class="permalink" href="#re2c:YYSHIFTMTAG"><b><b>re2c:YYSHIFTMTAG</b>,
+    <b>re2c:define:YYSHIFTMTAG</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSHIFTMTAG</b>.</dd>
+  <dt id="re2c:YYSHIFTSTAG"><a class="permalink" href="#re2c:YYSHIFTSTAG"><b><b>re2c:YYSHIFTSTAG</b>,
+    <b>re2c:define:YYSHIFTSTAG</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSHIFTSTAG</b>.</dd>
+  <dt id="re2c:YYSTAGN"><a class="permalink" href="#re2c:YYSTAGN"><b><b>re2c:YYSTAGN</b>,
+    <b>re2c:define:YYSTAGN</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSTAGN</b>.</dd>
+  <dt id="re2c:YYSTAGP"><a class="permalink" href="#re2c:YYSTAGP"><b><b>re2c:YYSTAGP</b>,
+    <b>re2c:define:YYSTAGP</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية العامة <b>YYSTAGP</b>.</dd>
+  <dt id="re2c:yyaccept"><a class="permalink" href="#re2c:yyaccept"><b><b>re2c:yyaccept</b>,
+    <b>re2c:variable:yyaccept</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yyaccept</b>.</dd>
+  <dt id="re2c:yybm"><a class="permalink" href="#re2c:yybm"><b><b>re2c:yybm</b>,
+    <b>re2c:variable:yybm</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yybm</b>.</dd>
+  <dt id="re2c:yybm:hex"><a class="permalink" href="#re2c:yybm:hex"><b><b>re2c:yybm:hex</b>,
+    <b>re2c:variable:yybm:hex</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى غير صفري، فسيتم إنشاء خرائط البتات لـ <b>--bit-vectors</b>
+      بالصيغة الست عشرية. القيمة الافتراضية هي صفر (خرائط البتات بالصيغة العشرية).</dd>
+  <dt id="re2c:yych"><a class="permalink" href="#re2c:yych"><b><b>re2c:yych</b>,
+    <b>re2c:variable:yych</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yych</b>.</dd>
+  <dt id="re2c:yych:emit"><a class="permalink" href="#re2c:yych:emit"><b><b>re2c:yych:emit</b>,
+    <b>re2c:variable:yych:emit</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى صفر، فلن يتم إنشاء تعريف <b>yych</b>. القيمة الافتراضية هي
+      غير صفرية.</dd>
+  <dt id="re2c:yych:conversion"><a class="permalink" href="#re2c:yych:conversion"><b><b>re2c:yych:conversion</b>,
+    <b>re2c:variable:yych:conversion</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى غير صفري، فسيقوم re2py تلقائيًا بإنشاء تحويل إلى
+      <b>YYCTYPE</b> في كل مرة يتم فيها قراءة <b>yych</b>. الافتراضي هو صفر (لا يوجد
+      تحويل).</dd>
+  <dt id="re2c:yych:literals"><a class="permalink" href="#re2c:yych:literals"><b><b>re2c:yych:literals</b>,
+    <b>re2c:variable:yych:literals</b></b></a></dt>
+  <dd>يحدد شكل الحروف الحرفية التي تتم مطابقتها مع <b>yych</b>.
+      القيم الممكنة هي: <b>char</b> (حروف حرفية في علامات اقتباس مفردة،
+      غير القابلة للطباعة تستخدم تسلسلات هروب تبدأ بشرطة مائلة للخلف)،
+      <b>hex</b> (أعداد صحيحة ست عشرية) و <b>char_or_hex</b> (مزيج من كليهما، حروف حرفية للأحرف القابلة للطباعة وأعداد صحيحة ست عشرية
+      للأحرف الأخرى).</dd>
+  <dt id="re2c:yyctable"><a class="permalink" href="#re2c:yyctable"><b><b>re2c:yyctable</b>,
+    <b>re2c:variable:yyctable</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yyctable</b>.</dd>
+  <dt id="re2c:yynmatch"><a class="permalink" href="#re2c:yynmatch"><b><b>re2c:yynmatch</b>,
+    <b>re2c:variable:yynmatch</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yynmatch</b>.</dd>
+  <dt id="re2c:yypmatch"><a class="permalink" href="#re2c:yypmatch"><b><b>re2c:yypmatch</b>,
+    <b>re2c:variable:yypmatch</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yypmatch</b>.</dd>
+  <dt id="re2c:yytarget"><a class="permalink" href="#re2c:yytarget"><b><b>re2c:yytarget</b>,
+    <b>re2c:variable:yytarget</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yytarget</b>.</dd>
+  <dt id="re2c:yystable"><a class="permalink" href="#re2c:yystable"><b><b>re2c:yystable</b>,
+    <b>re2c:variable:yystable</b></b></a></dt>
+  <dd>مهجور.</dd>
+  <dt id="re2c:yystate"><a class="permalink" href="#re2c:yystate"><b><b>re2c:yystate</b>,
+    <b>re2c:variable:yystate</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yystate</b>.</dd>
+  <dt id="re2c:yyfill"><a class="permalink" href="#re2c:yyfill"><b><b>re2c:yyfill</b>,
+    <b>re2c:variable:yyfill</b></b></a></dt>
+  <dd>يعرّف واجهة برمجة التطبيقات البدائية <b>yyfill</b>.</dd>
+  <dt id="re2c:yyfill:check"><a class="permalink" href="#re2c:yyfill:check"><b><b>re2c:yyfill:check</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى صفر، فسيتم قمع إنشاء فحص ما قبل <b>YYFILL</b> لعدد
+      أحرف الإدخال (التعريف <b>YYLESSTHAN</b> في الواجهة العامة والمقارنة المستندة إلى
+      <b>YYLIMIT</b> في واجهة مؤشر C). الافتراضي هو غير صفري (إنشاء الفحص).</dd>
+  <dt id="re2c:yyfill:enable"><a class="permalink" href="#re2c:yyfill:enable"><b><b>re2c:yyfill:enable</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى صفر، فسيتم قمع إنشاء <b>YYFILL</b> (مع الفحص). يجب استخدام هذا عندما يتناسب الإدخال بأكمله في قطعة واحدة من الذاكرة (لا توجد حاجة للتخزين المؤقت) ولا تعتمد فحوصات نهاية الإدخال على فحوصات <b>YYFILL</b> (مثل إذا تم استخدام حرف فاصل). استخدم التحذيرات (الخيار <b>-W</b>) وإعداد <b>re2c:sentinel</b> للتحقق من أن المحلل المولد لا يمكنه القراءة بعد نهاية الإدخال. الافتراضي هو غير صفري (<b>YYFILL</b> ممكّن).</dd>
+  <dt id="re2c:yyfill:parameter"><a class="permalink" href="#re2c:yyfill:parameter"><b><b>re2c:yyfill:parameter</b></b></a></dt>
+  <dd>إذا تم تعيينه إلى صفر، فسيتم قمع إنشاء الوسيط الممرر إلى <b>YYFILL</b>. الوسيط هو الحد الأدنى لعدد الأحرف التي يجب توفيرها. القيمة الافتراضية هي غير صفرية (يتم إنشاء الوسيط). يمكن تجاوز هذا الإعداد باستخدام <b>re2c:YYFILL:naked</b> أو <b>re2c:api:style</b>.</dd>
+  <dt id="re2c:yyfn:sep"><a class="permalink" href="#re2c:yyfn:sep"><b><b>re2c:yyfn:sep</b></b></a></dt>
+  <dd>يحدد الفاصل المستخدم في عناصر <b>YYFN</b> (الافتراضي هو
+    الفاصلة المنقوطة).</dd>
+  <dt id="re2c:yyfn:throw"><a class="permalink" href="#re2c:yyfn:throw"><b><b>re2c:yyfn:throw</b></b></a></dt>
+  <dd>يحدد الاستثناءات التي تثيرها دالة <b>YYFN</b> (الافتراضي هو فارغ،
+      مما يعني عدم وجود استثناءات).</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Regular_expressions'><a class='permalink' href='#Regular_expressions'>التعبيرات العادية</a></h2>
+<p cl
+<section class="Ss">
+<h2 class="Ss" id='Options'><a class='permalink' href='#Options'>Options</a></h2>
+<p class="Pp">The options are used to configure the re2py generator.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="compressed"><a class="permalink" href="#compressed"><b><b>--compressed</b></b></a></dt>
+  <dd>Generate a compressed lexer. This is useful for large lexers which
+      otherwise might lead to stack overflow.</dd>
+  <dt id="cpp"><a class="permalink" href="#cpp"><b><b>--cpp</b></b></a></dt>
+  <dd>Generate C++ code instead of C.</dd>
+  <dt id="header"><a class="permalink" href="#header"><b><b>--header</b></b></a></dt>
+  <dd>Generate a header file with constants, structures and function
+      prototypes. It also generates a mapping of condition names to numbers.
+      Useful for C programs that use the generated lexer.</dd>
+  <dt id="help"><a class="permalink" href="#help"><b><b>--help</b></b></a></dt>
+  <dd>Display a list of options and exit.</dd>
+  <dt id="hlines"><a class="permalink" href="#hlines"><b><b>--hlines</b></b></a></dt>
+  <dd>Insert `#line` directives into the generated code. This helps to map the
+      generated code back to the input specification.</dd>
+  <dt id="hooks"><a class="permalink" href="#hooks"><b><b>--hooks</b></b></a></dt>
+  <dd>Enable the use of hooks. Hooks are functions that are called when certain
+      events occur (e.g., when a rule is matched).</dd>
+  <dt id="input-encoding"><a class="permalink" href="#input-encoding"><b><b>--input-encoding
+    &lt;encoding&gt;</b></b></a></dt>
+  <dd>Set the input encoding. This is useful when the input file is not in
+      UTF-8. Supported encodings are UTF-8, UTF-16, UTF-32, UCS-2, ISO-8859-1,
+      CP1251.</dd>
+  <dt id="lang"><a class="permalink" href="#lang"><b><b>--lang
+    &lt;lang&gt;</b></b></a></dt>
+  <dd>Specify the target language. This is a string identifying the target language
+      and its syntax. The default value is C. The following values are
+      supported: <b>C</b>, <b>C++</b>, <b>Python2</b>, <b>Python3</b>,
+      <b>none</b>.</dd>
+  <dt id="nfa"><a class="permalink" href="#nfa"><b><b>--nfa</b></b></a></dt>
+  <dd>Generate NFA instead of DFA. NFA is generally slower but requires less
+      memory.</dd>
+  <dt id="nested-ifs"><a class="permalink" href="#nested-ifs"><b><b>--nested-ifs</b></b></a></dt>
+  <dd>Generate lexer using nested ifs. This is useful for large lexers which
+      might otherwise lead to stack overflow.</dd>
+  <dt id="no-lines"><a class="permalink" href="#no-lines"><b><b>--no-lines</b></b></a></dt>
+  <dd>Do not insert `#line` directives into the generated code.</dd>
+  <dt id="no-reduce"><a class="permalink" href="#no-reduce"><b><b>--no-reduce</b></b></a></dt>
+  <dd>Do not perform rule reduction. This is useful for debugging.</dd>
+  <dt id="no-skip"><a class="permalink" href="#no-skip"><b><b>--no-skip</b></b></a></dt>
+  <dd>Do not skip whitespace. This is useful for parsing code that contains
+      whitespace.</dd>
+  <dt id="no-tags"><a class="permalink" href="#no-tags"><b><b>--no-tags</b></b></a></dt>
+  <dd>Disable submatch extraction with tags.</dd>
+  <dt id="output"><a class="permalink" href="#output"><b><b>--output
+    FILE</b></b></a></dt>
+  <dd>Write output to <b>FILE</b> instead of stdout.</dd>
+  <dt id="resume"><a class="permalink" href="#resume"><b><b>--resume</b></b></a></dt>
+  <dd>Enable lexer resumption. This mode is used when the lexer is interrupted
+      by an outer program when there is not enough input, and then resumed when
+      more input becomes available. In this mode users should additionally define
+      <b>YYGETSTATE</b> and <b>YYSETSTATE</b> primitives, and variables
+      <b>yych</b>, <b>yyaccept</b> and <b>state</b> should be part of the stored
+      lexer state.</dd>
+  <dt id="syntax"><a class="permalink" href="#syntax"><b><b>--syntax
+    FILE</b></b></a></dt>
+  <dd>Load configurations from the specified <b>FILE</b> and apply them on top
+      of the default syntax file. Note that <b>FILE</b> can define only a few
+      configurations (if it's used to amend the default syntax file), or it can
+      define a whole new language backend (in the latter case it is recommended
+      to use <b>--lang none</b> option).</dd>
+  <dt id="tags"><a class="permalink" href="#tags"><b><b>--tags
+    -T</b></b></a></dt>
+  <dd>Enable submatch extraction with tags.</dd>
+  <dt id="ucs2"><a class="permalink" href="#ucs2"><b><b>--ucs2 --wide-chars
+    -w</b></b></a></dt>
+  <dd>Generate a lexer that reads UCS2-encoded input. re2py assumes that the
+      character range is 0 -- 0xFFFF and character size is 2 bytes. This option
+      implies <b>--nested-ifs</b>.</dd>
+  <dt id="utf8"><a class="permalink" href="#utf8"><b><b>--utf8 --utf-8
+    -8</b></b></a></dt>
+  <dd>Generate a lexer that reads input in UTF-8 encoding. re2py assumes that
+      the character range is 0 -- 0x10FFFF and character size is 1 byte.</dd>
+  <dt id="utf16"><a class="permalink" href="#utf16"><b><b>--utf16 --utf-16
+    -x</b></b></a></dt>
+  <dd>Generate a lexer that reads UTF16-encoded input. re2py assumes that the
+      character range is 0 -- 0x10FFFF and character size is 2 bytes. This
+      option implies <b>--nested-ifs</b>.</dd>
+  <dt id="utf32"><a class="permalink" href="#utf32"><b><b>--utf32 --unicode
+    -u</b></b></a></dt>
+  <dd>Generate a lexer that reads UTF32-encoded input. re2py assumes that the
+      character range is 0 -- 0x10FFFF and character size is 4 bytes. This
+      option implies <b>--nested-ifs</b>.</dd>
+  <dt id="verbose"><a class="permalink" href="#verbose"><b><b>--verbose</b></b></a></dt>
+  <dd>Output a short message in case of success.</dd>
+  <dt id="vernum"><a class="permalink" href="#vernum"><b><b>--vernum
+    -V</b></b></a></dt>
+  <dd>Show version information in <b>MMmmpp</b> format (major, minor,
+    patch).</dd>
+  <dt id="version"><a class="permalink" href="#version"><b><b>--version
+    -v</b></b></a></dt>
+  <dd>Show version information.</dd>
+  <dt id="single"><a class="permalink" href="#single"><b><b>--single-pass
+    -1</b></b></a></dt>
+  <dd>Deprecated. Does nothing (single pass is the default now).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="debug"><a class="permalink" href="#debug"><b><b>--debug-output
+    -d</b></b></a></dt>
+  <dd>Emit <b>YYDEBUG</b> invocations in the generated code. This is useful to
+      trace lexer execution.</dd>
+  <dt id="dump"><a class="permalink" href="#dump"><b><b>--dump-adfa</b></b></a></dt>
+  <dd>Debug option: output DFA after tunneling (in .dot format).</dd>
+  <dt id="dump~2"><a class="permalink" href="#dump~2"><b><b>--dump-cfg</b></b></a></dt>
+  <dd>Debug option: output control flow graph of tag variables (in .dot
+    format).</dd>
+  <dt id="dump~3"><a class="permalink" href="#dump~3"><b><b>--dump-closure-stats</b></b></a></dt>
+  <dd>Debug option: output statistics on the number of states in closure.</dd>
+  <dt id="dump~4"><a class="permalink" href="#dump~4"><b><b>--dump-dfa-det</b></b></a></dt>
+  <dd>Debug option: output DFA immediately after determinization (in .dot
+      format).</dd>
+  <dt id="dump~5"><a class="permalink" href="#dump~5"><b><b>--dump-dfa-min</b></b></a></dt>
+  <dd>Debug option: output DFA after minimization (in .dot format).</dd>
+  <dt id="dump~6"><a class="permalink" href="#dump~6"><b><b>--dump-dfa-tagopt</b></b></a></dt>
+  <dd>Debug option: output DFA after tag optimizations (in .dot format).</dd>
+  <dt id="dump~7"><a class="permalink" href="#dump~7"><b><b>--dump-dfa-tree</b></b></a></dt>
+  <dd>Debug option: output DFA under construction with states represented as tag
+      history trees (in .dot format).</dd>
+  <dt id="dump~8"><a class="permalink" href="#dump~8"><b><b>--dump-dfa-raw</b></b></a></dt>
+  <dd>Debug option: output DFA under construction with expanded state-sets (in
+      .dot format).</dd>
+  <dt id="dump~9"><a class="permalink" href="#dump~9"><b><b>--dump-interf</b></b></a></dt>
+  <dd>Debug option: output interference table produced by liveness analysis of
+      tag variables.</dd>
+  <dt id="dump~10"><a class="permalink" href="#dump~10"><b><b>--dump-nfa</b></b></a></dt>
+  <dd>Debug option: output NFA (in .dot format).</dd>
+  <dt id="emit"><a class="permalink" href="#emit"><b><b>--emit-dot
+    -D</b></b></a></dt>
+  <dd>Instead of normal output generate lexer graph in .dot format. The output
+      can be converted to an image with the help of Graphviz (e.g. something
+      like <b>dot -Tpng -odfa.png dfa.dot</b>).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="dfa"><a class="permalink" href="#dfa"><b><b>--dfa-minimization
+    &lt;moore | table&gt;</b></b></a></dt>
+  <dd>Internal option: DFA minimization algorithm used by re2py. The
+      <b>moore</b> option is the Moore algorithm (it is the default). The
+      <b>table</b> option is the &quot;table filling&quot; algorithm. Both
+      algorithms should produce the same DFA up to states relabeling; table
+      filling is simpler and much slower and serves as a reference
+      implementation.</dd>
+  <dt id="eager"><a class="permalink" href="#eager"><b><b>--eager-skip</b></b></a></dt>
+  <dd>Internal option: make the generated lexer advance the input position
+      eagerly -- immediately after reading the input symbol. This changes the
+      default behavior when the input position is advanced lazily -- after
+      transition to the next state.</dd>
+  <dt id="no~5"><a class="permalink" href="#no~5"><b><b>--no-lookahead</b></b></a></dt>
+  <dd>Internal option, deprecated. It used to enable TDFA(0) algorithm. Unlike
+      TDFA(1), TDFA(0) algorithm does not use one-symbol lookahead. It applies
+      register operations to the incoming transitions rather than the outgoing
+      ones. Benchmarks showed that TDFA(0) algorithm is less efficient than
+      TDFA(1).</dd>
+  <dt id="no~6"><a class="permalink" href="#no~6"><b><b>--no-optimize-tags</b></b></a></dt>
+  <dd>Internal option: suppress optimization of tag variables (useful for
+      debugging).</dd>
+  <dt id="posix~3"><a class="permalink" href="#posix~3"><b><b>--posix-closure
+    &lt;gor1 | gtop&gt;</b></b></a></dt>
+  <dd>Internal option: specify shortest-path algorithm used for the construction
+      of epsilon-closure with POSIX disambiguation semantics: <b>gor1</b> (the
+      default) stands for Goldberg-Radzik algorithm, and <b>gtop</b> stands for
+      &quot;global topological order&quot; algorithm.</dd>
+  <dt id="posix~4"><a class="permalink" href="#posix~4"><b><b>--posix-prectable
+    &lt;complex | naive&gt;</b></b></a></dt>
+  <dd>Internal option: specify the algorithm used to compute POSIX precedence
+      table. The <b>complex</b> algorithm computes precedence table in one
+      traversal of tag history tree and has quadratic complexity in the number
+      of TNFA states; it is the default. The <b>naive</b> algorithm has
+      worst-case cubic complexity in the number of TNFA states, but it is much
+      simpler than <b>complex</b> and may be slightly faster in non-pathological
+      cases.</dd>
+  <dt id="stadfa"><a class="permalink" href="#stadfa"><b><b>--stadfa</b></b></a></dt>
+  <dd>Internal option, deprecated. It used to enable staDFA algorithm, which
+      differs from TDFA in that register operations are placed in states rather
+      than on transitions. Benchmarks showed that staDFA algorithm is less
+      efficient than TDFA.</dd>
+  <dt id="fixed"><a class="permalink" href="#fixed"><b><b>--fixed-tags &lt;none
+    | toplevel | all&gt;</b></b></a></dt>
+  <dd>Internal option: specify whether the fixed-tag optimization should be
+      applied to all tags (<b>all</b>), none of them (<b>none</b>), or only
+      those in toplevel concatenation (<b>toplevel</b>). The default is
+      <b>all</b>. &quot;Fixed&quot; tags are those that are located within a
+      fixed distance to some other tag (called &quot;base&quot;). In such cases
+      only the base tag needs to be tracked, and the value of the fixed tag can
+      be computed as the value of the base tag plus a static offset. For tags
+      that are under alternative or repetition it is also necessary to check if
+      the base tag has a no-match value (in that case fixed tag should also be
+      set to no-match, disregarding the offset). For tags in top-level
+      concatenation the check is not needed, because they always match.</dd>
+</dl>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Warnings'><a class='permalink' href='#Warnings'>Warnings</a></h2>
+<p class="Pp">Warnings can be invividually enabled, disabled and turned into an
+    error.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="W"><a class="permalink" href="#W"><b><b>-W</b></b></a></dt>
+  <dd>Turn on all warnings.</dd>
+  <dt id="Werror"><a class="permalink" href="#Werror"><b><b>-Werror</b></b></a></dt>
+  <dd>Turn warnings into errors. Note that this option alone doesn't turn on any
+      warnings; it only affects those warnings that have been turned on so far
+      or will be turned on later.</dd>
+  <dt id="W_warning_"><a class="permalink" href="#W_warning_"><b><b>-W&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn on <b>warning</b>.</dd>
+  <dt id="Wno"><a class="permalink" href="#Wno"><b><b>-Wno-&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn off <b>warning</b>.</dd>
+  <dt id="Werror~2"><a class="permalink" href="#Werror~2"><b><b>-Werror-&lt;warning&gt;</b></b></a></dt>
+  <dd>Turn on <b>warning</b> and treat it as an error (this implies
+      <b>-W&lt;warning&gt;</b>).</dd>
+  <dt id="Wno~2"><a class="permalink" href="#Wno~2"><b><b>-Wno-error-&lt;warning&gt;</b></b></a></dt>
+  <dd>Don't treat this particular <b>warning</b> as an error. This doesn't turn
+      off the warning itself.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Wcondition"><a class="permalink" href="#Wcondition"><b><b>-Wcondition-order</b></b></a></dt>
+  <dd>Warn if the generated program makes implicit assumptions about condition
+      numbering. One should use either <b>--header</b> option or
+      <b>conditions</b> block to generate a mapping of condition names to
+      numbers and then use the autogenerated condition names.</dd>
+  <dt id="Wempty"><a class="permalink" href="#Wempty"><b><b>-Wempty-character-class</b></b></a></dt>
+  <dd>Warn if a regular expression contains an empty character class. Trying to
+      match an empty character class makes no sense: it should always fail.
+      However, for backwards compatibility reasons re2py permits empty character
+      classes and treats them as empty strings. Use the <b>--empty-class</b>
+      option to change the default behavior.</dd>
+  <dt id="Wmatch"><a class="permalink" href="#Wmatch"><b><b>-Wmatch-empty-string</b></b></a></dt>
+  <dd>Warn if a rule is nullable (matches an empty string). If the lexer runs in
+      a loop and the empty match is unintentional, the lexer may unexpectedly
+      hang in an infinite loop.</dd>
+  <dt id="Wswapped"><a class="permalink" href="#Wswapped"><b><b>-Wswapped-range</b></b></a></dt>
+  <dd>Warn if the lower bound of a range is greater than its upper bound. The
+      default behavior is to silently swap the range bounds.</dd>
+  <dt id="Wundefined"><a class="permalink" href="#Wundefined"><b><b>-Wundefined-control-flow</b></b></a></dt>
+  <dd>Warn if some input strings cause undefined control flow in the lexer (the
+      faulty patterns are reported). This is a dangerous and common mistake. It
+      can be easily fixed by adding the default rule <b>*</b> which has the
+      lowest priority, mat</dd>
+</dl>
+</div>
+</section>
+# -*- coding: utf-8 -*-
+---
+# This is the configuration file for re2c.
+# See re2c(1) for a manual page.
+
+# re2c configuration.
+#
+# This file specifies configuration variables for re2c.
+# It is used when the re2c: option is used in the input file,
+# or when the --syntax option is specified.
+#
+# Configuration variables are specified as a sequence of
+# variable = value
+# assignments.
+#
+# Note that all strings in re2c configuration files are
+# enclosed in double quotes, a double quote is escaped
+# as \", and a backslash is escaped as \\.
+#
+# Comments start with # and end at the end of line.
+# Empty lines are ignored.
+#
+# re2c supports the following options:
+#
+#  -W<name>
+#
+#    Warn options. re2c has a number of warning flags.
+#    Some of them are fatal, i.e. re2c exits with non-zero
+#    status. By default, all warnings are turned off.
+#
+#    -Wspan
+#      Warn if a rule consumes more than one code unit.
+#      This is the default behavior for most rules.
+#      This warning is only enabled for rules which don't
+#      match an empty string.
+#
+#    -Wstandalone
+#      Warn if a rule is standalone, i.e. it is not part of
+#      any rule. This may indicate an error.
+#
+#    -Wmidrule
+#      Warn if a rule contains more than one condition.
+#      This usually indicates a typo.
+#
+#    -Wempty
+#      Warn if a rule matches an empty string. Empty rules
+#      are normally ignored, but this option makes them
+#      visible.
+#
+#    -Winline
+#      Warn if the code is generated inline. This option is
+#      only enabled if the inline code generation is used.
+#
+#    -Weof
+#      Warn about standalone end of input rules. These rules
+#      are potentially broken in the future versions of re2c.
+#      At the moment, these rules take precedence when
+#      conflicting with other rules, but after the
+#      introduction of generalized end of input symbol
+#      $ precedence order will change and these rules will
+#      become shadowed by other rules.
+#
+#    -Wused
+#      Warn if a rule is not used by any other rule.
+#      This warning is only enabled for rules which don't
+#      match an empty string.
+#
+#    -Wimplicit
+#      Warn if a rule is implicitly generated by re2c.
+#      This option is only enabled if implicit rule
+#      generation is used.
+#
+#    -Wimplicit-all
+#      Warn about all implicitly generated rules. This option
+#      is only enabled if implicit rule generation is used.
+#
+#    -Wdigits
+#      Warn if a rule contains digits and the digits are not
+#      part of character codes. This option is enabled by
+#      default.
+#
+#    -Wnultype
+#      Warn if the null character is used in character codes.
+#      The null character cannot be used in character codes.
+#
+#    -Wplaceholder
+#      Warn if a rule contains placeholders. Placeholders are
+#      not supported by re2c.
+#
+#    -Wempty-action
+#      Warn if a rule has an empty action. Empty actions are
+#      normally ignored, but this option makes them visible.
+#
+#    -Wempty-condition
+#      Warn if a condition has an empty name.
+#
+#    -Wempty-rule
+#      Warn if a rule is empty.
+#
+#    -Wdefault-condition
+#      Warn if the default condition is used.
+#
+#    -Windent
+#      Warn if the indentation level is too high.
+#
+#    -Wlookahead
+#      Warn if the lookahead is too large.
+#
+#    -Wlookahead-condition
+#      Warn if the lookahead is too large for a condition.
+#
+#    -Wlookahead-skip
+#      Warn if the lookahead is skipped.
+#
+#    -Wlookahead-token
+#      Warn if the lookahead token is not recognized.
+#
+#    -Wlookahead-type
+#      Warn if the lookahead type is not recognized.
+#
+#    -Wlookahead-variable
+#      Warn if the lookahead variable is not recognized.
+#
+#    -Wlookahead-value
+#      Warn if the lookahead value is not recognized.
+#
+#    -Wlookahead-value-type
+#      Warn if the lookahead value type is not recognized.
+#
+#    -Wplaceholder-skip
+#      Warn if the placeholder is skipped.
+#
+#    -Wplaceholder-token
+#      Warn if the placeholder token is not recognized.
+#
+#    -Wplaceholder-type
+#      Warn if the placeholder type is not recognized.
+#
+#    -Wplaceholder-variable
+#      Warn if the placeholder variable is not recognized.
+#
+#    -Wplaceholder-value
+#      Warn if the placeholder value is not recognized.
+#
+#    -Wplaceholder-value-type
+#      Warn if the placeholder value type is not recognized.
+#
+#    -Wspan-empty
+#      Warn if a rule that matches an empty string has a span.
+#
+#    -Wskip
+#      Warn if a rule skips characters. This option is only
+#      enabled if the skip option is used.
+#
+#    -Wskip-condition
+#      Warn if a condition skips characters.
+#
+#    -Wskip-rule
+#      Warn if a rule skips characters.
+#
+#    -Wskip-token
+#      Warn if a rule skips a token.
+#
+#    -Wskip-type
+#      Warn if a rule skips a type.
+#
+#    -Wskip-variable
+#      Warn if a rule skips a variable.
+#
+#    -Wskip-value
+#      Warn if a rule skips a value.
+#
+#    -Wskip-value-type
+#      Warn if a rule skips a value type.
+#
+#    -Wtoken
+#      Warn if a rule contains tokens. Tokens are not supported
+#      by re2c.
+#
+#    -Wtoken-condition
+#      Warn if a condition contains tokens.
+#
+#    -Wtoken-rule
+#      Warn if a rule contains tokens.
+#
+#    -Wtoken-skip
+#      Warn if a rule contains tokens and skips characters.
+#
+#    -Wtoken-type
+#      Warn if a rule contains tokens and types.
+#
+#    -Wtoken-variable
+#      Warn if a rule contains tokens and variables.
+#
+#    -Wtoken-value
+#      Warn if a rule contains tokens and values.
+#
+#    -Wtoken-value-type
+#      Warn if a rule contains tokens and value types.
+#
+#    -Wtype
+#      Warn if a rule contains types. Types are not supported
+#      by re2c.
+#
+#    -Wtype-condition
+#      Warn if a condition contains types.
+#
+#    -Wtype-rule
+#      Warn if a rule contains types.
+#
+#    -Wtype-skip
+#      Warn if a rule contains types and skips characters.
+#
+#    -Wtype-token
+#      Warn if a rule contains types and tokens.
+#
+#    -Wtype-variable
+#      Warn if a rule contains types and variables.
+#
+#    -Wtype-value
+#      Warn if a rule contains types and values.
+#
+#    -Wtype-value-type
+#      Warn if a rule contains types and value types.
+#
+#    -Wvariable
+#      Warn if a rule contains variables. Variables are not
+#      supported by re2c.
+#
+#    -Wvariable-condition
+#      Warn if a condition contains variables.
+#
+#    -Wvariable-rule
+#      Warn if a rule contains variables.
+#
+#    -Wvariable-skip
+#      Warn if a rule contains variables and skips characters.
+#
+#    -Wvariable-token
+#      Warn if a rule contains variables and tokens.
+#
+#    -Wvariable-type
+#      Warn if a rule contains variables and types.
+#
+#    -Wvariable-value
+#      Warn if a rule contains variables and values.
+#
+#    -Wvariable-value-type
+#      Warn if a rule contains variables and value types.
+#
+#    -Wvalue
+#      Warn if a rule contains values. Values are not supported
+#      by re2c.
+#
+#    -Wvalue-condition
+#      Warn if a condition contains values.
+#
+#    -Wvalue-rule
+#      Warn if a rule contains values.
+#
+#    -Wvalue-skip
+#      Warn if a rule contains values and skips characters.
+#
+#    -Wvalue-token
+#      Warn if a rule contains values and tokens.
+#
+#    -Wvalue-type
+#      Warn if a rule contains values and types.
+#
+#    -Wvalue-variable
+#      Warn if a rule contains values and variables.
+#
+#    -Wvalue-value-type
+#      Warn if a rule contains values and value types.
+#
+#    -Wvalue-type
+#      Warn if a rule contains value types. Value types are not
+#      supported by re2c.
+#
+#    -Wvalue-type-condition
+#      Warn if a condition contains value types.
+#
+#    -Wvalue-type-rule
+#      Warn if a rule contains value types.
+#
+#    -Wvalue-type-skip
+#      Warn if a rule contains value types and skips characters.
+#
+#    -Wvalue-type-token
+#      Warn if a rule contains value types and tokens.
+#
+#    -Wvalue-type-type
+#      Warn if a rule contains value types and types.
+#
+#    -Wvalue-type-variable
+#      Warn if a rule contains value types and variables.
+#
+#    -Wvalue-type-value
+#      Warn if a rule contains value types and values.
+#
+#    -Wunreachable-rules
+#      Warn about rules that are shadowed by other rules and will never
+#      match.
+#
+#    -Wdeprecated-eof_rule
+#      Warn about standalone end of input rules $ that will be broken by
+#      the future changes and require fixing. At the moment these rules take
+#      precedence when conflicting with other rules, but after the introduction
+#      of generalized end of input symbol $ precedence order will change
+#      and these rules will become shadowed by other rules.
+#
+#    -Wuseless-escape
+#      Warn if a symbol is escaped when it shouldn't be. By default, re2py
+#      silently ignores such escapes, but this may as well indicate a typo or an
+#      error in the escape sequence.
+#
+#    -Wnondeterministic-tags
+#      Warn if a tag has n-th degree of nondeterminism, where n is
+#      greater than 1.
+#
+#    -Wsentinel-in-midrule
+#      Warn if the sentinel symbol occurs in the middle of a rule --- this may
+#      cause reads past the end of buffer, crashes or memory corruption in the
+#      generated lexer. This warning is only applicable if the sentinel method of
+#      checking for the end of input is used. It is set to an error if
+#      re2c:sentinel configuration is used.
+#
+#    -Wundefined-syntax-config
+#      Warn if the syntax file specified with --syntax option is missing
+#      definitions of some configurations. This helps to maintain user-defined
+#      syntax files: if a new release adds configurations, old syntax file will
+#      raise a warning, and the user will be notified. If some configurations are
+#      unused and do not need a definition, they should be explicitly set to
+#      <undefined>.
+#
+# Syntax files
+#
+# Support for different languages in re2c is based on the idea of
+# *syntax files*. A syntax file is a configuration file that defines
+# syntax of the target language -- not the whole language, but a small part of
+# it that is used by the generated code. Syntax files make re2c very flexible,
+# but they should not be used as a replacement for
+# re2c:
+# configurations: their purpose is to define syntax of the target language,
+# not to customize one particular lexer. All supported languages have default
+# syntax files that are part of the distribution (see
+# include/syntax
+# subdirectory); they are also embedded in the re2py binary. Users may provide
+# a custom syntax file that overrides a few configurations for one of
+# supported languages, or they may choose to redefine all configurations (in
+# that case
+# --lang none
+# option should be used). Syntax files contain
+# configurations of four different kinds: feature lists, language
+# configurations, inplace configurations and code templates.
+#
+# Feature lists
+#
+# A few list configurations define various features
+# supported by a given backend, so that re2py may give a clear error if the user
+# tries to enable an unsupported feature:
+#
+#   supported_apis
+#     A list of supported APIs with possible elements
+#     simple,
+#     record,
+#     generic.
+#   supported_api_styles
+#     A list of supported API styles with possible elements
+#     functions,
+#     free-form.
+#   supported_code_models
+#     A list of supported code models with possible elements
+#     goto-label,
+#     loop-switch,
+#     recursive-functions.
+#   supported_targets
+#     A list of supported codegen targets with possible elements
+#     code,
+#     dot,
+#     skeleton.
+#   supported_features
+#     A list of supported features with possible elements
+#     nested-ifs,
+#     bitmaps,
+#     computed-gotos,
+#     case-ranges,
+#     monadic,
+#     unsafe,
+#     tags,
+#     captures,
+#     captvars.
+#
+# Language configurations
+#
+# A few boolean configurations describe features of the
+# target language that affect re2py parser and code generator:
+#
+#   semicolons
+#     Non-zero if the language uses semicolons after statements.
+#   backtick_quoted_strings
+#     Non-zero if the language has backtick-quoted strings.
+#   single_quoted_strings
+#     Non-zero if the language has single-quoted strings.
+#   indentation_sensitive
+#     Non-zero if the language is indentation sensitive.
+#   wrap_blocks_in_braces
+#     Non-zero if compound statements must be wrapped in curly braces.
+#
+# Inplace configurations
+#
+# Syntax files define initial values of all
+# re2c:
+# configurations, as they may differ for different languages. See
+# configurations
+# section for a full list of all inplace configurations and their meaning.
+#
+# Code templates
+#
+# Code templates define syntax of the target language. They
+# are written in a simple domain-specific language with the following formal
+# grammar:
+#
+# code-template ::
+#       name '=' code-exprs ';'
+#     | CODE_TEMPLATE ';'
+#     | '<undefined>' ';'
+# code-exprs ::
+#       <EMPTY>
+#     | code-exprs code-expr
+# code-expr ::
+#       STRING
+#     | VARIABLE
+#     | optional
+#     | list
+# optional ::
+#       '(' CONDITIONAL '?' code-exprs ')'
+#     | '(' CONDITIONAL '?' code-exprs ':' code-exprs ')'
+# list ::
+#       '[' VARIABLE ':' code-exprs ']'
+#     | '[' VARIABLE '{' NUMBER '}' ':' code-exprs ']'
+#     | '[' VARIABLE '{' NUMBER ',' NUMBER '}' ':' code-exprs ']'
+#
+# A code template is a sequence of string literals, variables,
+# optional elements and lists, or a reference to another code template, or a
+# special value
+# <undefined>
+# . Variables are placeholders that are
+# substituted during code generation phase. List variables are special: when
+# expanding list templates, re2py repeats expressions the right hand side of
+# the column a few times, each time replacing occurrences of the list variable
+# with a value specific to this repetition. Lists have optional bounds
+# (negative values are counted from the end, e.g.
+# -1
+# means the last
+# element). Conditional names start with a dot. Both conditionals and
+# variables may be either local (specific to the given code template) or
+# global (allowed in all code templates). When re2py reads syntax file, it
+# checks that each code template uses only the variables and conditionals that
+# are allowed in it.
+#
+# For example, the following code template defines if-then-else
+# construct for a C-like language:
+#
+# code:if_then_else =
+#     [branch{0}: topindent "if " cond " {" nl
+#         indent [stmt: stmt] dedent]
+#     [branch{1:-1}: topindent "} else" (.cond ? " if " cond) " {" nl
+#         indent [stmt: stmt] dedent]
+#     topindent "}" nl;
+#
+# Here
+# branch
+# is a list variable:
+# branch{0}
+# expands to the first
+# branch (which is special, as there is no
+# else
+# part),
+# branch{1:-1}
+# expands to all remaining branches (if any).
+# stmt
+# is also a list variable:
+# [stmt: stmt]
+# is a nested list that expands
+# to a list of statements in the body of the current branch.
+# topindent,
+# indent,
+# dedent
+# and
+# nl
+# are global variables, and
+# .cond
+# is a local conditional (their meaning is described below). This
+# code template could produce the following code:
+#
+# if x {
+#     // do something
+# } else if y {
+#     // do something else
+# } else {
+#     // don't do anything
+# }
+#
+# Here's a list of all code templates supported by re2py with their
+# local variables and conditionals. Note that a particular definition may, but
+# does not have to use local variables and conditionals. Any unused code
+# templates should be set to
+# <undefined>
+# .
+#
+#   code:var_local
+#     Declaration or definition of a local variable. Supported variables:
+#     type
+#     (the type of the variable),
+#     name
+#     (its name) and
+#     init
+#     (initial value, if any). Conditionals:
+#     .init
+#     (true if
+#     there is an initializer).
+#   code:var_global
+#     Same as
+#     code:var_local,
+#     except that it's used in top-level.
+#   code:const_local
+#     Definition of a local constant. Supported variables:
+#     type
+#     (the type
+#     of the constant),
+#     name
+#     (its name) and
+#     init
+#     (initial
+#     value).
+#   code:const_global
+#     Same as
+#     code:const_local,
+#     except that it's used in top-level.
+#   code:array_local
+#     Definition of a local array (table). Supported variables:
+#     type
+#     (the
+#     type of array elements),
+#     name
+#     (array name),
+#     size
+#     (its size),
+#     row
+#     (a list variable that does not itself produce any code, but
+#     expands list expression as many times as there are rows in the table) and
+#     elem
+#     (a list variable that expands to all table elements in the
+#     current row -- it's meant to be nested in the
+#     row
+#     list). Supported
+#     conditional:
+#     .const
+#     (true if the array is immutable).
+#   code:array_global
+#     Same as
+#     code:array_local,
+#     except that it's used in top-level.
+#   code:array_elem
+#     Reference to an el
+<div>
+<dl>
+  <dt id="code:yyskip_yypeek"><a class="permalink" href="#code:yyskip_yypeek"><b><b>code:yyskip_yypeek</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yyskip</b> و <b>code:yypeek</b> (افتراضياً
+      <b>code:yyskip</b> متبوعاً بـ <b>code:yypeek</b>).</dd>
+  <dt id="code:yypeek_yyskip"><a class="permalink" href="#code:yypeek_yyskip"><b><b>code:yypeek_yyskip</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yypeek</b> و <b>code:yyskip</b> (افتراضياً
+      <b>code:yypeek</b> متبوعاً بـ <b>code:yyskip</b>).</dd>
+  <dt id="code:yyskip_yybackup"><a class="permalink" href="#code:yyskip_yybackup"><b><b>code:yyskip_yybackup</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yyskip</b> و <b>code:yybackup</b> (افتراضياً
+      <b>code:yyskip</b> متبوعاً بـ <b>code:yybackup</b>).</dd>
+  <dt id="code:yybackup_yyskip"><a class="permalink" href="#code:yybackup_yyskip"><b><b>code:yybackup_yyskip</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yybackup</b> و <b>code:yyskip</b> (افتراضياً
+      <b>code:yybackup</b> متبوعاً بـ <b>code:yyskip</b>).</dd>
+  <dt id="code:yybackup_yypeek"><a class="permalink" href="#code:yybackup_yypeek"><b><b>code:yybackup_yypeek</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yybackup</b> و <b>code:yypeek</b> (افتراضياً
+      <b>code:yybackup</b> متبوعاً بـ <b>code:yypeek</b>).</dd>
+  <dt id="code:yyskip_yybackup_yypeek"><a class="permalink" href="#code:yyskip_yybackup_yypeek"><b><b>code:yyskip_yybackup_yypeek</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yyskip</b> و <b>code:yybackup</b> و <b>code:yypeek</b>
+      (افتراضياً ``code:yyskip`` متبوعاً بـ <b>code:yybackup</b>
+      متبوعاً بـ <b>code:yypeek</b>).</dd>
+  <dt id="code:yybackup_yypeek_yyskip"><a class="permalink" href="#code:yybackup_yypeek_yyskip"><b><b>code:yybackup_yypeek_yyskip</b></b></a></dt>
+  <dd>بيان مدمج <b>code:yybackup</b> و <b>code:yypeek</b> و <b>code:yyskip</b>
+      (افتراضياً ``code:yybackup`` متبوعاً بـ <b>code:yypeek</b>
+      متبوعاً بـ <b>code:yyskip</b>).</dd>
+  <dt id="code:yyrestore"><a class="permalink" href="#code:yyrestore"><b><b>code:yyrestore</b></b></a></dt>
+  <dd>بيان <b>YYRESTORE</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYRESTORE</b>، <b>YYCURSOR</b>، <b>YYMARKER</b>،
+      <b>yyrecord</b> (تُعيّن إلى <b>re2c:</b>
+    التكوينات المقابلة).</dd>
+  <dt id="code:yyrestorectx"><a class="permalink" href="#code:yyrestorectx"><b><b>code:yyrestorectx</b></b></a></dt>
+  <dd>بيان <b>YYRESTORECTX</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYRESTORECTX</b>، <b>YYCURSOR</b>،
+      <b>YYCTXMARKER</b>، <b>yyrecord</b> (تُعيّن إلى <b>re2c:</b>
+      التكوينات المقابلة).</dd>
+  <dt id="code:yyrestoretag"><a class="permalink" href="#code:yyrestoretag"><b><b>code:yyrestoretag</b></b></a></dt>
+  <dd>بيان <b>YYRESTORETAG</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYRESTORETAG</b>، <b>YYCURSOR</b>، <b>yyrecord</b>
+      (تُعيّن إلى <b>re2c:</b> التكوينات المقابلة)، <b>tag</b> (اسم متغير العلامة المستخدم لاستعادة الموضع).</dd>
+  <dt id="code:yyshift"><a class="permalink" href="#code:yyshift"><b><b>code:yyshift</b></b></a></dt>
+  <dd>بيان <b>YYSHIFT</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSHIFT</b>، <b>YYCURSOR</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>offset</b> (عدد وحدات الشفرة للإزاحة الموضع الحالي).</dd>
+  <dt id="code:yyshiftstag"><a class="permalink" href="#code:yyshiftstag"><b><b>code:yyshiftstag</b></b></a></dt>
+  <dd>بيان <b>YYSHIFTSTAG</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSHIFTSTAG</b>، <b>yyrecord</b>، <b>negative</b>
+      (تُعيّن إلى <b>re2c:</b> التكوينات المقابلة)، <b>tag</b> (متغير العلامة الذي يحتاج إلى الإزاحة)، <b>offset</b> (عدد وحدات الشفرة للإزاحة). الشروط: <b>.nested</b> (صحيح إذا كانت هذه علامة متداخلة -- في هذه الحالة قد تساوي قيمتها <b>re2c:tags:negative</b>،
+      التي لا ينبغي إزاحتها).</dd>
+  <dt id="code:yyshiftmtag"><a class="permalink" href="#code:yyshiftmtag"><b><b>code:yyshiftmtag</b></b></a></dt>
+  <dd>بيان <b>YYSHIFTMTAG</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSHIFTMTAG</b> (تُعيّن إلى <b>re2c:</b>
+      التكوين المقابل)، <b>tag</b> (متغير العلامة الذي يحتاج إلى الإزاحة)، <b>offset</b> (عدد وحدات الشفرة للإزاحة).</dd>
+  <dt id="code:yystagp"><a class="permalink" href="#code:yystagp"><b><b>code:yystagp</b></b></a></dt>
+  <dd>بيان <b>YYSTAGP</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSTAGP</b>، <b>YYCURSOR</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>tag</b> (متغير العلامة الذي يجب تحديثه).</dd>
+  <dt id="code:yymtagp"><a class="permalink" href="#code:yymtagp"><b><b>code:yymtagp</b></b></a></dt>
+  <dd>بيان <b>YYMTAGP</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYMTAGP</b> (تُعيّن إلى <b>re2c:</b>
+      التكوين المقابل)، <b>tag</b> (متغير العلامة الذي يجب تحديثه).</dd>
+  <dt id="code:yystagn"><a class="permalink" href="#code:yystagn"><b><b>code:yystagn</b></b></a></dt>
+  <dd>بيان <b>YYSTAGN</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSTAGN</b>، <b>negative</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>tag</b> (متغير العلامة الذي يجب تحديثه).</dd>
+  <dt id="code:yymtagn"><a class="permalink" href="#code:yymtagn"><b><b>code:yymtagn</b></b></a></dt>
+  <dd>بيان <b>YYMTAGN</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYMTAGN</b> (تُعيّن إلى <b>re2c:</b>
+      التكوين المقابل)، <b>tag</b> (متغير العلامة الذي يجب تحديثه).</dd>
+  <dt id="code:yycopystag"><a class="permalink" href="#code:yycopystag"><b><b>code:yycopystag</b></b></a></dt>
+  <dd>بيان <b>YYCOPYSTAG</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYCOPYSTAG</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>lhs</b>، <b>rhs</b> (متغيرات العلامات لليسار واليمين لعملية النسخ).</dd>
+  <dt id="code:yycopymtag"><a class="permalink" href="#code:yycopymtag"><b><b>code:yycopymtag</b></b></a></dt>
+  <dd>بيان <b>YYCOPYMTAG</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYCOPYMTAG</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>lhs</b>، <b>rhs</b> (متغيرات العلامات لليسار واليمين لعملية النسخ).</dd>
+  <dt id="code:yygetaccept"><a class="permalink" href="#code:yygetaccept"><b><b>code:yygetaccept</b></b></a></dt>
+  <dd>بيان <b>YYGETACCEPT</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYGETACCEPT</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yyaccept</b>).</dd>
+  <dt id="code:yysetaccept"><a class="permalink" href="#code:yysetaccept"><b><b>code:yysetaccept</b></b></a></dt>
+  <dd>بيان <b>YYSETACCEPT</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSETACCEPT</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yyaccept</b>) و <b>val</b> (القيمة الرقمية للقاعدة المقبولة).</dd>
+  <dt id="code:yygetcond"><a class="permalink" href="#code:yygetcond"><b><b>code:yygetcond</b></b></a></dt>
+  <dd>بيان <b>YYGETCOND</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYGETCOND</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yycond</b>).</dd>
+  <dt id="code:yysetcond"><a class="permalink" href="#code:yysetcond"><b><b>code:yysetcond</b></b></a></dt>
+  <dd>بيان <b>YYSETCOND</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSETCOND</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yycond</b>) و <b>val</b> (معرّف الشرط الرقمي).</dd>
+  <dt id="code:yygetstate"><a class="permalink" href="#code:yygetstate"><b><b>code:yygetstate</b></b></a></dt>
+  <dd>بيان <b>YYGETSTATE</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYGETSTATE</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yystate</b>).</dd>
+  <dt id="code:yysetstate"><a class="permalink" href="#code:yysetstate"><b><b>code:yysetstate</b></b></a></dt>
+  <dd>بيان <b>YYSETSTATE</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYSETSTATE</b>، <b>yyrecord</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>var</b> (تُعيّن إلى
+      تكوين <b>re2c:yystate</b>) و <b>val</b> (رقم الحالة).</dd>
+  <dt id="code:yylessthan"><a class="permalink" href="#code:yylessthan"><b><b>code:yylessthan</b></b></a></dt>
+  <dd>بيان <b>YYLESSTHAN</b>، ربما يكون متخصصاً لواجهات برمجة تطبيقات مختلفة.
+      المتغيرات المدعومة: <b>YYLESSTHAN</b>، <b>YYCURSOR</b>، <b>YYLIMIT</b>،
+      <b>yyrecord</b> (تُعيّن إلى <b>re2c:</b> التكوينات المقابلة)،
+      <b>need</b> (عدد وحدات الشفرة المطلوب التحقق منها). الشرط:
+      <b>.many</b> (صحيح إذا كان <b>need</b> أكثر من واحد).</dd>
+  <dt id="code:yybm_filter"><a class="permalink" href="#code:yybm_filter"><b><b>code:yybm_filter</b></b></a></dt>
+  <dd>الشرط المستخدم لتصفية قيم <b>yych</b> التي لا تغطيها جدول <b>yybm</b> (يُستخدم مع خيار <b>--bitmaps</b>).
+      المتغير المدعوم: <b>yych</b> (يُعيّن إلى تكوين <b>re2c:yych</b>).</dd>
+  <dt id="code:yybm_match"><a class="permalink" href="#code:yybm_match"><b><b>code:yybm_match</b></b></a></dt>
+  <dd>تنسيق التحقق من جدول <b>yybm</b> (يتم إنشاؤه باستخدام خيار <b>--bitmaps</b>).
+      المتغيرات المدعومة: <b>yybm</b>، <b>yych</b> (تُعيّن إلى
+      <b>re2c:</b> التكوينات المقابلة)، <b>offset</b> (إزاحة في جدول <b>yybm</b>
+      التي يجب إضافتها إلى <b>yych</b>) و <b>mask</b> (قناع بت يجب تطبيقه على إدخال الجدول لاستعادة القيمة المنطقية التي يجب التحقق منها)</dd>
+  <dt id="code:yytarget_filter"><a class="permalink" href="#code:yytarget_filter"><b><b>code:yytarget_filter</b></b></a></dt>
+  <dd>الشرط المستخدم لتصفية قيم <b>yych</b> التي لا تغطيها جدول <b>yytarget</b> (يُستخدم مع خيار <b>--computed-gotos</b>).
+      المتغير المدعوم: <b>yych</b> (يُعيّن إلى تكوين <b>re2c:yych</b>).</dd>
+</dl>
+</div>
+<p class="Pp">هنا قائمة بجميع المتغيرات العامة المسموح بها في ملفات الصيغة:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="nl"><a class="permalink" href="#nl"><b><b>nl</b></b></a></dt>
+  <dd>سطر جديد.</dd>
+  <dt id="indent"><a class="permalink" href="#indent"><b><b>indent</b></b></a></dt>
+  <dd>متغير لا ينتج عنه أي شفرة، ولكنه له أثر جانبي لزيادة مستوى المسافة البادئة.</dd>
+  <dt id="dedent"><a class="permalink" href="#dedent"><b><b>dedent</b></b></a></dt>
+  <dd>متغير لا ينتج عنه أي شفرة، ولكنه له أثر جانبي لتقليل مستوى المسافة البادئة.</dd>
+  <dt id="topindent"><a class="permalink" href="#topindent"><b><b>topindent</b></b></a></dt>
+  <dd>سلسلة المسافة البادئة للبيان الحالي. يتم تتبع مستوى المسافة البادئة وتحديثه تلقائيًا بواسطة مولد الشفرة.</dd>
+</dl>
+</div>
+<p class="Pp">هنا قائمة بجميع الشروط العامة المسموح بها في ملفات الصيغة:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>.api.simple</b></b></dt>
+  <dd>صحيح إذا كانت</dd>
+</dl>
+</div>
+# re2py $INPUT -o $OUTPUT
+%{max %}
+def lex(yyinput):
+    yycursor = 0
+    yylimit = len(yyinput)
+    count = 0
+    while True: %{
+        re2c:YYFILL = "return -1";
+        re2c:indent:top = 2;
+        str = ['] ([^'\\] | [\\][^])* ['];
+        [\x00] {
+            # check that it is the sentinel, not some unexpected null
+            return count if yycursor == yylimit - YYMAXFILL + 1 else -1
+        }
+        str {
+            count += 1
+            break
+        }
+        [ ]+ { break }
+        *    { return -1 }
+    %}
+def test(str, count):
+    padded_str = str + (b"\0" * YYMAXFILL)
+    assert lex(padded_str) == count
+test(b"", 0)
+test(b"'unterminated\\'", -1)
+test(b"'qu\x00tes' 'are' 'fine: \\'' ", 3)
+test(b"'unexpected \x00 null'", -1)
+```
+
+```
+# re2py $INPUT -o $OUTPUT
+# expect a string without terminating null
+def lex(str):
+    cur = 0
+    lim = len(str)
+    count = 0
+    while True: %{
+        re2c:api = generic;
+        re2c:YYPEEK = "str[cur] if cur < lim else 0";
+        re2c:YYSKIP = "cur += 1";
+        re2c:yyfill:enable = 0;
+        re2c:indent:top = 2;
+        *      { return -1 }
+        [\x00] { return count }
+        [ ]+   { break }
+        [a-z]+ {
+            count += 1
+            break
+        }
+    %}
+assert lex(b"") == 0
+assert lex(b"one two three") == 3
+assert lex(b"f0ur") == -1
+```
+
+```python
+# re2py $INPUT -o $OUTPUT
+from enum import Enum
+import os
+BUFSIZE = 4096
+class State:
+    def __init__(self, fname):
+        self.file = open(fname, "rb")
+        self.yyinput = bytearray(BUFSIZE)
+        self.yylimit = BUFSIZE - 1 # exclude terminating null
+        self.yycursor = self.yylimit
+        self.yymarker = self.yylimit
+        self.token = self.yylimit
+        self.eof = False
+    def __del__(self):
+        self.file.close()
+class Status(Enum):
+    OK = 0
+    EOF = 1
+    LONG_LEXEME = 2
+def fill(st):
+    if st.eof:
+        return Status.EOF
+    # Error: lexeme too long. In real life could reallocate a larger buffer.
+    if st.token < 1:
+        return Status.LONG_LEXEME
+    # Shift buffer contents (discard everything up to the current token).
+    st.yyinput = st.yyinput[st.token:st.yylimit]
+    st.yycursor -= st.token;
+    st.yymarker -= st.token;
+    st.yylimit -= st.token;
+    st.token = 0;
+    # Fill free space at the end of buffer with new data from file.
+    bytes = st.file.read(BUFSIZE - st.yylimit - 1) # -1 for sentinel
+    if not bytes:
+        st.eof = True # end of file
+    else:
+        st.yylimit += len(bytes);
+        st.yyinput += bytes
+    st.yyinput += b'\0' # append sentinel
+    return Status.OK
+def lex(yyrecord, count):
+    while True:
+        yyrecord.token = yyrecord.yycursor
+    %{
+        re2c:api = record;
+        re2c:define:YYFILL = "fill(yyrecord) == Status.OK";
+        re2c:eof = 0;
+        re2c:indent:top = 2;
+        str = ['] ([^'\\] | [\\][^])* ['];
+        *    { return -1 }
+        $    { return count }
+        [ ]+ { break }
+        str  {
+            count += 1
+            break
+        }
+    %}
+def main():
+    fname = "input"
+    # Prepare input file.
+    f = open(fname, "w")
+    for i in range(BUFSIZE):
+        f.write("'qu\0tes' 'are' 'fine: \\' ' ")
+    f.close()
+    # Run lexer on the prepared file.
+    st = State(fname)
+    assert lex(st, 0) == 3 * BUFSIZE
+    # Cleanup.
+    os.remove(fname)
+if __name__ == '__main__':
+    main()
+```
+
+```
+               &lt;-- shift --&gt;                 &lt;-- need --&gt;
+             &gt;-A------------B---------C-----D-------E---F--------G-&gt;
+             buffer       tok
+<div class="manual-content">
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">الوصف</a></h1>
+<p class="Pp">يقوم هذا البرنامج بكتابة محرك مسح (lexer) بلغة بايثون من مواصفات re2c.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">الملخص</a></h1>
+<p class="Pp"><b>re2py</b> [<b>-h</b> | <b>--help</b>] [<b>-V</b> | <b>--version</b>] [<b>-o</b> <i>file</i>] [<b>--no-indent</b>] [<b>-i</b> | <b>--input</b> <i>file</i>] [<b>--start-conditions</b>] [<b>--header</b> <i>file</i>] [<b>-P</b> | <b>--conditions</b> <i>file</i>] [<b>--cond-enum-prefix</b> <i>prefix</i>] [<b>--cond-goto</b>] [<b>-b</b> | <b>--bitwise-state</b>] [<b>--nested-loops</b>] [<b>--empty-lines</b>] [<b>-S</b> | <b>--storable-states</b>] [<b>--no-backup-storable-states</b>] [<b>--api</b> <i>api</i>] [<b>--eof</b>] [<b>--case-insensitive</b>] [<b>-s</b> | <b>--string-input</b>] [<b>-W</b> | <b>--no-warnings</b>] [<b>-T</b> | <b>--tags</b>] [<b>--yych(0)</b>] [<b>-d</b> | <b>--debug</b>] [<b>-D</b> | <b>--debug-dfa</b>] [<b>-g</b> | <b>--legacy</b>] [<i>file</i> ...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">خيارات</a></h1>
+<p class="Pp">تم تجاهل هذه الخيارات لأنها خاصة بـ re2c C/C++.</p>
+<dl class="Bl-tag">
+  <dt><b>--api</b> <i>api</i></dt>
+  <dd>يحدد واجهة برمجة التطبيقات (API) الخاصة بالمخرجات. القيم الممكنة هي <b>record</b> (الافتراضي) و <b>string</b>.</dd>
+  <dt><b>--eof</b></dt>
+  <dd>يسمح بالتعامل مع نهاية الملف (EOF) كحرف عادي.</dd>
+  <dt><b>--start-conditions</b></dt>
+  <dd>تمكين الشروط الأولية (start conditions).</dd>
+  <dt><b>--conditions</b> <i>file</i></dt>
+  <dd>يحدد ملفًا يحتوي على تعريفات الشروط الأولية.</dd>
+  <dt><b>--cond-enum-prefix</b> <i>prefix</i></dt>
+  <dd>يحدد بادئة لأسماء التعداد (enum) للشروط الأولية.</dd>
+  <dt><b>--cond-goto</b></dt>
+  <dd>استخدام عبارات goto للانتقال بين الشروط الأولية.</dd>
+  <dt><b>-s</b> | <b>--string-input</b></dt>
+  <dd>التعامل مع مدخلات السلسلة النصية بدلاً من البايتات.</dd>
+  <dt><b>--yych(0)</b></dt>
+  <dd>يقوم بتغيير تمثيل الأحرف التي لا يمكن مسحها ضوئيًا.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">أمثلة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="Basic_usage"><a class="permalink" href="#Basic_usage">الاستخدام الأساسي</a></h2>
+<p class="Pp">يقوم هذا المثال بتوليد برنامج بايثون يقوم بمسح السلاسل النصية.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+def lex(str):
+    st = State(str)
+    while True: %{
+        [a-z]+
+        %})
+def main():
+    assert lex(&quot;abc&quot;) == 1
+    assert lex(&quot;aBcDeF&quot;) == 3
+    assert lex(&quot;123&quot;) == 0
+if __name__ == '__main__':
+    main()</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Input_buffers"><a class="permalink" href="#Input_buffers">مخازن الإدخال المؤقتة</a></h2>
+<p class="Pp">تتعامل re2c بشكل افتراضي مع مخازن الإدخال المؤقتة. عندما يصل المؤشر إلى نهاية المخزن المؤقت، يتم استدعاء دالة <code class="Nm">fill</code> لإعادة ملء المخزن المؤقت. يتم استخدام هذه الدالة لإعادة تخصيص المخزن المؤقت، ونقل البيانات، وقراءة المزيد من الإدخال. يجب أن تعيد الدالة قيمة تشير إلى نجاح العملية أو فشلها.</p>
+<p class="Pp">يستخدم المثال التالي المخزن المؤقت مع ملء محدود (padding) لضمان أن جميع المطابقات تحدث داخل المخزن المؤقت.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+from enum import Enum
+import os
+BUFSIZE = 4096
+# Maximum number of characters that can be part of a lexeme, but outside of the
+# current input buffer. The value must be greater than zero.
+YYMAXFILL = 5
+class State:
+    def __init__(self, fname):
+        self.file = open(fname, "rb")
+        self.yyinput = bytearray(BUFSIZE)
+        # The maximum possible position of the cursor.
+        self.yylimit = BUFSIZE - YYMAXFILL
+        # The current position of the cursor.
+        self.yycursor = self.yylimit
+        # The position of the last matched lexeme.
+        self.yymarker = self.yylimit
+        # The position of the token.
+        self.token = self.yylimit
+        self.eof = False
+    def __del__(self):
+        self.file.close()
+class Status(Enum):
+    OK = 0
+    EOF = 1
+    LONG_LEXEME = 2
+def fill(st, need):
+    if st.eof:
+        return Status.EOF
+    # Error: lexeme too long. In real life could reallocate a larger buffer.
+    if st.token &lt; need:
+        return Status.LONG_LEXEME
+    # Shift buffer contents (discard everything up to the current token).
+    st.yyinput = st.yyinput[st.token:st.yylimit]
+    st.yycursor -= st.token;
+    st.yymarker -= st.token;
+    st.yylimit -= st.token;
+    st.token = 0;
+    # Fill free space at the end of buffer with new data from file.
+    # We subtract 1 because YYMAXFILL characters are reserved for the sentinel.
+    bytes = st.file.read(BUFSIZE - st.yylimit - 1) # -1 for sentinel
+    if not bytes:
+        st.eof = True # end of file
+        # Add YYMAXFILL padding characters to the end of the buffer.
+        st.yylimit += YYMAXFILL
+        st.yyinput += b"\0" * YYMAXFILL
+    else:
+        st.yylimit += len(bytes);
+        st.yyinput += bytes
+    return Status.OK
+def lex(yyrecord):
+    count = 0
+    while True:
+        yyrecord.token = yyrecord.yycursor
+    %{
+        re2c:api = record;
+        re2c:YYFILL = "if fill(yyrecord, @@) != Status.OK: return -1";
+        re2c:indent:top = 2;
+        # Match strings enclosed in single quotes. Allows escaped quotes and backslashes.
+        str = [' ([^'\\] | [\\][^])* ']
+        [\x00] {
+            # Check that it is the sentinel, not some unexpected null.
+            return count if yyrecord.token == yyrecord.yylimit - YYMAXFILL else -1
+        }
+        str {
+            count += 1
+            break
+        }
+        [ ]+ { break } # Match one or more spaces and break
+        *    { return -1 } # Match any other character and return error
+    %}
+def main():
+    fname = "input"
+    # Prepare input file.
+    f = open(fname, "w")
+    for i in range(BUFSIZE):
+        f.write("'qu\0tes' 'are' 'fine: \\'' ")
+    f.close()
+    # Run lexer on the prepared file.
+    st = State(fname)
+    # Expected result is 3 times the buffer size because each iteration writes
+    # the same string 3 times.
+    assert lex(st) == 3 * BUFSIZE
+    # Cleanup.
+    os.remove(fname)
+if __name__ == '__main__':
+    main()
+</pre>
+</div>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FEATURES"><a class="permalink" href="#FEATURES">الميزات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id="Multiple_blocks"><a class="permalink" href="#Multiple_blocks">كتل متعددة</a></h2>
+<p class="Pp">في بعض الأحيان يكون من الضروري وجود محركات مسح متعددة مترابطة (على سبيل المثال، إذا كانت هناك آلة حالة عالية المستوى تنتقل بين أوضاع المسح). يمكن تنفيذ ذلك باستخدام كتل re2py متعددة متصلة. خيار آخر هو استخدام <i>الشروط الأولية</i>.</p>
+<p class="Pp">يعتمد تنفيذ الاتصالات بين الكتل على اللغة المستهدفة. في اللغات التي تحتوي على عبارة <b>goto</b> (مثل C/C++ و Go) يمكن أن يكون لدى جميع الكتل وظيفة واحدة، كل منها مسبوقة بتسمية. الانتقال من كتلة إلى أخرى هو <b>goto</b> بسيط. في اللغات التي لا تحتوي على <b>goto</b> (مثل Rust) من الضروري استخدام حلقة مع مفتاح لمتغير حالة، مشابه لـ <b>yystate</b> حلقة/مفتاح تم إنشاؤه بواسطة re2py، أو تغليف كل كتلة في وظيفة واستخدام استدعاءات الوظائف.</p>
+<p class="Pp">يستخدم المثال أدناه كتلًا متعددة لتحليل الأرقام الثنائية والثمانية والعشرية والسداسية عشرية. كل قاعدة لها كتلتها الخاصة. تحدد الكتلة الأولية القاعدة وتوزع على الكتل الأخرى. يتم تعريف التكوينات المشتركة في كتلة منفصلة في بداية البرنامج؛ يتم وراثتها بواسطة الكتل الأخرى.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+class State:
+    def __init__(self, str):
+        self.yyinput = str
+        self.yycursor = 0
+        self.yymarker = 0
+# Common re2c definitions shared between all functions.
+%{
+    re2c:api = record;
+    re2c:yyrecord = st;
+    re2c:yyfill:enable = 0;
+    re2c:indent:top = 2;
+%}
+def parse_u32(str):
+    st = State(str)
+%{local
+    re2c:indent:top = 1;
+    '0b' / [01]        { return parse_bin(st) }
+    "0"                { return parse_oct(st) }
+    "" / [1-9]         { return parse_dec(st) }
+    '0x' / [0-9a-fA-F] { return parse_hex(st) }
+    *                  { return None }
+%}
+def parse_bin(st):
+    n = 0
+    while True: %{
+        [01] {
+            n = n * 2 + (st.yyinput[st.yycursor - 1] - 48)
+            break
+        }
+        * { return n }
+    %}
+def parse_oct(st):
+    n = 0
+    while True: %{
+        [0-7] {
+            n = n * 8 + (st.yyinput[st.yycursor - 1] - 48)
+            break
+        }
+        * { return n }
+    %}
+def parse_dec(st):
+    n = 0
+    while True: %{
+        [0-9] {
+            n = n * 10 + (st.yyinput[st.yycursor - 1] - 48)
+            break
+        }
+        * { return n }
+    %}
+def parse_hex(st):
+    n = 0
+    while True: %{
+        [0-9] {
+            n = n * 16 + (st.yyinput[st.yycursor - 1] - 48)
+            break
+        }
+        [a-f] {
+            n = n * 16 + (st.yyinput[st.yycursor - 1] - 87)
+            break
+        }
+        [A-F] {
+            n = n * 16 + (st.yyinput[st.yycursor - 1] - 55)
+            break
+        }
+        * { return n }
+    %}
+assert parse_u32(b"\0") == None
+assert parse_u32(b"1234567890\0") == 1234567890
+assert parse_u32(b"0b1101\0") == 13
+assert parse_u32(b"0x7Fe\0") == 2046
+assert parse_u32(b"0644\0") == 420
+assert parse_u32(b"9999999999\0") == 9999999999</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id="Start_conditions"><a class="permalink" href="#Start_conditions">الشروط الأولية</a></h2>
+<p class="Pp">يتم تمكين الشروط الأولية باستخدام خيار <b>--start-conditions</b>. إنها توفر طريقة لترميز آلات متعددة مترابطة داخل نفس كتلة re2py.</p>
+<p class="Pp">يتوافق كل شرط مع آلة واحدة وله اسم فريد يحدده المستخدم ورقم داخلي فريد يحدده re2py. تستخدم الأرقام للتبديل بين الشروط: يستخدم الكود الذي تم إنشاؤه بدائيات <b>YYGETCOND</b> و <b>YYSETCOND</b> للحصول على الشرط الحالي أو تعيينه إلى رقم معين. استخدم كتلة <b>conditions</b> أو خيار <b>--header</b> أو تكوين <b>re2c:header</b> لإنشاء معرفات شروط رقمية. يحدد التكوين <b>re2c:cond:enumprefix</b> بادئة المعرف الذي تم إنشاؤه.</p>
+<p class="Pp">في وضع الشرط، يجب أن تكون كل قاعدة مسبوقة بقائمة بأسماء شروط مفصولة بفواصل في أقواس زاوية، أو حرف بدل <b>&lt;*&gt;</b> للدلالة على جميع الشروط. تمتد صيغة القاعدة على النحو التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt><b><b>&lt; condition-list &gt; regular-expression code</b></b></dt>
+  <dd>قاعدة يتم دمجها مع كل شرط في <b>condition-list</b>. تطابق <b>regular-expression</b> وتنفذ <b>code</b> المرتبط.</dd>
+  <dt><b><b>&lt; condition-list &gt; regular-expression =&gt; condition code</b></b></dt>
+  <dd>قاعدة يتم دمجها مع كل شرط في <b>condition-list</b>. تطابق <b>regular-expression</b>، وتعيين الشرط الحالي إلى <b>condition</b>، وتنفذ <b>code</b> المرتبط.</dd>
+  <dt><b><b>&lt; condition-list &gt; regular-expression :=&gt; condition</b></b></dt>
+  <dd>قاعدة يتم دمجها مع كل شرط في <b>condition-list</b>. تطابق <b>regular-expression</b> وتنتقل فورًا إلى <b>condition</b> (لا يوجد إجراء دلالي).</dd>
+  <dt><b><b>&lt; condition-list &gt; !action code</b></b></dt>
+  <dd>قاعدة تربط <b>code</b> بالمكان المحدد بواسطة <b>action</b> في كل شرط في <b>condition-list</b> (انظر قسم <i>actions</i> لأنواع مختلفة من الإجراءات).</dd>
+  <dt><b><b>&lt; ! condition-list &gt; code</b></b></dt>
+  <dd>قاعدة تضيف <b>code</b> إلى الإجراءات الدلالية لجميع القواعد لكل شرط في <b>condition-list</b>. تم إهمال هذه الصيغة، ويجب استخدام إجراء <b>!pre_rule</b> بدلاً منه (يقوم بنفس الشيء تمامًا).</dd>
+  <dt><b><b>&lt; &gt; code</b></b></dt>
+  <dd>قاعدة تنشئ شرط دخول خاص بالرقم صفر والاسم <b>"0"</b> الذي ينفذ <b>code</b> قبل القفز إلى شروط أخرى. تم إهمال هذه الصيغة، ويجب استخدام إجراء <b>!entry</b> بدلاً منه (يوفر تحكمًا أكثر دقة، حيث يمكن تحديد الكود لكل شرط على حدة، ويمكنك القفز مباشرة إلى بداية الشرط دون المرور عبر توزيع الشرط).</dd>
+  <dt><b><b>&lt; &gt; =&gt; condition code</b></b></dt>
+  <dd>نفس القاعدة السابقة، باستثناء أنها تعين <b>condition</b> التالي.</dd>
+  <dt><b><b>&lt; &gt; :=&gt; condition</b></b></dt>
+  <dd>نفس القاعدة السابقة، باستثناء أنها لا تحتوي على كود مرتبط وتقفز فورًا إلى <b>condition</b>.</dd>
+</dl>
+</div>
+</div>
+</div>
+<p class="Pp">يعتمد الكود الذي يولده re2py للشروط على ما إذا كان re2py يستخدم نهج goto/label أو نهج loop/switch لتشفير الآلات.</p>
+<p class="Pp">في اللغات التي تحتوي على عبارة <b>goto</b> (مثل C/C++ و Go) يتم تنفيذ الشروط بشكل طبيعي ككتل من الكود مسبوقة بتسميات بالشكل <b>yyc_&lt;cond&gt;</b>، حيث <b>cond</b> هو اسم شرط (يمكن تغيير بادئة التسمية باستخدام <b>re2c:cond:prefix</b>). يتم تنفيذ الانتقالات بين الشروط باستخدام <b>goto</b> وتسميات الشروط. قبل جميع الشروط، يقوم re2py بإنشاء مفتاح أولي على <b>YYGETSTATE</b> الذي يقفز إلى حالة البداية للشرط الحالي. تتجاوز قواعد الاختصار <b>:=&gt;</b> المفتاح الأولي وتقفز مباشرة إلى الشرط المحدد (يمكن استخدام <b>re2c:cond:goto</b> لتغيير السلوك الافتراضي). القواعد ذات الإجراءات الدلالية لا تقفز تلقائيًا إلى الشرط التالي؛ يجب القيام بذلك بواسطة الكود المحدد من قبل المستخدم.</p>
+<p class="Pp">في اللغات التي لا تحتوي على <b>goto</b> (مثل Rust) يعيد re2py استخدام المتغير <b>yystate</b> لتخزين أرقام الشروط. يحصل كل شرط على معرف رقمي يساوي عدد حالات البدء الخاصة به، ولا يختلف المفتاح بين الشروط عن المفتاح بين حالات DFA لشرط واحد. لا حاجة لمفتاح شرط أولي منفصل. (نظرًا لأنه يتم استخدام نفس النهج لتنفيذ حالات قابلة للتخزين، فإن <b>YYGETCOND</b>/<b>YYSETCOND</b> تكون زائدة عن الحاجة إذا تم استخدام كل من الحالات القابلة للتخزين والشروط).</p>
+<p class="Pp">يستخدم البرنامج أدناه شروطًا أولية لتحليل الأرقام الثنائية والثمانية والعشرية والسداسية عشرية. يوجد كتلة واحدة حيث لكل قاعدة شرطها الخاص، والشرط الأولي متصل بجميعها. تخزن المتغير المحدد من قبل المستخدم <b>cond</b> رقم الشرط الحالي؛ يتم تهيئته إلى رقم الشرط الأولي الذي تم إنشاؤه مع <b>conditions</b></p>
+</div>
+</div>
+  re2c:indent:top = 1;
+    &quot;&#x2200;x &#x2203;y&quot; { return yycursor }
+    *       { return None }
+%}
+def lex_utf8(yyinput):
+    yycursor = 0
+    %{use
+        re2c:encoding:utf8 = 1;
+    %}
+def lex_utf32(yyinput):
+    yycursor = 0
+    %{use
+        re2c:encoding:utf32 = 1;
+    %}
+s8 = [0xe2, 0x88, 0x80, 0x78, 0x20, 0xe2, 0x88, 0x83, 0x79]
+assert lex_utf8(s8) == len(s8)
+s32 = [0x2200, 0x78, 0x20, 0x2203, 0x79]
+assert lex_utf32(s32) == len(s32)</pre>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Submatch_extraction'><a class='permalink' href='#Submatch_extraction'>استخراج المطابقة الفرعية</a></h2>
+<p class="Pp">يحتوي re2py على خيارين لاستخراج المطابقة الفرعية.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Tags"><a class="permalink" href="#Tags"><b><b>علامات</b></b></a></dt>
+  <dd>الخيار الأول هو استخدام <i>علامات</i> قائمة بذاتها على شكل <b>@stag</b>
+      أو <b>#mtag</b>، حيث <b>stag</b> و <b>mtag</b> هي أسماء عشوائية معرفة
+      من قبل المستخدم. يتم تمكين العلامات باستخدام الخيار <b>-T --tags</b> أو
+      التكوين <b>re2c:tags = 1</b>. دلالياً، العلامات هي علامات موضع: يمكن
+      إدراجها في أي مكان في التعبير العادي، وهي تربط بالموضع المقابل (أو
+      مواضع متعددة) في سلسلة الإدخال. <i>علامات-S</i> تربط بآخر موضع مطابق،
+      و <i>علامات-M</i> تربط بقائمة من المواضع (يمكن استخدامها في تعبيرات
+      الفرعية للتكرار، حيث يتوافق موضع واحد في التعبير العادي مع مواضع
+      متعددة في سلسلة الإدخال). يجب تعريف جميع العلامات من قبل المستخدم، إما
+      يدويًا أو بمساعدة كتل <b>svars</b> و <b>mvars</b>. إذا كان هناك أكثر من
+      طريقة لمطابقة العلامات مع الإدخال، يتم حل الغموض باستخدام استراتيجية
+      التمييز الطمعية اليسرى.</dd>
+  <dt id="Captures"><a class="permalink" href="#Captures"><b><b>المجموعات الملتقطة</b></b></a></dt>
+  <dd>الخيار الثاني هو استخدام <i>مجموعات الالتقاط</i>. يتم تمكينها باستخدام
+      الخيار <b>--captures</b> أو التكوين <b>re2c:captures = 1</b>. هناك
+      نكهتان لسياسات تمييز مختلفة، <b>--leftmost-captures</b> (الافتراضي)
+      لاستراتيجية الطمعية اليسرى، و <b>--posix-captures</b> لاستراتيجية
+      أطول مطابقة POSIX. في هذا الوضع، تعتبر جميع التعبيرات الفرعية الموضوعة
+      بين قوسين مجموعات التقاط، ويمكن استخدام علامة تعجب (!) لتمييز المجموعات
+      غير الملتقطة: <b>(! ... )</b>. مع الخيار <b>--invert-captures</b> أو
+      التكوين <b>re2c:invert-captures = 1</b>، يتم عكس معنى علامة التعجب.
+      يتم تخزين عدد المجموعات لقاعدة المطابقة في المتغير <b>yynmatch</b>
+      (التعبير العادي بأكمله هو المجموعة رقم صفر)، ويتم تخزين نتائج المطابقة
+      الفرعية في المصفوفة <b>yypmatch</b>. يجب تعريف كل من <b>yynmatch</b> و
+      <b>yypmatch</b> من قبل المستخدم، ويجب أن يكون حجم <b>yypmatch</b> على
+      الأقل <b>[yynmatch * 2]</b>. استخدم كتلة <b>maxnmatch</b> لتعريف
+      <b>YYMAXNMATCH</b>، وهو ثابت يساوي القيمة القصوى لـ <b>yynmatch</b>
+      بين جميع القواعد.</dd>
+  <dt id="Captvars"><a class="permalink" href="#Captvars"><b><b>متغيرات الالتقاط</b></b></a></dt>
+  <dd>طريقة أخرى لاستخدام مجموعات الالتقاط هي الخيار <b>--captvars</b> أو
+      التكوين <b>re2c:captvars = 1</b>. الاختلاف الوحيد مع
+      <b>--captures</b> هو في الطريقة التي يخزن بها re2py نتائج المطابقة
+      الفرعية: بدلاً من <b>yynmatch</b> و <b>yypmatch</b>، يقوم re2py بإنشاء
+      المتغيرات <b>yytl&lt;k&gt;</b> و <b>yytr&lt;k&gt;</b> للمجموعة الملتقطة
+      رقم <i>k</i> (يجب على المستخدم الإعلان عن هذه باستخدام كتلة <b>svars</b>).
+      تدعم عمليات الالتقاط بالمتغيرات سياستي تمييز:
+      <b>--leftmost-captvars</b> أو <b>re2c:leftmost-captvars = 1</b>
+      لاستراتيجية الطمعية اليسرى (الافتراضي) و <b>--posix-captvars</b> أو
+      <b>re2c:posix-captvars</b> لاستراتيجية أطول مطابقة POSIX.</dd>
+</dl>
+</div>
+<p class="Pp">من الداخل، تترجم كل هذه الخيارات إلى علامات و <i>آلات حالة
+    قطعية محددة بالعلامات مع التطلع</i> (Tagged Deterministic Finite Automata
+    with Lookahead - TDFA). الفكرة الأساسية لـ TDFA هي تقليل الحمل الزائد على
+    استخراج المطابقة الفرعية. في الحالة القصوى، إذا لم تكن هناك علامات أو عمليات
+    التقاط في تعبير عادي، فإن TDFA هو مجرد DFA عادي. إذا كان عدد العلامات معتدلاً،
+    فإن الحمل الزائد لا يمكن ملاحظته تقريبًا. يستخدم TDFA الذي تم إنشاؤه عددًا من
+    <i>متغيرات العلامات</i> التي لا تتطابق مباشرة مع العلامات: قد يتم استخدام
+    متغير واحد لعلامات مختلفة، وقد تتطلب علامة واحدة متغيرات متعددة لتخزين
+    جميع قيمها الممكنة. في النهاية، يتم حل الغموض، ويبقى متغير نهائي واحد لكل
+    علامة. يجب تعريف متغيرات العلامات باستخدام كتل <b>stags</b> أو <b>mtags</b>.
+    إذا تم تخزين حالة المحلل اللغوي (lexer)، فيجب أن تكون متغيرات العلامات جزءًا
+    منها. كما تحتاج إلى تحديثها بواسطة <b>YYFILL</b>.</p>
+<p class="Pp">تدعم علامات-S العمليات التالية:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>حفظ موضع الإدخال في علامة-S: <b>t = YYCURSOR</b> مع واجهة مؤشر C أو
+      عملية معرفة من قبل المستخدم <b>YYSTAGP(t)</b> مع الواجهة العامة</li>
+  <li>حفظ قيمة افتراضية في علامة-S: <b>t = NULL</b> مع واجهة مؤشر C أو
+      عملية معرفة من قبل المستخدم <b>YYSTAGN(t)</b> مع الواجهة العامة</li>
+  <li>نسخ علامة-S إلى أخرى: <b>t1 = t2</b></li>
+</ul>
+</div>
+<p class="Pp">تدعم علامات-M العمليات التالية:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>إلحاق موضع الإدخال بعلامة-M: عملية معرفة من قبل المستخدم
+      <b>YYMTAGP(t)</b> مع كل من الواجهة الافتراضية والعامة</li>
+  <li>إلحاق قيمة افتراضية بعلامة-M: عملية معرفة من قبل المستخدم
+      <b>YYMTAGN(t)</b> مع كل من الواجهة الافتراضية والعامة</li>
+  <li>نسخ علامة-M إلى أخرى: <b>t1 = t2</b></li>
+</ul>
+</div>
+<p class="Pp">يمكن تنفيذ علامات-S كقيم مفردة (مؤشرات أو إزاحات). تحتاج علامات-M
+    إلى تمثيل أكثر تعقيدًا، حيث تحتاج إلى تخزين تسلسل من قيم العلامات. التمثيل
+    الأكثر بدائية وغير فعال لعلامة-M هو قائمة (مصفوفة، متجه) من قيم العلامات؛
+    تمثيل أكثر فعالية هو تخزين جميع علامات-M في شجرة بادئة ممثلة كمصفوفة من
+    العقد <b>(v, p)</b>، حيث <b>v</b> هي قيمة العلامة و <b>p</b> هو مؤشر
+    إلى العقدة الأم.</p>
+<p class="Pp">هذا مثال بسيط لاستخدام علامات-S لتحليل الإصدارات الدلالية التي
+    تتكون من ثلاثة مكونات رقمية: رئيسي، فرعي، تصحيح (الأخير اختياري). انظر أدناه
+    لمثال أكثر تعقيدًا يستخدم <b>YYFILL</b>.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+from collections import namedtuple
+SemVer = namedtuple('SemVer', 'major minor patch')
+NONE = -1
+def parse(yyinput):
+    yycursor = 0
+    %{
+    re2c:yyfill:enable = 0;
+    re2c:tags = 1;
+    re2c:indent:top = 1;
+    num = [0-9]+;
+    @t1 num @t2 &quot;.&quot; @t3 num @t4 (&quot;.&quot; @t5 num)? [\x00] {
+        major = int(yyinput[t1:t2])
+        minor = int(yyinput[t3:t4])
+        patch = int(yyinput[t5:yycursor - 1]) if t5 != NONE else 0
+        return SemVer(major, minor, patch)
+    }
+    * { return None }
+%}
+assert parse(b&quot;23.34\0&quot;) == SemVer(23, 34, 0)
+assert parse(b&quot;1.2.99999\0&quot;) == SemVer(1, 2, 99999)
+assert parse(b&quot;1.a\0&quot;) == None</pre>
+</div>
+</div>
+<p class="Pp">هذا مثال أكثر تعقيدًا لاستخدام علامات-S مع <b>YYFILL</b> لتحليل
+    ملف يحتوي على إصدارات دلالية مفصولة بأسطر جديدة. متغيرات العلامات هي جزء
+    من حالة المحلل اللغوي، ويتم تعديلها في <b>YYFILL</b> مثل مواضع الإدخال
+    الأخرى. لاحظ أن هذا ضروري لعلامات-S لأن قيمها تصبح غير صالحة بعد إزاحة
+    محتويات المخزن المؤقت. قد لا يكون هذا ضروريًا في تطبيق مخصص حيث تخزن متغيرات
+    العلامات الإزاحات بالنسبة لبداية سلسلة الإدخال بدلاً من المخزن المؤقت، وهو
+    ما قد يكون هو الحال مع علامات-M.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+from collections import namedtuple
+from enum import Enum
+import os
+BUFSIZE = 4096
+SemVer = namedtuple('SemVer', 'major minor patch')
+class State:
+    def __init__(self, fname):
+        self.file = open(fname, &quot;rb&quot;)
+        self.yyinput = bytearray(BUFSIZE)
+        self.yylimit = BUFSIZE - 1 # exclude terminating null
+        self.yycursor = self.yylimit
+        self.yymarker = self.yylimit
+        self.token = self.yylimit
+        self.eof = False
+        %{stags format = &quot;\n        self.@@ = -1&quot;; %}
+    def __del__(self):
+        self.file.close()
+class Status(Enum):
+    OK = 0
+    EOF = 1
+    LONG_LEXEME = 2
+def fill(st):
+    if st.eof:
+        return Status.EOF
+    # Error: lexeme too long. In real life could reallocate a larger buffer.
+    if st.token &lt; 1:
+        return Status.LONG_LEXEME
+    # Shift buffer contents (discard everything up to the current token).
+    st.yyinput = st.yyinput[st.token:st.yylimit]
+    st.yycursor -= st.token;
+    st.yymarker -= st.token;
+    st.yylimit -= st.token;
+    %{stags format = &quot;\n    if st.@@ != -1: st.@@ -= st.token&quot;; %}
+    st.token = 0;
+    # Fill free space at the end of buffer with new data from file.
+    bytes = st.file.read(BUFSIZE - st.yylimit - 1) # -1 for sentinel
+    if not bytes:
+        st.eof = True # end of file
+    else:
+        st.yylimit += len(bytes);
+        st.yyinput += bytes
+    st.yyinput += b'\0' # append sentinel
+    return Status.OK
+def lex(st, count):
+    vers = []
+    while True:
+        st.token = st.yycursor
+    %{
+        re2c:api = record;
+        re2c:yyrecord = st;
+        re2c:YYFILL = &quot;fill(st) == Status.OK&quot;;
+        re2c:eof = 0;
+        re2c:indent:top = 2;
+        re2c:tags = 1;
+        num = [0-9]+;
+        num @t1 &quot;.&quot; @t2 num @t3 (&quot;.&quot; @t4 num)? [\n] {
+            major = int(st.yyinput[st.token:t1])
+            minor = int(st.yyinput[t2:t3])
+            patch = int(st.yyinput[t4:st.yycursor - 1]) if t4 != -1 else 0
+            vers.append(SemVer(major, minor, patch))
+            break
+        }
+        $ { return vers }
+        * { return None }
+    %}
+def main():
+    fname = &quot;input&quot;
+    verstr = b&quot;1.22.333\n&quot;
+    expect = [SemVer(1, 22, 333)] * BUFSIZE
+    # Prepare input file.
+    f = open(fname, &quot;wb&quot;)
+    for i in range(BUFSIZE):
+        f.write(verstr)
+    f.close()
+    # Run lexer on the prepared file.
+    st = State(fname)
+    assert lex(st, 0) == expect
+    # Cleanup.
+    os.remove(fname)
+if __name__ == '__main__':
+    main()</pre>
+</div>
+</div>
+<p class="Pp">هذا مثال لاستخدام مجموعات الالتقاط لتحليل الإصدارات الدلالية.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+from collections import namedtuple
+SemVer = namedtuple('SemVer', 'major minor patch')
+NONE = -1
+def parse(yyinput):
+    yycursor = 0
+    %{
+    re2c:yyfill:enable = 0;
+    re2c:captvars = 1;
+    re2c:indent:top = 1;
+    num = [0-9]+;
+    (num) &quot;.&quot; (num) (&quot;.&quot; num)? [\x00] {
+        major = int(yyinput[yytl1:yytr1])
+        minor = int(yyinput[yytl2:yytr2])
+        patch = 0 if yytl3 == NONE else int(yyinput[yytl3 + 1:yytr3])
+        return SemVer(major, minor, patch)
+    }
+    * { return None }
+%}
+assert parse(b&quot;23.34\0&quot;) == SemVer(23, 34, 0)
+assert parse(b&quot;1.2.99999\0&quot;) == SemVer(1, 2, 99999)
+assert parse(b&quot;1.a\0&quot;) == None</pre>
+</div>
+</div>
+<p class="Pp">هذا مثال لاستخدام علامات-M لتحليل إصدار بعدد متغير من المكونات.
+    يتم تخزين متغيرات العلامات في شجرة تري.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># re2py $INPUT -o $OUTPUT
+NONE = -1
+def parse(yyinput):
+    yycursor = 0
+    %{mtags format = '\n    @@ = []'; %} # autogenerated tag variables
+%{
+    re2c:YYMTAGP = &quot;@@.append(yycursor)&quot;;
+    re2c:YYMTAGN = &quot;&quot;; // do nothing
+    re2c:yyfill:enable = 0;
+    re2c:tags = 1;
+    re2c:indent:top = 1;
+    num = [0-9]+;
+    @t1 num @t2 (&quot;.&quot; #t3 num #t4)* [\x00] {
+        vers = [int(yyinput[t1:t2])]
+        for i in ran
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>re2py(1) - Manual Page</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    
+    <main>
+        <article>
+<section class="Sh">
+<h1 class="Sh" id='DEBUG_OPTIONS'><a class='permalink' href='#DEBUG_OPTIONS'>DEBUG OPTIONS</a></h1>
+<p class="Pp">debug options, such as <b>--dump-nfa</b>, <b>--dump-dfa-raw</b> etc. (see the full list of options).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp">You can find more information about re2c at the official website: <a href='http://re2c.org'>http://re2c.org</a>. Similar programs are flex(1), lex(1), quex(<a href='http://quex.sourceforge.net'>http://quex.sourceforge.net</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>AUTHORS</a></h1>
+<p class="Pp">re2py was originally written by Peter Bumbulis (<i>peter@csg.uwaterloo.ca</i>) in 1993. Marcus Boerger and Dan Nuffer spent several years to turn the original idea into a production ready code generator. Since then it has been maintained and developed by multiple volunteers, most notably, Brian Young (<i>bayoung@acm.org</i>), <i>Marcus Boerger</i>, Dan Nuffer (<i>nuffer@users.sourceforge.net</i>), <i>Ulya Trofimovich</i> (<i>skvadrik@gmail.com</i>), <i>Serghei Iakovlev</i>, <i>Sergei Trofimovich</i>, <i>Petr Skocik</i>, <i>ligfx</i> <i>raekye</i> and <i>PolarGoose</i>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/re2c/">extra/re2c</a></dd>
+        <dt>Version:</dt>
+        <dd>4.3-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://re2c.org">https://re2c.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>LicenseRef-re2c</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/re2c/">/listing/extra/re2c/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#BASICS">BASICS</a></li>
+        
+            <li><a href="#HANDLING_THE_END_OF_INPUT">HANDLING THE END OF INPUT</a></li>
+        
+            <li><a href="#BUFFER_REFILLING">BUFFER REFILLING</a></li>
+        
+            <li><a href="#FEATURES">FEATURES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#AUTHORS">AUTHORS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/re2py.1.en.txt">txt</a>, 
+        
+            <a href="/man/re2py.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>
+```
+
+```html
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>re2py(1) - صفحة الدليل</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    
+    <main>
+        <article>
+<section class="Sh">
+<h1 class="Sh" id='DEBUG_OPTIONS'><a class='permalink' href='#DEBUG_OPTIONS'>خيارات التصحيح</a></h1>
+<p class="Pp">خيارات التصحيح، مثل <b>--dump-nfa</b>، <b>--dump-dfa-raw</b> وما إلى ذلك (انظر القائمة الكاملة للخيارات).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يمكنك العثور على مزيد من المعلومات حول re2c على الموقع الرسمي: <a href='http://re2c.org'>http://re2c.org</a>. البرامج المماثلة هي flex(1)، lex(1)، quex(<a href='http://quex.sourceforge.net'>http://quex.sourceforge.net</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>المؤلفون</a></h1>
+<p class="Pp">تمت كتابة re2py في الأصل بواسطة Peter Bumbulis (<i>peter@csg.uwaterloo.ca</i>) في عام 1993. قضى Marcus Boerger و Dan Nuffer عدة سنوات في تحويل الفكرة الأصلية إلى مولد أكواد جاهز للإنتاج. منذ ذلك الحين، تمت صيانته وتطويره بواسطة متطوعين متعددين، أبرزهم Brian Young (<i>bayoung@acm.org</i>)، <i>Marcus Boerger</i>، Dan Nuffer (<i>nuffer@users.sourceforge.net</i>)، <i>Ulya Trofimovich</i> (<i>skvadrik@gmail.com</i>)، <i>Serghei Iakovlev</i>، <i>Sergei Trofimovich</i>، <i>Petr Skocik</i>، <i>ligfx</i> <i>raekye</i> و <i>PolarGoose</i>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/re2c/">extra/re2c</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>4.3-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://re2c.org">https://re2c.org</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>LicenseRef-re2c</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/re2c/">/listing/extra/re2c/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#INTRODUCTION">مقدمة</a></li>
+        
+            <li><a href="#BASICS">الأساسيات</a></li>
+        
+            <li><a href="#HANDLING_THE_END_OF_INPUT">معالجة نهاية الإدخال</a></li>
+        
+            <li><a href="#BUFFER_REFILLING">إعادة ملء المخزن المؤقت</a></li>
+        
+            <li><a href="#FEATURES">الميزات</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/re2py.1.en.txt">txt</a>, 
+        
+            <a href="/man/re2py.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

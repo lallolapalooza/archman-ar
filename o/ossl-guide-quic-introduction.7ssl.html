@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ossl-guide-quic-introduction(7ssl) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">ossl-guide-quic-introduction(7ssl)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/openssl/">openssl</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">OSSL-GUIDE-QUIC-INTRODUCTION(7ssl)</td>
+    <td class="head-vol">OpenSSL</td>
+    <td class="head-rtitle">OSSL-GUIDE-QUIC-INTRODUCTION(7ssl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">ossl-guide-quic-introduction - دليل OpenSSL: مقدمة حول QUIC في OpenSSL</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>مقدمة</a></h1>
+<p class="Pp">ستقدم هذه الصفحة مقدمة لبعض مفاهيم QUIC الأساسية والخلفية وكيفية
+    استخدامها داخل OpenSSL. تفترض أن لديك فهمًا أساسيًا لـ UDP/IP والمقابس.
+    كما تفترض أنك على دراية ببعض أساسيات OpenSSL و TLS (انظر
+    <a href='/man/ossl-guide-libraries-introduction.7.en'>ossl-guide-libraries-introduction(7)</a> و
+    <a href='/man/ossl-guide-tls-introduction.7.en'>ossl-guide-tls-introduction(7)</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WHAT_IS_QUIC?'><a class='permalink' href='#WHAT_IS_QUIC?'>ما هو QUIC؟</a></h1>
+<p class="Pp">QUIC هو بروتوكول للأغراض العامة لتمكين التطبيقات من الاتصال بشكل
+    آمن عبر شبكة. تم تعريفه في RFC9000 (انظر
+    <a href='https://datatracker.ietf.org/doc/rfc9000/'>https://datatracker.ietf.org/doc/rfc9000/</a>). يدمج QUIC أجزاء من
+    بروتوكول TLS لإنشاء الاتصال ولكنه يحمي الحزم بشكل مستقل. يوفر ضمانات أمان
+    مماثلة لـ TLS مثل السرية والتكامل والمصادقة (انظر
+    <a href='/man/ossl-guide-tls-introduction.7.en'>ossl-guide-tls-introduction(7)</a>).</p>
+<p class="Pp">يقدم QUIC عددًا من المزايا:</p>
+<dl class="Bl-tag">
+  <dt id="Multiple"><a class="permalink" href="#Multiple">تدفقات متعددة</a></dt>
+  <dd>يدعم تدفقات متعددة من الاتصال (انظر &quot;تدفقات QUIC&quot; أدناه)، مما
+      يسمح لبروتوكولات التطبيقات المبنية على QUIC بإنشاء عدد تعسفي من تدفقات
+      البايتات للاتصال بين العميل والخادم. هذا يسمح لبروتوكول التطبيق بتجنب
+      المشاكل حيث يتم تأخير حزمة بيانات واحدة في انتظار تسليم حزمة أخرى
+      (يشار إليها عادةً باسم &quot;الانسداد في مقدمة الصف&quot;). كما أنه
+      يمكّن التطبيق من فتح تدفقات منطقية إضافية دون الحاجة إلى تبادل حزم ذهابًا
+      وإيابًا بين العميل والخادم كما هو مطلوب عند فتح اتصال TLS/TCP إضافي.</dd>
+  <dt id="HTTP/3"><a class="permalink" href="#HTTP/3">HTTP/3</a></dt>
+  <dd>نظرًا لأن QUIC هو أساس HTTP/3، فإن دعم QUIC يتيح أيضًا للتطبيقات استخدام
+      HTTP/3 باستخدام مكتبة خارجية مناسبة.</dd>
+  <dt id="Fast"><a class="permalink" href="#Fast">بدء اتصال سريع</a></dt>
+  <dd>ستوفر الإصدارات المستقبلية من OpenSSL دعمًا لبدء اتصال 0-RTT، مما
+      يسمح ببدء اتصال بخادم وإرسال بيانات التطبيق دون أي وقت انتظار. هذا مشابه
+      لوظيفة 0-RTT في TLS 1.3 ولكنه يتجنب أيضًا التبادل ذهابًا وإيابًا المطلوب
+      لفتح مقبس TCP؛ وبالتالي، فهو مشابه لمزيج من TLS 1.3 0-RTT و TCP Fast
+      Open.</dd>
+  <dt id="Connection"><a class="permalink" href="#Connection">ترحيل الاتصال</a></dt>
+  <dd>ستوفر الإصدارات المستقبلية من OpenSSL دعمًا لترحيل الاتصال، مما يسمح
+      للاتصالات بالبقاء سليمة عند تغيير عناوين IP.</dd>
+  <dt id="Datagram"><a class="permalink" href="#Datagram">حالات استخدام قائمة على Datagram</a></dt>
+  <dd>ستوفر الإصدارات المستقبلية من OpenSSL دعمًا لملحق QUIC datagram، مما
+      يسمح بدعم حالات استخدام TLS و DTLS على اتصال واحد.</dd>
+  <dt id="Implemented"><a class="permalink" href="#Implemented">مطبق كمكتبة تطبيقات</a></dt>
+  <dd>نظرًا لأن معظم تطبيقات QUIC، بما في ذلك تطبيق OpenSSL، يتم تطبيقها
+      كمكتبة تطبيقات بدلاً من نظام تشغيل، يمكن للتطبيق الاستفادة من QUIC دون
+      الحاجة إلى انتظار تحديث نظام التشغيل ليتم نشره. يمكن تقديم التطورات
+      والتحسينات المستقبلية لبروتوكول QUIC بسرعة قدر ما يمكن تحديث التطبيق دون
+      الاعتماد على دورة تحديث نظام التشغيل.</dd>
+  <dt id="Multiplexing"><a class="permalink" href="#Multiplexing">تعدد الإرسال عبر مقبس UDP واحد</a></dt>
+  <dd>نظرًا لأن QUIC يعتمد على UDP، فمن الممكن تعدد إرسال اتصال QUIC على
+      نفس مقبس UDP مثل بعض بروتوكولات UDP الأخرى، مثل RTP.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_TIME_BASED_EVENTS'><a class='permalink' href='#QUIC_TIME_BASED_EVENTS'>أحداث QUIC المستندة إلى الوقت</a></h1>
+<p class="Pp">يتمثل الاختلاف الرئيسي بين تطبيق TLS وتطبيق QUIC في OpenSSL في كيفية
+    معالجة الوقت. يتطلب بروتوكول QUIC إجراء إجراءات مختلفة بشكل منتظم بغض النظر
+    عما إذا كانت بيانات التطبيق تُرسل أو تُستقبل.</p>
+<p class="Pp">يقدم OpenSSL وظيفة جديدة <a href='/man/SSL_handle_events.3.en'>SSL_handle_events(3)</a>
+    والتي ستقوم تلقائيًا بمعالجة أي أحداث مستحقة متعلقة بالوقت يجب معالجتها.
+    بدلاً من ذلك، سيؤدي استدعاء أي وظيفة I/O مثل
+    <a href='/man/SSL_read_ex.3.en'>SSL_read_ex(3)</a> أو
+    <a href='/man/SSL_write_ex.3.en'>SSL_write_ex(3)</a> إلى معالجة هذه
+    الأحداث أيضًا. يوجد أيضًا
+    <a href='/man/SSL_get_event_timeout.3.en'>SSL_get_event_timeout(3)</a>
+    والتي تخبر التطبيق بالوقت المتبقي حتى يجب استدعاء
+    <a href='/man/SSL_handle_events.3.en'>SSL_handle_events(3)</a> (أو أي
+    وظيفة I/O).</p>
+<p class="Pp">لحسن الحظ، لا يحتاج التطبيق المتوقف الذي لا يترك اتصال QUIC
+    خاملًا، ويستدعي بانتظام وظائف I/O، عادةً إلى القلق بشأن هذا. ومع ذلك، إذا
+    كنت تقوم بتطوير تطبيق غير متوقف أو تطبيق قد يترك اتصال QUIC خاملًا لفترة
+    من الوقت، فستحتاج إلى ترتيب استدعاء هذه الوظائف.</p>
+<p class="Pp">يوفر OpenSSL &quot;وضع المساعدة الخيطية&quot; الاختياري والذي
+    سيقوم تلقائيًا بإنشاء خيط خلفي وسيستدعي بانتظام
+    <a href='/man/SSL_handle_events.3.en'>SSL_handle_events(3)</a> بطريقة
+    آمنة للخيوط. يوفر هذا طريقة بسيطة للتطبيق لتلبية متطلبات QUIC للأحداث
+    المستندة إلى الوقت دون الحاجة إلى تنفيذ منطق خاص لتحقيق ذلك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_AND_TLS'><a class='permalink' href='#QUIC_AND_TLS'>QUIC و TLS</a></h1>
+<p class="Pp">يعيد QUIC استخدام أجزاء من بروتوكول TLS في تطبيقه.
+    وبشكل خاص، يوجد أيضًا مصافحة TLS في QUIC. يتم تغليف رسائل مصافحة TLS في
+    رسائل بروتوكول QUIC لإرسالها إلى النظير. بمجرد اكتمال مصافحة TLS، يتم إرسال
+    جميع بيانات التطبيق بالكامل باستخدام رسائل بروتوكول QUIC دون استخدام TLS -
+    على الرغم من أنه قد لا تزال بعض رسائل مصافحة TLS تُرسل في بعض الظروف.</p>
+<p class="Pp">هذه العلاقة بين QUIC و TLS تعني أن العديد من وظائف API في OpenSSL
+    التي تنطبق على اتصالات TLS تنطبق أيضًا على اتصالات QUIC ويمكن للتطبيقات
+    استخدامها بنفس الطريقة تمامًا. بعض الوظائف لا تنطبق على QUIC على الإطلاق،
+    ولدى البعض الآخر دلالات معدلة. يجب عليك الرجوع إلى صفحات الوثائق لكل وظيفة
+    للحصول على معلومات حول كيفية تطبيقها على QUIC. عادةً، إذا لم يتم ذكر QUIC
+    في صفحات الدليل، فإن الوظائف تنطبق على كل من TLS و QUIC.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_STREAMS'><a class='permalink' href='#QUIC_STREAMS'>تدفقات QUIC</a></h1>
+<p class="Pp">يقدم QUIC مفهوم &quot;التدفقات&quot;. توفر التدفقات آلية
+    موثوقة لإرسال واستقبال بيانات التطبيق بين نقاط النهاية. يتم ضمان أن البايتات
+    المرسلة يتم استقبالها بنفس الترتيب الذي أُرسلت به دون أي فقدان للبيانات أو
+    إعادة ترتيب للبايتات. يكون لتطبيق TLS فعليًا تدفق واحد ثنائي الاتجاه
+    متاح له لكل اتصال TLS. يمكن لتطبيق QUIC أن يكون لديه تدفقات متعددة أحادية
+    الاتجاه أو ثنائية الاتجاه متاحة له لكل اتصال.</p>
+<p class="Pp">في OpenSSL، يتم استخدام كائن <b>SSL</b> لتمثيل كل من الاتصالات
+    والتدفقات. يقوم تطبيق QUIC بإنشاء كائن <b>SSL</b> أولي لتمثيل الاتصال
+    (يُعرف باسم كائن <b>SSL</b> للاتصال). بمجرد اكتمال الاتصال، يمكن إنشاء
+    كائنات <b>SSL</b> إضافية لتمثيل التدفقات (تُعرف باسم كائنات <b>SSL</b>
+    للتدفق). ما لم يتم تكوينه بشكل مختلف، يتم أيضًا ربط تدفق &quot;افتراضي&quot;
+    بكائن <b>SSL</b> للاتصال حتى تتمكن من كتابة البيانات وقراءتها منه. لا يمكن
+    استخدام بعض وظائف OpenSSL API إلا مع كائنات <b>SSL</b> للاتصال، وبعضها
+    يمكن استخدامه فقط مع كائنات <b>SSL</b> للتدفق. تحقق من الوثائق لكل وظيفة
+    لتأكيد نوع كائن <b>SSL</b> الذي يمكن استخدامه في أي سياق معين. يمكن استخدام
+    كائن <b>SSL</b> للاتصال الذي يحتوي على تدفق افتراضي مرفق به في السياقات
+    التي تتطلب كائن <b>SSL</b> للاتصال أو في السياقات التي تتطلب كائن <b>SSL</b>
+    للتعامل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SOCKETS_AND_BLOCKING'><a class='permalink' href='#SOCKETS_AND_BLOCKING'>المقابس والتعليق</a></h1>
+<p class="Pp">يفترض TLS دلالات من نوع &quot;التدفق&quot; لبروتوكول طبقة النقل
+    الأساسي الخاص به (يتم تحقيقه عادةً باستخدام TCP). ومع ذلك، يفترض QUIC
+    دلالات من نوع &quot;datagram&quot; عن طريق استخدام UDP. يكون تطبيق OpenSSL
+    الذي يستخدم QUIC مسؤولاً عن إنشاء BIO لتمثيل طبقة النقل الأساسية. يجب أن
+    يدعم هذا BIO datagrams وهو عادةً
+    <a href='/man/BIO_s_datagram.3.en'>BIO_s_datagram(3)</a>، ولكن هناك خيارات
+    <b>BIO</b> أخرى متاحة.</p>
+</div>
+</section>
+
+                
+            </article>
+            <article id="content-right">
+                <nav id="man-page-toc">
+                    <h2>Table of Contents</h2>
+                    <ul>
+                        <li><a href="#NAME">NAME</a></li>
+                        <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+                        <li><a href="#WHAT_IS_QUIC?">WHAT IS QUIC?</a></li>
+                        <li><a href="#QUIC_TIME_BASED_EVENTS">QUIC TIME BASED EVENTS</a></li>
+                        <li><a href="#QUIC_AND_TLS">QUIC AND TLS</a></li>
+                        <li><a href="#QUIC_STREAMS">QUIC STREAMS</a></li>
+                        <li><a href="#SOCKETS_AND_BLOCKING">SOCKETS AND BLOCKING</a></li>
+                    </ul>
+                </nav>
+            </article>
+        </main>
+    </body>
+</html>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>ossl-guide-quic-introduction(7) — Arch Linux</title>
+        
+        <link rel="canonical" href="/man/ossl-guide-quic-introduction.7.en">
+    </head>
+    <body>
+        
+        <main>
+            <article>
+                
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Nd">ossl-guide-quic-introduction - مقدمة إلى QUIC في OpenSSL</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>INTRODUCTION</a></h1>
+<p class="Pp">This is a guide to using OpenSSL to implement the QUIC protocol.
+    It is intended for developers who want to integrate QUIC into their
+    applications. The guide covers the basic concepts of QUIC and how to use
+    OpenSSL's QUIC implementation.</p>
+<p class="Pp">This guide assumes some familiarity with the OpenSSL library and
+    the TLS protocol. For more information on these topics, please refer to the
+    relevant OpenSSL documentation.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='WHAT_IS_QUIC?'><a class='permalink' href='#WHAT_IS_QUIC?'>WHAT IS QUIC?</a></h1>
+<p class="Pp">QUIC is a new transport layer network protocol developed by Google
+    and now standardized by the IETF. It is designed to improve the performance
+    of the web by reducing latency and improving connection establishment time.
+    QUIC is built on top of UDP and uses TLS 1.3 for encryption.</p>
+<p class="Pp">Key features of QUIC include:</p>
+<ul class="Bl-1">
+  <li>
+    <p class="Ib">Reduced connection establishment latency:</p>
+    <p class="Ip-1">QUIC aims to achieve 0-RTT or 1-RTT connection establishment,
+        which is faster than TLS over TCP.</p>
+  </li>
+  <li>
+    <p class="Ib">Improved congestion control:</p>
+    <p class="Ip-1">QUIC implements its own congestion control mechanisms, which
+        are designed to be more efficient and adaptive than traditional TCP
+        congestion control.</p>
+  </li>
+  <li>
+    <p class="Ib">Connection migration:</p>
+    <p class="Ip-1">QUIC connections are identified by a connection ID, which
+        allows them to survive changes in the underlying IP address or port.
+        This is useful for mobile devices that switch between Wi-Fi and cellular
+        networks.</p>
+  </li>
+  <li>
+    <p class="Ib">Multiplexing without head-of-line blocking:</p>
+    <p class="Ip-1">QUIC allows multiple streams of data to be sent over a single
+        connection without head-of-line blocking. This means that a lost packet
+        on one stream does not affect the delivery of data on other streams.</p>
+  </li>
+  <li>
+    <p class="Ib">Built on UDP:</p>
+    <p class="Ip-1">QUIC runs over UDP, which allows it to bypass some of the
+        limitations of TCP, such as head-of-line blocking and the need for
+        kernel-level support.</p>
+  </li>
+  <li>
+    <p class="Ib">Mandatory TLS 1.3 encryption:</p>
+    <p class="Ip-1">All QUIC traffic is encrypted using TLS 1.3, which provides
+        strong security guarantees.</p>
+  </li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_TIME_BASED_EVENTS'><a class='permalink' href='#QUIC_TIME_BASED_EVENTS'>QUIC TIME BASED EVENTS</a></h1>
+<p class="Pp">Unlike TLS, which is a protocol that operates on top of TCP, QUIC is
+    a protocol that operates directly on top of UDP. This means that QUIC is
+    responsible for implementing its own mechanisms for handling events that are
+    time-based, such as packet retransmission and connection timeouts.</p>
+<p class="Pp">OpenSSL's QUIC implementation provides a number of functions that
+    allow you to interact with these time-based events. For example, you can use
+    the <a href='/man/SSL_handle_events.3.en'>SSL_handle_events(3)</a> function to
+    process any pending events, such as expired timers or incoming packets.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_AND_TLS'><a class='permalink' href='#QUIC_AND_TLS'>QUIC AND TLS</a></h1>
+<p class="Pp">QUIC uses TLS 1.3 for encryption and authentication. The OpenSSL
+    QUIC implementation integrates with the OpenSSL TLS library, allowing you to
+    use your existing TLS knowledge and infrastructure.</p>
+<p class="Pp">Key aspects of the QUIC and TLS integration include:</p>
+<ul class="Bl-1">
+  <li>
+    <p class="Ib">TLS handshake:</p>
+    <p class="Ip-1">The TLS handshake is performed as part of the QUIC connection
+        establishment. OpenSSL's QUIC implementation handles the TLS handshake
+        automatically.</p>
+  </li>
+  <li>
+    <p class="Ib">Encryption and decryption:</p>
+    <p class="Ip-1">Once the TLS handshake is complete, all QUIC traffic is
+        encrypted and decrypted using TLS 1.3.</p>
+  </li>
+  <li>
+    <p class="Ib">Session resumption:</p>
+    <p class="Ip-1">QUIC supports session resumption, which allows clients to
+        re-establish connections quickly without performing a full TLS handshake.
+        OpenSSL's QUIC implementation supports session resumption.</p>
+  </li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='QUIC_STREAMS'><a class='permalink' href='#QUIC_STREAMS'>QUIC STREAMS</a></h1>
+<p class="Pp">QUIC allows multiple streams of data to be sent over a single
+    connection. This feature, known as multiplexing, helps to improve performance
+    by reducing head-of-line blocking. OpenSSL's QUIC implementation provides
+    functions for creating, managing, and reading from and writing to QUIC
+    streams.</p>
+<p class="Pp">You can use the <a href='/man/SSL_new_stream.3.en'>SSL_new_stream(3)</a>
+    function to create a new stream, and the <a href='/man/SSL_read_ex.3.en'>SSL_read_ex(3)</a>
+    and <a href='/man/SSL_write_ex.3.en'>SSL_write_ex(3)</a> functions to read from
+    and write to streams.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SOCKETS_AND_BLOCKING'><a class='permalink' href='#SOCKETS_AND_BLOCKING'>SOCKETS AND BLOCKING</a></h1>
+<p class="Pp">A significant difference between OpenSSL TLS applications and
+    OpenSSL QUIC applications is the way that blocking is implemented. In TLS if
+    your application expects blocking behaviour then you configure the
+    underlying socket for blocking. Conversely if your application wants
+    nonblocking behaviour then the underlying socket is configured to be
+    nonblocking.</p>
+<p class="Pp">With an OpenSSL QUIC application the underlying socket must always
+    be configured to be nonblocking. Howevever the <b>SSL</b> object will, by
+    default, still operate in blocking mode. So, from an application's
+    perspective, calls to functions such as <a href='/man/SSL_read_ex.3.en'>SSL_read_ex(3)</a>,
+    <a href='/man/SSL_write_ex.3.en'>SSL_write_ex(3)</a> and other I/O functions will still block. OpenSSL
+    itself provides that blocking capability for QUIC instead of the socket. If
+    nonblocking behaviour is desired then the application must call
+    <a href='/man/SSL_set_blocking_mode.3.en'>SSL_set_blocking_mode(3)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FURTHER_READING'><a class='permalink' href='#FURTHER_READING'>FURTHER   READING</a></h1>
+<p class="Pp">See <a href='/man/ossl-guide-quic-client-block.7.en'>ossl-guide-quic-client-block(7)</a> to see an example of
+    applying these concepts in order to write a simple blocking QUIC client.</p>
+<p class="Pp">See <a href='/man/ossl-guide-quic-server-block.7.en'>ossl-guide-quic-server-block(7)</a> to see an example of
+    applying these concepts in order to write a simple blocking QUIC server.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/ossl-guide-introduction.7.en'>ossl-guide-introduction(7)</a>,
+    <a href='/man/ossl-guide-libraries-introduction.7.en'>ossl-guide-libraries-introduction(7)</a>,
+    <a href='/man/ossl-guide-libssl-introduction.7.en'>ossl-guide-libssl-introduction(7)</a>,
+    <a href='/man/ossl-guide-tls-introduction.7.en'>ossl-guide-tls-introduction(7)</a>,
+    <a href='/man/ossl-guide-tls-client-block.7.en'>ossl-guide-tls-client-block(7)</a>,
+    <a href='/man/ossl-guide-quic-client-block.7.en'>ossl-guide-quic-client-block(7)</a>,
+    <a href='/man/ossl-guide-quic-client-non-block.7.en'>ossl-guide-quic-client-non-block(7)</a>,
+    <a href='/man/ossl-guide-quic-multi-stream.7.en'>ossl-guide-quic-multi-stream(7)</a>,
+    <a href='/man/ossl-guide-quic-server-block.7.en'>ossl-guide-quic-server-block(7)</a>,
+    <a href='/man/ossl-guide-quic-server-non-block.7.en'>ossl-guide-quic-server-non-block(7)</a>, <a href='/man/bio.7.en'>bio(7)</a>,</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>COPYRIGHT</a></h1>
+<p class="Pp">Copyright 2023-2025 The OpenSSL Project Authors. All Rights
+    Reserved.</p>
+<p class="Pp">Licensed under the Apache License 2.0 (the &quot;License&quot;).
+    You may not use this file except in compliance with the License. You can
+    obtain a copy in the file LICENSE in the source distribution or at
+    <a href='https://www.openssl.org/source/license.html'>https://www.openssl.org/source/license.html</a>.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-01</td>
+    <td class="foot-os">3.6.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/openssl/">core/openssl</a></dd>
+        <dt>Version:</dt>
+        <dd>3.6.0-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://www.openssl.org">https://www.openssl.org</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/openssl/">/listing/core/openssl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#WHAT_IS_QUIC?">WHAT IS QUIC?</a></li>
+        
+            <li><a href="#QUIC_TIME_BASED_EVENTS">QUIC TIME BASED EVENTS</a></li>
+        
+            <li><a href="#QUIC_AND_TLS">QUIC AND TLS</a></li>
+        
+            <li><a href="#QUIC_STREAMS">QUIC STREAMS</a></li>
+        
+            <li><a href="#SOCKETS_AND_BLOCKING">SOCKETS AND BLOCKING</a></li>
+        
+            <li><a href="#FURTHER_READING">FURTHER READING</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/ossl-guide-quic-introduction.7ssl.en.txt">txt</a>, 
+        
+            <a href="/man/ossl-guide-quic-introduction.7ssl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

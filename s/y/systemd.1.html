@@ -1,0 +1,361 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">systemd(1)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id='MEMORY_MANAGEMENT'><a class='permalink' href='#MEMORY_MANAGEMENT'>إدارة الذاكرة</a></h1>
+<p class="Pp">عندما لا توجد عمليات مطلوبة لوحدة، يتم إلغاء تحميلها من الذاكرة.
+    بشكل خاص، الوحدات الوحيدة التي يتم الاحتفاظ بها محملة في الذاكرة هي تلك التي
+    تتحقق فيها حالة واحدة على الأقل مما يلي:</p>
+<div class="Bd-indent"> 1. إنها في حالة نشطة، أو يتم تنشيطها، أو يتم إلغاء تنشيطها، أو فشلت
+  (أي في أي حالة وحدة بخلاف &quot;غير نشطة&quot;)</div>
+<div class="Bd-indent"> 2. توجد مهمة في قائمة انتظار لها</div>
+<div class="Bd-indent"> 3. إنها تبعية لوحدة واحدة أخرى على الأقل محملة في الذاكرة</div>
+<div class="Bd-indent"> 4. لديها شكل من أشكال الموارد لا تزال مخصصة لها (على سبيل المثال، وحدة خدمة غير نشطة ولكن لا يزال هناك عملية عالقة تجاهلت طلب إنهاءها)</div>
+<div class="Bd-indent"> 5. تم تثبيتها في الذاكرة برمجيًا عبر استدعاء D-Bus</div>
+<p class="Pp">سيقوم systemd بتحميل الوحدات من القرص تلقائيًا وضمنيًا
+    — إذا لم تكن محملة بعد — بمجرد طلب العمليات لها. وبالتالي، في العديد من
+    النواحي، حقيقة ما إذا كانت الوحدة محملة أم لا غير مرئية للعملاء. استخدم
+    <b>systemctl list-units --all</b> لسرد جميع الوحدات المحملة حاليًا بشكل شامل.
+    سيتم إلغاء تحميل أي وحدة لا تنطبق عليها أي من الشروط المذكورة أعلاه على
+    الفور. لاحظ أنه عندما يتم إلغاء تحميل وحدة من الذاكرة، يتم أيضًا مسح بيانات
+    المحاسبة الخاصة بها. ومع ذلك، لا يتم فقدان هذه البيانات بشكل عام، حيث يتم
+    إنشاء سجل في مفكرة الإدخالات (journal) يعلن عن الموارد المستهلكة كلما توقفت
+    وحدة عن العمل.</p>
+<p class="Pp">توضع العمليات التي يقوم systemd بإنشائها في مجموعات تحكم Linux
+    فردية مسماة باسم الوحدة التي تنتمي إليها في التسلسل الهرمي الخاص بـ systemd.
+    (انظر <b>مجموعات التحكم v2</b> [4] لمزيد من المعلومات حول مجموعات التحكم،
+    أو اختصارًا &quot;cgroups&quot;). يستخدم systemd هذا لتتبع العمليات بفعالية.
+    تتم صيانة معلومات مجموعة التحكم في النواة، ويمكن الوصول إليها عبر التسلسل
+    الهرمي لنظام الملفات (تحت /sys/fs/cgroup/)، أو في أدوات مثل
+    <a href='/man/systemd-cgls.1.en'>systemd-cgls(1)</a> أو
+    <a href='/man/ps.1.en'>ps(1)</a> (<b>ps xawf -eo pid,user,cgroup,args</b> مفيد بشكل خاص لسرد جميع العمليات ووحدات systemd التي تنتمي إليها.).</p>
+<p class="Pp">systemd متوافق مع وظائف Unix المختلفة الراسخة مثل /etc/fstab أو
+    قاعدة بيانات utmp.</p>
+<p class="Pp">يمتلك systemd نظام معاملات صغير: إذا طُلب من وحدة البدء أو
+    الإيقاف، فسيضيفها هي وجميع تبعياتها إلى معاملة مؤقتة. بعد ذلك، سيتحقق مما إذا
+    كانت المعاملة متسقة (أي ما إذا كان ترتيب جميع الوحدات خاليًا من الدورات).
+    إذا لم يكن كذلك، سيحاول systemd إصلاحه، ويزيل المهام غير الأساسية من
+    المعاملة التي قد تزيل الدورة. أيضًا، يحاول systemd قمع المهام غير الأساسية
+    في المعاملة التي ستوقف خدمة قيد التشغيل. أخيرًا، يتم التحقق مما إذا كانت
+    مهام المعاملة تتعارض مع المهام التي تم وضعها بالفعل في قائمة الانتظار،
+    ويتم اختياريًا إلغاء المعاملة عندئذٍ. إذا سار كل شيء بشكل صحيح وكانت
+    المعاملة متسقة وتم تقليل تأثيرها، فسيتم دمجها مع جميع المهام المعلقة بالفعل
+    وإضافتها إلى قائمة الانتظار التشغيلية. هذا يعني فعليًا أنه قبل تنفيذ عملية
+    مطلوبة، سيتحقق systemd من أنها منطقية، ويصلحها إذا أمكن، ويفشل فقط إذا لم
+    يكن من الممكن حقًا العمل.</p>
+<p class="Pp">لاحظ أن المعاملات يتم إنشاؤها بشكل مستقل عن حالة الوحدة في وقت
+    التشغيل، وبالتالي، على سبيل المثال، إذا طُلب تشغيل مهمة على وحدة تم
+    تشغيلها بالفعل، فستظل تنشئ معاملة وتوقظ أي تبعيات غير نشطة (وتسبب انتشار
+    مهام أخرى وفقًا للعلاقات المحددة). هذا لأن المهمة المدرجة في قائمة الانتظار
+    يتم مقارنتها في وقت التنفيذ بحالة الوحدة المستهدفة ويتم تمييزها على أنها ناجحة
+    وكاملة عندما يفي كلاهما. ومع ذلك، تسحب هذه المهمة أيضًا تبعيات أخرى بسبب
+    العلاقات المحددة وبالتالي تؤدي، في مثالنا، إلى وضع مهام بدء تشغيل لأي من
+    تلك الوحدات غير النشطة في قائمة الانتظار أيضًا.</p>
+<p class="Pp">قد يتم إنشاء الوحدات ديناميكيًا عند بدء التشغيل وإعادة تحميل مدير
+    النظام، على سبيل المثال بناءً على ملفات تكوين أخرى أو معلمات تم تمريرها في
+    سطر أوامر النواة. للحصول على التفاصيل، انظر
+    <a href='/man/systemd.generator.7.en'>systemd.generator(7)</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DIRECTORIES'><a class='permalink' href='#DIRECTORIES'>الدلائل</a></h1>
+<p class="Pp">دلائل وحدات النظام</p>
+<div class="Bd-indent">يقرأ مدير نظام systemd تكوينات الوحدات من دلائل مختلفة.
+  يجب على الحزم التي ترغب في تثبيت ملفات الوحدات وضعها في الدليل الذي يتم
+  إرجاعه بواسطة <b>pkg-config systemd --variable=systemdsystemunitdir</b>.
+  الدلائل الأخرى التي يتم فحصها هي /usr/local/lib/systemd/system و
+  /usr/lib/systemd/system. التكوين الخاص بالمستخدم له الأسبقية دائمًا.
+  <b>pkg-config systemd --variable=systemdsystemconfdir</b> يعيد مسار دليل
+  تكوين النظام. يجب على الحزم تعديل محتوى هذه الدلائل فقط باستخدام أوامر
+  <b>enable</b> و <b>disable</b> من أداة
+  <a href='/man/systemctl.1.en'>systemctl(1)</a>. يتم توفير قائمة كاملة بالدلائل في
+  <a href='/man/systemd.unit.5.en'>systemd.unit(5)</a>.</div>
+<p class="Pp">دلائل وحدات المستخدم</p>
+<div class="Bd-indent">تنطبق قواعد مماثلة على دلائل وحدات المستخدم. ومع
+  ذلك، هنا يتم اتباع <b>مواصفات دليل XDG الأساسي</b> [5] للعثور على
+  الوحدات. يجب على التطبيقات وضع ملفات وحداتها في الدليل الذي يتم إرجاعه بواسطة
+  <b>pkg-config systemd --variable=systemduserunitdir</b>. يتم إجراء التكوين
+  العام في الدليل الذي يتم الإبلاغ عنه بواسطة <b>pkg-config systemd
+  --variable=systemduserconfdir</b>. يمكن لأوامر <b>enable</b> و <b>disable</b>
+  من أداة <a href='/man/systemctl.1.en'>systemctl(1)</a> التعامل مع التمكين/عدم التمكين
+  للوحدات العامة (أي لجميع المستخدمين) والخاصة (لمستخدم واحد). يتم توفير قائمة
+  كاملة بالدلائل في
+  <a href='/man/systemd.unit.5.en'>systemd.unit(5)</a>.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SIGNALS'><a class='permalink' href='#SIGNALS'>الإشارات</a></h1>
+<p class="Pp">تستمع الخدمة إلى إشارات عمليات UNIX مختلفة يمكن استخدامها لطلب
+    إجراءات مختلفة بشكل غير متزامن. يتم تمكين معالجة الإشارات في وقت مبكر جدًا
+    أثناء التمهيد، قبل استدعاء أي عمليات أخرى. ومع ذلك، يجب على مدير حاوية
+    مشرف أو ما شابه ذلك الذي ينوي طلب هذه العمليات عبر هذه الآلية أن يأخذ في
+    الاعتبار أن هذه الوظيفة غير متاحة أثناء مرحلة التهيئة المبكرة. يتم إصدار
+    رسالة إخطار <b>sd_notify()</b> تحمل الحقل <i>X_SYSTEMD_SIGNALS_LEVEL=2</i>
+    بمجرد تمكين معالجات الإشارات، انظر أدناه. يمكن استخدام هذا لجدولة تقديم
+    هذه الإشارات بشكل صحيح.</p>
+<p class="Pp"><b>SIGTERM</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، يقوم مدير نظام systemd
+  بتسلسل حالته، ويعيد تنفيذ نفسه، ويعيد فك تسلسل الحالة المحفوظة مرة أخرى.
+  هذا يعادل إلى حد كبير <b>systemctl daemon-reexec</b>.
+<p class="Pp">سيبدأ مديرو مستخدمي systemd وحدة exit.target عند تلقي هذه
+    الإشارة. هذا يعادل إلى حد كبير <b>systemctl --user start
+    exit.target --job-mode=replace-irreversibly</b>.</p>
+</div>
+<p class="Pp"><b>SIGINT</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيقوم مدير نظام systemd
+  بتشغيل وحدة ctrl-alt-del.target. هذا يعادل إلى حد كبير
+  <b>systemctl start ctrl-alt-del.target --job-mode=replace-irreversibly</b>.
+  إذا تم تلقي هذه الإشارة أكثر من 7 مرات لكل 2 ثانية، يتم تشغيل إعادة تشغيل
+  فورية. لاحظ أن الضغط على Ctrl+Alt+Del على وحدة التحكم سيؤدي إلى تشغيل هذه
+  الإشارة. لذلك، إذا كانت إعادة التشغيل معلقة، فإن الضغط على Ctrl+Alt+Del أكثر
+  من 7 مرات في ثانيتين هو طريقة آمنة نسبيًا لتشغيل إعادة تشغيل فورية.
+<p class="Pp">يتعامل مديرو مستخدمي systemd مع هذه الإشارة بنفس طريقة
+    <b>SIGTERM</b>.</p>
+</div>
+<p class="Pp"><b>SIGWINCH</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيقوم مدير نظام systemd
+  بتشغيل وحدة kbrequest.target. هذا يعادل إلى حد كبير
+  <b>systemctl start kbrequest.target</b>.
+<p class="Pp">يتم تجاهل هذه الإشارة بواسطة مديري مستخدمي systemd.</p>
+</div>
+<p class="Pp"><b>SIGPWR</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيقوم مدير systemd بتشغيل وحدة
+  sigpwr.target. هذا يعادل إلى حد كبير <b>systemctl start
+  sigpwr.target</b>.</div>
+<p class="Pp"><b>SIGUSR1</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيحاول مدير systemd إعادة
+  الاتصال بحافلة D-Bus.</div>
+<p class="Pp"><b>SIGUSR2</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيقوم مدير systemd بتسجيل حالته
+  الكاملة بشكل قابل للقراءة. البيانات المسجلة هي نفسها التي تطبعها
+  <b>systemd-analyze dump</b>.</div>
+<p class="Pp"><b>SIGHUP</b></p>
+<div class="Bd-indent">يعيد تحميل تكوين العميل بالكامل. هذا يعادل إلى حد كبير
+  <b>systemctl daemon-reload</b>.</div>
+<p class="Pp"><b>SIGRTMIN+0</b></p>
+<div class="Bd-indent">يدخل الوضع الافتراضي، ويبدأ وحدة default.target. هذا يعادل
+  إلى حد كبير <b>systemctl isolate default.target</b>.</div>
+<p class="Pp"><b>SIGRTMIN+1</b></p>
+<div class="Bd-indent">يدخل وضع الإنقاذ، ويبدأ وحدة rescue.target. هذا يعادل إلى
+  حد كبير <b>systemctl isolate rescue.target</b>.</div>
+<p class="Pp"><b>SIGRTMIN+2</b></p>
+<div class="Bd-indent">يدخل وضع الطوارئ، ويبدأ خدمة emergency.service. هذا يعادل
+  إلى حد كبير <b>systemctl isolate emergency.service</b>.</div>
+<p class="Pp"><b>SIGRTMIN+3</b></p>
+<div class="Bd-indent">يوقف تشغيل الجهاز، ويبدأ وحدة halt.target. هذا يعادل إلى
+  حد كبير <b>systemctl start halt.target --job-mode=replace-irreversibly</b>.</div>
+<p class="Pp"><b>SIGRTMIN+4</b></p>
+<div class="Bd-indent">يغلق الجهاز، ويبدأ وحدة poweroff.target. هذا يعادل إلى حد
+  كبير <b>systemctl start poweroff.target --job-mode=replace-irreversibly</b>.</div>
+<p class="Pp"><b>SIGRTMIN+5</b></p>
+<div class="Bd-indent">يعيد تشغيل الجهاز، ويبدأ وحدة reboot.target. هذا يعادل إلى
+  حد كبير <b>systemctl start reboot.target --job-mode=replace-irreversibly</b>.</div>
+<p class="Pp"><b>SIGRTMIN+6</b></p>
+<div class="Bd-indent">يعيد تشغيل الجهاز عبر kexec، ويبدأ وحدة kexec.target. هذا
+  يعادل إلى حد كبير <b>systemctl start kexec.target
+  --job-mode=replace-irreversibly</b>.</div>
+<p class="Pp"><b>SIGRTMIN+7</b></p>
+<div class="Bd-indent">يعيد تشغيل مساحة المستخدم، ويبدأ وحدة soft-reboot.target.
+  هذا يعادل إلى حد كبير <b>systemctl start soft-reboot.target
+  --job-mode=replace-irreversibly</b>.
+<p class="Pp">تمت الإضافة في الإصدار 254.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+13</b></p>
+<div class="Bd-indent">يوقف تشغيل الجهاز فورًا.</div>
+<p class="Pp"><b>SIGRTMIN+14</b></p>
+<div class="Bd-indent">يغلق الجهاز فورًا.</div>
+<p class="Pp"><b>SIGRTMIN+15</b></p>
+<div class="Bd-indent">يعيد تشغيل الجهاز فورًا.</div>
+<p class="Pp"><b>SIGRTMIN+16</b></p>
+<div class="Bd-indent">يعيد تشغيل الجهاز فورًا باستخدام kexec.</div>
+<p class="Pp"><b>SIGRTMIN+17</b></p>
+<div class="Bd-indent">يعيد تشغيل مساحة المستخدم فورًا.
+<p class="Pp">تمت الإضافة في الإصدار 254.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+20</b></p>
+<div class="Bd-indent">يمكّن عرض رسائل الحالة على وحدة التحكم، كما يتم التحكم
+    فيها عبر <i>systemd.show_status=1</i> على سطر أوامر النواة.
+<p class="Pp">قد ترغب في استخدام <b>SetShowStatus()</b> بدلاً من
+    <b>SIGRTMIN+20</b> لمنع حالات السباق. انظر
+    <a href='/man/org.freedesktop.systemd1.5.en'>org.freedesktop.systemd1(5)</a>.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+21</b></p>
+<div class="Bd-indent">يعطّل عرض رسائل الحالة على وحدة التحكم، كما يتم التحكم
+    فيها عبر <i>systemd.show_status=0</i> على سطر أوامر النواة.
+<p class="Pp">قد ترغب في استخدام <b>SetShowStatus()</b> بدلاً من
+    <b>SIGRTMIN+21</b> لمنع ظروف السباق. انظر
+    <a href='/man/org.freedesktop.systemd1.5.en'>org.freedesktop.systemd1(5)</a>.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+22</b></p>
+<div class="Bd-indent">يضبط مستوى تسجيل مدير الخدمة على
+  "debug" ، بطريقة تعادل
+  <i>systemd.log_level=debug</i>
+  على سطر أوامر النواة.</div>
+<p class="Pp"><b>SIGRTMIN+23</b></p>
+<div class="Bd-indent">يستعيد مستوى التسجيل إلى قيمته المكونة. يتم اشتقاق القيمة المكونة
+  من — حسب ترتيب الأولوية —
+  القيمة المحددة بـ <i>systemd.log-level=</i> على سطر أوامر النواة، أو
+  القيمة المحددة بـ <b>LogLevel=</b> في ملف التكوين، أو
+  القيمة الافتراضية المضمنة "info".
+<p class="Pp">تمت الإضافة في الإصدار 239.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+24</b></p>
+<div class="Bd-indent">يخرج المدير فورًا (متاح فقط للمثيلات --user).
+<p class="Pp">تمت الإضافة في الإصدار 195.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+25</b></p>
+<div class="Bd-indent">عند تلقي هذه الإشارة، سيعيد مدير systemd تنفيذ نفسه. هذا يعادل تقريبًا
+  **systemctl daemon-reexec** باستثناء أنه سيتم ذلك بشكل غير متزامن.
+<p class="Pp">يعامل مدير نظام systemd هذه الإشارة بنفس طريقة
+    **SIGTERM**.
+<p class="Pp">تمت الإضافة في الإصدار 250.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+26</b></p>
+<div class="Bd-indent">يستعيد هدف التسجيل إلى قيمته المكونة. يتم اشتقاق القيمة المكونة
+  من — حسب ترتيب الأولوية —
+  القيمة المحددة بـ <i>systemd.log-target=</i> على سطر أوامر النواة، أو
+  القيمة المحددة بـ <b>LogTarget=</b> في ملف التكوين، أو
+  القيمة الافتراضية المضمنة.
+<p class="Pp">تمت الإضافة في الإصدار 239.</p>
+</div>
+<p class="Pp"><b>SIGRTMIN+27</b>، **SIGRTMIN+28**</p>
+<div class="Bd-indent">يضبط هدف التسجيل على "console" لـ
+  **SIGRTMIN+27** (أو "kmsg" لـ **SIGRTMIN+28**)، بطريقة تعادل
+  <i>systemd.log_target=console</i> (أو
+  <i>systemd.log_target=kmsg</i> لـ **SIGRTMIN+28**) على سطر أوامر النواة.
+<p class="Pp">تمت الإضافة في الإصدار 239.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>بيئة العمل</a></h1>
+<p class="Pp">يتم تعيين كتلة بيئة العمل لمدير النظام مبدئيًا بواسطة
+    النواة. (على وجه الخصوص، يتم تحويل تعيينات "key=value" على سطر أوامر النواة
+    إلى متغيرات بيئة لـ PID 1). بالنسبة لمدير المستخدم، يقوم مدير النظام بتعيين
+    البيئة كما هو موضح في قسم "متغيرات البيئة في العمليات المنبثقة" من
+    <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a>. ينطبق إعداد
+    <i>DefaultEnvironment=</i> في مدير النظام على جميع الخدمات بما في ذلك
+    user@.service. قد يتم تكوين إدخالات إضافية (كما هو الحال لأي خدمة أخرى) من
+    خلال إعدادات <i>Environment=</i> و <i>EnvironmentFile=</i> لـ
+    user@.service (انظر <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a>). أيضًا، قد يتم تعيين متغيرات بيئة
+    إضافية من خلال إعداد <i>ManagerEnvironment=</i> في
+    <a href='/man/systemd-system.conf.5.en'>systemd-system.conf(5)</a> و <a href='/man/systemd-user.conf.5.en'>systemd-user.conf(5)</a>.</p>
+<p class="Pp">بعض المتغيرات التي يفهمها <b>systemd</b>:</p>
+<p class="Pp"><i>$SYSTEMD_LOG_LEVEL</i></p>
+<div class="Bd-indent">أقصى مستوى تسجيل للرسائل المنبعثة (سيتم كبت الرسائل ذات مستوى التسجيل الأعلى، أي الأقل أهمية). تأخذ قائمة قيم مفصولة بفواصل. قد تكون القيمة إما واحدة من (حسب ترتيب الأهمية المتناقصة)
+    <b>emerg</b>، <b>alert</b>، <b>crit</b>، <b>err</b>،
+    <b>warning</b>، <b>notice</b>، <b>info</b>، <b>debug</b>، أو عدد صحيح في النطاق 0...7. انظر <a href='/man/syslog.3.en'>syslog(3)</a> لمزيد من المعلومات. قد يتم مسبوق كل قيمة اختياريًا بأحد
+    <b>console</b>، <b>syslog</b>، <b>kmsg</b> أو <b>journal</b> متبوعة بنقطتين لتعيين أقصى مستوى تسجيل لهذا الهدف المحدد للتسجيل (على سبيل المثال،
+    **SYSTEMD_LOG_LEVEL=debug,console:info** يحدد تسجيل مستوى التصحيح باستثناء عند التسجيل إلى وحدة التحكم الذي يجب أن يكون عند مستوى المعلومات). لاحظ أن الحد الأقصى العالمي لمستوى التسجيل له الأسبقية على أي مستويات تسجيل قصوى خاصة بالهدف.
+<p class="Pp">يمكن تجاوز هذا باستخدام <b>--log-level=</b>.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_COLOR</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، فسيتم تلوين الرسائل المكتوبة إلى tty
+    وفقًا للأولوية.
+<p class="Pp">يمكن تجاوز هذا باستخدام <b>--log-color=</b>.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TIME</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، فسيتم مسبوق رسائل تسجيل وحدة التحكم
+    بختم زمني.
+<p class="Pp">يمكن تجاوز هذا باستخدام <b>--log-time=</b>.</p>
+<p class="Pp">تمت الإضافة في الإصدار 246.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_LOCATION</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، فسيتم مسبوق الرسائل بملف المصدر ورقم السطر
+    الذي تنشأ منه الرسالة.
+<p class="Pp">يمكن تجاوز هذا باستخدام <b>--log-location=</b>.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TID</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، فسيتم مسبوق الرسائل بمعرف الخيط (TID) الرقمي الحالي.
+<p class="Pp">تمت الإضافة في الإصدار 247.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TARGET</i></p>
+<div class="Bd-indent">وجهة رسائل السجل. أحد الخيارات التالية: <b>console</b>
+    (السجل إلى tty المتصل)، <b>console-prefixed</b> (السجل إلى tty المتصل ولكن مع
+    بادئات تشفر مستوى التسجيل و "المرفق"، انظر <a href='/man/syslog.3.en'>syslog(3)</a>، <b>kmsg</b> (السجل إلى مخزن سجل النواة الدائري)،
+    <b>journal</b> (السجل إلى journal)، <b>journal-or-kmsg</b> (السجل إلى journal إذا كان متاحًا، وإلى kmsg بخلاف ذلك)،
+    <b>auto</b> (تحديد هدف التسجيل المناسب تلقائيًا، وهو الافتراضي)، <b>null</b> (تعطيل إخراج السجل).
+<p class="Pp">يمكن تجاوز هذا باستخدام <b>--log-target=</b>.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_RATELIMIT_KMSG</i></p>
+<div class="Bd-indent">ما إذا كان سيتم تحديد معدل kmsg أم لا. تأخذ قيمة منطقية.
+    الافتراضي هو "true". إذا تم تعطيله، فلن يقوم systemd بتحديد معدل الرسائل
+    المكتوبة إلى kmsg.
+<p class="Pp">تمت الإضافة في الإصدار 254.</p>
+</div>
+<p class="Pp"><i>$XDG_CONFIG_HOME</i>، <i>$XDG_CONFIG_DIRS</i>،
+    <i>$XDG_DATA_HOME</i>، <i>$XDG_DATA_DIRS</i></p>
+<div class="Bd-indent">يستخدم مدير مستخدم systemd هذه المتغيرات وفقًا لـ
+    **مواصفات دليل XDG الأساسي**[5] للعثور على تكوينه.</div>
+<p class="Pp"><i>$SYSTEMD_UNIT_PATH</i>، <i>$SYSTEMD_GENERATOR_PATH</i>،
+    <i>$SYSTEMD_ENVIRONMENT_GENERATOR_PATH</i></p>
+<div class="Bd-indent">يتحكم في مكان بحث systemd عن ملفات الوحدات والمولدات.
+<p class="Pp">قد تحتوي هذه المتغيرات على قائمة مسارات، مفصولة بنقاط مزدوجة
+    (":") . عند تعيينها، إذا انتهت القائمة بمكون فارغ ("...:")، يتم
+    إلحاق هذه القائمة بمجموعة المسارات العادية.
+    بخلاف ذلك، تحل القائمة المحددة محل مجموعة المسارات العادية.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_PAGER</i>، <i>$PAGER</i></p>
+<div class="Bd-indent">المستعرض للاستخدام عندما لا يتم إعطاء <b>--no-pager</b>.
+    يتم استخدام <i>$SYSTEMD_PAGER</i> إذا تم تعيينه؛ بخلاف ذلك يتم استخدام
+    <i>$PAGER</i>. إذا لم يتم تعيين كل من <i>$SYSTEMD_PAGER</i> و
+    <i>$PAGER</i>، يتم تجربة مجموعة من تطبيقات المستعرض المعروفة بالتتابع، بما في ذلك
+    <a href='/man/less.1.en'>less(1)</a> و
+    <a href='/man/more.1.en'>more(1)</a>، حتى يتم العثور على أحدها. إذا لم يتم اكتشاف تطبيق مستعرض،
+    فلن يتم استدعاء أي مستعرض. يعد تعيين هذه المتغيرات البيئية إلى سلسلة فارغة أو
+    قيمة "cat" مكافئًا لتمرير <b>--no-pager</b>.
+<p class="Pp">ملاحظة: إذا لم يتم تعيين <i>$SYSTEMD_PAGERSECURE</i>،
+    فلا يمكن استخدام <i>$SYSTEMD_PAGER</i> و <i>$PAGER</i> إلا لتعطيل
+    المستعرض (مع "cat" أو "")، ويتم تجاهلهما بخلاف ذلك.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LESS</i></p>
+<div class="Bd-indent">تجاوز الخيارات الممررة إلى <b>less</b> (الافتراضي هو
+    "FRSXMK").
+<p class="Pp">قد يرغب المستخدمون في تغيير خيارين بشكل خاص:</p>
+<p class="Pp"><b>K</b></p>
+<div class="Bd-indent">يقوم هذا الخيار بتعليم المستعرض بالخروج فورًا عند الضغط على Ctrl+C. للسماح لـ
+    **less** بمعالجة Ctrl+C بنفسه للعودة إلى موجه أوامر المستعرض، قم بإلغاء تعيين
+    هذا الخيار.
+<p class="Pp">إذا كانت قيمة <i>$SYSTEMD_LESS</i> لا تتضمن
+    "K"، وكان المستعرض الذي يتم استدعاؤه هو **less**، فسيتم تجاهل Ctrl+C
+    بواسطة الملف التنفيذي، ويجب معالجته بواسطة المستعرض.</p>
+</div>
+<p class="Pp"><b>X</b></p>
+<div class="Bd-indent">يقوم هذا الخيار بتعليم المستعرض بعدم إرسال سلاسل تهيئة وإلغاء تهيئة termcap
+    إلى الطرفية. يتم تعيينه افتراضيًا للسماح بإخراج الأمر بالبقاء مرئيًا في الطرفية
+    حتى بعد خروج المستعرض. ومع ذلك، هذا يمنع بعض وظائف المستعرض من العمل، خاصة
+    أن الإخراج المصفح لا يمكن تمريره باستخدام الفأرة.</div>
+<p class="Pp">لاحظ أن تعيين متغير البيئة العادي <i>$LESS</i>
+    ليس له تأثير على استدعاءات <b>less</b> بواسطة أدوات systemd.</p>
+<p class="Pp">انظر <a href='/man/less.1.en'>less(1)</a> لمزيد من المناقشة.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LESSCHARSET</i></p>
+<div class="Bd-indent">تجاوز مجموعة الأحرف الممررة إلى <b>less</b> (الافتراضي هو
+    "utf-8"، إذا تم تحديد الطرفية المستدعاة على أنها متوافقة مع UTF-8).
+<p class="Pp">لاحظ أن تعيين متغير البيئة العادي <i>$LESSCHARSET</i>
+    ليس له تأثير على استدعاءات <b>less</b> بواسطة أدوات systemd.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_PAGERSECURE</i></p>
+<div class="Bd-indent">أوامر المستعرض الشائعة مثل <a href='/man/less.1.en'>less(1)</a>، بالإضافة إلى
+    "التصفح"، أي التمرير عبر الإخراج، تدعم فتح أو كتابة ملفات أخرى وتشغيل أوامر
+    Shell عشوائية. عند استدعاء الأوامر بامتيازات مرتفعة، على سبيل المثال تحت
+    <a href='/man/sudo.8.en'>sudo(8)</a> أو
+    <a href='/man/pkexec.1.en'>pkexec(1)</a>، يصبح المستعرض حدودًا أمنية. يجب توخي الحذر لضمان أن البرامج ذات
+    الوظائف المحدودة بشكل صارم فقط هي التي يتم استخدامها كمستعرضات، وأن الميزات
+    التفاعلية غير المقصودة مثل فتح أو إنشاء ملفات جديدة أو بدء عمليات فرعية غير مسموح
+    بها. قد يتم تمكين "وضع الأمان" للمستعرض كما هو موضح أدناه، <i>إذا كان المستعرض يدعم ذلك</i>
+    (معظم المستعرضات ليست مكتوبة بطريقة تأخذ هذا في الاعتبار). يوصى إما بتمكين
+    "وضع الأمان" صراحةً أو تعطيل المستعرض تمامًا باستخدام
+    <b>--no-pager</b> أو <i>PAGER=cat</i> عند السماح للمستخدمين غير الموثوق بهم بتنفيذ
+    الأوامر بامتيازات مرتفعة.
+<p class="Pp">يأخذ هذا الخيار وسيطة منطقية. عند تعيينه على صحيح، يتم تمكين
+    "وضع الأمان" للمستعرض. في "وضع الأمان"،
+    سيتم تعيين <b>LESSSECURE=1</b> عند استدعاء المستعرض، والذي يوجه المستعرض إلى
+    تعطيل الأوامر التي تفتح أو تنشئ ملفات جديدة أو تبدأ عمليات فرعية جديدة. حاليًا،
+    يعرف <a href='/man/less.1.en'>less(1)</a> فقط هذا المتغير وينفذ "وضع الأمان".</p>
+<p class="Pp">عند تعيينه على خطأ، لا يتم وضع قيود على المستعرض. قد يسمح تعيين
+    <i>SYSTEMD_PAGERSECURE=0</i> أو عدم إزالته من البيئة الموروثة للمستخدم بتشغيل
+    أوامر عشوائية.</p>
+<p class="Pp">عندما لا يتم تعيين <i>$SYSTEMD_PAGERSECURE</i>، تحاول أدوات systemd
+    تحديد ما إذا كان يجب تمكين "وضع الأمان" وما إذا كان المستعرض يدعمه تلقائيًا.
+    يتم تمكين "وضع الأمان" إذا لم يكن معرف المستخدم الفعال (UID) هو نفسه مالك
+    جلسة تسجيل الدخول، انظر <a href='/man/geteuid.2.en'>geteuid(2)</a> و <a href='/man/sd_pid_get_owner_uid.3.en'>sd_pid_get_owner_uid(3)</a>، أو عند التشغيل تحت
+    <a href='/man/sudo.8.en'>sudo(8)</a> أو أدوات مماثلة (<i>$SUDO_UID</i> تم تعيينه [6]). في هذه الحالات،
+    <i>SYSTEMD_PAGERSECURE=

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>cdb(5) — صفحات دليل آرتش</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">cdb(5)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tinycdb/">tinycdb</a></p>
+<p class="lic">التراخيص: MIT</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">cdb(5)</td>
+    <td class="head-vol">دليل تنسيقات الملفات</td>
+    <td class="head-rtitle">cdb(5)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">cdb - تنسيق ملف قاعدة البيانات الثابتة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">قاعدة بيانات <b>cdb</b> هي ملف واحد يستخدم لربط 'المفاتيح' بـ 'القيم'، مع سجلات من أزواج (مفتاح، قيمة). يتكون الملف من 3 أجزاء: جدول المحتويات (toc)، البيانات، والفهرس (جداول التجزئة).</p>
+<p class="Pp">يحتوي جدول المحتويات على طول ثابت يبلغ 2048 بايت، ويحتوي على 256 مؤشرًا لجداول التجزئة داخل أقسام الفهرس. كل مؤشر يتكون من موضع جدول التجزئة بالبايت من بداية الملف، وحجم جدول التجزئة بالمدخلات، وكلاهما عبارة عن أعداد صحيحة غير سالبة بحجم 4 بايت (32 بت) بتنسيق little-endian. قد يكون طول جدول التجزئة صفرًا، مما يعني أن جدول التجزئة المقابل فارغ.</p>
+<p class="Pp">يتبع قسم البيانات مباشرة بعد قسم جدول المحتويات بدون أي محاذاة. يتكون من سلسلة من السجلات، كل منها عبارة عن طول المفتاح، طول القيمة (البيانات)، المفتاح، والقيمة. مرة أخرى، طول المفتاح والقيمة عبارة عن أعداد صحيحة غير سالبة بحجم 4 بايت. يتبع كل سجل تالٍ للسجل السابق بدون أي محاذاة خاصة.</p>
+<p class="Pp">بعد قسم البيانات، يتبع قسم الفهرس (جداول التجزئة). يجب النظر إليه بالاقتران مع قسم جدول المحتويات، حيث يتم تحديد كل من 256 جدول تجزئة كحد أقصى. يتكون قسم الفهرس من سلسلة من جداول التجزئة، مع تحديد الموضع والمدة في قسم جدول المحتويات. كل جدول تجزئة هو تسلسل من السجلات، كل منها يحمل رقمين: قيمة تجزئة المفتاح، وموضع السجل داخل قسم البيانات (بالبايت من بداية الملف إلى أول بايت يبدأ طول المفتاح به تسجيل البيانات). إذا كان موضع السجل صفرًا، فهذا يعني أن هذا مكان فارغ في جدول التجزئة، ولا يشير إلى أي شيء.</p>
+<p class="Pp">دالة تجزئة CDB هي</p>
+<pre>  hv = ((hv &lt;&lt; 5) + hv) ^ <i>c</i></pre>
+لكل بايت <i>c</i> منفرد في المفتاح، بدءًا بـ hv = <i>5381</i>.
+<p class="Pp">يتم فهرسة قسم جدول المحتويات بواسطة (hv % 256)، أي قيمة التجزئة مضروبة في 256 (عدد المدخلات في قسم جدول المحتويات).</p>
+<p class="Pp">للعثور على سجل، يجب: أولاً، حساب قيمة التجزئة (hv) للمفتاح. ثانيًا، النظر إلى جدول التجزئة رقم hv modulo 256. إذا كان فارغًا، فلا يوجد هذا المفتاح. إذا لم يكن فارغًا، فثالثًا، التكرار عبر الأماكن داخل جدول التجزئة هذا، بدءًا من المكان ذي الرقم hv مقسومًا على 256 modulo طول هذا الجدول، أو ((hv / 256) % htlen)، والبحث عن هذا الـ hv في جدول التجزئة. أوقف البحث عند مكان فارغ (إذا كان موضع السجل صفرًا) أو عندما تم فحص جميع الأماكن (لاحظ البحث الدوري، القفز من نهاية الجدول إلى بدايته). عندما يتم العثور على قيمة التجزئة المعنية في جدول التجزئة، انظر إلى مفتاح السجل المقابل، وقارنه بالمفتاح المعني. إذا كانا بنفس الطول ومتساويين، فسيتم العثور على السجل، وإلا، كرر مع المكان التالي في جدول التجزئة. لاحظ أنه قد تكون هناك عدة سجلات بنفس المفتاح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">cdb(1)، cdb(3).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">تمت كتابة حزمة <b>tinycdb</b> بواسطة Michael Tokarev &lt;mjt+cdb@corpit.ru&gt;، بناءً على أفكار وحصة تنسيق الملف مع مكتبة cdb الأصلية بواسطة Dan Bernstein.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENSE'><a class='permalink' href='#LICENSE'>الترخيص</a></h1>
+<p class="Pp">Tinycdb مرخص بموجب ترخيص MIT.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">أبريل، 2005</td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="بحث" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tinycdb/">extra/tinycdb</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>0.81-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.corpit.ru/mjt/tinycdb.html">https://www.corpit.ru/mjt/tinycdb.html</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>MIT</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/tinycdb/">/listing/extra/tinycdb/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+            <li><a href="#LICENSE">الترخيص</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+<nav class="other-sections">
+    <p>في أقسام أخرى:</p>
+    <ul>
+    
+        <li><a href="/man/cdb.1.en">cdb(1)</a></li>
+    
+        <li><a href="/man/cdb.3.en">cdb(3)</a></li>
+    
+    </ul>
+</nav>
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/cdb.5.en.txt">txt</a>, 
+        
+            <a href="/man/cdb.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، والتي لديها ترخيصها الخاص
+               المحدد في حزمة آرتش لينكس المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>systemd-journald@.service(8) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">systemd-journald@.service(8)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SYSTEMD-JOURNALD.SERVICE(8)</td>
+    <td class="head-vol">systemd-journald.service</td>
+    <td class="head-rtitle">SYSTEMD-JOURNALD.SERVICE(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">systemd-journald.service, systemd-journald.socket,
+    systemd-journald-dev-log.socket, systemd-journald-audit.socket,
+    systemd-journald@.service, systemd-journald@.socket,
+    systemd-journald-varlink@.socket, systemd-journald - Journal service</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<div class="Bd-indent">systemd-journald.service</div>
+<div class="Bd-indent">systemd-journald.socket</div>
+<div class="Bd-indent">systemd-journald-dev-log.socket</div>
+<div class="Bd-indent">systemd-journald-audit.socket</div>
+<div class="Bd-indent">systemd-journald@.service</div>
+<div class="Bd-indent">systemd-journald@.socket</div>
+<div class="Bd-indent">systemd-journald-varlink@.socket</div>
+<div class="Bd-indent">/usr/lib/systemd/systemd-journald</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">systemd-journald is a system service that collects and stores
+    logging data. It creates and maintains structured, indexed journals based on
+    logging information that is received from a variety of sources:</p>
+<div class="Bd-indent">&#x2022;Kernel log messages, via kmsg</div>
+<div class="Bd-indent">&#x2022;Simple system log messages, via the libc
+  <a href='/man/syslog.3.en'>syslog(3)</a> call</div>
+<div class="Bd-indent">&#x2022;Structured system log messages via the native
+  Journal API, see <a href='/man/sd_journal_print.3.en'>sd_journal_print(3)</a> and <b>Native Journal
+  Protocol</b>[1]</div>
+<div class="Bd-indent">&#x2022;Standard output and standard error of service
+  units. For further details see below.</div>
+<div class="Bd-indent">&#x2022;Audit records, originating from the kernel audit
+  subsystem</div>
+<p class="Pp">The daemon will implicitly collect numerous metadata fields for
+    each log messages in a secure and unfakeable way. See
+    <a href='/man/systemd.journal-fields.7.en'>systemd.journal-fields(7)</a> for more information about the collected
+    metadata.</p>
+<p class="Pp">Log data collected by the journal is primarily text-based but can
+    also include binary data where necessary. Individual fields making up a log
+    record stored in the journal may be up to 2&#x2076;&#x2074;-1 bytes in
+  size.</p>
+<p class="Pp">The journal service stores log data either persistently below
+    /var/log/journal or in a volatile way below /run/log/journal/ (in the latter
+    case, it is lost at reboot). By default, log data is stored persistently if
+    /var/log/journal/ exists during boot, with an implicit fallback to volatile
+    storage otherwise. Use <i>Storage=</i> in <a href='/man/journald.conf.5.en'>journald.conf(5)</a> to
+    configure where log data is placed, independently of the existence of
+    /var/log/journal/.</p>
+<p class="Pp">Note that journald will initially use volatile storage, until a
+    call to <b>journalctl --flush</b> (or sending <b>SIGUSR1</b> to journald)
+    will cause it to switch to persistent logging (under the conditions
+    mentioned above). This is done automatically on boot via
+    &quot;systemd-journal-flush.service&quot;.</p>
+<p class="Pp">On systems where /var/log/journal/ does not exist yet but where
+    persistent logging is desired (and the default journald.conf is used), it is
+    sufficient to create the directory, and ensure it has the correct access
+    modes and ownership:</p>
+<div class="Bd-indent">
+<pre>mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal</pre>
+</div>
+<p class="Pp">See <a href='/man/journald.conf.5.en'>journald.conf(5)</a> for information about the
+    configuration of this service.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STREAM_LOGGING'><a class='permalink' href='#STREAM_LOGGING'>STREAM   LOGGING</a></h1>
+<p class="Pp">The systemd service manager invokes all service processes with
+    standard output and standard error connected to the journal by default. This
+    behaviour may be altered via the
+    <i>StandardOutput=</i>/<i>StandardError=</i> unit file settings, see
+    <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a> for details. The journal converts the log byte stream
+    received this way into individual log records, splitting the stream at
+    newline (&quot;\n&quot;, ASCII <b>10</b>) and <b>NUL</b> bytes.</p>
+<p class="Pp">If systemd-journald.service is stopped, the stream connections
+    associated with all services are terminated. Further writes to those streams
+    by the service will result in <b>EPIPE</b> errors. In order to react
+    gracefully in this case, it is recommended that programs logging to standard
+    output/error ignore such errors. If the <b>SIGPIPE</b> UNIX signal handler
+    is not blocked or turned off, such write attempts will also result in such
+    process signals being generated, see <a href='/man/signal.7.en'>signal(7)</a>. To mitigate this
+    issue, systemd service manager explicitly turns off the <b>SIGPIPE</b>
+    signal for all invoked processes by default (this may be changed for each
+    unit individually via the <i>IgnoreSIGPIPE=</i> option, see
+    <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a> for details). After the standard output/error
+    streams have been terminated they may not be recovered until the
+    services they are associated with are restarted. Note that during normal
+    operation, systemd-journald.service stores copies of the file descriptors
+    for those streams in the service manager. If systemd-journald.service is
+    restarted using <b>systemctl restart</b> or equivalent operation instead of
+    a pair of separate <b>systemctl stop</b> and <b>systemctl start</b> commands
+    (or equivalent operations), these stream connections are not terminated and
+    survive the restart. It is thus safe to restart systemd-journald.service,
+    but stopping it is not recommended.</p>
+<p class="Pp">Note that the log record metadata for records transferred via such
+    standard output/error streams reflect the metadata of the peer the stream
+    was originally created for. If the stream connection is passed on to other
+    processes (such as further child processes forked off the main service
+    process), the log records will not reflect their metadata, but will continue
+    to describe the original process. This is different from the other logging
+    transports listed above, which are inherently record based and where the
+    metadata is always associated with the individual record.</p>
+<p class="Pp">In addition to the implicit standard output/error logging of
+    services, stream logging is also available via the <a href='/man/systemd-cat.1.en'>systemd-cat(1)</a>
+    command line tool.</p>
+<p class="Pp">Currently, the number of parallel log streams systemd-journald
+    will accept is limited to 4096. When this limit is reached further log
+    streams may be established but will receive <b>EPIPE</b> right from the
+    beginning.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='JOURNAL_NAMESPACES'><a class='permalink' href='#JOURNAL_NAMESPACES'>JOURNAL   NAMESPACES</a></h1>
+<p class="Pp">Journal 'namespaces' are both a mechanism for logically isolating
+    the log stream of projects consisting of one or more services from the rest
+    of the system and a mechanism for improving performance. Multiple journal
+    namespaces may exist simultaneously, each defining its own, independent log
+    stream managed by its own instance of <b>systemd-journald</b>. Namespaces
+    are independent of each other, both in the data store and in the IPC
+    interface. By default, only a single &quot;default namespace exists, managed
+    by systemd-journald.service (and its associated socket units). Additional
+    namespaces are created by starting an instance of the
+    systemd-journald@.service service template. The instance name is the
+    namespace identifier, which is a short string used for referencing the
+    journal namespace. Service units may be assigned to a specific journal
+    namespace through the <i>LogNamespace=</i> unit file setting, see
+    <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a> for details. The <b>--namespace=</b> switch of
+    <a href='/man/journalctl.1.en'>journalctl(1)</a> may be used to view the log stream of a specific
+    namespace. If the switch is not used the log stream of the default namespace
+    is shown, i.e. log data from other namespaces is not visible.</p>
+<p class="Pp">Services associated with a specific log namespace may log via
+    <a href='/man/syslog.3.en'>syslog(3)</a>, the native logging protocol of the journal and via
+    stdout/stderr; the logging from all three transports is associated with the
+    namespace.</p>
+<p class="Pp">By default, only the default namespace will collect kernel and
+    audit log messages.</p>
+<p class="Pp">The <b>systemd-journald</b> instance of the default namespace is
+    configured through /etc/systemd/journald.conf (see below), while the other
+    instances are configured through
+    /etc/systemd/journald@<i>NAMESPACE</i>.conf. The journal log data for the
+    default namespace is placed in /var/log/journal/<i>MACHINE_ID</i> (see
+    below) while the data for the other namespaces is located in
+    /var/log/journal/<i>MACHINE_ID</i>.<i>NAMESPACE</i>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SIGNALS'><a class='permalink' href='#SIGNALS'>SIGNALS</a></h1>
+<p class="Pp">SIGUSR1</p>
+<div class="Bd-indent">Request that journal data from /run/ is flushed to /var/
+  in order to make it persistent (if this is enabled). This must be used after
+  /var/ is mounted, as otherwise log data from /run/ is never flushed to /var/
+  regardless of the configuration. Use the</div>
+</div>
+</section>
+<!-- Generated by pandoc 2.3.1 -->
+</section>
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>My Page</title>
+    </head>
+    <body>
+        <main>
+            <!-- Main content of the page -->
+        </main>
+        <footer>
+            <p>
+                باستثناء محتويات صفحات الدليل، والتي لها ترخيصها الخاص
+                المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

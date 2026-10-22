@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perlhacktut(1perl) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlhacktut.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERLHACKTUT(1perl)</td>
+    <td class="head-vol">دليل مبرمجي Perl</td>
+    <td class="head-rtitle">PERLHACKTUT(1perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">perlhacktut - استعراض لإنشاء تعديل بسيط لكود C</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">هذه الوثيقة تأخذك عبر مثال تعديل بسيط.</p>
+<p class="Pp">إذا لم تكن قد قرأت perlhack بعد، فافعل ذلك أولاً! قد ترغب أيضًا في قراءة perlsource.</p>
+<p class="Pp">بمجرد الانتهاء من هنا، تحقق من perlhacktips تاليًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_OF_A_SIMPLE_PATCH'><a class='permalink' href='#EXAMPLE_OF_A_SIMPLE_PATCH'>مثال لتعديل بسيط</a></h1>
+<p class="Pp">لنأخذ تعديلاً بسيطًا من البداية إلى النهاية.</p>
+<p class="Pp">إليك شيء اقترحه لاري: إذا كان <span class="Li">&quot;U&quot;</span> هو أول تنسيق نشط أثناء <span class="Li">&quot;pack&quot;</span>، (على سبيل المثال، <span class="Li">&quot;pack &quot;U3C8&quot;, @stuff&quot;</span>) فيجب التعامل مع السلسلة الناتجة على أنها مرمزة بـ UTF-8.</p>
+<p class="Pp">إذا كنت تعمل مع استنساخ Git لمستودع Perl، فستحتاج إلى إنشاء فرع لتغييراتك. سيجعل هذا إنشاء تعديل مناسب أسهل بكثير. انظر perlgit للحصول على التفاصيل حول كيفية القيام بذلك.</p>
+<section class="Ss">
+<h2 class="Ss" id='Writing_the_patch'><a class='permalink' href='#Writing_the_patch'>كتابة التعديل</a></h2>
+<p class="Pp">كيف نستعد لإصلاح هذا؟ أولاً نحدد الكود المعني - يحدث <span class="Li">&quot;pack&quot;</span> في وقت التشغيل، لذلك سيكون في أحد ملفات <i>pp</i>. وبالتأكيد، <span class="Li">&quot;pp_pack&quot;</span> موجود في <i>pp.c</i>. نظرًا لأننا سنقوم بتعديل هذا الملف، فلننسخه إلى <i>pp.c~</i>.</p>
+<p class="Pp">[حسنًا، كان موجودًا في <i>pp.c</i> عندما تمت كتابة هذا الدليل. تم تقسيمه الآن مع <span class="Li">&quot;pp_unpack&quot;</span> إلى ملفه الخاص، <i>pp_pack.c</i>]</p>
+<p class="Pp">الآن دعنا نلقي نظرة على <span class="Li">&quot;pp_pack&quot;</span>: نأخذ نمطًا في <span class="Li">&quot;pat&quot;</span>، ثم نمر عبر النمط، ونأخذ كل حرف تنسيق في دوره في <span class="Li">&quot;datum_type&quot;</span>. ثم لكل حرف تنسيق ممكن، نبتلع الوسائط الأخرى في النمط (عرض حقل، علامة استفهام، وما إلى ذلك) ونحول الجزء التالي من المدخلات إلى التنسيق المحدد، ونضيفه إلى SV الناتج <span class="Li">&quot;cat&quot;</span>.</p>
+<p class="Pp">كيف نعرف ما إذا كان <span class="Li">&quot;U&quot;</span> هو التنسيق الأول في <span class="Li">&quot;pat&quot;</span>؟ حسنًا، إذا كان لدينا مؤشر إلى بداية <span class="Li">&quot;pat&quot;</span>، فإذا رأينا <span class="Li">&quot;U&quot;</span> يمكننا اختبار ما إذا كنا لا نزال في بداية السلسلة. لذا، هنا يتم إعداد <span class="Li">&quot;pat&quot;</span>:</p>
+<pre>STRLEN fromlen;
+char *pat = SvPVx(*++MARK, fromlen);
+char *patend = pat + fromlen;
+I32 len;
+I32 datumtype;
+SV *fromstr;</pre>
+<p class="Pp">سيكون لدينا مؤشر سلسلة آخر هناك:</p>
+<pre>   STRLEN fromlen;
+   char *pat = SvPVx(*++MARK, fromlen);
+   char *patend = pat + fromlen;
++  char *patcopy;
+   I32 len;
+   I32 datumtype;
+   SV *fromstr;</pre>
+<p class="Pp">وقبل أن نبدأ الحلقة، سنقوم بتعيين <span class="Li">&quot;patcopy&quot;</span> ليكون بداية <span class="Li">&quot;pat&quot;</span>:</p>
+<pre>   items = SP - MARK;
+   MARK++;
+   SvPVCLEAR(cat);
++  patcopy = pat;
+   while (pat &lt; patend) {</pre>
+<p class="Pp">الآن، إذا رأينا <span class="Li">&quot;U&quot;</span> الذي كان في بداية السلسلة، فسنقوم بتشغيل العلم <span class="Li">&quot;UTF8&quot;</span> لـ SV الناتج، <span class="Li">&quot;cat&quot;</span>:</p>
+<pre>+  if (datumtype == 'U' &amp;&amp; pat==patcopy+1)
++      SvUTF8_on(cat);
+   if (datumtype == '#') {
+       while (pat &lt; patend &amp;&amp; *pat != '\n')
+           pat++;</pre>
+<p class="Pp">تذكر أنه يجب أن يكون <span class="Li">&quot;patcopy+1&quot;</span> لأن الحرف الأول من السلسلة هو <span class="Li">&quot;U&quot;</span> الذي تم ابتلاعه في <span class="Li">&quot;datumtype!&quot;</span></p>
+<p class="Pp">عفوًا، لقد نسينا شيئًا واحدًا: ماذا لو كانت هناك مسافات في بداية النمط؟ <span class="Li">&quot;pack(&quot; U*&quot;, @stuff)&quot;</span> سيكون لديه <span class="Li">&quot;U&quot;</span> كأول حرف نشط، على الرغم من أنه ليس أول شيء في النمط. في هذه الحالة، علينا تقديم <span class="Li">&quot;patcopy&quot;</span> جنبًا إلى جنب مع <span class="Li">&quot;pat&quot;</span> عندما نرى مسافات:</p>
+<pre>if (isSPACE(datumtype))
+    continue;</pre>
+<p class="Pp">يجب أن يصبح</p>
+<pre>if (isSPACE(datumtype)) {
+    patcopy++;
+    continue;
+}</pre>
+<p class="Pp">حسنا. انتهينا من جزء C. الآن يجب علينا القيام بشيئين إضافيين قبل أن يكون هذا التعديل جاهزًا: لقد غيرنا سلوك Perl، ولذلك يجب علينا توثيق هذا التغيير. يجب علينا أيضًا توفير المزيد من اختبارات الانحدار للتأكد من أن تعديلنا يعمل ولا ينشئ خطأ في مكان آخر.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Testing_the_patch'><a class='permalink' href='#Testing_the_patch'>اختبار التعديل</a></h2>
+<p class="Pp">توجد اختبارات الانحدار لكل عامل في <i>t/op/</i>، لذلك سنقوم بعمل نسخة من <i>t/op/pack.t</i> إلى <i>t/op/pack.t~</i>. الآن يمكننا إضافة اختباراتنا إلى النهاية. أولاً، سنختبر أن <span class="Li">&quot;U&quot;</span> ينشئ بالفعل سلاسل Unicode.</p>
+<p class="Pp">يحتوي t/op/pack.t على دالة <b>ok()</b> منطقية، ولكن إذا لم يكن كذلك، فيمكننا استخدام الدالة من t/test.pl.</p>
+<pre>require './test.pl';
+plan( tests =&gt; 159 );</pre>
+<p class="Pp">لذلك بدلاً من هذا:</p>
+<pre>print 'not ' unless &quot;1.20.300.4000&quot; eq sprintf &quot;%vd&quot;,
+                                              pack(&quot;U*&quot;,1,20,300,4000);
+print &quot;ok $test\n&quot;; $test++;</pre>
+<p class="Pp">يمكننا كتابة (انظر Test::More للحصول على شرح كامل لـ <b>is()</b> ووظائف الاختبار الأخرى) ما هو أكثر منطقية.</p>
+<pre>is( &quot;1.20.300.4000&quot;, sprintf &quot;%vd&quot;, pack(&quot;U*&quot;,1,20,300,4000),
+                                      &quot;U* ينتج Unicode&quot; );</pre>
+<p class="Pp">الآن سنختبر أننا تعاملنا مع مسألة المسافة في البداية بشكل صحيح:</p>
+<pre>is( &quot;1.20.300.4000&quot;, sprintf &quot;%vd&quot;, pack(&quot;  U*&quot;,1,20,300,4000),
+                                    &quot;  مع مسافات في البداية&quot; );</pre>
+<p class="Pp">وأخيرًا سنختبر أننا لا ننشئ سلاسل Unicode إذا لم يكن <span class="Li">&quot;U&quot;</span> هو التنسيق النشط الأول:</p>
+<pre>isnt( v1.20.300.4000, sprintf &quot;%vd&quot;, pack(&quot;C0U*&quot;,1,20,300,4000),
+                                      &quot;U* ليس الأول ليس Unicode&quot; );</pre>
+<p class="Pp">يجب ألا ننسى تغيير عدد الاختبارات الذي يظهر في الأعلى، وإلا فإن المختبر الآلي سيصاب بالارتباك. سيبدو هذا على النحو التالي:</p>
+<pre>print &quot;1..156\n&quot;;</pre>
+<p class="Pp">أو هذا:</p>
+<pre>plan( tests =&gt; 156 );</pre>
+<p class="Pp">نقوم الآن بتجميع Perl، ونقوم بتشغيله عبر مجموعة الاختبارات. اختباراتنا الجديدة تجتاز، يا لها من فرحة!</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Documenting_the_patch'><a class='permalink' href='#Documenting_the_patch'>توثيق التعديل</a></h2>
+<p class="Pp">أخيرًا، التوثيق. المهمة لا تنتهي أبدًا حتى تنتهي الأوراق، لذا دعنا نصف التغيير الذي أجريناه للتو. المكان المناسب هو <i>pod/perlfunc.pod</i>؛ مرة أخرى، نقوم بإنشاء نسخة، ثم سنقوم بإدراج هذا النص في وصف <span class="Li">&quot;pack&quot;</span>:</p>
+<pre>=item *
+If the pattern begins with a C&lt;U&gt;, the resulting string will be treated
+as UTF-8-encoded Unicode. You can force UTF-8 encoding on in a string
+with an initial C&lt;U0&gt;, and the bytes that follow will be interpreted as
+Unicode characters. If you don't want this to happen, you can begin
+your pattern with C&lt;C0&gt; (or anything else) to force Perl not to UTF-8
+encode your string, and then follow this with a C&lt;U*&gt; somewhere in your
+pattern.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Submit'><a class='permalink' href='#Submit'>إرسال</a></h2>
+<p class="Pp">انظر perlhack للحصول على تفاصيل حول كيفية إرسال هذا التعديل.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">تمت كتابة هذه الوثيقة في الأصل بواسطة ناثان تورينجتون، ويتم صيانتها بواسطة قائمة البريد perl5-porters.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-07-13</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="البحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>5.42.0-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+        <dt>التراخيص:</dt>
+    
+</dl>
+</section>
+
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+    <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#EXAMPLE_OF_A_SIMPLE_PATCH">مثال على تصحيح بسيط</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perlhacktut.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perlhacktut.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لديها ترخيصها الخاص
+               محدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

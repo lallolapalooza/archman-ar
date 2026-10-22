@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Test2::Tools::Process(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Test2__Tools__Process(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Test2::Tools::Process(3)</td>
+    <td class="head-vol">وثائق Perl مقدمة من المستخدم</td>
+    <td class="head-rtitle">Test2::Tools::Process(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Test2::Tools::Process - اختبارات الوحدة للكود الذي يستدعي exit، exec، system أو qx()</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSION'><a class='permalink' href='#VERSION'>الإصدار</a></h1>
+<p class="Pp">الإصدار 0.07</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>use Test2::V0 -no_srand =&gt; 1;
+use Test2::Tools::Process;
+
+process {
+  system 'foo', 'bar';
+} [
+  # تحقق من أن أول نظام تم استدعاؤه هو أمر foo مع أي وسيط
+  proc_event(system =&gt; array {
+    item 'foo';
+    etc;
+  }, sub {
+    # محاكاة أمر foo
+    my($proc, @args) = @_;
+    note "faux bar command: @args";
+    # محاكاة إنهاء طبيعي
+    $proc-&gt;exit(0);
+  }),
+];
+
+process {
+  exit 2;
+  note 'لا يتم التنفيذ';
+} [
+  # يمكن استخدام أي تحقق من Test2 على حالة الخروج
+  proc_event(exit =&gt; match qr/^[2-3]$/),
+];
+
+process {
+  exit 4;
+} [
+  # أو يمكنك التحقق من تطابق حالة الخروج رقميًا
+  proc_event(exit =&gt; 4),
+];
+
+process {
+  exit 5;
+} [
+  # أو ببساطة التحقق من استدعاء exit.
+  proc_event('exit'),
+];
+
+process {
+  exec 'foo bar';
+  exec 'baz';
+  note 'لا يتم التنفيذ';
+} [
+  # محاكاة أول exec كفاشل
+  proc_event(exec =&gt; match qr/^foo\b/, sub {
+    my($return, @command) = @_;
+    $! = 2;
+    return 0;
+  }),
+  # سيتم محاكاة ثاني exec بنجاح
+  proc_event('exec'),
+];
+
+# اعتراض `exit`
+is intercept_exit { exit 10 }, 10;
+
+# اعتراض `exec`
+is intercept_exec { exec 'foo', 'bar', 'baz' }, ['foo','bar','baz'];
+
+done_testing;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تُستخدم مجموعة أدوات الاختبار هذه لكتابة اختبارات الوحدة للكود الذي يتفاعل مع العمليات دون استخدام عمليات حقيقية قد يكون لها آثار جانبية غير مرغوبة. كما أنها تسمح باختبار الكود الذي يخرج من تدفق البرنامج دون إنهاء الاختبار فعليًا. حتى الآن، يسمح باختبار و/أو محاكاة <span class="Li">&quot;exit&quot;</span>، <span class="Li">&quot;exec&quot;</span>، <span class="Li">&quot;system&quot;</span>، <span class="Li">&quot;readpipe&quot;</span> و <span class="Li">&quot;qx//&quot;</span>. ستتم إضافة اختبارات عمليات أخرى في المستقبل.</p>
+<p class="Pp">تحذف هذه الوحدة بعض الأفكار من Test::Exit. على وجه الخصوص، لا تستخدم استثناءات لمحاكاة <span class="Li">&quot;exit&quot;</span> أو <span class="Li">&quot;exec&quot;</span>، لذلك يمكنك اختبار الكود الذي يستدعيها في <span class="Li">&quot;eval&quot;</span> بحرية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FUNCTIONS'><a class='permalink' href='#FUNCTIONS'>الدوال</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='process'><a class='permalink' href='#process'>process</a></h2>
+<pre>my $ok = process { ... } \@events, $test_name;
+my $ok = process { ... } \@events;
+my $ok = process { ... } $test_name;
+my $ok = process { ... };</pre>
+<p class="Pp">ينفذ الكتلة، لاعتراض استدعاءات <span class="Li">&quot;exit&quot;</span>، <span class="Li">&quot;exec&quot;</span>، <span class="Li">&quot;system&quot;</span>، <span class="Li">&quot;readpipe&quot;</span> و <span class="Li">&quot;qx//&quot;</span>. تتم مقارنة الاستدعاءات مع <span class="Li">&quot;\@events&quot;</span> كأحداث عملية متوقعة. انظر <span class="Li">&quot;proc_event&quot;</span> أدناه لتعريف الأحداث الفردية، والملخص أعلاه للأمثلة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='named_signal'><a class='permalink' href='#named_signal'>named_signal</a></h2>
+<pre>my $signame = named_signal $name;</pre>
+<p class="Pp">بالنظر إلى اسم إشارة مثل <span class="Li">&quot;KILL&quot;</span>، فإنها تعيد رقم الإشارة الصحيح. تثير استثناء إذا كان <span class="Li">$name</span> غير صالح.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='intercept_exit'><a class='permalink' href='#intercept_exit'>intercept_exit</a></h2>
+<pre>my $status = intercept_exit { ... };</pre>
+<p class="Pp">يعترض أي استدعاء <span class="Li">&quot;exit&quot;</span> داخل الكتلة ويعيد قيمة حالة الخروج. يعيد <span class="Li">&quot;undef&quot;</span> إذا لم تكن هناك استدعاءات <span class="Li">&quot;exec&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='intercept_exec'><a class='permalink' href='#intercept_exec'>intercept_exec</a></h2>
+<pre>my $arrayref = intercept_exec { ... };</pre>
+<p class="Pp">يعترض أي استدعاء <span class="Li">&quot;exec&quot;</span> داخل الكتلة ويعيد سطر الأوامر الذي تم تمريره إليه. يعيد <span class="Li">&quot;undef&quot;</span> إذا لم تكن هناك استدعاءات <span class="Li">&quot;exec&quot;</span>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CHECKS'><a class='permalink' href='#CHECKS'>التحققات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='proc_event'><a class='permalink' href='#proc_event'>proc_event</a></h2>
+<pre>process { ... } [
+  proc_event($type =&gt; $check, $callback),
+  proc_event($type =&gt; $check),
+  proc_event($type =&gt; $callback),
+  proc_event($type),
+
+  # تحقق إضافية لأحداث النظام
+  proc_event('system' =&gt; $check, \%result_check, $callback),
+  proc_event('system' =&gt; \%result_check, $callback),
+  proc_event('system' =&gt; $check, \%result_check),
+  proc_event('system' =&gt; \%result_check),
+];</pre>
+<p class="Pp">تنشئ الدالة <span class="Li">&quot;proc_event&quot;</span> حدث عملية، مع تحقق واختياري ورد اتصال. كيف يعمل <span class="Li">$check</span> يعتمد على <span class="Li">$type</span>. إذا لم يتم توفير <span class="Li">$check</span>، فسيتحقق فقط من تطابق <span class="Li">$type</span>. نظرًا لطبيعتها، يتم محاكاة أحداث <span class="Li">&quot;exit&quot;</span> و <span class="Li">&quot;exec&quot;</span>. تتم استدعاءات النظام الفعلية لأحداث <span class="Li">&quot;system&quot;</span>، إلا إذا تم توفير <span class="Li">$callback</span>.</p>
+<dl class="Bl-tag">
+  <dt id="exit"><a class="permalink" href="#exit">exit</a></dt>
+  <dd>حدث عملية لاستدعاء <span class="Li">&quot;exit&quot;</span>. يتم التحقق مقابل القيمة الحالة التي تم تمريرها إلى <span class="Li">&quot;exit&quot;</span>. ستكون هذه القيمة دائمًا عددًا صحيحًا. إذا لم يتم تمرير أي قيمة حالة إلى <span class="Li">&quot;exit&quot;</span>، فسيتم استخدام <span class="Li">0</span> كقيمة الحالة.  
+    <p class="Pp">إذا لم يتم توفير رد اتصال، فسيتم محاكاة استدعاء <span class="Li">&quot;exit&quot;</span> (ناجح) عن طريق إنهاء كتلة العملية دون تنفيذ المزيد من الكود. ستستمر بقية الاختبار.</p>
+        <pre>proc_event( exit =&gt; sub {
+  my($proc, $status) = @_;
+  $proc-&gt;terminate;
+});
+</pre>
+    <p class="Pp">يأخذ رد الاتصال كائن <span class="Li">$proc</span> وقيمة <span class="Li">$status</span> لاستدعاء <span class="Li">&quot;exit&quot;</span>. بشكل طبيعي، لا تعيد <span class="Li">&quot;exit&quot;</span>، لذا ما تريد فعله هو استدعاء الطريقة <span class="Li">&quot;terminate&quot;</span> على الكائن <span class="Li">$proc</span>.</p>
+  </dd>
+  <dt id="exec"><a class="permalink" href="#exec">exec</a></dt>
+  <dd>حدث عملية لاستدعاء <span class="Li">&quot;exec&quot;</span>. يتم التحقق مقابل الأمر الذي تم تمريره إلى <span class="Li">&quot;exec&quot;</span>. إذا تم استدعاء <span class="Li">&quot;exec&quot;</span> بوسيط واحد، فسيكون سلسلة، وإلا فسيكون مرجع مصفوفة. بهذه الطريقة يمكنك التمييز بين وضعي SCALAR و LIST لـ <span class="Li">&quot;exec&quot;</span>.
+    <p class="Pp">إذا لم يتم توفير رد اتصال، فسيتم محاكاة استدعاء <span class="Li">&quot;exec&quot;</span> (ناجح) عن طريق إنهاء كتلة العملية دون تنفيذ المزيد من الكود. ستستمر بقية الاختبار.</p>
+        <pre>proc_event( exec =&gt; sub {
+  my($proc, @command) = @_;
+  ...;
+});
+</pre>
+    <p class="Pp">يأخذ رد الاتصال كائن <span class="Li">$proc</span> والوسائط التي تم تمريرها إلى <span class="Li">&quot;exec&quot;</span> كـ <span class="Li">@command</span>. يمكنك محاكاة استدعاء <span class="Li">&quot;exec&quot;</span> فاشل باستخدام الطريقة <span class="Li">&quot;errno&quot;</span> للكائن <span class="Li">$proc</span>:</p>
+        <pre>proc_event( exec =&gt; sub {
+  my($proc, @command) = @_;
+  $proc-&gt;errno(2); # هذه هي قيمة errno
+});
+</pre>
+    <p class="Pp">لمحاكاة استدعاء <span class="Li">&quot;exec&quot;</span> ناجح، فقط تذكر استدعاء الطريقة <span class="Li">&quot;terminate&quot;</span> على الكائن <span class="Li">$proc</span>.</p>
+        <pre>proc_event( exec =&gt; sub {
+  my($proc, @command) = @_;
+  $proc-&gt;terminate;
+});
+</pre>
+  </dd>
+  <dt id="system"><a class="permalink" href="#system">system</a></dt>
+  <dd>حدث عملية لـ <span class="Li">&quot;system&quot;</span>، <span class="Li">&quot;piperead&quot;</span> و <span class="Li">&quot;qx//&quot;</span>. التحقق الأول (كما هو الحال مع <span class="Li">&quot;exec&quot;</span>) هو مقابل سلسلة الأوامر التي تم تمريرها إلى <span class="Li">&quot;system&quot;</span>. الثاني هو مرجع تجزئة مع تحقق من النتائج.</dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="status"><a class="permalink" href="#status">status</a></dt>
+  <dd>حدث عملية لاستدعاء <span class="Li">&quot;status&quot;</span>. يتم التحقق مقابل القيمة المرجعة لـ <span class="Li">&quot;status&quot;</span>. ستكون هذه القيمة دائمًا عددًا صحيحًا. إذا لم يتم تمرير أي قيمة مرجعة، فسيتم استخدام <span class="Li">0</span> كقيمة مرجعة.</dd>
+</dl>
+</div>
+</section>
+</body>
+</html>

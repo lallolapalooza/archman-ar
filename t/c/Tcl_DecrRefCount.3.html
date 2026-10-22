@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="generator" content="archmanweb" />
+        <title>Tcl_DecrRefCount(3) — Tcl</title>
+        <link rel="stylesheet" href="/css/style.css">
+        <link rel="stylesheet" href="/css/man.css">
+        
+        
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tcl_DecrRefCount(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tcl/">tcl</a></p>
+<p class="lic">التراخيص: TCL</p>
+
+        
+        <main class="container">
+            <article>
+                <section class="Sh">
+    <h1 class="Sh" id="NAME">NAME</h1>
+    <p class="Nd">Tcl_DecrRefCount, Tcl_IncrRefCount, Tcl_IsShared, Tcl_DuplicateObj - manage reference counts for Tcl values</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SYNOPSIS">SYNOPSIS</h1>
+    <pre>#include &lt;tcl.h&gt;
+
+void
+<b>Tcl_IncrRefCount</b>(objPtr)
+void
+<b>Tcl_DecrRefCount</b>(objPtr)
+int
+<b>Tcl_IsShared</b>(objPtr)
+Tcl_Obj *
+<b>Tcl_DuplicateObj</b>(objPtr)</pre>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="ARGUMENTS">ARGUMENTS</h1>
+    <dl class="Nd">
+        <dt>Tcl_Obj *<i>objPtr</i> (in)</dt>
+        <dd>Pointer to the Tcl value object.</dd>
+    </dl>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+    <p class="Pp">Tcl values are mutable objects that contain internal representations of their
+        data. For example, a value might have an internal representation as a string and
+        also as an integer. Tcl manages these values using reference counting to ensure
+        that storage for a value is not freed until it is no longer in use. The
+        <code class="Nm">Tcl_IncrRefCount</code> and <code class="Nm">Tcl_DecrRefCount</code>
+        macros manage these reference counts. The <code class="Nm">Tcl_IsShared</code>
+        function and <code class="Nm">Tcl_DuplicateObj</code> procedure are used to handle
+        shared values.</p>
+    <p class="Pp">When a Tcl value object is first created using functions like
+        <code class="Nm">Tcl_NewObj</code> or <code class="Nm">Tcl_NewStringObj</code>,
+        its reference count is initialized to 0. The reference count is incremented by
+        <code class="Nm">Tcl_IncrRefCount</code> whenever a new reference to the value is
+        created. This typically happens when a value is stored in a variable, passed as an
+        argument to a procedure, or stored in a data structure that needs to maintain a
+        reference to it.</p>
+    <p class="Pp">When a reference to a Tcl value is no longer needed,
+        <code class="Nm">Tcl_DecrRefCount</code> should be called. This macro decrements the
+        reference count. If the reference count drops to zero as a result of this call, the
+        storage for the value object (including any internal representations) is freed.
+        It is crucial to call <code class="Nm">Tcl_DecrRefCount</code> exactly once for every
+        time <code class="Nm">Tcl_IncrRefCount</code> was called for a given value to prevent
+        memory leaks or premature freeing of the value.</p>
+    <p class="Pp">A value is considered "shared" if its reference count is greater than 1. The
+        <code class="Nm">Tcl_IsShared</code> function returns true (1) if the reference count
+        of the value pointed to by <i>objPtr</i> is greater than 1, and false (0)
+        otherwise.</p>
+    <p class="Pp">When a command procedure needs to modify a Tcl value that might be shared, it
+        must first ensure that it has its own private copy of the value. Modifying a shared
+        value directly would affect all other references to that value. To obtain a private
+        copy, the procedure should first call <code class="Nm">Tcl_IsShared</code>. If the value
+        is shared, the procedure should then call <code class="Nm">Tcl_DuplicateObj</code>.
+        <code class="Nm">Tcl_DuplicateObj</code> creates a new Tcl value object that is a
+        copy of the original object pointed to by <i>objPtr</i>. The new object is
+        returned and has a reference count of 0. The caller is then responsible for managing
+        the reference count of this new object (typically by calling
+        <code class="Nm">Tcl_IncrRefCount</code> if it intends to keep a reference to it).</p>
+    <p class="Pp">If <code class="Nm">Tcl_IsShared</code> returns false, it means the value is not
+        currently shared, and the command procedure can safely modify it directly without
+        needing to duplicate it. In this case, the procedure effectively "owns" the value
+        and is responsible for managing its reference count appropriately (e.g., decrementing
+        it when it's no longer needed).</p>
+    <p class="Pp">The internal representation of a Tcl object can change over time. For instance,
+        when a value is first created as a string, it may later be converted to an integer
+        if operations requiring an integer representation are performed on it. The
+        <code class="Nm">Tcl_GetIntFromObj</code> procedure can be used to obtain an integer
+        representation of a value. If the value does not already have an integer
+        representation, Tcl will attempt to convert it. This conversion process might involve
+        creating a new internal representation and updating the object's type pointer.
+        Procedures that modify values, such as list manipulation commands, may need to
+        invalidate the string representation of a value after changing its internal
+        representation. This is typically done using <code class="Nm">Tcl_InvalidateStringRep</code>.
+        A list element can be extracted using <code class="Nm">Tcl_ListObjIndex</code>. The same
+        value holding the same string value can have several different internal
+        representations at different times. Extension writers can also force a value to be
+        converted from one type to another using the <code class="Nm">Tcl_ConvertToType</code>
+        procedure. Only programmers that create new value types need to be concerned about how
+        this is done. A procedure defined as part of the value type's implementation creates a
+        new internal representation for a value and changes its <i>typePtr</i>. See the
+        man page for <code class="Nm">Tcl_RegisterObjType</code> to see how to create a new
+        value type.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="EXAMPLE_OF_THE_LIFETIME_OF_A_VALUE">EXAMPLE OF THE LIFETIME OF A VALUE</h1>
+    <p class="Pp">As an example of the lifetime of a value, consider the following
+        sequence of commands:</p>
+    <div class="Bd-indent">
+        <pre><b>set x 123</b></pre>
+    </div>
+    <p class="Pp">This assigns to <i>x</i> an untyped value whose <i>bytes</i>
+        member points to <b>123</b> and <i>length</i> member contains 3. The value's
+        <i>typePtr</i> member is NULL.</p>
+    <div class="Bd-indent">
+        <pre><b>puts &quot;x is $x&quot;</b></pre>
+    </div>
+    <p class="Pp"><i>x</i>'s string representation is valid (since <i>bytes</i> is
+        non-NULL) and is fetched for the command.</p>
+    <div class="Bd-indent">
+        <pre><b>incr x</b></pre>
+    </div>
+    <p class="Pp">The <b>incr</b> command first gets an integer from <i>x</i>'s
+        value by calling <b>Tcl_GetIntFromObj</b>. This procedure checks whether the
+        value is already an integer value. Since it is not, it converts the value by
+        setting the value's internal representation to the integer <b>123</b> and
+        setting the value's <i>typePtr</i> to point to the integer Tcl_ObjType
+        structure. Both representations are now valid. <b>incr</b> increments the
+        value's integer internal representation then invalidates its string
+        representation (by calling <b>Tcl_InvalidateStringRep</b>) since the string
+        representation no longer corresponds to the internal representation.</p>
+    <div class="Bd-indent">
+        <pre><b>puts &quot;x is now $x&quot;</b></pre>
+    </div>
+    <p class="Pp">The string representation of <i>x</i>'s value is needed and is
+        recomputed. The string representation is now <b>124</b> and both
+        representations are again valid.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="STORAGE_MANAGEMENT_OF_VALUES">STORAGE MANAGEMENT OF VALUES</h1>
+    <p class="Pp">Tcl values are allocated on the heap and are shared as much as
+        possible to reduce storage requirements. Reference counting is used to
+        determine when a value is no longer needed and can safely be freed. A value
+        just created by <b>Tcl_NewObj</b> or <b>Tcl_NewStringObj</b> has
+        <i>refCount</i> 0. The macro <b>Tcl_IncrRefCount</b> increments the
+        reference count when a new reference to the value is created. The macro
+        <b>Tcl_DecrRefCount</b> decrements the count when a reference is no longer
+        needed and, if the value's reference count drops to zero, frees its storage.
+        A value shared by different code or data structures has <i>refCount</i>
+        greater than 1. Incrementing a value's reference count ensures that it will
+        not be freed too early or have its value change accidentally.</p>
+    <p class="Pp">As an example, the bytecode interpreter shares argument values
+        between calling and called Tcl procedures to avoid having to copy values. It
+        assigns the call's argument values to the procedure's formal parameter
+        variables. In doing so, it calls <b>Tcl_IncrRefCount</b> to increment the
+        reference count of each argument since there is now a new reference to it
+        from the formal parameter. When the called procedure returns, the
+        interpreter calls <b>Tcl_DecrRefCount</b> to decrement each argument's
+        reference count. When a value's reference count drops less than or equal to
+        zero, <b>Tcl_DecrRefCount</b> reclaims its storage. Most command procedures
+        do not have to be concerned about reference counting since they use a
+        value's value immediately and do not retain a pointer to the value after
+        they return. However, if they do retain a pointer to a value in a data
+        structure, they must be careful to increment its reference count since the
+        retained pointer is a new reference.</p>
+    <p class="Pp">Command procedures that directly modify values such as those for
+        <b>lappend</b> and <b>linsert</b> must be careful to copy a shared value
+        before changing it. They must first check whether the value is shared by
+        calling <b>Tcl_IsShared</b>. If the value is shared they must copy the value
+        by using <b>Tcl_DuplicateObj</b>; this returns a new duplicate of the
+        original value that has <i>refCount</i> 0. If the value is not shared, the
+        command procedure &#x201C;owns&#x201D; the value and can safely modify it
+        directly. For example, the following code appears in the command procedure
+        that implements <b>linsert</b>. This procedure modifies the list value
+        passed to it in <i>objv[1]</i> by inserting <i>objc-3</i> new elements
+        before <i>index</i>.</p>
+    <div class="Bd-indent">
+        <pre>listPtr = objv[1];
+if (<b>Tcl_IsShared</b>(listPtr)) {
+    listPtr = <b>Tcl_DuplicateObj</b>(listPtr);
+}
+result = Tcl_ListObjReplace(interp, listPtr, index, 0,
+        (objc-3), &amp;(objv[3]));</pre>
+    </div>
+    <p class="Pp">As another example, <b>incr</b>'s command procedure must check
+        whether the variable's value is shared before incrementing the integer in
+        its internal representation. If it is shared, it needs to duplicate the
+        value in order to avoid accidentally changing values in other data
+        structures.</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="SEE_ALSO">SEE ALSO</h1>
+    <p class="Pp">Tcl_ConvertToType(3), Tcl_GetIntFromObj(3),
+        Tcl_ListObjAppendElement(3), Tcl_ListObjIndex(3), Tcl_ListObjReplace(3),
+        Tcl_RegisterObjType(3)</p>
+</section>
+<section class="Sh">
+    <h1 class="Sh" id="KEYWORDS">KEYWORDS</h1>
+    <p class="Pp">internal representation, value, value creation, value type,
+        reference counting, string representation, type conversion</p>
+</section>
+</div>
+<table class="foot">
+    <tr>
+        <td class="foot-date">8.5</td>
+        <td class="foot-os">Tcl</td>
+    </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+        <dt>Version:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>TCL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#ARGUMENTS">ARGUMENTS</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#THE_TCL_OBJ_STRUCTURE">THE TCL_OBJ STRUCTURE</a></li>
+        
+            <li><a href="#EXAMPLE_OF_THE_LIFETIME_OF_A_VALUE">EXAMPLE OF THE LIFETIME OF A VALUE</a></li>
+        
+            <li><a href="#STORAGE_MANAGEMENT_OF_VALUES">STORAGE MANAGEMENT OF VALUES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#KEYWORDS">KEYWORDS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Tcl_DecrRefCount.3.en.txt">txt</a>, 
+        
+            <a href="/man/Tcl_DecrRefCount.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>
+```
+
+```arabic
+l <b>Tcl_ListObjIndex</b> لاستخراج
+    عنصر قائمة من القيمة. نفس القيمة التي تحمل نفس القيمة النصية
+    يمكن أن يكون لها عدة تمثيلات داخلية مختلفة في أوقات مختلفة.
+    يمكن لكتاب التوسعات أيضًا فرض تحويل قيمة من نوع إلى آخر
+    باستخدام الإجراء <b>Tcl_ConvertToType</b>. فقط المبرمجين الذين
+    ينشئون أنواع قيم جديدة يحتاجون إلى الاهتمام بكيفية القيام بذلك. أ
+    إجراء معرف كجزء من تنفيذ نوع القيمة ينشئ تمثيلًا داخليًا جديدًا
+    لقيمة ويغير <i>typePtr</i> الخاص بها. انظر صفحة الدليل لـ
+    <b>Tcl_RegisterObjType</b> لمعرفة كيفية إنشاء نوع قيمة جديد.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='مثال_على_دورة_حياة_القيمة'><a class='permalink' href='#مثال_على_دورة_حياة_القيمة'>مثال   على دورة حياة القيمة</a></h1>
+<p class="Pp">كمثال على دورة حياة القيمة، ضع في اعتبارك التسلسل التالي
+    للأوامر:</p>
+<div class="Bd-indent">
+<pre><b>set x 123</b></pre>
+</div>
+<p class="Pp">يقوم هذا بتعيين قيمة غير مصنفة إلى <i>x</i> حيث يشير العضو
+    <i>bytes</i> إلى <b>123</b> ويحتوي العضو <i>length</i> على 3. الـ
+    <i>typePtr</i> الخاص بالقيمة هو NULL.</p>
+<div class="Bd-indent">
+<pre><b>puts &quot;x is $x&quot;</b></pre>
+</div>
+<p class="Pp">التمثيل النصي لـ <i>x</i> صالح (نظرًا لأن <i>bytes</i> غير NULL)
+    ويتم جلبه للأمر.</p>
+<div class="Bd-indent">
+<pre><b>incr x</b></pre>
+</div>
+<p class="Pp">يقوم الأمر <b>incr</b> أولاً بالحصول على عدد صحيح من قيمة
+    <i>x</i> عن طريق استدعاء <b>Tcl_GetIntFromObj</b>. يتحقق هذا الإجراء مما إذا كانت
+    القيمة بالفعل قيمة عدد صحيح. نظرًا لأنها ليست كذلك، فإنه يحول القيمة عن طريق
+    تعيين التمثيل الداخلي للقيمة إلى العدد الصحيح <b>123</b> وتعيين <i>typePtr</i>
+    للقيمة للإشارة إلى بنية Tcl_ObjType للعدد الصحيح. كلا التمثيليين صالحان الآن.
+    <b>incr</b> يزيد التمثيل الداخلي للعدد الصحيح للقيمة ثم يبطل تمثيلها النصي
+    (عن طريق استدعاء <b>Tcl_InvalidateStringRep</b>) نظرًا لأن التمثيل النصي لم يعد
+    يتوافق مع التمثيل الداخلي.</p>
+<div class="Bd-indent">
+<pre><b>puts &quot;x is now $x&quot;</b></pre>
+</div>
+<p class="Pp">يلزم التمثيل النصي لقيمة <i>x</i> ويتم إعادة حسابه. التمثيل النصي
+    الآن هو <b>124</b> وكلا التمثيليين صالحان مرة أخرى.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='إدارة_تخزين_القيم'><a class='permalink' href='#إدارة_تخزين_القيم'>إدارة   تخزين القيم</a></h1>
+<p class="Pp">يتم تخصيص قيم Tcl في الذاكرة العشوائية ويتم مشاركتها قدر الإمكان
+    لتقليل متطلبات التخزين. يتم استخدام عد المراجع لتحديد متى لم تعد القيمة مطلوبة
+    ويمكن تحريرها بأمان. قيمة تم إنشاؤها للتو بواسطة <b>Tcl_NewObj</b> أو
+    <b>Tcl_NewStringObj</b> لديها <i>refCount</i> 0. يقوم الماكرو
+    <b>Tcl_IncrRefCount</b> بزيادة عد المراجع عند إنشاء مرجع جديد للقيمة. يقوم الماكرو
+    <b>Tcl_DecrRefCount</b> بتقليل العد عند عدم الحاجة إلى مرجع، وإذا انخفض عد المراجع
+    للقيمة إلى الصفر، فإنه يحرر تخزينها. قيمة مشتركة بين هياكل بيانات أو رموز
+    مختلفة لديها <i>refCount</i> أكبر من 1. زيادة عد المراجع للقيمة تضمن أنها لن
+    تُحرر مبكرًا أو تتغير قيمتها عن طريق الخطأ.</p>
+<p class="Pp">كمثال، يقوم مفسر البايت كود بمشاركة قيم الوسيطات بين إجراءات Tcl
+    التي تستدعي وتُستدعى لتجنب نسخ القيم. يقوم بتعيين قيم وسيطات الاستدعاء للمتغيرات
+    الرسمية للإجراء. عند القيام بذلك، يستدعي <b>Tcl_IncrRefCount</b> لزيادة عد المراجع
+    لكل وسيطة نظرًا لوجود مرجع جديد لها الآن من المعلمة الرسمية. عند عودة الإجراء
+    المستدعى، يستدعي المفسر <b>Tcl_DecrRefCount</b> لتقليل عد المراجع لكل وسيطة. عندما
+    ينخفض عد المراجع للقيمة إلى أقل من أو يساوي الصفر، يقوم
+    <b>Tcl_DecrRefCount</b> باستعادة تخزينها. لا تحتاج معظم إجراءات الأوامر إلى الاهتمام
+    بعد المراجع لأنها تستخدم قيمة القيمة فورًا ولا تحتفظ بمؤشر للقيمة بعد
+    عودتها. ومع ذلك، إذا احتفظت بمؤشر لقيمة في هيكل بيانات، فيجب عليها توخي
+    الحذر لزيادة عد المراجع الخاص بها نظرًا لأن المؤشر المحتفظ به هو مرجع جديد.</p>
+<p class="Pp">يجب على إجراءات الأوامر التي تعدل القيم مباشرة مثل تلك الخاصة بـ
+    <b>lappend</b> و <b>linsert</b> توخي الحذر لنسخ قيمة مشتركة قبل تغييرها. يجب
+    عليها أولاً التحقق مما إذا كانت القيمة مشتركة عن طريق استدعاء
+    <b>Tcl_IsShared</b>. إذا كانت القيمة مشتركة، فيجب عليها نسخ القيمة باستخدام
+    <b>Tcl_DuplicateObj</b> ؛ هذا يعيد نسخة جديدة من القيمة الأصلية التي لديها
+    <i>refCount</i> 0. إذا لم تكن القيمة مشتركة، فإن إجراء الأمر
+    "يملك" القيمة ويمكنه تعديلها بأمان مباشرة. على سبيل المثال، الكود التالي يظهر في
+    إجراء الأمر الذي ينفذ <b>linsert</b>. هذا الإجراء يعدل قيمة القائمة
+    الممررة إليه في <i>objv[1]</i> عن طريق إدراج <i>objc-3</i> عناصر جديدة قبل
+    <i>index</i>.</p>
+<div class="Bd-indent">
+<pre>listPtr = objv[1];
+if (<b>Tcl_IsShared</b>(listPtr)) {
+    listPtr = <b>Tcl_DuplicateObj</b>(listPtr);
+}
+result = Tcl_ListObjReplace(interp, listPtr, index, 0,
+        (objc-3), &amp;(objv[3]));</pre>
+</div>
+<p class="Pp">كمثال آخر، يجب على إجراء أمر <b>incr</b> التحقق مما إذا كانت
+    قيمة المتغير مشتركة قبل زيادة العدد الصحيح في تمثيلها الداخلي. إذا كانت مشتركة،
+    فيجب عليها تكرار القيمة لتجنب تغيير القيم في هياكل البيانات الأخرى عن طريق
+    الخطأ.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='انظر_أيضا'><a class='permalink' href='#انظر_أيضا'>انظر   أيضا</a></h1>
+<p class="Pp">Tcl_ConvertToType(3), Tcl_GetIntFromObj(3),
+    Tcl_ListObjAppendElement(3), Tcl_ListObjIndex(3), Tcl_ListObjReplace(3),
+    Tcl_RegisterObjType(3)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='الكلمات_المفتاحية'><a class='permalink' href='#الكلمات_المفتاحية'>الكلمات   المفتاحية</a></h1>
+<p class="Pp">التمثيل الداخلي، القيمة، إنشاء القيمة، نوع القيمة،
+    عد المراجع، التمثيل النصي، تحويل النوع</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">8.5</td>
+    <td class="foot-os">Tcl</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+        <dt>Version:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>TCL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#ARGUMENTS">ARGUMENTS</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#THE_TCL_OBJ_STRUCTURE">THE TCL_OBJ STRUCTURE</a></li>
+        
+            <li><a href="#EXAMPLE_OF_THE_LIFETIME_OF_A_VALUE">EXAMPLE OF THE LIFETIME OF A VALUE</a></li>
+        
+            <li><a href="#STORAGE_MANAGEMENT_OF_VALUES">STORAGE MANAGEMENT OF VALUES</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#KEYWORDS">KEYWORDS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Tcl_DecrRefCount.3.en.txt">txt</a>, 
+        
+            <a href="/man/Tcl_DecrRefCount.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

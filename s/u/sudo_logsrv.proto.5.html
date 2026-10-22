@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>sudo_logsrv.proto(5) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">sudo_logsrv.proto(5)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SUDO_LOGSRV.PROTO(5)</td>
+    <td class="head-vol">File Formats Manual</td>
+    <td class="head-rtitle">SUDO_LOGSRV.PROTO(5)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp"><code class="Nm">sudo_logsrv.proto</code> &#x2014;
+    <span class="Nd">بروتوكول خادم تسجيل sudo</span></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">بدءًا من الإصدار 1.9.0، يدعم <code class="Nm">sudo</code> إرسال سجلات الأحداث والإدخال/الإخراج إلى خادم تسجيل. البروتوكول المستخدم مكتوب بلغة Google Protocol Buffers الخاصة بالمجال. يتضمن قسم <a class="Sx" href="#EXAMPLES">الأمثلة</a> وصفًا كاملاً للبروتوكول بتنسيق Protocol Buffers.</p>
+<p class="Pp">نظرًا لعدم وجود طريقة لتحديد حدود الرسائل عند استخدام Protocol Buffers، يتم إرسال حجم السلك لكل رسالة مسبقًا مباشرةً قبل الرسالة نفسها كرقم صحيح غير موقع 32 بت بترتيب بايت الشبكة. يُشار إلى هذا باسم "التأطير البادئ بالطول" وهو الطريقة التي تقترحها Google للتعامل مع نقص محددات الرسائل.</p>
+<p class="Pp">يتكون البروتوكول من رسالتين أساسيتين، <i class="Em">ClientMessage</i> و <i class="Em">ServerMessage</i>، الموصوفتين أدناه. يجب أن يقبل الخادم الرسائل التي يصل حجمها إلى ميغابايت. قد يُرجع الخادم خطأ إذا حاول العميل إرسال رسالة أكبر من ميغابايت.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Client_Messages'><a class='permalink' href='#Client_Messages'>رسائل العميل</a></h1>
+<p class="Pp">إن <i class="Em">ClientMessage</i> هو حاوية تُستخدم لتغليف جميع أنواع الرسائل الممكنة التي يمكن للعميل إرسالها إلى الخادم.</p>
+<div class="Bd Pp Li">
+<pre>message ClientMessage {
+  oneof type {
+    AcceptMessage accept_msg = 1;
+    RejectMessage reject_msg = 2;
+    ExitMessage exit_msg = 3;
+    RestartMessage restart_msg = 4;
+    AlertMessage alert_msg = 5;
+    IoBuffer ttyin_buf = 6;
+    IoBuffer ttyout_buf = 7;
+    IoBuffer stdin_buf = 8;
+    IoBuffer stdout_buf = 9;
+    IoBuffer stderr_buf = 10;
+    ChangeWindowSize winsize_event = 11;
+    CommandSuspend suspend_event = 12;
+    ClientHello hello_msg = 13;
+  }
+}</pre>
+</div>
+<p class="Pp">الرسائل الفرعية المختلفة من نوع <i class="Em">ClientMessage</i> التي يمكن للعميل إرسالها إلى الخادم موصوفة أدناه.</p>
+<section class="Ss">
+<h2 class="Ss" id='TimeSpec'><a class='permalink' href='#TimeSpec'>TimeSpec</a></h2>
+<div class="Bd Li">
+<pre>message TimeSpec {
+    int64 tv_sec = 1;
+    int32 tv_nsec = 2;
+}</pre>
+</div>
+<p class="Pp" id="tv_sec">إن <i class="Em">TimeSpec</i> هو المكافئ لبنية POSIX <var class="Vt">struct timespec</var>، يحتوي على أعضاء الثواني والنانوثواني. العضو <a class="permalink" href="#tv_sec"><i class="Em">tv_sec</i></a> هو عدد صحيح 64 بت لدعم التواريخ بعد عام 2038.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='InfoMessage'><a class='permalink' href='#InfoMessage'>InfoMessage</a></h2>
+<div class="Bd Li">
+<pre>message InfoMessage {
+  message StringList {
+    repeated string strings = 1;
+  }
+  message NumberList {
+    repeated int64 numbers = 1;
+  }
+  string key = 1;
+  oneof value {
+    int64 numval = 2;
+    string strval = 3;
+    StringList strlistval = 4;
+    NumberList numlistval = 5;
+  }
+}</pre>
+</div>
+<p class="Pp">يُستخدم <i class="Em">InfoMessage</i> لتمثيل معلومات حول المستخدم المستدعي وكذلك بيئة التنفيذ التي يعمل فيها الأمر على شكل أزواج مفتاح-قيمة. المفتاح هو دائمًا سلسلة نصية ولكن القيمة قد تكون عددًا صحيحًا 64 بت، أو سلسلة نصية، أو مصفوفة من السلاسل النصية، أو مصفوفة من الأعداد الصحيحة 64 بت. يتكون سجل الأحداث من إدخالات <i class="Em">InfoMessage</i>. انظر قسم <a class="Sx" href="#EVENT_LOG_VARIABLES">متغيرات سجل الأحداث</a> لمزيد من المعلومات.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ClientHello_hello_msg'><a class='permalink' href='#ClientHello_hello_msg'>ClientHello   hello_msg</a></h2>
+<div class="Bd Li">
+<pre>message ClientHello {
+  string client_id = 1;
+}</pre>
+</div>
+<p class="Pp">تتكون رسالة <i class="Em">ClientHello</i> من معلومات العميل التي قد يتم إرسالها إلى الخادم عند اتصال العميل لأول مرة.</p>
+<dl class="Bl-tag">
+  <dt>client_id</dt>
+  <dd>وصف حر للعميل. يتضمن هذا عادةً اسم وإصدار تطبيق العميل.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='AcceptMessage_accept_msg'><a class='permalink' href='#AcceptMessage_accept_msg'>AcceptMessage   accept_msg</a></h2>
+<div class="Bd Li">
+<pre>message AcceptMessage {
+  TimeSpec submit_time = 1;
+  repeated InfoMessage info_msgs = 2;
+  bool expect_iobufs = 3;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">AcceptMessage</i> بواسطة العميل عندما يُسمح للأمر بموجب سياسة الأمان. تحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>submit_time</dt>
+  <dd>وقت الساعة الجداري عندما تم تقديم الأمر إلى سياسة الأمان.</dd>
+  <dt>info_msgs</dt>
+  <dd>مصفوفة من <i class="Em">InfoMessage</i> تصف المستخدم الذي قدم الأمر بالإضافة إلى بيئة تنفيذ الأمر. تُستخدم هذه المعلومات لإنشاء إدخال سجل أحداث وقد يستخدمها الخادم أيضًا لتحديد مكان وكيفية تخزين سجل الإدخال/الإخراج.</dd>
+  <dt>expect_iobufs</dt>
+  <dd>تم تعيينه إلى true إذا كان يجب أن يتوقع الخادم رسائل <i class="Em">IoBuffer</i> لتتبعها (لتسجيل الإدخال/الإخراج) أو false إذا كان يجب على الخادم تخزين سجل الأحداث فقط.</dd>
+</dl>
+<p class="Pp">إذا تم إرسال <i class="Em">AcceptMessage</i>، يجب على العميل عدم إرسال <i class="Em">RejectMessage</i> أو <i class="Em">RestartMessage</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='RejectMessage_reject_msg'><a class='permalink' href='#RejectMessage_reject_msg'>RejectMessage   reject_msg</a></h2>
+<div class="Bd Li">
+<pre>message RejectMessage {
+  TimeSpec submit_time = 1;
+  string reason = 2;
+  repeated InfoMessage info_msgs = 3;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">RejectMessage</i> بواسطة العميل عندما يتم رفض الأمر بموجب سياسة الأمان. تحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>submit_time</dt>
+  <dd>وقت الساعة الجداري عندما تم تقديم الأمر إلى سياسة الأمان.</dd>
+  <dt>reason</dt>
+  <dd>السبب الذي قدمته سياسة الأمان لرفض الأمر.</dd>
+  <dt>info_msgs</dt>
+  <dd>مصفوفة من <i class="Em">InfoMessage</i> تصف المستخدم الذي قدم الأمر بالإضافة إلى بيئة تنفيذ الأمر. تُستخدم هذه المعلومات لإنشاء إدخال سجل أحداث.</dd>
+</dl>
+<p class="Pp">إذا تم إرسال <i class="Em">RejectMessage</i>، يجب على العميل عدم إرسال <i class="Em">AcceptMessage</i> أو <i class="Em">RestartMessage</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ExitMessage_exit_msg'><a class='permalink' href='#ExitMessage_exit_msg'>ExitMessage   exit_msg</a></h2>
+<div class="Bd Li">
+<pre>message ExitMessage {
+  TimeSpec run_time = 1;
+  int32 exit_value = 2;
+  bool dumped_core = 3;
+  string signal = 4;
+  string error = 5;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">ExitMessage</i> بواسطة العميل بعد خروج الأمر أو إنهاءه بإشارة. تحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>run_time</dt>
+  <dd>إجمالي الوقت المنقضي منذ بدء الأمر، محسوبًا باستخدام ساعة رتيبة حيثما أمكن. هذا ليس وقت الساعة الجداري.</dd>
+  <dt>exit_value</dt>
+  <dd>قيمة خروج الأمر في النطاق 0-255.</dd>
+  <dt>dumped_core</dt>
+  <dd>صحيح إذا تم إنهاء الأمر بإشارة وتم تفريغ الذاكرة الأساسية.</dd>
+  <dt>signal</dt>
+  <dd>إذا تم إنهاء الأمر بإشارة، يتم تعيين هذا إلى اسم الإشارة بدون البادئة "SIG". على سبيل المثال، <code class="Dv">INT</code>، <code class="Dv">TERM</code>، <code class="Dv">KILL</code>، <code class="Dv">SEGV</code>.</dd>
+  <dt>error</dt>
+  <dd>رسالة من العميل تشير إلى أن الأمر قد تم إنهاؤه بشكل غير متوقع بسبب خطأ.</dd>
+</dl>
+<p class="Pp">عند إجراء تسجيل الإدخال/الإخراج، يجب على العميل انتظار <i class="Em">commit_point</i> المقابل لـ <i class="Em">IoBuffer</i> النهائي قبل إغلاق الاتصال ما لم يتم استلام <i class="Em">commit_point</i> النهائي بالفعل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='RestartMessage_restart_msg'><a class='permalink' href='#RestartMessage_restart_msg'>RestartMessage   restart_msg</a></h2>
+<div class="Bd Li">
+<pre>message RestartMessage {
+  string log_id = 1;
+  TimeSpec resume_point = 2;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">RestartMessage</i> بواسطة العميل لاستئناف إرسال سجل إدخال/إخراج موجود تم مقاطعته سابقًا. يحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>log_id</dt>
+  <dd>الاسم من جانب الخادم لسجل الإدخال/الإخراج الذي تم إرساله سابقًا من الخادم إلى العميل. قد يكون هذا اسم مسار على الخادم أو نوعًا آخر من المعرفات من جانب الخادم.</dd>
+  <dt>resume_point</dt>
+  <dd>النقطة الزمنية التي يجب استئناف سجل الإدخال/الإخراج بعدها. هذا على شكل <i class="Em">TimeSpec</i> يمثل مقدار الوقت منذ بدء الأمر، وليس وقت الساعة الجداري. يجب أن يتوافق <i class="Em">resume_point</i> مع <i class="Em">commit_point</i> تم إرساله سابقًا من الخادم إلى العميل. إذا تلقى الخادم <i class="Em">RestartMessage</i> يحتوي على <i class="Em">resume_point</i> لم يره من قبل، فسيتم إرجاع خطأ إلى العميل وسيتم إنهاء الاتصال.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='AlertMessage_alert_msg'><a class='permalink' href='#AlertMessage_alert_msg'>AlertMessage   alert_msg</a></h2>
+<div class="Bd Li">
+<pre>message AlertMessage {
+  string message = 1;
+  repeated InfoMessage info_msgs = 2;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">AlertMessage</i> بواسطة العميل لإعلام الخادم بوجود مشكلة لم تؤد إلى إنهاء الأمر. تحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>message</dt>
+  <dd>رسالة التنبيه.</dd>
+  <dt>info_msgs</dt>
+  <dd>مصفوفة من <i class="Em">InfoMessage</i> تصف المستخدم الذي قدم الأمر بالإضافة إلى بيئة تنفيذ الأمر.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='IoBuffer'><a class='permalink' href='#IoBuffer'>IoBuffer</a></h2>
+<div class="Bd Li">
+<pre>message IoBuffer {
+  TimeSpec timestamp = 1;
+  bytes buffer = 2;
+  bool is_commit_point = 3;
+}</pre>
+</div>
+<p class="Pp">يمثل <i class="Em">IoBuffer</i> المخزن المؤقت لبيانات الإدخال/الإخراج التي تم التقاطها. تحتوي على الأعضاء التالية:</p>
+<dl class="Bl-tag">
+  <dt>timestamp</dt>
+  <dd>الطابع الزمني لبيانات الإدخال/الإخراج.</dd>
+  <dt>buffer</dt>
+  <dd>بيانات الإدخال/الإخراج الفعلية.</dd>
+  <dt>is_commit_point</dt>
+  <dd>يتم تعيينه إلى true إذا كان المخزن المؤقت يمثل نقطة التزام، مما يعني أن جميع البيانات السابقة قد تم تسجيلها. تُستخدم هذه لتحديد نقاط الاستئناف.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ChangeWindowSize_winsize_event'><a class='permalink' href='#ChangeWindowSize_winsize_event'>ChangeWindowSize   winsize_event</a></h2>
+<div class="Bd Li">
+<pre>message ChangeWindowSize {
+  int32 rows = 1;
+  int32 cols = 2;
+  int32 x = 3;
+  int32 y = 4;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">ChangeWindowSize</i> بواسطة العميل لإعلام الخادم بأن حجم نافذة الجهاز الظاهري قد تغير.</p>
+<dl class="Bl-tag">
+  <dt>rows</dt>
+  <dd>عدد الصفوف الجديدة.</dd>
+  <dt>cols</dt>
+  <dd>عدد الأعمدة الجديدة.</dd>
+  <dt>x</dt>
+  <dd>موضع x الجديد للنافذة (خاص بـ xterm).</dd>
+  <dt>y</dt>
+  <dd>موضع y الجديد للنافذة (خاص بـ xterm).</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='CommandSuspend_suspend_event'><a class='permalink' href='#CommandSuspend_suspend_event'>CommandSuspend   suspend_event</a></h2>
+<div class="Bd Li">
+<pre>message CommandSuspend {
+  bool suspended = 1;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">CommandSuspend</i> بواسطة العميل للإشارة إلى ما إذا كان الأمر قد تم تعليقه أو استئنافه.</p>
+<dl class="Bl-tag">
+  <dt>suspended</dt>
+  <dd>صحيح إذا تم تعليق الأمر، وخطأ إذا تم استئنافه.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Server_Messages'><a class='permalink' href='#Server_Messages'>رسائل الخادم</a></h1>
+<p class="Pp">إن <i class="Em">ServerMessage</i> هو حاوية تُستخدم لتغليف جميع أنواع الرسائل الممكنة التي يمكن للخادم إرسالها إلى العميل.</p>
+<div class="Bd Pp Li">
+<pre>message ServerMessage {
+  oneof type {
+    LogIdMessage log_id_msg = 1;
+    CommitPointMessage commit_point_msg = 2;
+    ErrorMessage error_msg = 3;
+    ServerHello hello_msg = 4;
+  }
+}</pre>
+</div>
+<p class="Pp">الرسائل الفرعية المختلفة من نوع <i class="Em">ServerMessage</i> التي يمكن للخادم إرسالها إلى العميل موصوفة أدناه.</p>
+<section class="Ss">
+<h2 class="Ss" id='ServerHello_hello_msg'><a class='permalink' href='#ServerHello_hello_msg'>ServerHello   hello_msg</a></h2>
+<div class="Bd Li">
+<pre>message ServerHello {
+  string server_id = 1;
+  repeated string supported_api_versions = 2;
+}</pre>
+</div>
+<p class="Pp">رسالة <i class="Em">ServerHello</i> يتم إرسالها بواسطة الخادم كاستجابة لـ <i class="Em">ClientHello</i>. تحتوي على معرف الخادم وإصدارات واجهة برمجة التطبيقات التي يدعمها.</p>
+<dl class="Bl-tag">
+  <dt>server_id</dt>
+  <dd>معرف حر للخادم.</dd>
+  <dt>supported_api_versions</dt>
+  <dd>قائمة بالسلاسل النصية التي تمثل إصدارات واجهة برمجة التطبيقات التي يدعمها الخادم.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='LogIdMessage_log_id_msg'><a class='permalink' href='#LogIdMessage_log_id_msg'>LogIdMessage   log_id_msg</a></h2>
+<div class="Bd Li">
+<pre>message LogIdMessage {
+  string log_id = 1;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">LogIdMessage</i> بواسطة الخادم عند إنشاء معرف فريد لسجل الإدخال/الإخراج.</p>
+<dl class="Bl-tag">
+  <dt>log_id</dt>
+  <dd>الاسم من جانب الخادم لسجل الإدخال/الإخراج. قد يكون هذا اسم مسار على الخادم أو معرفًا آخر من جانب الخادم.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='CommitPointMessage_commit_point_msg'><a class='permalink' href='#CommitPointMessage_commit_point_msg'>CommitPointMessage   commit_point_msg</a></h2>
+<div class="Bd Li">
+<pre>message CommitPointMessage {
+  TimeSpec commit_point = 1;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">CommitPointMessage</i> بواسطة الخادم للإشارة إلى نقطة في سجل الإدخال/الإخراج تم حفظها بشكل دائم. تُستخدم هذه النقاط كنقاط استئناف محتملة.</p>
+<dl class="Bl-tag">
+  <dt>commit_point</dt>
+  <dd>نقطة الالتزام في شكل <i class="Em">TimeSpec</i> تمثل الوقت المنقضي منذ بدء الأمر.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='ErrorMessage_error_msg'><a class='permalink' href='#ErrorMessage_error_msg'>ErrorMessage   error_msg</a></h2>
+<div class="Bd Li">
+<pre>message ErrorMessage {
+  string error = 1;
+}</pre>
+</div>
+<p class="Pp">يتم إرسال <i class="Em">ErrorMessage</i> بواسطة الخادم للإشارة إلى خطأ حدث على جانب الخادم. يؤدي هذا إلى إنهاء الاتصال.</p>
+<dl class="Bl-tag">
+  <dt>error</dt>
+  <dd>رسالة خطأ من الخادم.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>
+<p class="Pp">يحتوي ملف <code class="Nm">/etc/sudo.conf</code> على مثال لتعريف بروتوكول Protocol Buffers:</p>
+<div class="Bd Pp Sx">
+<pre>sudo_logsrv.proto</pre>
+</div>
+<p class="Pp">يمكنك تضمين هذا الملف في ملفات .proto الأخرى باستخدام البناء <code class="Dv">import</code>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EVENT_LOG_VARIABLES'><a class='permalink' href='#EVENT_LOG_VARIABLES'>EVENT LOG VARIABLES</a></h1>
+<p class="Pp">تُستخدم متغيرات سجل الأحداث لتخزين معلومات حول الأمر الذي تم تشغيله. يتم تمثيل هذه المعلومات كأزواج مفتاح-قيمة في رسائل <i class="Em">InfoMessage</i>. فيما يلي قائمة ببعض متغيرات سجل الأحداث الشائعة:</p>
+<ul class="Bl-bullet">
+  <li><code class="Dv">COMMAND</code>: الأمر الكامل الذي تم تشغيله.</li>
+  <li><code class="Dv">ARGUMENTS</code>: قائمة بالوسائط التي تم تمريرها إلى الأمر.</li>
+  <li><code class="Dv">CWD</code>: دليل العمل الحالي عند تشغيل الأمر.</li>
+  <li><code class="Dv">USER</code>: اسم المستخدم الذي قام بتشغيل الأمر.</li>
+  <li><code class="Dv">HOME</code>: الدليل الرئيسي للمستخدم.</li>
+  <li><code class="Dv">SHELL</code>: الغلاف المستخدم لتشغيل الأمر.</li>
+  <li><code class="Dv">HOST</code>: اسم المضيف الذي تم تشغيل الأمر عليه.</li>
+  <li><code class="Dv">TTY</code>: الجهاز الطرفي الذي تم استخدامه.</li>
+  <li><code class="Dv">REMOTEHOST</code>: اسم المضيف البعيد إذا تم تشغيل الأمر عن بعد.</li>
+  <li><code class="Dv">COLOR</code>: يشير إلى ما إذا كان لون الإخراج مدعومًا.</li>
+  <li><code class="Dv">PID</code>: معرف العملية للأمر.</li>
+  <li><code class="Dv">SESSION_ID</code>: معرف الجلسة.</li>
+  <li><code class="Dv">LOGIN_ID</code>: معرف تسجيل الدخول.</li>
+  <li><code class="Dv">KERNEL_VERSION</code>: إصدار النواة.</li>
+  <li><code class="Dv">Os</code>: اسم نظام التشغيل.</li>
+  <li><code class="Dv">ARCHITECTURE</code>: بنية النظام.</li>
+  <li><code class="Dv">PLUGIN_NAME</code>: اسم المكون الإضافي المستخدم.</li>
+  <li><code class="Dv">PLUGIN_OPTIONS</code>: خيارات المكون الإضافي المستخدم.</li>
+  <li><code class="Dv">LOGIN_USER</code>: المستخدم الذي قام بتسجيل الدخول.</li>
+  <li><code class="Dv">LOGIN_GROUP</code>: المجموعة التي قام بتسجيل الدخول إليها.</li>
+  <li><code class="Dv">LOGIN_GROUPS</code>: قائمة المجموعات التي ينتمي إليها المستخدم.</li>
+  <li><code class="Dv">LOGIN_HOMEDIR</code>: الدليل الرئيسي للمستخدم المسجل.</li>
+  <li><code class="Dv">LOGIN_SHELL</code>: الغلاف الخاص بالمستخدم المسجل.</li>
+  <li><code class="Dv">Login_REALM</code>: مجال تسجيل الدخول.</li>
+  <li><code class="Dv">LOGIN_TTY</code>: الجهاز الطرفي للمستخدم المسجل.</li>
+  <li><code class="Dv">LOGIN_REMOTEHOST</code>: اسم المضيف البعيد للمستخدم المسجل.</li>
+  <li><code class="Dv">LOGIN_SSHHOSTKEY FINGERPRINT</code>: بصمة مفتاح SSH لمضيف تسجيل الدخول.</li>
+  <li><code class="Dv">LOGIN_SSHHOSTKEY ALGORITHM</code>: خوارزمية مفتاح SSH لمضيف تسجيل الدخول.</li>
+  <li><code class="Dv">LOGIN_SSHHOSTKEY BASE64</code>: بصمة مفتاح SSH الأساسية 64 لمضيف تسجيل الدخول.</li>
+</ul>
+<p class="Pp">يمكن أن تتضمن سياسات sudo تكوين متغيرات سجل أحداث إضافية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
+<p class="Pp"><a class="Xr">sudo.conf(5)</a>, <a class="Xr">sudo.log(5)</a></p>
+</section>
+</div>
+</section>
+
+                
+            </article>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">The following <i class="Em">InfoMessage</i> entries are
+    required:</p>
+<table class="Bl-column">
+  <tr>
+    <td><a class="permalink" href="#Description"><b class="Sy" id="Description">Description</b></a></td>
+    <td><a class="permalink" href="#Type"><b class="Sy" id="Type">Type</b></a></td>
+    <td><a class="permalink" href="#command"><b class="Sy" id="command">Command</b></a></td>
+    <td><a class="permalink" href="#runuser"><b class="Sy" id="runuser">Run User</b></a></td>
+    <td><a class="permalink" href="#submithost"><b class="Sy" id="submithost">Submit Host</b></a></td>
+    <td><a class="permalink" href="#submituser"><b class="Sy" id="submituser">Submit User</b></a></td>
+  </tr>
+  <tr>
+    <td>command</td>
+    <td>string</td>
+    <td>command that was submitted</td>
+  </tr>
+  <tr>
+    <td>runuser</td>
+    <td>string</td>
+    <td>name of user the command was run as</td>
+  </tr>
+  <tr>
+    <td>submithost</td>
+    <td>string</td>
+    <td>name of host the command was submitted on</td>
+  </tr>
+  <tr>
+    <td>submituser</td>
+    <td>string</td>
+    <td>name of user submitting the command</td>
+  </tr>
+</table>
+<p class="Pp">The following <i class="Em">InfoMessage</i> entries are
+    recognized, but not required:</p>
+<table class="Bl-column">
+  <tr id="Key~2">
+    <td><a class="permalink" href="#Key~2"><b class="Sy">Key</b></a></td>
+    <td><a class="permalink" href="#Type~2"><b class="Sy" id="Type~2">Type</b></a></td>
+    <td><a class="permalink" href="#Description~2"><b class="Sy" id="Description~2">Description</b></a></td>
+  </tr>
+  <tr>
+    <td>clientargv</td>
+    <td>StringList</td>
+    <td>client's original argument vector</td>
+  </tr>
+  <tr>
+    <td>clientpid</td>
+    <td>int64</td>
+    <td>client's process ID</td>
+  </tr>
+  <tr>
+    <td>clientppid</td>
+    <td>int64</td>
+    <td>client's parent process ID</td>
+  </tr>
+  <tr>
+    <td>clientsid</td>
+    <td>int64</td>
+    <td>client's terminal session ID</td>
+  </tr>
+  <tr>
+    <td>columns</td>
+    <td>int64</td>
+    <td>number of columns in the terminal</td>
+  </tr>
+  <tr>
+    <td>lines</td>
+    <td>int64</td>
+    <td>number of lines in the terminal</td>
+  </tr>
+  <tr>
+    <td>runargv</td>
+    <td>StringList</td>
+    <td>argument vector of command to run</td>
+  </tr>
+  <tr>
+    <td>runchroot</td>
+    <td>string</td>
+    <td>root directory of command to run</td>
+  </tr>
+  <tr>
+    <td>runcwd</td>
+    <td>string</td>
+    <td>running command's working directory</td>
+  </tr>
+  <tr>
+    <td>runenv</td>
+    <td>StringList</td>
+    <td>the running command's environment</td>
+  </tr>
+  <tr>
+    <td>rungid</td>
+    <td>int64</td>
+    <td>primary group-ID of the command</td>
+  </tr>
+  <tr>
+    <td>rungids</td>
+    <td>NumberList</td>
+    <td>supplementary group-IDs for the command</td>
+  </tr>
+  <tr>
+    <td>rungroup</td>
+    <td>string</td>
+    <td>primary group name of the command</td>
+  </tr>
+  <tr>
+    <td>rungroups</td>
+    <td>StringList</td>
+    <td>supplementary group names for the command</td>
+  </tr>
+  <tr>
+    <td>runuid</td>
+    <td>int64</td>
+    <td>run user's user-ID</td>
+  </tr>
+  <tr>
+    <td>submitcwd</td>
+    <td>string</td>
+    <td>submit user's current working directory</td>
+  </tr>
+  <tr>
+    <td>submitenv</td>
+    <td>StringList</td>
+    <td>the submit user's environment</td>
+  </tr>
+  <tr>
+    <td>submitgid</td>
+    <td>int64</td>
+    <td>submit user's primary group-ID</td>
+  </tr>
+  <tr>
+    <td>submitgids</td>
+    <td>NumberList</td>
+    <td>submit user's supplementary group-IDs</td>
+  </tr>
+  <tr>
+    <td>submitgroup</td>
+    <td>string</td>
+    <td>submitting user's primary group name</td>
+  </tr>
+  <tr>
+    <td>submitgroups</td>
+    <td>StringList</td>
+    <td>submit user's supplementary group names</td>
+  </tr>
+  <tr>
+    <td>submituid</td>
+    <td>int64</td>
+    <td>submit user's user-ID</td>
+  </tr>
+  <tr>
+    <td>ttyname</td>
+    <td>string</td>
+    <td>terminal the command was submitted from</td>
+  </tr>
+</table>
+<p class="Pp">The server must accept other variables not listed above but may
+    ignore them.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">The Protocol Buffers description of the log server protocol, using
+    "proto3" syntax, is included in full below.</p>
+<div class="Bd Pp Li">
+<pre>syntax = &quot;proto3&quot;;
+
+/*
+ * Client message to the server.  Messages on the wire are
+ * prefixed with a 32-bit size in network byte order.
+ */
+message ClientMessage {
+  oneof type {
+    AcceptMessage accept_msg = 1;
+    RejectMessage reject_msg = 2;
+    ExitMessage exit_msg = 3;
+    RestartMessage restart_msg = 4;
+    AlertMessage alert_msg = 5;
+    IoBuffer ttyin_buf = 6;
+    IoBuffer ttyout_buf = 7;
+    IoBuffer stdin_buf = 8;
+    IoBuffer stdout_buf = 9;
+    IoBuffer stderr_buf = 10;
+    ChangeWindowSize winsize_event = 11;
+    CommandSuspend suspend_event = 12;
+  }
+}
+
+/* Equivalent of POSIX struct timespec */
+message TimeSpec {
+    int64 tv_sec = 1;		/* seconds */
+    int32 tv_nsec = 2;		/* nanoseconds */
+}
+
+/* I/O buffer with keystroke data */
+message IoBuffer {
+  TimeSpec delay = 1;		/* elapsed time since last record */
+  bytes data = 2;		/* keystroke data */
+}
+
+/*
+ * Key/value pairs, like Privilege Manager struct info.
+ * The value may be a number, a string, or a list of strings.
+ */
+message InfoMessage {
+  message StringList {
+    repeated string strings = 1;
+  }
+  message NumberList {
+    repeated int64 numbers = 1;
+  }
+  string key = 1;
+  oneof value {
+    int64 numval = 2;
+    string strval = 3;
+    StringList strlistval = 4;
+    NumberList numlistval = 5;
+  }
+}
+
+/*
+ * Event log data for command accepted by the policy.
+ */
+message AcceptMessage {
+  TimeSpec submit_time = 1;		/* when command was submitted */
+  repeated InfoMessage info_msgs = 2;	/* key,value event log data */
+  bool expect_iobufs = 3;		/* true if I/O logging enabled */
+}
+
+/*
+ * Event log data for command rejected by the policy.
+ */
+message RejectMessage {
+  TimeSpec submit_time = 1;		/* when command was submitted */
+  string reason = 2;			/* reason command was rejected */
+  repeated InfoMessage info_msgs = 3;	/* key,value event log data */
+}
+
+/* Message sent by client when command exits. */
+/* Might revisit runtime and use end_time instead */
+message ExitMessage {
+  TimeSpec run_time = 1;	/* total elapsed run time */
+  int32 exit_value = 2;		/* 0–255 */
+  bool dumped_core = 3;		/* true if command dumped core */
+  string signal = 4;		/* signal name if killed by signal */
+  string error = 5;		/* if killed due to other error */
+}
+
+/* Alert message, policy module-specific. */
+message AlertMessage {
+  TimeSpec alert_time = 1;		/* time alert message occurred */
+  string reason = 2;			/* policy alert error string */
+  repeated InfoMessage info_msgs = 3;	/* key,value event log data */
+}
+
+/* Used to restart an existing I/O log on the server. */
+message RestartMessage {
+  string log_id = 1;		/* ID of log being restarted */
+  TimeSpec resume_point = 2;	/* resume point (elapsed time) */
+}
+
+/* Window size change event. */
+message ChangeWindowSize {
+  TimeSpec delay = 1;		/* elapsed time since last record */
+  int32 rows = 2;		/* new number of rows */
+  int32 cols = 3;		/* new number of columns */
+}
+
+/* Command suspend/resume event. */
+message CommandSuspend {
+  TimeSpec delay = 1;		/* elapsed time since last record */
+  string signal = 2;		/* signal that caused suspend/resume */
+}
+
+/*
+ * Server messages to the client.  Messages on the wire are
+ * prefixed with a 32-bit size in network byte order.
+ */
+message ServerMessage {
+  oneof type {
+    ServerHello hello = 1;	/* server hello message */
+    TimeSpec commit_point = 2;	/* cumulative time of records stored */
+    string log_id = 3;		/* ID of server-side I/O log */
+    string error = 4;		/* error message from server */
+    string abort = 5;		/* abort message, kill command */
+  }
+}
+
+/* Hello message from server when client connects. */
+message ServerHello {
+  string server_id = 1;		/* free-form server description */
+  string redirect = 2;		/* optional redirect if busy */
+  repeated string servers = 3;	/* optional list of known servers */
+}</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE ALSO</a></h1>
+<p class="Pp"><a class="Xr" href="/man/sudo_logsrvd.conf.5.en">sudo_logsrvd.conf(5)</a>,
+    <a class="Xr" href="/man/sudoers.5.en">sudoers(5)</a>,
+    <a class="Xr" href="/man/sudo.8.en">sudo(8)</a>,
+    <a class="Xr" href="/man/sudo_logsrvd.8.en">sudo_logsrvd(8)</a></p>
+<p class="Pp"><cite class="Rs"><span class="RsT">Protocol Buffers</span>,
+    <a class="RsU" href="https://protobuf.dev/">https://protobuf.dev/</a>.</cite></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHORS"><a class="permalink" href="#AUTHORS">AUTHORS</a></h1>
+<p class="Pp">Many people have worked on <code class="Nm">sudo</code> over the
+    years; this version consists of code written primarily by:</p>
+<div class="Bd Pp Bd-indent"><span class="An">Todd C. Miller</span></div>
+<p class="Pp">See the Contributors.md file in the <code class="Nm">sudo</code>
+    distribution (<a href="https://www.sudo.ws/about/contributors/">https://www.sudo.ws/about/contributors/</a>) for an exhaustive
+    list of people who have contributed to <code class="Nm">sudo</code>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="BUGS"><a class="permalink" href="#BUGS">BUGS</a></h1>
+<p class="Pp">If you believe you have found a bug in
+    <code class="Nm">sudo_logsrv.proto</code>, you can either file a bug report
+    in the sudo bug database, <a href="https://bugzilla.sudo.ws/">https://bugzilla.sudo.ws/</a>, or open an issue at
+    <a href="https://github.com/sudo-project/sudo/issues">https://github.com/sudo-project/sudo/issues</a>. If you would prefer to use
+    email, messages may be sent to the sudo-workers mailing list,
+    <a href="https://www.sudo.ws/mailman/listinfo/sudo-workers">https://www.sudo.ws/mailman/listinfo/sudo-workers</a> (public) or
+    &lt;sudo@sudo.ws&gt; (private).</p>
+<p class="Pp">Please do not report security vulnerabilities through public
+    GitHub issues, Bugzilla or mailing lists. Instead, report them via email to
+    &lt;Todd.Miller@sudo.ws&gt;. You may encrypt your message with PGP if you
+    would like, using the key found at <a href="https://www.sudo.ws/dist/PGPKEYS">https://www.sudo.ws/dist/PGPKEYS</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SUPPORT"><a class="permalink" href="#SUPPORT">SUPPORT</a></h1>
+<p class="Pp">Limited free support is available via the sudo-users mailing list,
+    see <a href="https://www.sudo.ws/mailman/listinfo/sudo-users">https://www.sudo.ws/mailman/listinfo/sudo-users</a> to subscribe or search
+    the archives.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DISCLAIMER"><a class="permalink" href="#DISCLAIMER">DISCLAIMER</a></h1>
+<p class="Pp"><code class="Nm">sudo</code> is provided "AS IS" and
+    any express or implied warranties, including, but not limited to, the
+    implied warranties of merchantability and fitness for a particular purpose
+    are disclaimed. See the LICENSE.md file distributed with
+    <code class="Nm">sudo</code> or <a href="https://www.sudo.ws/about/license/">https://www.sudo.ws/about/license/</a> for
+    complete details.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">September 13, 2022</td>
+    <td class="foot-os">Sudo 1.9.17p2</td>
+  </tr>
+</table>
+<!DOCTYPE html>
+<html lang="ar">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>sudo_logsrv.proto.5 - صفحة الدليل</title>
+        <link rel="stylesheet" href="/css/style.css">
+    </head>
+    <body>
+        
+        <main>
+            <article>
+                <h2>sudo_logsrv.proto(5) - صفحة الدليل</h2>
+
+                <section id="NAME">
+                    <h3>NAME</h3>
+                    <p>sudo_logsrv.proto - صيغة بروتوكول سجل sudo</p>
+                </section>
+
+                <section id="DESCRIPTION">
+                    <h3>DESCRIPTION</h3>
+                    <p>الملف <code>/etc/sudo-plugins/sudo-logsrv.proto</code> يحتوي على وصف بصيغة بروتوكول نصي عادي لبنية رسائل سجل <code>sudoers</code>.</p>
+                    <p>هذا الملف اختياري. إذا لم يكن موجودًا، فإن <code>sudo</code> يستخدم صيغة افتراضية. إذا كان موجودًا، فسيتم تفسيره بواسطة <code>sudo log server</code>.</p>
+                    <p>يجب أن يكون الملف قابلاً للقراءة بواسطة المستخدم الذي يقوم بتشغيل <code>sudo log server</code>.</p>
+                </section>
+
+                <section id="Client_Messages">
+                    <h3>رسائل العميل</h3>
+                    <p>تصف بنية الرسائل التي يرسلها عميل <code>sudo</code> إلى خادم السجل.</p>
+                </section>
+
+                <section id="Server_Messages">
+                    <h3>رسائل الخادم</h3>
+                    <p>تصف بنية الرسائل التي يرسلها خادم السجل إلى عميل <code>sudo</code>.</p>
+                </section>
+
+                <section id="Protocol_flow_of_control">
+                    <h3>تدفق التحكم في البروتوكول</h3>
+                    <p>يصف تسلسل الرسائل المتبادلة بين عميل <code>sudo</code> وخادم السجل.</p>
+                </section>
+
+                <section id="EVENT_LOG_VARIABLES">
+                    <h3>متغيرات سجل الأحداث</h3>
+                    <p>قائمة بالمتغيرات المتاحة التي يمكن تضمينها في رسائل السجل.</p>
+                </section>
+
+                <section id="EXAMPLES">
+                    <h3>أمثلة</h3>
+                    <p>أمثلة توضح كيفية استخدام ملف البروتوكول.</p>
+                </section>
+
+                <section id="SEE_ALSO">
+                    <h3>انظر أيضًا</h3>
+                    <p><code>sudoers</code>(5)، <code>sudo.conf</code>(5)</p>
+                </section>
+
+                <section id="AUTHORS">
+                    <h3>المؤلفون</h3>
+                    <p>تم تطوير <code>sudo</code> بواسطة Todd C. Miller &lt;Todd.Miller@sudo.ws&gt;.</p>
+                </section>
+
+                <section id="BUGS">
+                    <h3>أخطاء</h3>
+                    <p>يرجى الإبلاغ عن الأخطاء إلى &lt;dev@sudo.ws&gt;.</p>
+                </section>
+
+                <section id="SUPPORT">
+                    <h3>الدعم</h3>
+                    <p>دعم <code>sudo</code> متاح عبر قائمة البريد sudo-users.</p>
+                </section>
+
+                <section id="DISCLAIMER">
+                    <h3>إخلاء المسؤولية</h3>
+                    <p>هذا البرنامج يأتي بدون أي ضمان، صريحًا أو ضمنيًا.</p>
+                </section>
+
+            </article>
+
+            <aside>
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav>
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#Client_Messages">رسائل العميل</a></li>
+        
+            <li><a href="#Server_Messages">رسائل الخادم</a></li>
+        
+            <li><a href="#Protocol_flow_of_control">تدفق التحكم في البروتوكول</a></li>
+        
+            <li><a href="#EVENT_LOG_VARIABLES">متغيرات سجل الأحداث</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHORS">المؤلفون</a></li>
+        
+            <li><a href="#BUGS">أخطاء</a></li>
+        
+            <li><a href="#SUPPORT">الدعم</a></li>
+        
+            <li><a href="#DISCLAIMER">إخلاء المسؤولية</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/sudo_logsrv.proto.5.en.txt">txt</a>, 
+        
+            <a href="/man/sudo_logsrv.proto.5.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

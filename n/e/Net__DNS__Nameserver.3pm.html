@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Net::DNS::Nameserver(3pm)</title>
+    <link rel="stylesheet" type="text/css" href="/man/style.css">
+<link rel="stylesheet" href="basic.css">
+</head>
+<body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Net__DNS__Nameserver(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-net-dns/">perl-net-dns</a></p>
+<p class="lic">التراخيص: PerlArtistic</p>
+
+    
+    <article>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">Net::DNS::Nameserver - A DNS nameserver class</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre>    use Net::DNS::Nameserver;
+    sub reply_handler {
+        my ($q, $nameserver) = @_;
+        # ... process the query ...
+        # return an array of Net::DNS::RR objects for the answer, authority, and
+        # additional sections.
+        #
+        # The question ($q) is a Net::DNS::Question object.
+        # The nameserver ($nameserver) is a Net::DNS::Nameserver object.
+        #
+        # $q-&gt;query() returns the name being queried.
+        # $q-&gt;type() returns the query type.
+        #
+        # Example:
+        my @ans;
+        my $rr = undef;
+        if ($q-&gt;query() eq &quot;example.com.&quot;) {
+            $rr = new Net::DNS::RR(
+                Name     =&gt; &quot;example.com.&quot;,
+                Type     =&gt; &quot;A&quot;,
+                TTL      =&gt; 3600,
+                Address  =&gt; &quot;1.2.3.4&quot;,
+            );
+            push @ans, $rr;
+        }
+        return (@ans);
+    }
+    my $ns = Net::DNS::Nameserver-&gt;new(
+        LocalPort    =&gt; 53,
+        ReplyHandler =&gt; \&amp;reply_handler,
+        Verbose      =&gt; 1,
+        ) or die &quot;couldn't create nameserver object&quot;;
+    $ns-&gt;start_server;
+    # ... server runs until interrupted ...
+    exit;</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">Net::DNS::Nameserver provides a framework for writing a DNS
+    nameserver in Perl. It handles the low-level details of listening for DNS
+    queries, parsing them, and sending replies.</p>
+<p class="Pp">You create a subclass of Net::DNS::Nameserver, implement a
+    <code class="Cm">reply_handler</code> subroutine, and then start the server.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='METHODS'><a class='permalink' href='#METHODS'>METHODS</a></h1>
+<p class="Pp">Net::DNS::Nameserver-&gt;new(...)
+    <code class="Cm">new()</code> creates a new Net::DNS::Nameserver object. It takes
+    the following arguments:</p>
+<dl class="Bl-tag">
+    <dt>LocalPort</dt>
+    <dd>The port to listen on. Defaults to 53.</dd>
+    <dt>ListenAddress</dt>
+    <dd>The IP address(es) to listen on. Defaults to all available addresses.</dd>
+    <dt>ReplyHandler</dt>
+    <dd>A reference to a subroutine that will be called to handle incoming
+        queries. This subroutine will receive two arguments: the query object
+        (a Net::DNS::Question) and the nameserver object itself. It should
+        return an array of Net::DNS::RR objects that will form the answer,
+        authority, and additional sections of the reply.</dd>
+    <dt>Verbose</dt>
+    <dd>If set to 1 or higher, the nameserver will print debugging
+        information.</dd>
+</dl>
+<p class="Pp">start_server(...)
+    <code class="Cm">start_server()</code> starts the nameserver listening for
+    queries. It takes an optional argument, <code class="Ar">timeout</code>,
+    which specifies how many seconds to run the server for before exiting. If
+    no timeout is specified, the server will run indefinitely until interrupted.</p>
+<p class="Pp">stop_server()
+    <code class="Cm">stop_server()</code> stops the nameserver.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>
+<pre>
+# A simple nameserver that always replies with 1.2.3.4 for example.com
+# and an SOA record for .
+sub reply_handler {
+    my ($q, $ns) = @_;
+    my @ans;
+    my $rcode = $ns-&gt;rcode(); # Default is NOERROR
+    my @auth;
+    my @add;
+    my $headermask = {
+        qr_header =&gt; {},
+        qr_question =&gt; $q,
+    };
+    if ($q-&gt;type() eq 'SOA') {
+        push @ans, new Net::DNS::RR(
+            Name =&gt; '.',
+            Type =&gt; 'SOA',
+            TTL =&gt; 3600,
+            Primary =&gt; 'ns1.example.com.',
+            Admin =&gt; 'admin.example.com.',
+            Serial =&gt; 1,
+            Refresh =&gt; 10800,
+            Retry =&gt; 3600,
+            Expire =&gt; 604800,
+            Minimum =&gt; 86400,
+        );
+    } elsif ($q-&gt;query() eq 'example.com.' &amp;&amp; $q-&gt;type() eq 'A') {
+        push @ans, new Net::DNS::RR(
+            Name =&gt; 'example.com.',
+            Type =&gt; 'A',
+            TTL =&gt; 3600,
+            Address =&gt; '1.2.3.4',
+        );
+    } else {
+        $rcode = $ns-&gt;rcode('NXDOMAIN'); # Not found
+    }
+    my $optionmask = {};
+    return ( $rcode, \@ans, \@auth, \@add, $headermask, $optionmask );
+}
+my $ns = Net::DNS::Nameserver-&gt;new(
+                LocalPort    =&gt; 15353,
+                ReplyHandler =&gt; \&amp;reply_handler,
+                Verbose      =&gt; 1
+                ) or die &quot;couldn't create nameserver object&quot;;
+$ns-&gt;start_server(60);
+exit;   # leaving nameserver processes running for 60 seconds</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>BUGS</a></h1>
+<p class="Pp">Limitations in perl make it impossible to guarantee that replies
+    to UDP queries from Net::DNS::Nameserver are sent from the IP-address to
+    which the query was directed, the source address being chosen by the
+    operating system based upon its notion of &quot;closest address&quot;. This
+    limitation is mitigated to some extent by creating a separate socket and
+    subprocess for each IP address.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'><a class='permalink' href='#COPYRIGHT'>COPYRIGHT</a></h1>
+<p class="Pp">Copyright (c)2000 Michael Fuhr.</p>
+<p class="Pp">Portions Copyright (c)2002-2004 Chris Reinhardt.</p>
+<p class="Pp">Portions Copyright (c)2005 Robert Martin-Legene.</p>
+<p class="Pp">Portions Copyright (c)2005-2009 O.M.Kolkman, RIPE NCC.</p>
+<p class="Pp">Portions Copyright (c)2017-2024 R.W.Franks.</p>
+<p class="Pp">All rights reserved.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LICENSE'><a class='permalink' href='#LICENSE'>LICENSE</a></h1>
+<p class="Pp">Permission to use, copy, modify, and distribute this software and
+    its documentation for any purpose and without fee is hereby granted,
+    provided that the original copyright notices appear in all copies and that
+    both copyright notice and this permission notice appear in supporting
+    documentation, and that the name of the author not be used in advertising or
+    publicity pertaining to distribution of the software without specific prior
+    written permission.</p>
+<p class="Pp">THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF
+    ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+    EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp">perl Net::DNS Net::DNS::Resolver Net::DNS::Packet Net::DNS::Update
+    Net::DNS::Header Net::DNS::Question Net::DNS::RR</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-09-27</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-net-dns/">extra/perl-net-dns</a></dd>
+        <dt>Version:</dt>
+        <dd>1.53-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://search.cpan.org/dist/Net-DNS/">https://search.cpan.org/dist/Net-DNS/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>PerlArtistic</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/perl-net-dns/">/listing/extra/perl-net-dns/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#METHODS">METHODS</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+            <li><a href="#BUGS">BUGS</a></li>
+        
+            <li><a href="#COPYRIGHT">COPYRIGHT</a></li>
+        
+            <li><a href="#LICENSE">LICENSE</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Net::DNS::Nameserver.3pm.en.txt">txt</a>, 
+        
+            <a href="/man/Net::DNS::Nameserver.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

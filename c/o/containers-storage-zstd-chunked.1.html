@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>containers-storage-zstd-chunked(1) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">containers-storage-zstd-chunked(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/containers-common/">containers-common</a></p>
+<p class="lic">التراخيص: Apache-2.0</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">()</td>
+    <td class="head-vol"></td>
+    <td class="head-rtitle">()</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='containers-storage_1_August_2024'><a class='permalink' href='#containers-storage_1_August_2024'>containers-storage   1 أغسطس 2024</a></h1>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">containers-storage-zstd-chunked - معلومات حول
+    zstd:chunked</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">التنسيق التقليدي لطبقات صور الحاويات هو
+    application/vnd.oci.image.layer.v1.tar+gzip
+    &#x27E8;<a href='https://github.com/opencontainers/image-spec/blob/main/layer.md#gzip-media-types'>https://github.com/opencontainers/image-spec/blob/main/layer.md#gzip-media-types</a>&#x27E9;.
+    في الآونة الأخيرة، تم تعزيز المعيار باستخدام zstd:
+    application/vnd.oci.image.layer.v1.tar+zstd
+    &#x27E8;<a href='https://github.com/opencontainers/image-spec/blob/main/layer.md#zstd-media-types'>https://github.com/opencontainers/image-spec/blob/main/layer.md#zstd-media-types</a>&#x27E9;
+    وهو تنسيق ضغط حديث وأكثر كفاءة.</p>
+<p class="Pp"><b>zstd:chunked</b> هو شكل متغير من نوع الوسائط
+    <b>application/vnd.oci.image.layer.v1.tar+zstd</b> يستخدم إطارات zstd قابلة للتخطي
+    &#x27E8;<a href='https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames'>https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md#skippable-frames</a>&#x27E9;
+    لتضمين بيانات وصفية إضافية (خاصة "جدول محتويات")
+    يتضمن SHA-256 ومواقع الأجزاء الفردية للملفات.
+    بالإضافة إلى ذلك، يتم ضغط الأجزاء بشكل منفصل. هذا يسمح للعميل
+    بجلب الأجزاء التي لا يملكها ديناميكيًا فقط باستخدام طلبات نطاق HTTP.</p>
+<p class="Pp">في وقت كتابة هذا التقرير، تم تمكين الدعم لهذا افتراضيًا في الكود.</p>
+<p class="Pp">يمكنك تمكين أو تعطيل zstd:chunked بشكل صريح مع التغييرات التالية في
+    <b>containers-storage.conf</b>:</p>
+<pre>[storage.options.pull_options]
+enable_partial_images = &quot;true&quot; | &quot;false&quot;</pre>
+<p class="Pp">لاحظ أن قيمة هذا الحقل يجب أن تكون "سلسلة منطقية"، ولا يمكن أن تكون قيمة منطقية أصلية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='IMPLEMENTATION'><a class='permalink' href='#IMPLEMENTATION'>التنفيذ</a></h1>
+<p class="Pp">كل طبقة مرتبطة بمفتاح "بيانات كبيرة" يسمى
+    <b>chunked-manifest-cache</b> وهو تنسيق ثنائي مخصص مناسب لـ mmap()
+    يحتوي على بيانات تعريفية للفهرس لكل طبقة مع تجزئة sha256 الكاملة لكل ملف بالإضافة إلى "أجزائه" (كما تم حسابه بواسطة
+    <b>zstd:chunked</b>).</p>
+<p class="Pp">عند سحب أي صورة، يتم فحص جميع الطبقات الأخرى الموجودة باستخدام
+    <b>chunked-manifest-cache</b> لمعرفة ما إذا كانت تحتوي على ملف بنفس التجزئة. إذا تم العثور عليه، يتم ربطه بعلامة (hardlinked) إذا كان
+    <b>use_hardlinks = &quot;true</b>&quot;، وإلا يتم نسخه كـ reflink (إذا كان مدعومًا من نظام الملفات، أو يتم عمل نسخة فعلية كاملة). هناك محاولة لتمكين fsverity على الملف إذا تم تكوينه (انظر
+    &#x27E8;<a href='https://github.com/containers/storage/issues/2017'>https://github.com/containers/storage/issues/2017</a>&#x27E9;).</p>
+<p class="Pp">لمزيد من المعلومات، في الوقت الحالي، الملف الذي يحتوي على معظم المعلومات هو pkg/chunked/internal/compression.go
+    &#x27E8;<a href='https://github.com/containers/storage/blob/39d469c34c96db67062e25954bc9d18f2bf6dae3/pkg/chunked/internal/compression.go'>https://github.com/containers/storage/blob/39d469c34c96db67062e25954bc9d18f2bf6dae3/pkg/chunked/internal/compression.go</a>&#x27E9;.
+    الرابط أعلاه هو رابط دائم للاستقرار، ولكن تأكد من التحقق مما إذا كانت هناك تغييرات أحدث أيضًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STANDARDIZATION'><a class='permalink' href='#STANDARDIZATION'>التوحيد</a></h1>
+<p class="Pp">في الوقت الحالي، لم يتم توحيد التنسيق أو توثيقه رسميًا بخلاف التعليقات والكود في التنفيذ المرجعي.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd><a href='https://github.com/containers/storage/issues?q=is%3Aissue+label%3Aarea%2Fzstd%3Achunked+is%3Aopen'>https://github.com/containers/storage/issues?q=is%3Aissue+label%3Aarea%2Fzstd%3Achunked+is%3Aopen</a>
+      </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FOOTNOTES'><a class='permalink' href='#FOOTNOTES'>ملاحظات</a></h1>
+<p class="Pp">مشروع Containers Storage ملتزم بالشمولية، وهي قيمة أساسية للمصدر المفتوح. يتم استخدام مصطلحات <b>master</b> و <b>slave</b> في نشر التبعيات (mount propagation) في هذا المستودع. هذه اللغة إشكالية ومسببة للانقسام، ويجب تغييرها. ومع ذلك، يتم استخدام هذه المصطلحات حاليًا داخل نواة Linux ويجب استخدامها كما هي في هذا الوقت. عندما يقوم مسؤولو نواة Linux بتصحيح هذا الاستخدام، سيتبع Containers Storage فورًا.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os"></td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث عن صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/containers-common/">extra/containers-common</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1:0.66.0-1</dd>
+        <dt>المصدر:</dt>
+        <dd><a href="https://github.com/containers/container-libs">https://github.com/containers/container-libs</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>Apache-2.0</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/containers-common/">/listing/extra/containers-common/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#containers-storage_1_August_2024">containers-storage 1 أغسطس 2024</a></li>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#IMPLEMENTATION">التنفيذ</a></li>
+        
+            <li><a href="#STANDARDIZATION">التوحيد</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#FOOTNOTES">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/containers-storage-zstd-chunked.1.en.txt">txt</a>, 
+        
+            <a href="/man/containers-storage-zstd-chunked.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

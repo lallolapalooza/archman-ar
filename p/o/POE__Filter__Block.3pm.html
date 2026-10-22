@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POE::Filter::Block(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">POE__Filter__Block(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-poe/">perl-poe</a></p>
+<p class="lic">التراخيص: GPL، PerlArtistic</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">POE::Filter::Block(3)</td>
+    <td class="head-vol">وثائق مساهمة من مستخدمي Perl</td>
+    <td class="head-rtitle">POE::Filter::Block(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">POE::Filter::Block - ترجمة البيانات بين التدفقات والكتل</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>#!perl
+use warnings;
+use strict;
+use POE::Filter::Block;
+my $filter = POE::Filter::Block-&gt;new( BlockSize =&gt; 8 );
+# تطبع ثلاثة أسطر: abcdefgh، ijklmnop، qrstuvwx.
+# تبقى البايتات "y" و "z" في المخزن المؤقت وتنتظر اكتمال الكتلة
+# المكونة من 8 بايتات التالية.
+$filter-&gt;get_one_start([ &quot;abcdefghijklmnopqrstuvwxyz&quot; ]);
+while (1) {
+  my $block = $filter-&gt;get_one();
+  last unless @$block;
+  print $block-&gt;[0], &quot;\n&quot;;
+}
+# تطبع سطراً واحداً: yz123456
+$filter-&gt;get_one_start([ &quot;123456&quot; ]);
+while (1) {
+  my $block = $filter-&gt;get_one();
+  last unless @$block;
+  print $block-&gt;[0], &quot;\n&quot;;
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">POE::Filter::Block يترجم البيانات بين التدفقات التسلسلية والكتل.
+    يمكنه التعامل مع الكتل ذات الطول الثابت والكتل ذات البادئة الطول، ويمكن
+    توسيعه للتعامل مع أنواع الكتل الأخرى.</p>
+<p class="Pp">تُستخدم الكتل ذات الطول الثابت عندما يتم استدعاء منشئ الكتلة
+    (Block constructor) بقيمة BlockSize. وإلا فإن فلتر الكتلة يستخدم الكتل ذات
+    البادئة الطول.</p>
+<p class="Pp">المستخدمون الذين يحددون أحجام كتل أقل من واحد يستحقون ما يحصلون
+    عليه.</p>
+<p class="Pp">في وضع الطول المتغير، يمكن تحديد معلمة LengthCodec. يجب أن تكون
+    قيمة LengthCodec مرجعًا إلى قائمة من دالتين: مشفر الطول، وفك تشفير
+    الطول:</p>
+<pre>LengthCodec =&gt; [ \&amp;encoder, \&amp;decoder ]</pre>
+<p class="Pp">يقوم المشفر بأخذ مرجع إلى مخزن مؤقت ويضيف طول المخزن المؤقت إليه
+    في البداية. يقوم المشفر الافتراضي بإضافة التمثيل النصي لطول المخزن المؤقت
+    وبايت <a href='/man/chr.0.en'>chr(0)</a> للفصل بين الطول والبيانات الفعلية:</p>
+<pre>sub _default_encoder {
+  my $stuff = shift;
+  substr($$stuff, 0, 0) = length($$stuff) . &quot;\0&quot;;
+  return;
+}</pre>
+<p class="Pp">يقوم مفك التشفير المقابل بإرجاع طول الكتلة بعد إزالته هو وفاصل
+    البيانات من المخزن المؤقت. يعيد لا شيء إذا لم يتم تحديد طول.</p>
+<pre>sub _default_decoder {
+  my $stuff = shift;
+  unless ($$stuff =~ s/^(\d+)\0//s) {
+    warn length($1), &quot; strange bytes removed from stream&quot;
+      if $$stuff =~ s/^(\D+)//s;
+    return;
+  }
+  return $1;
+}</pre>
+<p class="Pp">هذا المرشح يحتفظ بالكتل غير المكتملة حتى يتم إكمالها في مخزن مؤقت
+    تأطيري. للتحكم في استخدام الذاكرة، يتم فرض حد أقصى لحجم المخزن المؤقت
+    التأطيري. هذا الحد الأقصى للحجم افتراضيًا هو 512 ميجابايت (512 * 1024 *
+    1024 بايت). يمكنك تغيير حد الحجم هذا باستخدام المعلمة
+    <span class="Li">&quot;MaxBuffer&quot;</span>.</p>
+<pre>MaxBuffer =&gt; 1099511627776  # واحد تيرابايت!</pre>
+<p class="Pp">يتم أيضًا تحديد حجم كل كتلة فردية. افتراضيًا، قد لا تكون كل كتلة
+    أكثر من 64 ميجابايت. يمكنك تغيير حد الحجم هذا باستخدام المعلمة
+    <span class="Li">&quot;MaxLength&quot;</span>.</p>
+<pre>MaxLength =&gt; 10             # كتل صغيرة</pre>
+<p class="Pp">تذكر أن MaxBuffer يجب أن يكون أكبر من MaxLength. علاوة على ذلك،
+    يجب أن يكون لديه مساحة لبادئة الطول.</p>
+<p class="Pp">إذا تم تجاوز قيد <span class="Li">&quot;MaxLength&quot;</span> أو
+    <span class="Li">&quot;MaxBuffer&quot;</span>، فسيقوم
+    <span class="Li">&quot;POE::Filter::Bock&quot;</span> بإطلاق استثناء.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PUBLIC_FILTER_METHODS'><a class='permalink' href='#PUBLIC_FILTER_METHODS'>أساليب المرشح العامة</a></h1>
+<p class="Pp">لا يحتوي POE::Filter::Block على أي أساليب عامة إضافية.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp">يرجى الرجوع إلى POE::Filter للحصول على وثائق حول الواجهة الأساسية.</p>
+<p class="Pp">قسم "انظر أيضًا" في POE يحتوي على جدول محتويات يغطي توزيع POE
+    بالكامل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">أسلوب <b>put()</b> لا يتحقق من أحجام الكتل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS_&amp;amp;_COPYRIGHTS'><a class='permalink' href='#AUTHORS_&amp;amp;_COPYRIGHTS'>المؤلفون وحقوق النشر</a></h1>
+<p class="Pp">تم المساهمة في فلتر الكتلة بواسطة Dieter Pearcey، مع تغييرات قام بها
+    Rocco Caputo.</p>
+<p class="Pp">يرجى الرجوع إلى POE لمزيد من المعلومات حول المؤلفين والمساهمين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2024-07-13</td>
+    <td class="foot-os">perl v5.38.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/any/perl-poe/">extra/perl-poe</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>1.370-2</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://search.cpan.org/dist/POE">https://search.cpan.org/dist/POE</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL، PerlArtistic</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/extra/perl-poe/">/listing/extra/perl-poe/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#PUBLIC_FILTER_METHODS">أساليب المرشح العامة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#BUGS">الأخطاء</a></li>
+        
+            <li><a href="#AUTHORS_&amp;amp;_COPYRIGHTS">المؤلفون وحقوق النشر</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/POE::Filter::Block.3pm.en.txt">txt</a>، 
+        
+            <a href="/man/POE::Filter::Block.3pm.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لديها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

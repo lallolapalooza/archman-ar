@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>systemd-portabled(8)</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+<link rel="stylesheet" href="basic.css">
+</head>
+<body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">org.freedesktop.portable1(5)</h1>
+
+    <article>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp"><code class="Nm">systemd-portabled</code> &#x2014; service for managing portable
+    images</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre>
+<code class="Cc">systemd-portabled.service(8)</code>
+<code class="Cm">portablectl(1)</code>
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp"><code class="Nm">systemd-portabled</code> is a system service that manages
+    portable images. It allows users to attach, detach, and manage portable
+    images, which are self-contained, encapsulated OS environments. These images
+    are typically OCI container images or simple directory trees. The service
+    provides a D-Bus API for interacting with these images.</p>
+<p class="Pp">The service works with a pool of images, usually located under
+    <code class="Fk">/var/lib/portables/</code>. Images can be attached to the system
+    in several ways, either temporarily for the current boot session or
+    persistently. When attached, services and other system resources declared
+    within the image become available system-wide.</p>
+<p class="Pp">The service is controlled and configured via the
+    <code class="Nm">portablectl(1)</code> utility, and its D-Bus API is accessible
+    through the <code class="Nm">systemd-portabled.service(8)</code> unit.</p>
+<section class="Ss">
+<h2 class="Ss" id='D-BUS_API'><a class='permalink' href='#D-BUS_API'>D-BUS API</a></h2>
+<p class="Pp">The service exposes two main D-Bus objects: the Manager object and
+    the Image object.</p>
+<section class="Ss">
+<h3 class="Ss" id='The_Manager_Object'><a class='permalink' href='#The_Manager_Object'>The Manager Object</a></h3>
+<p class="Pp">The Manager object is located at
+    <code class="Fl">/org/freedesktop/portable1</code> on the system bus. It provides
+    methods for managing the image pool and listing available images.</p>
+<div class="Bd-indent">
+<pre>node /org/freedesktop/portable1 {
+  interface org.freedesktop.portable1.Manager {
+    methods:
+      GetImage(in  s name,
+               out o image_object);
+      CreateImage(in  s name,
+                  in  s path,
+                  in  s type,
+                  in  t flags,
+                  out o image_object);
+      AttachImage(in  s name,
+                  in  as matches,
+                  in  s profile,
+                  in  b runtime,
+                  in  s copy_mode,
+                  out a(sss) changes);
+      AttachImageWithExtensions(in  s name,
+                                in  as extensions,
+                                in  as matches,
+                                in  s profile,
+                                in  s copy_mode,
+                                in  t flags,
+                                out a(sss) changes);
+      DetachImage(in  b runtime,
+                  out a(sss) changes);
+      DetachImageWithExtensions(in  as extensions,
+                                in  t flags,
+                                out a(sss) changes);
+      ReattachImage(in  s name,
+                    in  as matches,
+                    in  s profile,
+                    in  b runtime,
+                    in  s copy_mode,
+                    out a(sss) changes_removed,
+                    out a(sss) changes_updated);
+      ReattachImageWithExtensions(in  s name,
+                                  in  as extensions,
+                                  in  as matches,
+                                  in  s profile,
+                                  in  s copy_mode,
+                                  in  t flags,
+                                  out a(sss) changes_removed,
+                                  out a(sss) changes_updated);
+      RemoveImage(in  s name);
+      MarkImageReadOnly(in  s name,
+                        in  b read_only);
+      SetPoolLimit(in  t limit);
+      SetImageLimit(in  s name,
+                    in  t limit);
+    properties:
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly ay AvailableProfiles = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly aay Images = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t PoolUsage = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t PoolLimit = ...;
+  };
+  interface org.freedesktop.DBus.Peer { ... };
+  interface org.freedesktop.DBus.Introspectable { ... };
+  interface org.freedesktop.DBus.Properties { ... };
+};</pre>
+</div>
+<p class="Pp"><b>AttachImage()</b> attaches a portable image to the system.
+    This method takes an image name, a list of device matches, a profile name,
+    and a boolean indicating whether the image should be attached only for the
+    current boot session (runtime) or persistently. The <code class="Fl">copy_mode</code>
+    parameter determines how the image is copied into the pool. This method
+    returns the list of changes applied to the system (for example, which unit
+    was added and is now available as a system service). Each change is
+    represented as a triplet of strings: the type of change applied, the path on
+    which it was applied, and the source (if any). The type of change applied
+    will be one of the following possible values:</p>
+<div class="Bd-indent">&#x2022;link</div>
+<div class="Bd-indent">&#x2022;copy</div>
+<p class="Pp"><b>DetachImage()</b> detaches a portable image from the system.
+    This method takes an image path or name, and a boolean indicating whether
+    the image to detach was attached only for the current boot session or
+    persistently. This method returns the list of changes applied to the system
+    (for example, which unit was removed and is no longer available as a system
+    service). Each change is represented as a triplet of strings: the type of
+    change applied, the path on which it was applied, and the source (if any).
+    The type of change applied will be one of the following possible values:</p>
+<div class="Bd-indent">&#x2022;unlink</div>
+<p class="Pp">Note that an image cannot be detached if a unit that it contains
+    is running. Note that this method returns only after all the listed
+    operations are completed, and due to the I/O involved it might take some
+    time.</p>
+<p class="Pp"><b>DetachImageWithExtensions()</b> detaches a portable image from
+    the system. This method is a superset of <b>DetachImage()</b> with the
+    addition of a list of extensions as input parameter, which were overlaid on
+    top of the main image via <b>AttachImageWithExtensions()</b>.</p>
+<p class="Pp"><b>ReattachImage()</b> combines the effects of the
+    <b>AttachImage()</b> method and the <b>DetachImage()</b> method. The
+    difference is that it is allowed to reattach an image while one or more of
+    its units are running. The reattach operation will fail if no matching image
+    is attached. The input parameters match the <b>AttachImage()</b> method, and
+    the return parameters are the combination of the return parameters of the
+    <b>DetachImage()</b> method (first array, units that were removed) and the
+    <b>AttachImage()</b> method (second array, units that were updated or
+    added).</p>
+<p class="Pp"><b>ReattachImageWithExtensions()</b> reattaches a portable image
+    to the system. This method is a superset of <b>ReattachImage()</b> with the
+    addition of a list of extensions as input parameter, which will be overlaid
+    on top of the main image. For more details on this functionality, see the
+    <i>MountImages=</i> entry on <a href='/man/systemd.exec.5.en'>systemd.exec(5)</a> and
+    <a href='/man/systemd-sysext.8.en'>systemd-sysext(8)</a>.</p>
+<p class="Pp"><b>RemoveImage()</b> removes the image with the specified
+    name.</p>
+<p class="Pp"><b>MarkImageReadOnly()</b> toggles the read-only flag of an
+    image.</p>
+<p class="Pp"><b>SetPoolLimit()</b> sets an overall quota limit on the pool of
+    images.</p>
+<p class="Pp"><b>SetImageLimit()</b> sets a per-image quota limit.</p>
+<p class="Pp">The <b>AttachImageWithExtensions()</b>,
+    <b>DetachImageWithExtensions()</b> and <b>ReattachImageWithExtensions()</b>
+    methods take in options as flags instead of booleans to allow for
+    extendability. <i>SD_SYSTEMD_PORTABLE_FORCE_ATTACH</i> will bypass the
+    safety checks that ensure the units are not running while the image is
+    attached or detached. <i>SD_SYSTEMD_PORTABLE_FORCE_EXTENSION</i> will bypass
+    the check that ensures the extension-release.<i>NAME</i> file in the
+    extension image matches the image name. They are defined as follows:</p>
+<div class="Bd-indent">
+<pre>#define SD_SYSTEMD_PORTABLE_RUNTIME            (UINT64_C(1) &lt;&lt; 0)
+#define SD_SYSTEMD_PORTABLE_FORCE_ATTACH       (UINT64_C(1) &lt;&lt; 1)
+#define SD_SYSTEMD_PORTABLE_FORCE_EXTENSION    (UINT64_C(1) &lt;&lt; 2)</pre>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Properties'><a class='permalink' href='#Properties'>Properties</a></h2>
+<p class="Pp"><i>PoolPath</i> specifies the file system path where images are
+    written to.</p>
+<p class="Pp"><i>PoolUsage</i> specifies the current usage size of the image
+    pool in bytes.</p>
+<p class="Pp"><i>PoolLimit</i> specifies the size limit of the image pool in
+    bytes.</p>
+<p class="Pp"><i>Profiles</i> specifies the available runtime profiles for
+    portable services.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_IMAGE_OBJECT'><a class='permalink' href='#THE_IMAGE_OBJECT'>THE   IMAGE OBJECT</a></h1>
+<p class="Pp">The service exposes the following interfaces on the Image object
+    on the bus:</p>
+<div class="Bd-indent">
+<pre>node /org/freedesktop/portable1 {
+  interface org.freedesktop.portable1.Image {
+    methods:
+      GetOSRelease(out a{ss} os_release);
+      GetMetadata(in  as matches,
+                  out s image,
+                  out ay os_release,
+                  out a{say} units);
+      GetMetadataWithExtensions(in  as extensions,
+                                in  as matches,
+                                in  t flags,
+                                out s image,
+                                out ay os_release,
+                                out a{say} extensions,
+                                out a{say} units);
+      GetState(out s state);
+      GetStateWithExtensions(in  as extensions,
+                             in  t flags,
+                             out s state);
+      Attach(in  as matches,
+             in  s profile,
+             in  b runtime,
+             in  s copy_mode,
+             out a(sss) changes);
+      AttachWithExtensions(in  as extensions,
+                           in  as matches,
+                           in  s profile,
+                           in  s copy_mode,
+                           in  t flags,
+                           out a(sss) changes);
+      Detach(in  b runtime,
+             out a(sss) changes);
+      DetachWithExtensions(in  as extensions,
+                           in  t flags,
+                           out a(sss) changes);
+      Reattach(in  as matches,
+               in  s profile,
+               in  b runtime,
+               in  s copy_mode,
+               out a(sss) changes_removed,
+               out a(sss) changes_updated);
+      ReattachWithExtensions(in  as extensions,
+                             in  as matches,
+                             in  s profile,
+                             in  s copy_mode,
+                             in  t flags,
+                             out a(sss) changes_removed,
+                             out a(sss) changes_updated);
+      Remove();
+      MarkReadOnly(in  b read_only);
+      SetLimit(in  t limit);
+    properties:
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly s Name = '...';
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly s Path = '...';
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly s Type = '...';
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly b ReadOnly = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t CreationTimestamp = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t ModificationTimestamp = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t Usage = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t Limit = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t UsageExclusive = ...;
+      @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
+      readonly t LimitExclusive = ...;
+  };
+  interface org.freedesktop.DBus.Peer { ... };
+  interface org.freedesktop.DBus.Introspectable { ... };
+  interface org.freedesktop.DBus.Properties { ... };
+};</pre>
+</div>
+<section class="Ss">
+<h2 class="Ss" id='Methods_2'><a class='permalink' href='#Methods_2'>Methods</a></h2>
+<p class="Pp">The following methods implement the same operation as the
+    respective methods on the Manager object (see above). However, these methods
+    operate on the image object and hence does not take an image name parameter.
+    Invoking the methods directly on the Manager object has the advantage of not
+    requiring a <b>GetImage()</b> call to get the image object for a specific
+    image name. Calling the methods on the Manager object is hence a round trip
+    optimization. List of methods:</p>
+<div class="Bd-indent">&#x2022;GetOSRelease()</div>
+<div class="Bd-indent">&#x2022;GetMetadata()</div>
+<div class="Bd-indent">&#x2022;GetMetadataWithExtensions()</div>
+<div class="Bd-indent">&#x2022;GetState()</div>
+<div class="Bd-indent">&#x2022;Attach()</div>
+<div class="Bd-indent">&#x2022;AttachWithExtensions()</div>
+<div class="Bd-indent">&#x2022;Detach()</div>
+<div class="Bd-indent">&#x2022;DetachWithExtensions()</div>
+<div class="Bd-indent">&#x2022;Reattach()</div>
+<div class="Bd-indent">&#x2022;ReattachWithExtensions()</div>
+<div class="Bd-indent">&#x2022;Remove()</div>
+<div class="Bd-indent">&#x2022;MarkReadOnly()</div>
+<div class="Bd-indent">&#x2022;SetLimit()</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Properties_2'><a class='permalink' href='#Properties_2'>Properties</a></h2>
+<p class="Pp"><i>Name</i> specifies the image name.</p>
+<p class="Pp"><i>Path</i> specifies the file system path where image is
+    stored.</p>
+<p class="Pp"><i>Type</i> specifies the image type.</p>
+<p class="Pp"><i>ReadOnly</i> specifies whether the image is read-only.</p>
+<p class="Pp"><i>CreationTimestamp</i> specifies the image creation
+    timestamp.</p>
+<p class="Pp"><i>ModificationTimestamp</i> specifies the image modification
+    timestamp.</p>
+<p class="Pp"><i>Usage</i> specifies the image disk usage.</p>
+<p class="Pp"><i>Limit</i> specifies the image disk usage limit.</p>
+<p class="Pp"><i>UsageExclusive</i> specifies the image disk usage
+  (exclusive).</p>
+<p class="Pp"><i>LimitExclusive</i> specifies the image disk usage limit
+    (exclusive).</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSIONING'><a class='permalink' href='#VERSIONING'>VERSIONING</a></h1>
+<p class="Pp">These D-Bus interfaces follow <b>the usual interface versioning
+    guidelines</b>[1].</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>HISTORY</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='The_Manager_Object_2'><a class='permalink' href='#The_Manager_Object_2'>The   Manager Object</a></h2>
+<p class="Pp"><b>GetImageStateWithExtensions()</b> was added in version 251.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='The_Image_Object_2'><a class='permalink' href='#The_Image_Object_2'>The   Image Object</a></h2>
+<p class="Pp"><b>GetStateWithExtensions()</b> was added in version 251.</p>
+<p class="Pp"><b>ReattachWithExtensions()</b> was added in version 254.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
+<p class="Pp"><a href='/man/systemd.1.en'>systemd(1)</a>, <a href='/man/systemd-portabled.service.8.en'>systemd-portabled.service(8)</a>,
+    <a href='/man/portablectl.1.en'>portablectl(1)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>NOTES</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>the usual interface versioning guidelines</dd>
+</dl>
+<div class="Bd-indent"><a href='https://0pointer.de/blog/projects/versioning-dbus.html'>https://0pointer.de/blog/projects/versioning-dbus.html</a></div>
+</section>
+</article>
+    <footer>
+        <p>
+            <a href="https://github.com/systemd/systemd">systemd</a>
+            |
+            <a href="https://github.com/systemd/systemd/blob/main/docs/README.md">Documentation</a>
+            |
+            <a href="https://github.com/systemd/systemd/issues">Bug Tracker</a>
+        </p>
+        <p class="copyright">
+            Copyright © 2004-2024
+            <a href="https://0pointer.de/">Lennart Poettering</a>
+            and others.
+            <br>
+            Licensed under the
+            <a href="https://www.gnu.org/licenses/lgpl-2.1.html">LGPLv2.1+</a>.
+        </p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ar" dir="rtl">
+<head>
+<title>debuginfod(8)</title>
+<meta name="generator" content="manpage.dsl">
+<meta name="version" content="debuginfod 0.4.0">
+<link rel="stylesheet" href="man.css" type="text/css"/>
+<link rel="stylesheet" href="basic.css">
+</head>
+<body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">debuginfod(8)</h1>
+
+<div class="NAV">
+<a href="#_top">toc</a> &#x2022; <a href="#path_components">path components</a> &#x2022; <a href="#data_management">DATA MANAGEMENT</a> &#x2022; <a href="#security">SECURITY</a> &#x2022; <a href="#environment_variables">ENVIRONMENT VARIABLES</a>
+</div>
+<h1>debuginfod(8)</h1>
+<p class="Sh">NAME</p>
+<p class="Nd">debuginfod - HTTP client/server for debug symbol and source file lookups</p>
+<div class="Bd-indent">
+</div>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">The <span class="Nm">debuginfod</span> program is an HTTP client
+    and server, which can be used to find and download debug symbol and source
+    files. It can be used to implement a GSoC or Fedora-style debug symbol
+    server, or as a client to fetch debug symbols from such servers.</p>
+<p class="Pp">The server implements the following API endpoints:</p>
+<section class="Ss">
+<h2 class="Ss" id='/buildid/BUILDID/source/SOURCE/FILE'><a class='permalink' href='#/buildid/BUILDID/source/SOURCE/FILE'>/buildid/<i>BUILDID</i>/source/<i>SOURCE</i>/<i>FILE</i></a></h2>
+<p class="Pp">Fetch a source file.</p>
+<p class="Pp">The server will search for SOURCE/FILE within the buildid
+    represented by BUILDID. If a match is found, the contents of the source file
+    will be returned. For example, if you had a buildid which contained a
+    distribution which normally installs source files into
+    /usr/src/debug/foo-1.0/source, then you could fetch a file with a URL like
+    this:</p>
+<div class="Bd-indent">
+<pre>/buildid/BUILDID/source/foo-1.0/source/main.c</pre>
+</div>
+<p class="Pp">This endpoint is designed to normalise path components like
+    <span class="Op">..</span> or extraneous slashes <span class="Op">///</span>
+    which may appear in the path names. Note that this request is idempotent
+    under path normalisation. This means that:</p>
+<pre>
+    /buildid/BUILDID/source/../foo/bar.c
+    /buildid/BUILDID/source/foo//bar.c
+</pre>
+<p class="Pp">or</p>
+<p class="Pp">extraneous <span class="Op">///</span> sorts of path
+    components in the directory names.</p>
+<p class="Pp"><span class="Nm">debuginfod</span> accepts both forms.
+    Specifically, <span class="Nm">debuginfod</span> canonicalizes path
+    names according to RFC3986 section 5.2.4 (Remove Dot Segments), plus
+    reducing any <span class="Op">//</span> to <span class="Op">/</span> in the
+    path.</p>
+<p class="Pp">For example:</p>
+<table class="tbl">
+  <tr>
+    <td><pre>#include &lt;stdio.h&gt;</pre></td>
+    <td><pre>/buildid/BUILDID/source/usr/include/stdio.h</pre></td>
+  </tr>
+  <tr>
+    <td><pre>/path/to/foo.c</pre></td>
+    <td><pre>/buildid/BUILDID/source/path/to/foo.c</pre></td>
+  </tr>
+  <tr>
+    <td><pre>AT_comp_dir=/zoo/</pre></td>
+    <td><pre>/buildid/BUILDID/source/zoo//../bar/foo.c</pre></td>
+  </tr>
+</table>
+<p class="Pp">Note: the client should %-escape characters in
+    /SOURCE/FILE that are not shown as &quot;unreserved&quot; in section 2.3
+    of RFC3986. Some characters that will be escaped include &quot;+&quot;,
+    &quot;\&quot;, &quot;$&quot;, &quot;!&quot;, the 'space' character, and
+    &quot;;&quot;. RFC3986 includes a more comprehensive list of these
+    characters.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='/buildid/&lt;i&gt;BUILDID&lt;/i&gt;/section&lt;i&gt;/SECTION&lt;/i&gt;'><a class='permalink' href='#/buildid/&lt;i&gt;BUILDID&lt;/i&gt;/section&lt;i&gt;/SECTION&lt;/i&gt;'>/buildid/<i>BUILDID</i>/section<i>/SECTION</i></a></h2>
+<p class="Pp">If the given buildid is known to the server, the server will
+    attempt to extract the contents of an ELF/DWARF section named SECTION from
+    the debuginfo file matching BUILDID. If the debuginfo file can't be found
+    or the section has type SHT_NOBITS, then the server will attempt to extract
+    the section from the executable matching BUILDID. If the section is
+    successfully extracted then this request results in a binary object of the
+    section's contents. Note that this result is the raw binary contents of the
+    section, not an ELF file.</p>
+</section>
+<section class=" Ss">
+<h2 class="Ss" id='/metrics'><a class='permalink' href='#/metrics'>/metrics</a></h2>
+<p class="Pp">This endpoint returns a Prometheus formatted text/plain dump of a
+    variety of statistics about the operation of the <span class="Nm">debuginfod</span>
+    server. The exact set of metrics and their meanings may change in future
+    versions.</p>
+</section>
+<section class=" Ss">
+<h2 class="Ss" id='/metadata?key=&lt;i&gt;KEY&lt;/i&gt;&amp;amp;value=&lt;i&gt;VALUE&lt;/i&gt;'><a class='permalink' href='#/metadata?key=&lt;i&gt;KEY&lt;/i&gt;&amp;amp;value=&lt;i&gt;VALUE&lt;/i&gt;'>/metadata?key=<i>KEY</i>&amp;value=<i>VALUE</i></a></h2>
+<p class="Pp">This endpoint triggers a search of the files in the index plus any
+    upstream federated servers, based on given key and value. If successful, the
+    result is a application/json textual array, listing metadata for the matched
+    files. See <a href='/man/debuginfod-find.1.en'>debuginfod-find(1)</a> for
+    documentation of the common key/value search parameters, and the resulting
+    data schema.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DATA_MANAGEMENT'><a class='permalink' href='#DATA_MANAGEMENT'>DATA MANAGEMENT</a></h1>
+<p class="Pp"><span class="Nm">debuginfod</span> stores its index in an sqlite
+    database in a densely packed set of interlinked tables. While the
+    representation is as efficient as we have been able to make it, it still
+    takes a considerable amount of data to record all debuginfo-related data of
+    potentially a great many files. This section offers some advice about the
+    implications.</p>
+<p class="Pp">As a general explanation for size, consider that <span class="Nm">debuginfod</span>
+    indexes ELF/DWARF files, it stores their names and referenced source file
+    names, and buildids will be stored. When indexing archives, it stores every
+    file name <i>of or in</i> an archive, every buildid, plus every source file
+    name referenced from a DWARF file. (Indexing archives takes more space
+    because the source files often reside in separate subpackages that may not
+    be indexed at the same pass, so extra metadata has to be kept.)</p>
+<p class="Pp">Getting down to numbers, in the case of Fedora RPMs (essentially,
+    gzip-compressed cpio files), the sqlite index database tends to be from 0.5%
+    to 3% of their size. It's larger for binaries that are assembled out of a
+    great many source files, or packages that carry much debuginfo-unrelated
+    content. It may be even larger during the indexing phase due to temporary
+    sqlite write-ahead-logging files; these are checkpointed (cleaned out and
+    removed) at shutdown. It may be helpful to apply tight -I or -X
+    regular-expression constraints to exclude files from scanning that you know
+    have no debuginfo-relevant content.</p>
+<p class="Pp">As <span class="Nm">debuginfod</span> runs in normal
+    <i>active</i> mode, it periodically rescans its target directories, and any
+    new content found is added to the database. Old content, such as data for
+    files that have disappeared or that have been replaced with newer versions
+    is removed at a periodic <i>grooming</i> pass. This means that the sqlite
+    files grow fast during initial indexing, slowly during index rescans, and
+    periodically shrink during grooming. There is also an optional one-shot
+    <i>maximal grooming</i> pass is available. It removes information
+    debuginfo-unrelated data from the archive content index such as file names
+    found in archives (&quot;archive sdef&quot; records) that are not referred
+    to as source files from any binaries find in archives (&quot;archive sref&quot;
+    records). This can save considerable disk space. However, it is slow and
+    temporarily requires up to twice the database size as free space. Worse: it
+    may result in missing source-code info if the archive traversals were
+    interrupted, so that not all source file references were known. Use it rarely
+    to polish a complete index.</p>
+<p class="Pp">You should ensure that ample disk space remains available. (The
+    flood of error messages on -ENOSPC is ugly and nagging. But, like for most
+    other errors, <span class="Nm">debuginfod</span> will resume when
+    resources permit.) If necessary, <span class="Nm">debuginfod</span> can
+    be stopped, the database file moved or removed, and <span class="Nm">debuginfod</span>
+    restarted.</p>
+<p class="Pp">sqlite offers several performance-related options in the form of
+    pragmas. Some may be useful to fine-tune the defaults plus the <span class="Nm">debuginfod</span>
+    extras. The -D option may be useful to tell <span class="Nm">debuginfod</span>
+    to execute the given bits of SQL after the basic schema creation commands.
+    For example, the &quot;synchronous&quot;, &quot;cache_size&quot;,
+    &quot;auto_vacuum&quot;, &quot;threads&quot;, &quot;journal_mode&quot; pragmas
+    may be fun to tweak via -D, if you're searching for peak performance. The
+    &quot;optimize&quot;, &quot;wal_checkpoint&quot; pragmas may be useful to run
+    periodically, outside <span class="Nm">debuginfod</span>. The default
+    settings are performance- rather than reliability-oriented, so a hardware
+    crash might corrupt the database. In these cases, it may be necessary to
+    manually delete the sqlite database and start over.</p>
+<p class="Pp">As <span class="Nm">debuginfod</span> changes in the future, we
+    may have no choice but to change the database schema in an incompatible
+    manner. If this happens, new versions of <span class="Nm">debuginfod</span>
+    will issue SQL statements to <i>drop</i> all prior schema &amp; data, and
+    start over. So, disk space will not be wasted for retaining a no-longer-useable
+    dataset.</p>
+<p class="Pp">In summary, if your system can bear a 0.5%-3%
+    index-to-archive-dataset size ratio, and slow growth afterwards, you should
+    not need to worry about disk space. If a system crash corrupts the database,
+    or you want to force <span class="Nm">debuginfod</span> to reset and start
+    over, simply erase the sqlite file before restarting <span class="Nm">debuginfod</span>.</p>
+<p class="Pp">In contrast, in <i>passive</i> mode, all scanning and grooming is
+    disabled, and the index database remains read-only. This makes the database
+    more suitable for sharing between servers or sites with simple one-way
+    replication, and data management considerations are generally moot.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SECURITY'><a class='permalink' href='#SECURITY'>SECURITY</a></h1>
+<p class="Pp"><span class="Nm">debuginfod</span> <b>does not</b> include any
+    particular security features. While it is robust with respect to inputs,
+    some abuse is possible. It forks a new thread for each incoming HTTP
+    request, which could lead to a denial-of-service in terms of RAM, CPU,
+    disk I/O, or network I/O. If this is a problem, users are advised to install
+    <span class="Nm">debuginfod</span> with a HTTPS reverse-proxy front-end
+    that enforces site policies for firewalling, authentication, integrity,
+    authorization, and load control.</p>
+<p class="Pp">Front-end proxies may elide sensitive path name components in
+    X-DEBUGINFOD-FILE/ARCHIVE response headers. For example, using Apache
+    httpd's <b>mod_headers</b>, you can remove the entire directory name
+    prefix:</p>
+<div class="Bd-indent">
+<pre>Header edit x-debuginfod-archive &quot;.*/&quot; &quot;&quot;</pre>
+</div>
+<p class="Pp">When relaying queries to upstream debuginfods, <span class="Nm">debuginfod</span>
+    <b>does not</b> include any particular security features. It trusts that the
+    binaries returned by the debuginfods are accurate. Therefore, the list of
+    servers should include only trustworthy ones. If accessed across HTTP rather
+    than HTTPS, the network should be trustworthy. Authentication information
+    through the internal <i>libcurl</i> library is not currently enabled.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT_VARIABLES'><a class='permalink' href='#ENVIRONMENT_VARIABLES'>ENVIRONMENT VARIABLES</a></h1>
+<dl class="Bl-tag">
+  <dt><b>$TMPDIR</b></dt>
+  <dd>This environment variable points to a file system to be used for temporary
+      files. The default is /tmp.
+      </dd>
+  <dt><b>$DEBUGINFOD_URLS</b></dt>
+  <dd>This environment variable contains a list of URL prefixes for trusted
+      <span class="Nm">debuginfod</span> instances. Alternate URL prefixes are
+      separated by space. This environment variable may be set by /etc/profile.d
+      scripts reading /etc/debuginfod/*.urls files.
+    <p class="Pp">This environment variable can also contain policy defining
+        tags which dictate the response policy for verifying per-file IMA
+        signatures in RPMs. As the space seperated list is read left to right,
+        upon encountering a tag, subsequent URLs up to the next tag will be
+        handled using that specified policy. All URLs before the first tag will
+        use the default policy, <i>ima:ignore</i>. For example:</p>
+    <p class="Pp">
+      <br/>
+    </p>
+    <pre>DEBUGINFOD_URLS=&quot;https://foo.com ima:enforcing https://bar.ca http://localhost:8002/ ima:ignore https://baz.org&quot;
+</pre>
+    <br/>
+    <p class="Pp">Where foo.com and baz.org use the default <i>ignore</i> policy
+        and bar.ca and localhost use an <i>enforcing</i> policy. The policy tag
+        may be one of the following:</p>
+  </dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd><i>ima:enforcing</i> Every downloaded file requires a valid signature,
+      fully protecting integrity.</dd>
+  <dt></dt>
+  <dd><i>ima:ignore</i> Skips verification altogether, providing no
+      protection.</dd>
+  <dt></dt>
+  <dd>
+    <p class="Pp">Alerts of validation failure will be directed as specified in
+        $DEBUGINFOD_VERBOSE.</p>
+      </dd>
+</dl>
+<dl class="Bl-tag">
+  <dt><b>$DEBUGINFOD_CACHE_PATH</b></dt>
+  <dd>This environment variable governs the location of the cache where
+      downloaded files and cache-control files are kept. The default directory
+      is chosen based on other environment variables, see below.
+      </dd>
+  <dt><b>$DEBUGINFOD_PROGRESS</b></dt>
+  <dd>This environment variable governs the default progress function. If set,
+      and if a progressfn is not explicitly set, then the library will configure
+      a default progressfn. This function will append a simple progress message
+      periodically to stderr. The default is no progress function output.
+      </dd>
+</dl>
+</body>
+</html>

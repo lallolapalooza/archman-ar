@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>lvmpersist(8) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">lvmpersist(8)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/lvm2/">lvm2</a></p>
+<p class="lic">التراخيص: GPL-2.0-only, LGPL-2.1-only</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">LVMPERSIST(8)</td>
+    <td class="head-vol">دليل مدير النظام</td>
+    <td class="head-rtitle">LVMPERSIST(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">lvmpersist - إدارة الحجوزات المستمرة على مجموعة من أجهزة الكتلة</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">توفر الحجوزات المستمرة (PRs) آلية للتحكم في الوصول إلى أجهزة التخزين المشتركة، عادةً لحماية الأجهزة من التعديل بواسطة مضيفين لا ينبغي لهم الكتابة إلى الأجهزة المشتركة. هذا عادة ما يكون مصدر قلق في بيئات SAN أو المجمعة، حيث يكون لدى العديد من المضيفين وصول إلى نفس أجهزة التخزين.</p>
+<p class="Pp">إذا كانت مجموعة وحدات التخزين LVM (VG) تحتوي على أجهزة قادرة على PR، فيمكن استخدام أوامر LVM لإدارة PR على مستوى VG، وتطبيق PR على كل حجم مادي (PV) في VG. (يجب أن تدعم جميع وحدات PV في VG خاصية PR.)</p>
+<p class="Pp"><b>lvmpersist</b> هي أداة منخفضة المستوى تستخدم لتنفيذ عمليات PR على أجهزة الكتلة الفردية. توفر LVM أيضًا واجهة إدارة PR عالية المستوى من خلال واجهة أوامر LVM قياسية:
+  <br/>
+  <b>vgchange</b> <b>--setpersist</b>، <b>vgchange --persist</b></p>
+<p class="Pp">lvmpersist هو برنامج نصي لا ينفذ خيارات سطر الأوامر الشائعة لـ LVM أو قدراتها. يستخدم البرنامج النصي أوامر sg_persist و mpathpersist و nvme لتنفيذ عمليات PR على أجهزة الكتلة. تنفذ أوامر LVM عالية المستوى (مثل vgchange) البرنامج النصي lvmpersist.</p>
+<section class="Ss">
+<h2 class="Ss" id='Device_types'><a class='permalink' href='#Device_types'>أنواع الأجهزة</a></h2>
+<p class="Pp">تدعم أجهزة SCSI أو SCSI-المشابهة (مثل iSCSI، SAS، Fibre Channel) و dm-multipath و NVME. تم تقديم PRs مع معيار SCSI Primary Commands Version 3 (SPC-3).</p>
+<p class="Pp">عند استخدام أجهزة المسارات المتعددة، يجب تكوين multipath.conf باستخدام &quot;reservation_key file&quot;. (قم بتشغيل mpathconf --option reservation_key:file، وأعد تشغيل multipathd.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Persistent_reservation_types'><a class='permalink' href='#Persistent_reservation_types'>أنواع الحجوزات المستمرة</a></h2>
+<p class="Pp">تستخدم LVM نوع PR &quot;Write Exclusive&quot; (WE) للأجهزة في VG محلي، و &quot;Write Exclusive - all registrants&quot; (WEAR) للأجهزة في VG مشترك. هناك استثناء واحد وهو أجهزة dm-multipath، التي تستخدم WEAR في كل من VGs المحلية والمشتركة (هذا ضروري للحفاظ على جميع المسارات قابلة للاستخدام.)</p>
+<p class="Pp">يحتوي أمر lvmpersist على خيارين لتحديد نوع PR:</p>
+<dl class="Bl-tag">
+  <dt id="access"><a class="permalink" href="#access"><b>--access
+    ex|sh</b></a></dt>
+  <dd>
+    <br/>
+    قم بتعيين الوصول إلى &quot;ex&quot; (حصري) إذا كان يجب الوصول إلى الأجهزة بواسطة مضيف واحد فقط (أي أن الأجهزة جزء من VG محلي.) قم بتعيين الوصول إلى &quot;sh&quot; (مشترك) إذا كان من المفترض الوصول إلى الأجهزة بشكل متزامن بواسطة مضيفين متعددين (أي أن الأجهزة جزء من VG مشترك.) سيختار lvmpersist نوع PR المناسب لكل جهاز (عادةً WE لـ &quot;ex&quot;، و WEAR لـ &quot;sh&quot;.)</dd>
+  <dt id="prtype"><a class="permalink" href="#prtype"><b>--prtype</b><i>&#x00A0;PRTYPE</i></a></dt>
+  <dd>عند تحديد قيمة PRTYPE، سيستخدم lvmpersist هذا النوع فقط لجميع الأجهزة.</dd>
+</dl>
+<p class="Pp">أنواع PR والاختصارات المستخدمة في الواجهات/الرسائل:</p>
+<p class="Pp"><b>WE</b> Write Exclusive (كتابة حصرية)
+  <br/>
+  <b>EA</b> Exclusive Access (وصول حصري)
+  <br/>
+  <b>WERO</b> Write Exclusive - registrants only (كتابة حصرية - المسجلون فقط)
+  <br/>
+  <b>EARO</b> Exclusive Access - registrants only (وصول حصري - المسجلون فقط)
+  <br/>
+  <b>WEAR</b> Write Exclusive - all registrants (كتابة حصرية - جميع المسجلين)
+  <br/>
+  <b>EAAR</b> Exclusive Access - all registrants (وصول حصري - جميع المسجلين)</p>
+<p class="Pp">(لا يتم دعم أنواع WERO و EARO بعد.)</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Persistent_reservation_keys'><a class='permalink' href='#Persistent_reservation_keys'>مفاتيح الحجز المستمر</a></h2>
+<p class="Pp">يمكن أن يصل طول مفاتيح PR إلى 8 بايت، ويتم تمثيلها بما يصل إلى 16 حرفًا سداسي عشري مع بادئة &quot;0x&quot;. لا يُسمح بالأصفار البادئة، على سبيل المثال، استخدم 0x1234abcd، وليس 0x000000001234abcd. يتم قبول قيمة مفتاح عشري (بدون بادئة 0x) كمدخل، ولكنها ستظهر كست عشري في المخرجات.</p>
+<p class="Pp">يجب أن يستخدم كل مضيف يستخدم أجهزة مشتركة مفتاح PR فريدًا.</p>
+<p class="Pp">يجب تكوين مفاتيح PR على كل مضيف في /etc/lvm/lvmlocal.conf (راجع الإعدادات المحلية أدناه.)</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USAGE'><a class='permalink' href='#USAGE'>الاستخدام</a></h1>
+<p class="Pp">مجموعة الأوامر الأساسية والخيارات لإدارة PR:</p>
+<p class="Pp">أداة PR على مستوى الجهاز:
+  <br/>
+  <b>lvmpersist</b>
+    <b>start</b>|<b>stop</b>|<b>remove</b>|<b>clear</b>|<b>read</b>
+    [<i>OPTIONS</i>] <i>DEST</i></p>
+<p class="Pp">تكوين VG PR:
+  <br/>
+  <b>vgchange --setpersist</b> <b>y</b>|<b>n</b> <i>VG</i></p>
+<p class="Pp">عمليات VG PR:
+  <br/>
+  <b>vgchange --persist</b>
+    <b>start</b>|<b>stop</b>|<b>remove</b>|<b>clear</b>|<b>read</b>|<b>check</b>
+    <i>VG</i></p>
+<section class="Ss">
+<h2 class="Ss" id='lvmpersist_commands'><a class='permalink' href='#lvmpersist_commands'>أوامر lvmpersist</a></h2>
+<p class="Pp"><b>lvmpersist start</b> <b>--ourkey</b><i>&#x00A0;KEY</i>
+    <i>DEST</i></p>
+<p class="Pp">&quot;start&quot; يسجل المفتاح المحلي ويحجز الأجهزة. إذا كان مفتاح مختلف من نفس المضيف لا يزال مسجلاً، فسيتم استبداله بالمفتاح المحدد. عندما لا يتم تحديد --access أو --prtype، يتم استخدام الوصول &quot;ex&quot;.</p>
+<p class="Pp"><b>lvmpersist stop</b> <b>--ourkey</b><i>&#x00A0;KEY</i>
+    <i>DEST</i></p>
+<p class="Pp">&quot;stop&quot; يلغي تسجيل المفتاح المحلي، مما يزيل أيضًا حجزًا محليًا.</p>
+<p class="Pp"><b>lvmpersist remove</b>
+    <b>--ourkey</b><i>&#x00A0;KEY</i><b>&#x00A0;--removekey</b><i>&#x00A0;REMKEY</i>
+    <i>DEST</i></p>
+<p class="Pp">&quot;remove&quot; يزيل مفتاح مضيف مسجل آخر. يفقد المضيف ذو المفتاح الذي تمت إزالته القدرة على الكتابة إلى الأجهزة. (ينطبق هذا الأمر على VGs المشتركة، حيث يتم تشغيل مضيفين متعددين في وقت واحد.)</p>
+<p class="Pp"><b>lvmpersist start</b>
+    <b>--ourkey</b><i>&#x00A0;KEY</i><b>&#x00A0;--removekey</b><i>&#x00A0;REMKEY</i>
+    <i>DEST</i></p>
+<p class="Pp">&quot;start&quot; مع removekey يسجل المفتاح المحلي ويستحوذ على الحجز من مضيف آخر (باستخدام preempt-abort). يفقد المضيف الآخر القدرة على الكتابة إلى الأجهزة. (ينطبق هذا الأمر على VGs المحلية، والتي يمكن تشغيل مضيف واحد فيها في وقت واحد.)</p>
+<p class="Pp"><b>lvmpersist clear</b> <b>--ourkey</b><i>&#x00A0;KEY</i>
+    <i>DEST</i></p>
+<p class="Pp">&quot;clear&quot; يزيل جميع المفاتيح والحجوزات من الأجهزة.</p>
+<p class="Pp"><b>lvmpersist</b>
+    <b>devtest</b>|<b>read</b>|<b>read-keys</b>|<b>read-reservation</b>
+    <i>DEST</i></p>
+<p class="Pp">تستخدم هذه الأوامر لاختبار ما إذا كانت الأجهزة تدعم PR، وعرض مفاتيح PR والحجوزات الحالية.</p>
+<p class="Pp"><b>lvmpersist check-key</b> <b>--key</b><i>&#x00A0;KEY</i>
+    <i>DEST</i></p>
+<p class="Pp">تحقق مما إذا كان مفتاح معين مسجلًا.</p>
+<p class="Pp">OPTIONS:</p>
+<dl class="Bl-tag">
+  <dt id="ourkey"><a class="permalink" href="#ourkey"><b>--ourkey</b><i>&#x00A0;KEY</i></a></dt>
+  <dd>
+    <br/>
+    مفتاح PR المحلي، على سبيل المثال 0x123abc</dd>
+  <dt id="removekey"><a class="permalink" href="#removekey"><b>--removekey</b><i>&#x00A0;REMKEY</i></a></dt>
+  <dd>
+    <br/>
+    مفتاح مضيف آخر.</dd>
+  <dt id="key"><a class="permalink" href="#key"><b>--key</b><i>&#x00A0;KEY</i></a></dt>
+  <dd>
+    <br/>
+    أي مفتاح للتحقق منه.</dd>
+  <dt id="access~2"><a class="permalink" href="#access~2"><b>--access
+    ex|sh</b></a></dt>
+  <dd>
+    <br/>
+    استخدم نوع PR للوصول الحصري أو المشترك إلى الجهاز.</dd>
+  <dt id="prtype~2"><a class="permalink" href="#prtype~2"><b>--prtype</b><i>&#x00A0;PRTYPE</i></a></dt>
+  <dd>
+    <br/>
+    استخدم نوع الحجز المحدد (بديل لـ --access.)</dd>
+  <dt id="ptpl"><a class="permalink" href="#ptpl"><b>--ptpl</b></a></dt>
+  <dd>
+    <br/>
+    تمكين الاستمرار عبر فقدان الطاقة أثناء البدء (التسجيل.)</dd>
+</dl>
+<p class="Pp">DEST:</p>
+<dl class="Bl-tag">
+  <dt id="device"><a class="permalink" href="#device"><b>--device</b><i>&#x00A0;PATH</i><b>&#x00A0;...</b></a></dt>
+  <dd>
+    <br/>
+    جهاز واحد أو أكثر للعمل عليه.</dd>
+  <dt id="vg"><a class="permalink" href="#vg"><b>--vg</b><i>&#x00A0;VGNAME</i></a></dt>
+  <dd>
+    <br/>
+    VG واحد للعمل عليه (جميع وحدات PV في VG.)</dd>
+  <dt id="vg~2"><a class="permalink" href="#vg~2"><b>--vg</b><i>&#x00A0;VGNAME</i><b>&#x00A0;--device</b><i>&#x00A0;PATH</i><b>&#x00A0;...</b></a></dt>
+  <dd>
+    <br/>
+    جهاز واحد أو أكثر للعمل عليه، واسم VG لاستخدامه كمعرف لمجموعة الأجهزة.</dd>
+</dl>
+<p class="Pp">يتطلب lvmpersist إما أسماء أجهزة محددة، كل منها محدد كـ --device /dev/name، أو اسم VG، محدد مع --vg VGNAME. عند تحديد VG، بدون أجهزة كتلة فردية، يقوم lvmpersist بتشغيل أوامر PR على كل PV في VG. عند تحديد الأجهزة، ويتم توفير VG أيضًا مع --vg، فإن اسم VG يستخدم ببساطة في رسائل السجل لتحديد مجموعة الأجهزة ككل. عند تشغيل lvmpersist بواسطة أوامر LVM عالية المستوى، يتم تحديد كل جهاز باستخدام --device، واسم VG يتم تحديده باستخدام --vg.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='VG_metadata_commands'><a class='permalink' href='#VG_metadata_commands'>أوامر بيانات VG الوصفية</a></h2>
+<p class="Pp">يستخدم vgchange --setpersist لتكوين أتمتة وإنفاذ PR فيما يتعلق بالاستخدام الأوسع لـ VG</p>
+</section>
+</section>
+</div>
+
+</section>
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id="NAME">NAME</h1>
+<p class="Nd">lvmpersist - Manage persistent reservations for LVM devices</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+<p class="Co">The <code>lvmpersist</code> utility allows you to manage persistent
+  reservations on LVM devices. Persistent reservations are a feature that allows
+  multiple hosts to share access to block devices while ensuring data integrity.
+  This utility is part of the LVM (Logical Volume Manager) tools and is used to
+  start, stop, and check the status of persistent reservations on LVM volume
+  groups.</p>
+<p class="Co">When a volume group is configured with persistent reservation
+  support, it uses an underlying mechanism (like SCSI Persistent Reservations or
+  other storage array specific features) to control access. Only the host that
+  holds the reservation can modify the volume group's metadata or create/delete
+  logical volumes.</p>
+<p class="Co">The commands demonstrated in the examples typically involve:</p>
+<ul>
+  <li>
+    <p class="Co">Starting and stopping the persistent reservation service for a
+      volume group.</p>
+  </li>
+  <li>
+    <p class="Co">Activating and deactivating logical volumes within a volume
+      group.</p>
+  </li>
+  <li>
+    <p class="Co">Checking the status of persistent reservations, including which
+      host holds the reservation.</p>
+  </li>
+  <li>
+    <p class="Co">Forcibly taking over the reservation from another host.</p>
+  </li>
+</ul>
+<p class="Co">The use of persistent reservations is crucial in shared storage
+  environments (like clusters or SANs) to prevent data corruption when multiple
+  servers access the same LVM volume group.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="USAGE">USAGE</h1>
+<p class="Co">The following commands are demonstrated to illustrate the usage of
+  <code>lvmpersist</code> and related LVM commands in managing persistent
+  reservations:</p>
+<dl>
+  <dt><code>vgchange --persist stop &lt;vgname&gt;</code></dt>
+  <dd>Stops the persistent reservation service for the specified volume group.
+    This releases any reservations held by the current host.</dd>
+  <dt><code>vgchange -ay &lt;vgname&gt;</code></dt>
+  <dd>Activates all logical volumes in the specified volume group. This command
+    may fail if persistent reservation is not started or if the host does not
+    hold the reservation.</dd>
+  <dt><code>lvcreate -l &lt;extents&gt; -n &lt;lname&gt; &lt;vgname&gt;</code></dt>
+  <dd>Creates a new logical volume with the specified size and name within the
+    volume group. This also requires the host to hold the persistent
+    reservation.</dd>
+  <dt><code>vgchange --persist start &lt;vgname&gt;</code></dt>
+  <dd>Starts the persistent reservation service for the specified volume group.
+    The host attempts to acquire the reservation.</dd>
+  <dt><code>lvmconfig local/host_id</code></dt>
+  <dd>Retrieves the unique host ID configured for the local system.</dd>
+  <dt><code>vgchange --persist check &lt;vgname&gt;</code></dt>
+  <dd>Checks the status of the persistent reservation for the volume group,
+    indicating which host holds the reservation (if any) and the type of
+    reservation.</dd>
+  <dt><code>vgchange --persist start --removekey &lt;key&gt; &lt;vgname&gt;</code></dt>
+  <dd>Starts the persistent reservation service and removes a specific reservation
+    key. This is often used to forcibly take over the reservation from another
+    host.</dd>
+  <dt><code>vgcreate --shared &lt;vgname&gt; &lt;device1&gt; &lt;device2&gt; ...</code></dt>
+  <dd>Creates a new shared volume group. The <code>--shared</code> option implies
+    the use of a locking mechanism (like sanlock) and enables persistent
+    reservation features.</dd>
+  <dt><code>vgchange --setpersist y &lt;vgname&gt;</code></dt>
+  <dd>Enables persistent reservation support for an existing volume group.</dd>
+  <dt><code>vgchange --lockstart &lt;vgname&gt;</code></dt>
+  <dd>Starts the locking mechanism for a shared volume group, which is necessary
+    for persistent reservations to function correctly.</dd>
+  <dt><code>lvchange -ay &lt;vgname&gt;/&lt;lname&gt;</code></dt>
+  <dd>Activates a specific logical volume. If the LV is locked by another host,
+    this operation will fail.</dd>
+  <dt><code>vgchange -an &lt;vgname&gt;</code></dt>
+  <dd>Deactivates all logical volumes in the specified volume group.</dd>
+  <dt><code>vgchange --lockstop &lt;vgname&gt;</code></dt>
+  <dd>Stops the locking mechanism for a shared volume group.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES">EXAMPLES</h1>
+<p class="Co">The following examples illustrate scenarios of managing persistent
+  reservations:</p>
+<section class="Ss">
+<h2 class="Ss">Basic persistent reservation management</h2>
+<pre>host1:
+$ lvmconfig local/host_id
+host_id=1
+$ vgchange --persist stop vg
+  lvmpersist: stopped vg with key 0x1000000000000001.
+$ vgchange -ay vg
+  persistent reservation is not started.
+  Cannot access VG vg without persistent reservation.
+$ lvcreate -l1 -n lvol1 vg
+  persistent reservation is not started.
+  Cannot access VG vg without persistent reservation.
+$ vgchange --persist start vg
+  lvmpersist: started vg with key 0x1000000000000001.
+$ vgchange -ay vg
+  1 logical volume(s) in volume group &quot;vg&quot; now active
+$ lvcreate -l1 -n lvol1 vg
+  Logical volume &quot;lvol1&quot; created.
+host2 foricibly takes VG from host1:
+$ lvmconfig local/host_id
+host_id=2
+$ vgchange -ay vg
+  persistent reservation is not started.
+  Cannot access VG vg without persistent reservation.
+$ vgchange --persist start vg
+  persistent reservation is not started by another host
+$ vgchange --persist check vg
+  key for local host is not registered (host_id 2)
+  key for other host is registered: 0x1000000000000001
+  reservation WE for other host
+  PR is not started.
+$ dd if=/dev/zero of=/dev/sda
+dd: error writing '/dev/sda': Input/output error
+$ vgchange --persist start --removekey 0x1000000000000001 vg
+  lvmpersist: started vg with key 0x1000000000000002.
+$ vgchange -ay vg
+  2 logical volume(s) in volume group &quot;vg&quot; now active
+$ vgchange --persist check vg
+  key for local host is registered: 0x1000000000000002
+  reservation WE for local host
+  PR is started.
+host1 can no longer write:
+$ dd if=/dev/zero of=/dev/vg/lvol0
+dd: error writing '/dev/vg/lvol0': Input/output error
+$ lvcreate -l1 -n lvol1 vg
+  persistent reservation is not started.
+  Cannot access VG vg without persistent reservation.
+$ vgchange --persist check vg
+  key for local host is not registered (host_id 1)
+  key for other host is registered: 0x1000000000000002
+  reservation WE for other host
+  PR is not started.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss">Shared VG usage</h2>
+<pre>host1:
+$ lvmconfig local/host_id
+host_id=1
+$ vgcreate --shared vg /dev/sda /dev/sdb
+  Enabling sanlock global lock
+  Physical volume &quot;/dev/sda&quot; successfully created.
+  Physical volume &quot;/dev/sdb&quot; successfully created.
+  Logical volume &quot;lvmlock&quot; created.
+  Volume group &quot;vg&quot; successfully created
+  VG vg starting sanlock lockspace
+  Starting locking.  Waiting until locks are ready...
+$ vgchange --setpersist y vg
+  Volume group &quot;vg&quot; successfully changed.
+$ vgchange --persist start vg
+  lvmpersist: started vg with key 0x1000000000010001.
+$ vgchange --persist check vg
+  key for local host is registered: 0x1000000000010001
+  keys for all registered hosts: 0x1000000000010001
+  reservation WEAR for registered hosts
+  PR is started.
+$ lvcreate -l1 -n lvol0 vg
+  Logical volume &quot;lvol0&quot; created.
+host2:
+$ lvmconfig local/host_id
+host_id=2
+$ vgchange --persist start vg
+  lvmpersist: started vg with key 0x1000000000010002.
+$ vgchange --lockstart vg
+  VG vg starting sanlock lockspace
+  Starting locking.  Waiting for sanlock...
+$ vgchange --persist check vg
+  key for local host is registered: 0x1000000000010002
+  keys for all registered hosts: 0x1000000000010001 0x1000000000010002
+  reservation WEAR for registered hosts
+  PR is started.
+$ lvcreate -l1 -n lvol1 vg
+  Logical volume &quot;lvol1&quot; created.
+$ lvchange -ay vg/lvol0
+  LV locked by other host: vg/lvol0 (host_id 1)
+  Failed to lock logical volume vg/lvol0.
+$ vgchange -an vg
+  0 logical volume(s) in volume group &quot;vg&quot; now active
+$ vgchange --lockstop vg
+$ vgchange --persist stop vg
+  lvmpersist: stopped ee with key 0x1000000000010002.
+$ vgchange --persist check vg
+  key for local host is not registered (host_id 2)
+  keys for all registered hosts: 0x1000000000010001
+  reservation WEAR for registered hosts
+  PR is not started.
+$ dd if=/dev/zero of=/dev/sda
+dd: error writing '/dev/sda': Input/output error</pre>
+</section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">LVM TOOLS 2.03.37(2) (2025-11-21)</td>
+    <td class="foot-os">Red Hat, Inc</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/lvm2/">core/lvm2</a></dd>
+        <dt>Version:</dt>
+        <dd>2.03.37-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://sourceware.org/lvm2/">https://sourceware.org/lvm2/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>GPL-2.0-only, LGPL-2.1-only</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/core/lvm2/">/listing/core/lvm2/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#USAGE">USAGE</a></li>
+        
+            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/lvmpersist.8.en.txt">txt</a>, 
+        
+            <a href="/man/lvmpersist.8.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

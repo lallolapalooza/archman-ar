@@ -1,0 +1,673 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perl5240delta.1perl</h1>
+<link rel="stylesheet" href="basic.css">
+صراحة، أو
+    ضمنياً، على سبيل المثال، مع طبقة <span class="Li">:encoding(UTF-16LE)</span>.</p>
+<p class="Pp">كل من <span class="Li">sysread()</span> و
+    <span class="Li">recv()</span> تستخدم حالياً فقط علامة
+    <span class="Li">&quot;:utf8&quot;</span> للتدفق، متجاهلة الطبقات الفعلية. بما أن
+    <span class="Li">sysread()</span> و <span class="Li">recv()</span> لا تقومان
+    بتحقق من صحة UTF-8، يمكن أن ينتهي بهما الأمر بإنشاء قيم متدرجة مشفرة بشكل
+    غير صالح.</p>
+<p class="Pp">بالمثل، تستخدم <span class="Li">syswrite()</span> و
+    <span class="Li">send()</span> فقط علامة
+    <span class="Li">&quot;:utf8&quot;</span>، وتتجاهل أي طبقات أخرى. إذا تم تعيين
+    العلامة، فكلاهما يكتب القيمة مشفرة بـ UTF-8، حتى لو كانت الطبقة ترميزاً
+    مختلفاً، مثل المثال أعلاه.</p>
+<p class="Pp">من الناحية المثالية، يجب أن تتجاهل كل هذه العمليات علامة
+    <span class="Li">&quot;:utf8&quot;</span> تماماً، وتعمل فقط بالبايتات، ولكن هذا
+    سيؤدي إلى كسر الكود الموجود بصمت. لتجنب ذلك، ستقوم نسخة مستقبلية من perl
+    برمي استثناء عند استدعاء أي من
+    <span class="Li">sysread()</span>، <span class="Li">recv()</span>،
+    <span class="Li">syswrite()</span> أو <span class="Li">send()</span> على
+    مقبض مع طبقة <span class="Li">&quot;:utf8&quot;</span>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='تحسينات_الأداء'><a class='permalink' href='#تحسينات_الأداء'>تحسينات الأداء</a></h1>
+<ul class="Bl-bullet">
+  <li>تم تقليل الحمل الزائد لدخول الخروج من النطاق والخروج منه بشكل كبير، لذلك على
+      سبيل المثال، أصبحت استدعاءات الوظائف الفرعية والحلقات والكتل الأساسية أسرع
+      الآن. هذه المكالمة الوظيفية الفارغة تستغرق الآن حوالي ثلث الوقت أقل للتنفيذ:
+        <pre>sub f{} f();
+</pre>
+  </li>
+  <li>العديد من اللغات، مثل الصينية، لا حساسية لحالة الأحرف. تعرف Perl الآن على
+      معظم اللغات الشائعة، وتتخطى الكثير من العمل عندما يحاول برنامج تغيير حالة
+      الأحرف فيها (مثل <span class="Li">ucfirst()</span>) أو المطابقة دون حساسية
+      لحالة الأحرف (<span class="Li">&quot;qr//i&quot;</span>). هذا سيسرع البرنامج،
+      مثل خادم الويب، الذي يمكنه العمل على لغات متعددة، بينما يعمل على لغة لا
+      حساسية لحالة الأحرف.</li>
+  <li>تم جعل <span class="Li">&quot;/fixed-substr/&quot;</span> أسرع بكثير.
+    <p class="Pp">على المنصات التي تحتوي على تطبيق <span class="Li">memchr()</span>
+        من libc يستفيد بشكل جيد من دعم الأجهزة الأساسي، ستكون الأنماط التي تتضمن
+        سلاسل فرعية ثابتة الآن أسرع بكثير في كثير من الأحيان؛ على سبيل المثال،
+        مع glibc على وحدة معالجة مركزية حديثة x86_64، هذا:</p>
+        <pre>$s = &quot;a&quot; x 1000 . &quot;wxyz&quot;;
+$s =~ /wxyz/ for 1..30000
+</pre>
+    <p class="Pp">أصبح الآن أسرع بحوالي 7 مرات. على الأنظمة التي تحتوي على
+        <span class="Li">memchr()</span> بطيء، مثل ARM Raspberry Pi 32 بت، سيكون
+        هناك تسريع صغير أو قليل. وعلى العكس من ذلك، فإن بعض الحالات المرضية،
+        مثل <span class="Li">&quot;&quot;ab&quot; x 1000 =~
+        /aa/&quot;</span> ستكون أبطأ الآن؛ أبطأ بما يصل إلى 3 مرات على rPi،
+        أبطأ 1.5x على x86_64.</p>
+  </li>
+  <li>إضافة وطرح وضرب أسرع.
+    <p class="Pp">منذ 5.8.0، أصبحت العمليات الحسابية أبطأ بسبب الحاجة إلى دعم
+        الأعداد الصحيحة 64 بت. للتعامل مع الأعداد الصحيحة 64 بت، يلزم التحقق من
+        الكثير من الحالات الطرفية، مما يضيف وقتاً. نكتشف الآن الحالات الشائعة
+        التي لا حاجة فيها للتحقق من تلك الحالات الطرفية، ونقوم بتخصيصها.</p>
+  </li>
+  <li>تم جعل الزيادة السابقة، والنقص السابق، والزيادة اللاحقة، والنقص اللاحق
+      أسرع عن طريق تقسيم الوظائف التي تتعامل مع حالات متعددة داخلياً إلى وظائف
+      مختلفة.</li>
+  <li>تمت إزالة إنشاء هياكل بيانات مصحح Perl (انظر "Inside the Debugger" في
+      perldebguts) لـ XSUBs والوظائف الثابتة. هذا أزال تركيبة glob/scalar
+      واحدة لكل ملف ".c" فريد جاءت منه XSUBs والوظائف الثابتة. عند بدء التشغيل
+      (<span class="Li">&quot;perl -e&quot;0&quot;&quot;</span>) تم إنشاء حوالي نصف
+      دستة تركيبات glob/scalar للمصحح. تحميل وحدات XS أنشأ المزيد من تركيبات
+      glob/scalar. كانت هذه الأشياء تُنشأ بغض النظر عما إذا كان مصحح Perl قيد
+      الاستخدام، وعلى الرغم من حقيقة أنه لا يمكنه تصحيح كود C على أي حال.</li>
+  <li>على Win32، أصبح إجراء <span class="Li">&quot;stat&quot;</span> أو
+      <span class="Li">&quot;-X&quot;</span> على مسار، إذا كان الملف أو الدليل غير
+      موجود، أسرع بـ 3.5 مرات من ذي قبل.</li>
+  <li>أصبحت الوسائط الفردية في تعيين القائمة أسرع قليلاً:
+        <pre>($x) = (...);
+(...) = ($x);
+</pre>
+  </li>
+  <li>يتم الآن استخدام ذاكرة قصوى أقل عند تجميع أنماط التعبيرات العادية.</li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='الوحدات_و_المعياري'><a class='permalink' href='#الوحدات_و_المعياري'>الوحدات والمُعياريّات</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='الوحدات_والمعياريّات_المُحدّثة'><a class='permalink' href='#الوحدات_والمعياريّات_المُحدّثة'>الوحدات والمُعياريّات المُحدّثة</a></h2>
+<ul class="Bl-bullet">
+  <li>تمت ترقية arybase من الإصدار 0.10 إلى 0.11.</li>
+  <li>تمت ترقية Attribute::Handlers من الإصدار 0.97 إلى 0.99.</li>
+  <li>تمت ترقية autodie من الإصدار 2.26 إلى 2.29.</li>
+  <li>تمت ترقية autouse من الإصدار 1.08 إلى 1.11.</li>
+  <li>تمت ترقية B من الإصدار 1.58 إلى 1.62.</li>
+  <li>تمت ترقية B::Deparse من الإصدار 1.35 إلى 1.37.</li>
+  <li>تمت ترقية base من الإصدار 2.22 إلى 2.23.</li>
+  <li>تمت ترقية Benchmark من الإصدار 1.2 إلى 1.22.</li>
+  <li>تمت ترقية bignum من الإصدار 0.39 إلى 0.42.</li>
+  <li>تمت ترقية bytes من الإصدار 1.04 إلى 1.05.</li>
+  <li>تمت ترقية Carp من الإصدار 1.36 إلى 1.40.</li>
+  <li>تمت ترقية Compress::Raw::Bzip2 من الإصدار 2.068 إلى 2.069.</li>
+  <li>تمت ترقية Compress::Raw::Zlib من الإصدار 2.068 إلى 2.069.</li>
+  <li>تمت ترقية Config::Perl::V من الإصدار 0.24 إلى 0.25.</li>
+  <li>تمت ترقية CPAN::Meta من الإصدار 2.150001 إلى 2.150005.</li>
+  <li>تمت ترقية CPAN::Meta::Requirements من الإصدار 2.132 إلى 2.140.</li>
+  <li>تمت ترقية CPAN::Meta::YAML من الإصدار 0.012 إلى 0.018.</li>
+  <li>تمت ترقية Data::Dumper من الإصدار 2.158 إلى 2.160.</li>
+  <li>تمت ترقية Devel::Peek من الإصدار 1.22 إلى 1.23.</li>
+  <li>تمت ترقية Devel::PPPort من الإصدار 3.31 إلى 3.32.</li>
+  <li>تمت ترقية Dumpvalue من الإصدار 1.17 إلى 1.18.</li>
+  <li>تمت ترقية DynaLoader من الإصدار 1.32 إلى 1.38.</li>
+  <li>تمت ترقية Encode من الإصدار 2.72 إلى 2.80.</li>
+  <li>تمت ترقية encoding من الإصدار 2.14 إلى 2.17.</li>
+  <li>تمت ترقية encoding::warnings من الإصدار 0.11 إلى 0.12.</li>
+  <li>تمت ترقية English من الإصدار 1.09 إلى 1.10.</li>
+  <li>تمت ترقية Errno من الإصدار 1.23 إلى 1.25.</li>
+  <li>تمت ترقية experimental من الإصدار 0.013 إلى 0.016.</li>
+  <li>تمت ترقية ExtUtils::CBuilder من الإصدار 0.280221 إلى 0.280225.</li>
+  <li>تمت ترقية ExtUtils::Embed من الإصدار 1.32 إلى 1.33.</li>
+  <li>تمت ترقية ExtUtils::MakeMaker من الإصدار 7.04_01 إلى 7.10_01.</li>
+  <li>تمت ترقية ExtUtils::ParseXS من الإصدار 3.28 إلى 3.31.</li>
+  <li>تمت ترقية ExtUtils::Typemaps من الإصدار 3.28 إلى 3.31.</li>
+  <li>تمت ترقية feature من الإصدار 1.40 إلى 1.42.</li>
+  <li>تمت ترقية fields من الإصدار 2.17 إلى 2.23.</li>
+  <li>تمت ترقية File::Find من الإصدار 1.29 إلى 1.34.</li>
+  <li>تمت ترقية File::Glob من الإصدار 1.24 إلى 1.26.</li>
+  <li>تمت ترقية File::Path من الإصدار 2.09 إلى 2.12_01.</li>
+  <li>تمت ترقية File::Spec من الإصدار 3.56 إلى 3.63.</li>
+  <li>تمت ترقية Filter::Util::Call من الإصدار 1.54 إلى 1.55.</li>
+  <li>تمت ترقية Getopt::Long من الإصدار 2.45 إلى 2.48.</li>
+  <li>تمت ترقية Hash::Util من الإصدار 0.18 إلى 0.19.</li>
+  <li>تمت ترقية Hash::Util::FieldHash من الإصدار 1.15 إلى 1.19.</li>
+  <li>تمت ترقية HTTP::Tiny من الإصدار 0.054 إلى 0.056.</li>
+  <li>تمت ترقية I18N::Langinfo من الإصدار 0.12 إلى 0.13.</li>
+  <li>تمت ترقية if من الإصدار 0.0604 إلى 0.0606.</li>
+  <li>تمت ترقية IO من الإصدار 1.35 إلى 1.36.</li>
+  <li>تمت ترقية IO-Compress من الإصدار 2.068 إلى 2.069.</li>
+  <li>تمت ترقية IPC::Open3 من الإصدار 1.18 إلى 1.20.</li>
+  <li>تمت ترقية IPC::SysV من الإصدار 2.04 إلى 2.06_01.</li>
+  <li>تمت ترقية List::Util من الإصدار 1.41 إلى 1.42_02.</li>
+  <li>تمت ترقية locale من الإصدار 1.06 إلى 1.08.</li>
+  <li>تمت ترقية Locale::Codes من الإصدار 3.34 إلى 3.37.</li>
+  <li>تمت ترقية Math::BigInt من الإصدار 1.9997 إلى 1.999715.</li>
+  <li>تمت ترقية Math::BigInt::FastCalc من الإصدار 0.31 إلى 0.40.</li>
+  <li>تمت ترقية Math::BigRat من الإصدار 0.2608 إلى 0.260802.</li>
+  <li>تمت ترقية Module::CoreList من الإصدار 5.20150520 إلى 5.20160320.</li>
+  <li>تمت ترقية Module::Metadata من الإصدار 1.000026 إلى 1.000031.</li>
+  <li>تمت ترقية mro من الإصدار 1.17 إلى 1.18.</li>
+  <li>تمت ترقية ODBM_File من الإصدار 1.12 إلى 1.14.</li>
+  <li>تمت ترقية Opcode من الإصدار 1.32 إلى 1.34.</li>
+  <li>تمت ترقية parent من الإصدار 0.232 إلى 0.234.</li>
+  <li>تمت ترقية Parse::CPAN::Meta من الإصدار 1.4414 إلى 1.4417.</li>
+  <li>تمت ترقية Perl::OSType من الإصدار 1.008 إلى 1.009.</li>
+  <li>تمت ترقية perlfaq من الإصدار 5.021009 إلى 5.021010.</li>
+  <li>تمت ترقية PerlIO::encoding من الإصدار 0.21 إلى 0.24.</li>
+  <li>تمت ترقية PerlIO::mmap من الإصدار 0.014 إلى 0.016.</li>
+  <li>تمت ترقية PerlIO::scalar من الإصدار 0.22 إلى 0.24.</li>
+  <li>تمت ترقية PerlIO::via من الإصدار 0.15 إلى 0.16.</li>
+  <li>تمت ترقية Pod::Functions من الإصدار 1.09 إلى 1.10.</li>
+  <li>تمت ترقية Pod::Perldoc من الإصدار 3.25 إلى 3.25_02.</li>
+  <li>تمت ترقية Pod::Simple من الإصدار 3.29 إلى 3.32.</li>
+  <li>تمت ترقية Pod::Usage من الإصدار 1.64 إلى 1.68.</li>
+  <li>تمت ترقية POSIX من الإصدار 1.53 إلى 1.65.</li>
+  <li>تمت ترقية Scalar::Util من الإصدار 1.41 إلى 1.42_02.</li>
+  <li>تمت ترقية SDBM_File من الإصدار 1.13 إلى 1.14.</li>
+  <li>تمت ترقية SelfLoader من الإصدار 1.22 إلى 1.23.</li>
+  <li>تمت ترقية Socket من الإصدار 2.018 إلى 2.020_03.</li>
+  <li>تمت ترقية Storable من الإصدار 2.53 إلى 2.56.</li>
+  <li>تمت ترقية strict من الإصدار 1.09 إلى 1.11.</li>
+  <li>تمت ترقية Term::ANSIColor من الإصدار 4.03 إلى 4.04.</li>
+  <li>تمت ترقية Term::Cap من الإصدار 1.15 إلى 1.17.</li>
+  <li>تمت ترقية Test من الإصدار 1.26 إلى 1.28.</li>
+  <li>تمت ترقية Test::Harness من الإصدار 3.35 إلى 3.36.</li>
+  <li>تمت ترقية Thread::Queue من الإصدار 3.05 إلى 3.08.</li>
+  <li>تمت ترقية threads من الإصدار 2.01 إلى 2.06.</li>
+  <li>تمت ترقية threads::shared من الإصدار 1.48 إلى 1.50.</li>
+  <li>تمت ترقية Tie::File من الإصدار 1.01 إلى 1.02.</li>
+  <li>تمت ترقية Tie::Scalar من الإصدار 1.03 إلى 1.04.</li>
+  <li>تمت ترقية Time::HiRes من الإصدار 1.9726 إلى 1.9732.</li>
+  <li>تمت ترقية Time::Piece من الإصدار 1.29 إلى 1.31.</li>
+  <li>تمت ترقية Unicode::Collate من الإصدار 1.12 إلى 1.14.</li>
+  <li>تمت ترقية Unicode::Normalize من الإصدار 1.18 إلى 1.25.</li>
+  <li>تمت ترقية Unicode::UCD من الإصدار 0.61 إلى 0.64.</li>
+  <li>تمت ترقية UNIVERSAL من الإصدار 1.12 إلى 1.13.</li>
+  <li>تمت ترقية utf8 من الإصدار 1.17 إلى 1.19.</li>
+  <li>تمت ترقية version من الإصدار 0.9909 إلى 0.9916.</li>
+  <li>تمت ترقية warnings من الإصدار 1.32 إلى 1.36.</li>
+  <li>تمت ترقية Win32 من الإصدار 0.51 إلى 0.52.</li>
+  <li>تمت ترقية Win32API::File من الإصدار 0.1202 إلى 0.1203.</li>
+  <li>تمت ترقية XS::Typ</li>
+</ul>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Platform_Support'><a class='permalink' href='#Platform_Support'>دعم المنصة</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Platform-Specific_Notes'><a class='permalink' href='#Platform-Specific_Notes'>ملاحظات خاصة بالمنصة</a></h2>
+<dl class="Bl-tag">
+  <dt id="AmigaOS"><a class="permalink" href="#AmigaOS">AmigaOS</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تم إعادة دمج منفذ AmigaOS في الشجرة الرئيسية، بناءً على Perl 5.22.1.</dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="Cygwin"><a class="permalink" href="#Cygwin">Cygwin</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>أصبحت الاختبارات أكثر قوة ضد بادئات cygdrive غير العادية. [GH #15076]
+      <a href='https://github.com/Perl/perl5/issues/15076'>https://github.com/Perl/perl5/issues/15076</a></dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="EBCDIC"><a class="permalink" href="#EBCDIC">EBCDIC</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="UTF"><a class="permalink" href="#UTF">UTF-EBCDIC موسع</a></dt>
+  <dd>UTF-EBCDIC يشبه UTF-8، ولكنه مخصص لمنصات EBCDIC. لقد تم توسيعه الآن بحيث يمكنه تمثيل نقاط الترميز حتى 2 ** 64 - 1 على المنصات ذات الكلمات بحجم 64 بت. وهذا يجعله متوافقًا مع UTF-8. يتطلب هذا التحسين تغييرًا غير متوافق في تمثيل نقاط الترميز في النطاق من 2 ** 30 إلى 2 ** 31 -1 (الأخير كان أقصى نقطة ترميز قابلة للتمثيل سابقًا). هذا يعني أن ملفًا يحتوي على إحدى نقاط الترميز هذه، والذي تم كتابته بإصدارات سابقة من perl، لا يمكن قراءته، دون تحويل، بواسطة perl يحتوي على هذا التغيير. نحن لا نعتقد أن هناك أي ملفات من هذا القبيل موجودة، ولكن إذا كان لديك واحد، قم بتقديم تذكرة إلى perlbug@perl.org &lt;mailto:perlbug@perl.org&gt;، وسنقوم بكتابة برنامج نصي للتحويل لك.</dd>
+  <dt>تم إصلاح EBCDIC cmp() و sort() للسلاسل النصية UTF-EBCDIC</dt>
+  <dd>لم تكن مقارنة سلسلتين مشفرتين بكليهما بصيغة UTF-8 (أو بشكل أكثر دقة، UTF-EBCDIC) تعمل بشكل صحيح حتى الآن. بما أن <span class="Li">sort()</span> تستخدم <span class="Li">cmp()</span>، فإن هذا يصلح ذلك أيضًا.</dd>
+  <dt>تم إصلاح EBCDIC "tr///" و "y///" لـ "\N{}"، ونطاقات "use&#x00A0;utf8"</dt>
+  <dd>قدم Perl v5.22 مفهوم النطاقات المحمولة إلى أنماط التعبيرات العادية. يطابق النطاق المحمول نفس مجموعة الأحرف بغض النظر عن المنصة التي يتم التشغيل عليها. تم توسيع هذا المفهوم الآن ليشمل <span class="Li">"tr///"</span>. انظر <span class="Li">"tr///"</span>.
+    <p class="Pp">كانت هناك أيضًا بعض المشاكل مع هذه العمليات تحت <span class="Li">"use&#x00A0;utf8"</span>، والتي تم إصلاحها الآن</p>
+  </dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="FreeBSD"><a class="permalink" href="#FreeBSD">FreeBSD</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>استخدم الدالة <span class="Li">fdclose()</span> من FreeBSD إذا كانت متاحة. [GH #15082]
+    <a href='https://github.com/Perl/perl5/issues/15082'>https://github.com/Perl/perl5/issues/15082</a></dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="IRIX"><a class="permalink" href="#IRIX">IRIX</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>في ظل ظروف معينة، يقوم IRIX stdio <span class="Li">fgetc()</span> و <span class="Li">fread()</span> بتعيين errno إلى <span class="Li">"ENOENT"</span>، وهو ما لم يكن منطقيًا وفقًا لوثائق IRIX أو POSIX. تم الآن مسح Errno في مثل هذه الحالات. [GH #14557] <a href='https://github.com/Perl/perl5/issues/14557'>https://github.com/Perl/perl5/issues/14557</a></li>
+  <li>تم إصلاح المشاكل عند ضرب الأرقام المزدوجة الطويلة باللانهاية. [GH #14993] <a href='https://github.com/Perl/perl5/issues/14993'>https://github.com/Perl/perl5/issues/14993</a></li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt id="MacOS"><a class="permalink" href="#MacOS">MacOS X</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>حتى الآن، حددت إصدارات OS X من perl هدف ربط 10.3 (Panther، 2003) ولكنها لم تحدد هدف مترجم. من الآن فصاعدًا، ستقوم إصدارات perl على OS X 10.6 أو أحدث (Snow Leopard، 2008) افتراضيًا بالتقاط إصدار OS X الحالي وتحديده كهدف ربط صريح في كل من علامات المترجم والرابط، وبالتالي الحفاظ على التوافق الثنائي للملحقات التي تم بناؤها لاحقًا بغض النظر عن التغييرات في إصدارات OS X أو SDK أو المترجم والرابط. لتجاوز القيمة الافتراضية المستخدمة في البناء والمحتفظ بها في العلامات، حدد <span class="Li">"export MACOSX_DEPLOYMENT_TARGET=10.N"</span> قبل تكوين وبناء perl، حيث 10.N هو إصدار OS X الذي ترغب في استهدافه. في OS X 10.5 أو أقدم، لا يوجد تغيير في السلوك الموجود عند كانت تلك الأنظمة حالية؛ هدف الربط لا يزال OS X 10.3 ولا يوجد هدف مترجم صريح.</li>
+  <li>كانت عمليات البناء التي تم تمكين كل من -DDEBUGGING والخيوط فيها تفشل مع خطأ "panic: free from wrong pool" عند بنائها أو اختبارها من Terminal على OS X. كان هذا بسبب إدارة Perl الداخلية للبيئة المتعارضة مع معالج atfork الذي يستخدم وظيفة libc <span class="Li">setenv()</span> لتحديث البيئة.
+    <p class="Pp">يستخدم Perl الآن <span class="Li">setenv()</span>/<span class="Li">unsetenv()</span> لتحديث البيئة على OS X. [GH #14955]
+        <a href='https://github.com/Perl/perl5/issues/14955'>https://github.com/Perl/perl5/issues/14955</a></p>
+  </li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt id="Solaris"><a class="permalink" href="#Solaris">Solaris</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تقوم جميع متغيرات Solaris الآن ببناء مكتبة Perl مشتركة.
+    <p class="Pp">تقوم Solaris والمتغيرات مثل OpenIndiana الآن دائمًا بالبناء باستخدام مكتبة Perl المشتركة (Configure -Duseshrplib). كان هذا مطلوبًا لعمليات بناء OpenIndiana، ولكن هذا هو الإعداد أيضًا لإصدارات Oracle/Sun Perl لعدة سنوات.</p>
+  </dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="Tru64"><a class="permalink" href="#Tru64">Tru64</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>حل بديل حيث يرفض Tru64 عندما يتم سرد النماذج كـ <span class="Li">"PERL_STATIC_INLINE"</span>، ولكن عندما يتم بناء الاختبار بـ <span class="Li">"-DPERL_NO_INLINE_FUNCTIONS"</span>.</dd>
+</dl>
+</div>
+<dl class="Bl-tag">
+  <dt id="VMS"><a class="permalink" href="#VMS">VMS</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>على VMS، أصبحت نماذج الدوال الرياضية في <span class="Li">"math.h"</span> مرئية الآن تحت C++. الآن، لن يتعطل بناء ملحق POSIX باستخدام C++.</li>
+  <li>كان لدى VMS <span class="Li">"setenv"</span>/<span class="Li">"unsetenv"</span> منذ الإصدار v7.0 (تم إصداره في عام 1996)، <span class="Li">"Perl_vmssetenv"</span> يستخدم الآن دائمًا <span class="Li">"setenv"</span>/<span class="Li">"unsetenv"</span>.</li>
+  <li>تنفيذ Perl الآن وظيفة <span class="Li">"killpg"</span> الخاصة به عن طريق المسح عن العمليات في مجموعة العمليات المحددة، والتي قد لا تعني نفس الشيء بالضبط مثل مجموعة عمليات Unix، ولكنها تسمح لنا بإرسال إشارة إلى عملية أصل (أو رئيسية) وجميع العمليات الفرعية الخاصة بها. على مستوى perl، هذا يعني أنه يمكننا الآن إرسال pid سالب على النحو التالي:
+        <pre>kill SIGKILL, -$pid;
+</pre>
+    <p class="Pp">للإشارة إلى جميع العمليات في نفس المجموعة مثل <span class="Li">$pid</span>.</p>
+  </li>
+  <li>بالنسبة لعناصر <span class="Li">%ENV</span> المستندة إلى مصفوفة البيئة CRTL، كنا دائمًا نحافظ على حالة الأحرف عند تعيينها ولكننا كنا نبحث فقط بعد تحويل المفتاح إلى أحرف كبيرة أولاً، مما أدى إلى فقدان الإدخالات ذات الأحرف الصغيرة أو المختلطة. تم تصحيح هذه المشكلة بجعل عناصر <span class="Li">%ENV</span> المشتقة من مصفوفة البيئة حساسة لحالة الأحرف عند البحث وكذلك تحافظ على حالة الأحرف عند التخزين.</li>
+  <li>كانت عمليات البحث عن البيئة لـ <span class="Li">"PERL5LIB"</span> و <span class="Li">"PERLLIB"</span> تنظر فقط إلى الأسماء المنطقية سابقًا، ولكنها الآن تنظر إلى جميع مصادر <span class="Li">%ENV</span> كما هو محدد بواسطة <span class="Li">"PERL_ENV_TABLES"</span> وكما هو موثق في "&quot;%ENV&quot;" في perlvms.</li>
+  <li>الحد الأدنى للإصدار المدعوم من VMS هو الآن v7.3-2، والذي تم إصداره في عام 2003. كأثر جانبي لهذا التغيير، لم يعد VAX مدعومًا كإصدار نهائي لـ OpenVMS VAX، والذي كان v7.3 في عام 2001.</li>
+</ul>
+</div>
+<dl class="Bl-tag">
+  <dt id="Win32"><a class="permalink" href="#Win32">Win32</a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>تمت إضافة خيار بناء جديد <span class="Li">"USE_NO_REGISTRY"</span> إلى ملفات make. هذا الخيار معطل افتراضيًا، مما يعني أن الافتراضي هو إجراء عمليات بحث في سجل Windows. هذا الخيار يمنع Perl من البحث في السجل عن أي شيء. لمعرفة القيم التي يتم البحث عنها في السجل، راجع perlwin32. داخليًا، في C، اسم هذا الخيار هو <span class="Li">"WIN32_NO_REGISTRY"</span>.</li>
+  <li>تغير سلوك Perl باستخدام <span class="Li">"HKEY_CURRENT_USER\Software\Perl"</span> و <span class="Li">"HKEY_LOCAL_MACHINE\Software\Perl"</span> للبحث عن قيم معينة، بما في ذلك متغيرات <span class="Li">%ENV</span> التي تبدأ بـ <span class="Li">"PERL"</span>. في السابق، كان المفتاحان يتم فحصهما بحثًا عن إدخالات في جميع الأوقات طوال عمر عملية perl حتى لو لم يكونا موجودين. لأسباب تتعلق بالأداء، الآن، إذا لم يكن المفتاح الجذر (أي <span class="Li">"HKEY_CURRENT_USER\Software\Perl"</span> أو <span class="Li">"HKEY_LOCAL_MACHINE\Software\Perl"</span>) موجودًا عند بدء العملية، فلن يتم فحصه مرة أخرى لإدخالات تجاوز البيئة <span class="Li">%ENV</span> لبقية عمر عملية perl. وهذا يطابق سلوك Unix بشكل أوثق من حيث أن البيئة يتم نسخها أو وراثتها عند البدء، ولن يؤدي تغيير المتغير في العملية الأصلية أو عملية أخرى أو تحرير <i>.bashrc</i> إلى تغيير متغير البيئة في العمليات الأخرى الحالية، قيد التشغيل.</li>
+  <li>تمت إزالة عملية بحث glob واحدة لكل استدعاء <span class="Li>"-X"</span> أو <span class="Li">"stat"</span> سواء تم إجراؤه من كود Perl أو داخليًا من كود C الخاص بـ Perl. كان glob الذي يتم البحث عنه هو <span class="Li">"${^WIN32_SLOPPY_STAT}"</span> وهو متغير خاص. هذا يجعل <span class="Li">"-X"</span> و <span class="Li">"stat"</span> أسرع قليلاً.</li>
+  <li>خلال بدء عملية miniperl، أثناء عملية البناء، تمت إزالة 4 إلى 8 استدعاءات IO متعلقة ببدء العملية <i>.pl</i> والملف <i>buildcustomize.pl</i> من الكود الذي يفتح وينفذ أول 1 أو 2 ملفات <i>.pl</i>.</li>
+  <li>عمليات البناء باستخدام Microsoft Visual C++ 2003 والإصدارات الأقدم لم تعد تنتج رسالة "INTERNAL COMPILER ERROR". [perl #126045]</li>
+  <li>ستعمل عمليات البناء باستخدام Visual C++ 2013 الآن على XP والإصدارات الأحدث. في السابق، كانت تعمل فقط على Vista والإصدارات الأحدث.</li>
+  <li>يمكنك الآن بناء perl باستخدام GNU Make و GCC. [perl #123440]</li>
+  <li><span class="Li">"truncate($filename, $</span></li>
+</ul>
+</div>
+</section>
+</section>
+{
+  "file_structure": {
+    "sections": [
+      {
+        "title": "Bug Fixes",
+        "content": [
+          {
+            "type": "list",
+            "items": [
+              "The <span class=\"Li\">open</span> function with the <span class=\"Li\">&quot;o&quot;</span> flag now works for files over 4GB in size. [perl #125347]",
+              "Parallel building has been added to the dmake <span class=\"Li\">&quot;makefile.mk&quot;</span> makefile. All Win32 compilers are supported.",
+              "Building a 64-bit perl with a 64-bit GCC but a 32-bit gmake would result in an invalid <span class=\"Li\">$Config{archname}</span> for the resulting perl. [perl #127584]",
+              {
+                "type": "paragraph",
+                "text": "Errors set by Winsock functions are now put directly into <span class=\"Li\">$^E</span>, and the relevant <span class=\"Li\">&quot;WSAE*&quot;</span> error codes are now exported from the Errno and POSIX modules for testing this against."
+              },
+              {
+                "type": "paragraph",
+                "text": "The previous behavior of putting the errors (converted to POSIX-style <span class=\"Li\">&quot;E*&quot;</span> error codes since Perl 5.20.0) into <span class=\"Li\">$!</span> was buggy due to the non-equivalence of like-named Winsock and POSIX error constants, a relationship between which has unfortunately been established in one way or another since Perl 5.8.0."
+              },
+              {
+                "type": "paragraph",
+                "text": "The new behavior provides a much more robust solution for checking Winsock errors in portable software without accidentally matching POSIX tests that were intended for other OSes and may have different meanings for Winsock."
+              },
+              {
+                "type": "paragraph",
+                "text": "The old behavior is currently retained, warts and all, for backwards compatibility, but users are encouraged to change any code that tests <span class=\"Li\">$!</span> against <span class=\"Li\">&quot;E*&quot;</span> constants for Winsock errors to instead test <span class=\"Li\">$^E</span> against <span class=\"Li\">&quot;WSAE*&quot;</span> constants. After a suitable deprecation period, the old behavior may be removed, leaving <span class=\"Li\">$!</span> unchanged after Winsock function calls, to avoid any possible confusion over which error variable to check."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "ppc64el",
+        "content": [
+          {
+            "type": "definition_list",
+            "items": [
+              {
+                "term": "floating point",
+                "definition": "The floating point format of ppc64el (Debian naming for little-endian PowerPC) is now detected correctly."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "Internal Changes",
+        "content": [
+          {
+            "type": "definition_list",
+            "items": [
+              {
+                "term": "\u2022",
+                "definition": "The implementation of perl's context stack system, and its internal API, have been heavily reworked. Note that no significant changes have been made to any external APIs, but XS code which relies on such internal details may need to be fixed. The main changes are:"
+              }
+            ]
+          },
+          {
+            "type": "list",
+            "items": [
+              "The <span class=\"Li\">PUSHBLOCK()</span>, <span class=\"Li\">POPSUB()</span> etc. macros have been replaced with static inline functions such as <span class=\"Li\">cx_pushblock()</span>, <span class=\"Li\">cx_popsub()</span> etc. These use function args rather than implicitly relying on local vars such as <span class=\"Li\">&quot;gimme&quot;</span> and <span class=\"Li\">&quot;newsp&quot;</span> being available. Also their functionality has changed: in particular, <span class=\"Li\">cx_popblock()</span> no longer decrements <span class=\"Li\">&quot;cxstack_ix&quot;</span>. The ordering of the steps in the <span class=\"Li\">&quot;pp_leave*&quot;</span> functions involving <span class=\"Li\">cx_popblock()</span>, <span class=\"Li\">cx_popsub()</span> etc. has changed. See the new documentation, \"Dynamic Scope and the Context Stack\" in perlguts, for details on how to use them.",
+              "Various macros, which now consistently have a CX_ prefix, have been added:\n        <pre>CX_CUR(), CX_LEAVE_SCOPE(), CX_POP()\n</pre>\n    or renamed:\n        <pre>CX_POP_SAVEARRAY(), CX_DEBUG(), CX_PUSHSUBST(), CX_POPSUBST()\n</pre>",
+              "<span class=\"Li\">cx_pushblock()</span> now saves <span class=\"Li\">&quot;PL_savestack_ix&quot;</span> and <span class=\"Li\">&quot;PL_tmps_floor&quot;</span>, so <span class=\"Li\">&quot;pp_enter*&quot;</span> and <span class=\"Li\">&quot;pp_leave*&quot;</span> no longer do\n        <pre>ENTER; SAVETMPS; ....; LEAVE\n</pre>",
+              "<span class=\"Li\">cx_popblock()</span> now also restores <span class=\"Li\">&quot;PL_curpm&quot;</span>.",
+              "In <span class=\"Li\">dounwind()</span> for every context type, the current savestack frame is now processed before each context is popped; formerly this was only done for sub-like context frames. This action has been removed from <span class=\"Li\">cx_popsub()</span> and placed into its own macro, <span class=\"Li\">CX_LEAVE_SCOPE(cx)</span>, which must be called before <span class=\"Li\">cx_popsub()</span> etc.\n    <span class=\"Li\">dounwind()</span> now also does a <span class=\"Li\">cx_popblock()</span> on the last popped frame (formerly it only did the <span class=\"Li\">cx_popsub()</span> etc. actions on each frame).",
+              "The temps stack is now freed on scope exit; previously, temps created during the last statement of a block wouldn't be freed until the next <span class=\"Li\">&quot;nextstate&quot;</span> following the block (apart from an existing hack that did this for recursive subs in scalar context); and in something like <span class=\"Li\">&quot;f(g())&quot;</span>, the temps created by the last statement in <span class=\"Li\">g()</span> would formerly not be freed until the statement following the return from <span class=\"Li\">f()</span>.",
+              "Most values that were saved on the savestack on scope entry are now saved in suitable new fields in the context struct, and saved and restored directly by <span class=\"Li\">cx_pushfoo()</span> and <span class=\"Li\">cx_popfoo()</span>, which is much faster.",
+              "Various context struct fields have been added, removed or modified.",
+              "The handling of <span class=\"Li\">@_</span> in <span class=\"Li\">cx_pushsub()</span> and <span class=\"Li\">cx_popsub()</span> has been considerably tidied up, including removing the <span class=\"Li\">&quot;argarray&quot;</span> field from the context struct, and extracting out some common (but rarely used) code into a separate function, <span class=\"Li\">clear_defarray()</span>. Also, useful subsets of <span class=\"Li\">cx_popsub()</span> which had been unrolled in places like <span class=\"Li\">&quot;pp_goto&quot;</span> have been gathered into the new functions <span class=\"Li\">cx_popsub_args()</span> and <span class=\"Li\">cx_popsub_common()</span>.",
+              "<span class=\"Li\">&quot;pp_leavesub&quot;</span> and <span class=\"Li\">&quot;pp_leavesublv&quot;</span> now use the same function as the rest of the <span class=\"Li\">&quot;pp_leave*&quot;</span>'s to process return args.",
+              "<span class=\"Li\">&quot;CXp_FOR_PAD&quot;</span> and <span class=\"Li\">&quot;CXp_FOR_GV&quot;</span> flags have been added, and <span class=\"Li\">&quot;CXt_LOOP_FOR&quot;</span> has been split into <span class=\"Li\">&quot;CXt_LOOP_LIST&quot;</span>, <span class=\"Li\">&quot;CXt_LOOP_ARY&quot;</span>.",
+              "Some variables formerly declared by <span class=\"Li\">&quot;dMULTICALL&quot;</span> (but not documented) have been removed."
+            ]
+          },
+          {
+            "type": "list",
+            "items": [
+              "The obscure <span class=\"Li\">&quot;PL_timesbuf&quot;</span> variable, effectively a vestige of Perl 1, has been removed. It was documented as deprecated in Perl 5.20, with a statement that it would be removed early in the 5.21.x series; that has now finally happened. [GH #13632] <a href='https://github.com/Perl/perl5/issues/13632'>https://github.com/Perl/perl5/issues/13632</a>",
+              "An unwarranted assertion in <span class=\"Li\">Perl_newATTRSUB_x()</span> has been removed. If a stub subroutine definition with a prototype has been seen, then any subsequent stub (or definition) of the same subroutine with an attribute was causing an assertion failure because of a null pointer. [GH #15081] <a href='https://github.com/Perl/perl5/issues/15081'>https://github.com/Perl/perl5/issues/15081</a>",
+              "<span class=\"Li\">&quot;::&quot;</span> has been replaced by <span class=\"Li\">&quot;__&quot;</span> in <span class=\"Li\">&quot;ExtUtils::ParseXS&quot;</span>, like it's done for parameters/return values. This is more consistent, and simplifies writing XS code wrapping C++ classes into a nested Perl namespace (it requires only a typedef for <span class=\"Li\">&quot;Foo__Bar&quot;</span> rather than two, one for <span class=\"Li\">&quot;Foo_Bar&quot;</span> and the other for <span class=\"Li\">&quot;Foo::Bar&quot;</span>).",
+              "The <span class=\"Li\">to_utf8_case()</span> function is now deprecated. Instead use <span class=\"Li\">&quot;toUPPER_utf8&quot;</span>, <span class=\"Li\">&quot;toTITLE_utf8&quot;</span>, <span class=\"Li\">&quot;toLOWER_utf8&quot;</span>, and <span class=\"Li\">&quot;toFOLD_utf8&quot;</span>. (See <a href='http://nntp.perl.org/group/perl.perl5.porters/233287'>http://nntp.perl.org/group/perl.perl5.porters/233287</a>.)",
+              "Perl core code and the threads extension have been annotated so that, if Perl is configured to use threads, then during compile-time clang (3.6 or later) will warn about suspicious uses of mutexes. See <a href='http://clang.llvm.org/docs/ThreadSafetyAnalysis.html'>http://clang.llvm.org/docs/ThreadSafetyAnalysis.html</a> for more information.",
+              "The <span class=\"Li\">signbit()</span> emulation has been enhanced. This will help older and/or more exotic platforms or configurations.",
+              "Most EBCDIC-specific code in the core has been unified with non-EBCDIC code, to avoid repetition and make maintenance easier.",
+              "MSWin32 code for <span class=\"Li\">$^X</span> has been moved out of the <i>win32</i> directory to <i>caretx.c</i>, where other operating systems set that variable.",
+              "<span class=\"Li\">sv_ref()</span> is now part of the API.",
+              "&quot;sv_backoff&quot; in perlapi had its return type changed from <span class=\"Li\">&quot;int&quot;</span> to <span class=\"Li\">&quot;void&quot;</span>. It previously has always returned <span class=\"Li\">0</span> since Perl 5.000 stable but that was undocumented. Although <span class=\"Li\">&quot;sv_backoff&quot;</span> is marked as public API, XS code is not expected to be impacted since the proper API call would be through public API <span class=\"Li\">&quot;sv_setsv(sv, &amp;PL_sv_undef)&quot;</span>, or quasi-public <span class=\"Li\">&quot;SvOOK_off&quot;</span>, or non-public <span class=\"Li\">&quot;SvOK_off&quot;</span> calls, and the return value of <span class=\"Li\">&quot;sv_backoff&quot;</span> was previously a meaningless constant that can be rewritten as <span class=\"Li\">&quot;(sv_backoff(sv),0)&quot;</span>.",
+              "The <span class=\"Li\">&quot;EXTEND&quot;</span> and <span class=\"Li\">&quot;MEXTEND&quot;</span> macros have been improved to avoid various issues with integer truncation and wrapping. In particular, some casts formerly used within the macros have been removed. This means for example that passing an unsigned <span class=\"Li\">&quot;nitems&quot;</span> argument is likely to raise a compiler warning now (it's always been documented to require a signed value; formerly int, lately SSize_t)."
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+<section class="Sh">
+<h1 class="Sh" id='Removed'><a class='permalink' href='#Removed'>Removed</a></h1>
+<ul class="Bl-bullet">
+  <li><code><span class="Li">&quot;PL_sawalias&quot;</span></code> and
+      <code><span class="Li">&quot;GPf_ALIASED_SV&quot;</span></code> have been removed.</li>
+  <li><code><span class="Li">&quot;GvASSIGN_GENERATION&quot;</span></code> and
+      <code><span class="Li">&quot;GvASSIGN_GENERATION_set&quot;</span></code> have been
+      removed.</li>
+</ul>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Selected_Bug_Fixes'><a class='permalink' href='#Selected_Bug_Fixes'>Selected Bug Fixes</a></h1>
+<ul class="Bl-bullet">
+  <li>It now works properly to specify a user-defined property, such as
+      <pre>qr/\p{mypkg1::IsMyProperty}/i
+</pre>
+    with <code><span class="Li">&quot;/i&quot;</span></code> caseless matching,
+    an explicit package name, and <i>IsMyProperty</i> not defined at the
+    time of the pattern compilation.</li>
+  <li>Perl's <code><span class="Li">memcpy()</span></code>,
+      <code><span class="Li">memmove()</span></code>, <code><span class="Li">memset()</span></code> and
+      <code><span class="Li">memcmp()</span></code> fallbacks are now more compatible with
+      the originals. [perl #127619]</li>
+  <li>Fixed the issue where a <code><span class="Li">&quot;s///r&quot;</span></code>) with
+      <b>-DPERL_NO_COW</b> attempts to modify the source SV, resulting in the
+      program dying. [perl #127635]</li>
+  <li>Fixed an EBCDIC-platform-only case where a pattern could fail to match.
+      This occurred when matching characters from the set of C1 controls when
+      the target matched string was in UTF-8.</li>
+  <li>Narrow the filename check in <i>strict.pm</i> and <i>warnings.pm</i>.
+      Previously, it assumed that if the filename (without the <i>.pmc?</i>
+      extension) differed from the package name, if was a misspelled use
+      statement (i.e. <code><span class="Li">&quot;use Strict&quot;</span></code> instead of
+      <code><span class="Li">&quot;use strict&quot;</span></code>). We now check whether
+      there's really a miscapitalization happening, and not some other
+      issue.</li>
+  <li>Turn an assertion into a more user friendly failure when parsing regexes.
+      [perl #127599]</li>
+  <li>Correctly raise an error when trying to compile patterns with unterminated
+      character classes while there are trailing backslashes. [perl
+      #126410].</li>
+  <li>Line numbers larger than 2**31-1 but less than 2**32 are no longer
+      returned by <code><span class="Li">caller()</span></code> as negative numbers. [perl
+      #126991]</li>
+  <li><code><span class="Li">&quot;unless (</span></code><code><span class="Li">
+      <i>assignment</i></span></code><code><span class="Li">
+      )&quot;</span></code> now properly warns when syntax warnings are enabled. [perl
+      #127122]</li>
+  <li>Setting an <code><span class="Li">&quot;ISA&quot;</span></code> glob to an array
+      reference now properly adds <code><span class="Li">&quot;isaelem&quot;</span></code>
+      magic to any existing elements. Previously modifying such an element would
+      not update the ISA cache, so method calls would call the wrong function.
+      Perl would also crash if the <code><span class="Li">&quot;ISA&quot;</span></code> glob
+      was destroyed, since new code added in 5.23.7 would try to release the
+      <code><span class="Li">&quot;isaelem&quot;</span></code> magic from the elements. [perl
+      #127351]</li>
+  <li>If a here-doc was found while parsing another operator, the parser had
+      already read end of file, and the here-doc was not terminated, perl could
+      produce an assertion or a segmentation fault. This now reliably complains
+      about the unterminated here-doc. [perl #125540]</li>
+  <li><code><span class="Li">untie()</span></code> would sometimes return the last value
+      returned by the <code><span class="Li">UNTIE()</span></code> handler as well as its
+      normal value, messing up the stack. [perl #126621]</li>
+  <li>Fixed an operator precedence problem when <code><span class="Li">&quot;
+      castflags &amp; 2&quot;</span></code> is true. [perl #127474]</li>
+  <li>Caching of DESTROY methods could result in a non-pointer or a non-STASH
+      stored in the <code><span class="Li">SvSTASH()</span></code> slot of a stash, breaking
+      the B <code><span class="Li">STASH()</span></code> method. The DESTROY method is now
+      cached in the MRO metadata for the stash. [perl #126410]</li>
+  <li>The AUTOLOAD method is now called when searching for a DESTROY method, and
+      correctly sets <code><span class="Li">$AUTOLOAD</span></code> too. [perl #124387] [perl
+      #127494]</li>
+  <li>Avoid parsing beyond the end of the buffer when processing a
+      <code><span class="Li">&quot;#line&quot;</span></code> directive with no filename.
+      [perl #127334]</li>
+  <li>Perl now raises a warning when a regular expression pattern looks like it
+      was supposed to contain a POSIX class, like
+      <code><span class="Li">&quot;qr/[[:alpha:]]/&quot;</span></code>, but there was some
+      slight defect in its specification which causes it to instead be treated
+      as a regular bracketed character class. An example would be missing the
+      second colon in the above like this:
+      <code><span class="Li">&quot;qr/[[:alpha]]/&quot;</span></code>. This compiles to match
+      a sequence of two characters. The second is
+      <code><span class="Li">&quot;]&quot;</span></code>, and the first is any of:
+      <code><span class="Li">&quot;[&quot;</span></code>,
+      <code><span class="Li">&quot;:&quot;</span></code>,
+      <code><span class="Li">&quot;a&quot;</span></code>,
+      <code><span class="Li">&quot;h&quot;</span></code>,
+      <code><span class="Li">&quot;l&quot;</span></code>, or
+      <code><span class="Li">&quot;p&quot;</span></code>. This is unlikely to be the intended
+      meaning, and now a warning is raised. No warning is raised unless the
+      specification is very close to one of the 14 legal POSIX classes. (See
+      &quot;POSIX Character Classes&quot; in perlrecharclass.) [perl #8904]</li>
+  <li>Certain regex patterns involving a complemented POSIX class in an inverted
+      bracketed character class, and matching something else optionally would
+      improperly fail to match. An example of one that could fail is
+      <code><span class="Li">&quot;qr/_?[^\Wbar]\x{100}/&quot;</span></code>. This has been
+      fixed. [perl #127537]</li>
+  <li>Perl 5.22 added support to the C99 hexadecimal floating point notation,
+      but sometimes misparses hex floats. This has been fixed. [perl
+      #127183]</li>
+  <li>A regression that allowed undeclared barewords in hash keys to work
+      despite strictures has been fixed. [GH #15099]
+      <a href='https://github.com/Perl/perl5/issues/15099'>https://github.com/Perl/perl5/issues/15099</a></li>
+  <li>Calls to the placeholder <code><span class="Li">&amp;PL_sv_yes</span></code> used
+      internally when an <code><span class="Li">import()</span></code> or
+      <code><span class="Li">unimport()</span></code> method isn't found now correctly handle
+      scalar context. [GH #14902]
+      <a href='https://github.com/Perl/perl5/issues/14902'>https://github.com/Perl/perl5/issues/14902</a></li>
+  <li>Report more context when we see an array where we expect to see an
+      operator and avoid an assertion failure. [GH #14472]
+      <a href='https://github.com/Perl/perl5/issues/14472'>https://github.com/Perl/perl5/issues/14472</a></li>
+  <li>Modifying an array that was previously a package
+      <code><span class="Li">@ISA</span></code> no longer causes assertion failures or
+      crashes. [GH #14492]
+      <a href='https://github.com/Perl/perl5/issues/14492'>https://github.com/Perl/perl5/issues/14492</a></li>
+  <li>Retain binary compatibility across plain and DEBUGGING perl builds. [GH
+      #15122] <a href='https://github.com/Perl/perl5/issues/15122'>https://github.com/Perl/perl5/issues/15122</a></li>
+  <li>Avoid leaking memory when setting <code><span class="Li">$ENV{foo}</span></code> on
+      darwin. [GH #14955]
+      <a href='https://github.com/Perl/perl5/issues/14955'>https://github.com/Perl/perl5/issues/14955</a></li>
+  <li><code><span class="Li">&quot;/...\G/&quot;</span></code> no longer crashes on utf8
+      strings. When <code><span class="Li">&quot;\G&quot;</span></code> is a fixed number of
+      characters from the start of the regex, perl needs to count back that many
+      characters from the current <code><span class="Li">pos()</span></code> position and
+      start matching from there. However, it was counting back bytes rather than
+      characters, which could lead to panics on utf8 strings.</li>
+  <li>In some cases operators that return integers would return negative
+      integers as large positive integers. [GH #15049]
+      <a href='https://github.com/Perl/perl5/issues/15049'>https://github.com/Perl/perl5/issues/15049</a></li>
+  <li>The <code><span class="Li">pipe()</span></code> operator would assert for DEBUGGING
+      builds instead of producing the correct error message. The condition
+      asserted on is detected and reported on correctly without the assertions,
+      so the assertions were removed. [GH #15015]
+      <a href='https://github.com/Perl/perl5/issues/15015'>https://github.com/Perl/perl5/issues/15015</a></li>
+  <li>In some cases, failing to parse a here-doc would attempt to use freed
+      memory. This was caused by a pointer not being restored correctly. [GH
+      #15009] <a href='https://github.com/Perl/perl5/issues/15009'>https://github.com/Perl/perl5/issues/15009</a></li>
+  <li><code><span class="Li">&quot;@x = sort { *a = 0; $a &lt;=&gt; $b } 0 ..
+      1&quot;</span></code> no longer frees the GP for *a before restoring its SV slot.
+      [GH #14595] <a href='https://github.com/Perl/perl5/issues/14595'>https://github.com/Perl/perl5/issues/14595</a></li>
+  <li>Multiple problems with the new hexadecimal floating point printf format
+      <code><span class="Li">%a</span></code> were fixed: [GH #15032]
+      <a href='https://github.com/Perl/perl5/issues/15032'>https://github.com/Perl/perl5/issues/15032</a>, [GH #15033]
+      <a href='https://github.com/Perl/perl5/issues/15033'>https://github.com/Perl/perl5/issues/15033</a>, [GH #15074]
+      <a href='https://github.com/Perl/perl5/issues/15074'>https://github.com/Perl/perl5/issues/15074</a></li>
+  <li>Calling <code><span class="Li">mg_set()</span></code> in
+      <code><span class="Li">leave_scope()</span></code> no longer leaks.</li>
+  <li>A regression from Perl v5.20 was fixed in which debugging output of
+      regular expression compilation was wrong. (The pattern was correctly
+      compiled, but what got displayed for it was wrong.)</li>
+  <li><code><span class="Li">&quot;\b{sb}&quot;</span></code> works much better. In Perl
+      v5.22.0, this new construct didn't seem to give the expected results, yet
+      passed all the tests in the extensive suite furnished by Unicode. It turns
+      out that it was because these were short input strings, and the failures
+      had to do with longer inputs.</li>
+  <li>Certain syntax errors in &quot;Extended Bracketed Character Classes&quot;
+      in perlrecharclass caused panics instead of the proper error message. This
+      has now been fixed. [perl #126481]</li>
+  <li>Perl 5.20 added a message when a quantifier in a regular expression was
+      useless, but then caused the parser to skip it; this caused the surplus
+      quantifier to be silently ignored, instead of throwing an error. This is
+      now fixed. [perl #126253]</li>
+  <li>The switch to building non-XS modules last in win32/makefile.mk
+      (introduced by design as part of the changes to enable parallel building)
+      caused the build of POSIX to break due to problems with the version
+      module. This is now fixed.</li>
+  <li>Improved parsing of hex float constants.</li>
+  <li>Fixed an issue with <code><span class="Li">&quot;pack&quot;</span></code> where
+      <code><span class="Li">&quot;pack &quot;H&quot;&quot;</span></code> (and
+      <code><span class="Li">&quot;pack &quot;h&quot;&quot;</span></code>) could read past
+      the source when given a non-utf8 source, and a utf8 target. [perl
+      #126325]</li>
+  <li>Fixed several cases where perl would abort due to a segmentation fault, or
+      a C-level assert. [perl #126615], [perl #126602], [perl #126193].</li>
+  <li>There were places in regular expression patterns where comments
+      (<code><span class="Li">&quot;(?#...)&quot;</span></code>) weren't allowed, but should
+      have been. This is now fixed. [GH #12755]
+      <a href='https://github.com/Perl/perl5/issues/12755'>https://github.com/Perl/perl5/issues/12755</a></li>
+  <li>Some regressions from Perl 5.20 have been fixed, in which some syntax
+      errors in <span class="Li">&quo</span></li>
+</ul>
+</section>
+   <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#Core_Enhancements">التحسينات الأساسية</a></li>
+        
+            <li><a href="#Security">الأمان</a></li>
+        
+            <li><a href="#Incompatible_Changes">تغييرات غير متوافقة</a></li>
+        
+            <li><a href="#Deprecations">تنبيهات</a></li>
+        
+            <li><a href="#Performance_Enhancements">تحسينات الأداء</a></li>
+        
+            <li><a href="#Modules_and_Pragmata">الوحدات والتعليمات البرمجية</a></li>
+        
+            <li><a href="#Documentation">التوثيق</a></li>
+        
+            <li><a href="#Diagnostics">التشخيص</a></li>
+        
+            <li><a href="#Configuration_and_Compilation">التكوين والترجمة</a></li>
+        
+            <li><a href="#Testing">الاختبار</a></li>
+        
+            <li><a href="#Platform_Support">دعم المنصات</a></li>
+        
+            <li><a href="#Internal_Changes">تغييرات داخلية</a></li>
+        
+            <li><a href="#Selected_Bug_Fixes">إصلاحات أخطاء مختارة</a></li>
+        
+            <li><a href="#Acknowledgements">شكر وتقدير</a></li>
+        
+            <li><a href="#Reporting_Bugs">الإبلاغ عن الأخطاء</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/perl5240delta.1perl.en.txt">txt</a>, 
+        
+            <a href="/man/perl5240delta.1perl.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط رخصة <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، والتي لها رخصتها الخاصة المحددة في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

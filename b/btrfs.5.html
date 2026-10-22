@@ -1,0 +1,423 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">btrfs(5)</h1>
+<link rel="stylesheet" href="basic.css">
+ble
+    مساحة غير مستخدمة لأجزاء جديدة.</p>
+<p class="Pp">مع ملفات المبادلة النشطة، ستتجاهل العمليات التالية على نظام الملفات
+    بالكامل نطاقات ملفات المبادلة أو قد تفشل:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>balance - يتم تخطي مجموعات الكتل التي تحتوي على نطاقات لأي ملفات مبادلة نشطة
+      ويتم الإبلاغ عنها، وسيتم معالجة الباقي بشكل طبيعي</li>
+  <li>resize grow - غير متأثر</li>
+  <li>resize shrink - يعمل طالما أن نطاقات أي ملفات مبادلة نشطة تقع خارج
+      النطاق الذي تم تقليصه</li>
+  <li>device add - إذا لم تتداخل الأجهزة الجديدة مع أي ملفات مبادلة نشطة
+      بالفعل، فستعمل هذه العملية، على الرغم من أنه لا يمكن تنشيط أي ملف مبادلة
+      جديد بعد ذلك</li>
+  <li>device delete - إذا تم إضافة الجهاز كما هو موضح أعلاه، يمكن حذفه أيضًا</li>
+  <li>device replace - كذلك</li>
+</ul>
+</div>
+<p class="Pp">عندما لا تكون هناك ملفات مبادلة نشطة وتعمل عملية حصرية على نظام
+    الملفات بأكمله (مثل balance, device delete, shrink)، لا يمكن تنشيط ملفات
+    المبادلة مؤقتًا. يجب أن تنتهي العملية أولاً.</p>
+<p class="Pp">لإنشاء وتنشيط ملف مبادلة، قم بتشغيل الأوامر التالية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># truncate -s 0 swapfile
+# chattr +C swapfile
+# fallocate -l 2G swapfile
+# chmod 0600 swapfile
+# mkswap swapfile
+# swapon swapfile</pre>
+</div>
+</div>
+<p class="Pp">منذ الإصدار 6.1، أصبح من الممكن إنشاء ملف المبادلة بأمر واحد (باستثناء
+    التنشيط):</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># btrfs filesystem mkswapfile --size 2G swapfile
+# swapon swapfile</pre>
+</div>
+</div>
+<p class="Pp">يرجى ملاحظة أن UUID الذي يتم إرجاعه بواسطة الأداة <i>mkswap</i>
+    يحدد "نظام الملفات" الخاص بالمبادلة، ولأنه مخزن في ملف، فإنه ليس مرئيًا
+    وقابلاً للاستخدام بشكل عام كمعرف، بخلاف ما إذا كان على جهاز كتلة.</p>
+<p class="Pp">بمجرد تنشيطه، سيظهر الملف في <b>/proc/swaps</b>:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># cat /proc/swaps
+Filename          Type          Size           Used      Priority
+/path/swapfile    file          2097152        0         -2</pre>
+</div>
+</div>
+<p class="Pp">يمكن إنشاء ملف المبادلة كعملية لمرة واحدة، أو بمجرد إنشائه بشكل صحيح،
+    تنشيطه عند كل إقلاع بواسطة الأمر <b>swapon -a</b> (يتم تشغيله عادةً بواسطة
+    مدير الخدمة). أضف الإدخال التالي إلى <i>/etc/fstab</i>، بافتراض أن نظام
+    الملفات الذي يوفر <i>/path</i> قد تم تحميله بالفعل في هذه النقطة. يمكن أيضًا
+    تعيين خيارات تحميل إضافية ذات صلة بملف المبادلة (مثل الأولوية، وليس خيارات
+    تحميل BTRFS).</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>/path/swapfile        none        swap        defaults      0 0</pre>
+</div>
+</div>
+<p class="Pp">من الآن فصاعدًا، لا يمكن أخذ لقطة للقارئ (snapshot) للحاوية الفرعية
+    (subvolume) التي تحتوي على ملف المبادلة النشط حتى يتم إلغاء تنشيط ملف
+    المبادلة مرة أخرى بواسطة <b>swapoff</b>. عندها يصبح ملف المبادلة ملفًا عاديًا
+    ويمكن أخذ لقطة للقارئ للحاوية الفرعية مرة أخرى، على الرغم من أن هذا سيمنع
+    تنشيط أي ملف مبادلة آخر تم أخذ لقطة له. يمكن إنشاء وتنشيط ملفات مبادلة
+    جديدة (لم يتم أخذ لقطات لها).</p>
+<p class="Pp">بخلاف ذلك، لا يؤثر ملف المبادلة غير النشط على الحاوية الفرعية التي
+    تحتوي عليه. يؤدي التنشيط إلى إنشاء حالة مؤقتة في الذاكرة ويمنع بعض عمليات
+    الملفات، ولكنه غير مخزن بشكل دائم.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HIBERNATION'><a class='permalink' href='#HIBERNATION'>السبات (HIBERNATION)</a></h1>
+<p class="Pp">يمكن استخدام ملف المبادلة للسبات ولكنه ليس مباشرًا. قبل السبات،
+    يجب كتابة إزاحة استئناف (resume offset) إلى الملف <i>/sys/power/resume_offset</i>
+    أو تعيين معلمة سطر أوامر النواة <i>resume_offset</i>.</p>
+<p class="Pp">القيمة هي الإزاحة المادية على الجهاز. لاحظ أن هذه **ليست نفس**
+    **القيمة التي** **يطبعها** **filefrag** **كإزاحة مادية!**</p>
+<p class="Pp">يستخدم نظام الملفات Btrfs تخطيطًا بين العناوين المنطقية والمادية، ولكن
+    هنا يمكن أن تتم الإحالة المادية إلى عنوان كتلة مادي واحد أو أكثر خاص بالجهاز.
+    إنها الإزاحة المادية الخاصة بالجهاز هي المناسبة كإزاحة استئناف.</p>
+<p class="Pp">منذ الإصدار 6.1، هناك أمر btrfs inspect-internal map-swapfile
+    &lt;#man-inspect-map-swapfile&gt; الذي سيطبع الإزاحة المادية للجهاز والقيمة
+    المعدلة لـ <b>/sys/power/resume_offset</b>. لاحظ أن القيمة مقسومة على حجم
+    الصفحة، أي أنها ليست الإزاحة نفسها.</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># btrfs filesystem mkswapfile swapfile
+# btrfs inspect-internal map-swapfile swapfile
+Physical start: 811511726080
+Resume offset:     198122980</pre>
+</div>
+</div>
+<p class="Pp">لأغراض البرمجة النصية والراحة، سيقوم الخيار <i>-r</i> بطباعة
+    الإزاحة فقط:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># btrfs inspect-internal map-swapfile -r swapfile
+198122980</pre>
+</div>
+</div>
+<p class="Pp">يقوم الأمر <b>map-swapfile</b> أيضًا بالتحقق من جميع المتطلبات، أي
+    عدم وجود ثقوب، جهاز واحد، إلخ.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TROUBLESHOOTING'><a class='permalink' href='#TROUBLESHOOTING'>استكشاف الأخطاء وإصلاحها</a></h1>
+<p class="Pp">إذا فشل تنشيط ملف المبادلة، يرجى التحقق من أنك اتبعت جميع الخطوات
+    المذكورة أعلاه أو تحقق من سجل النظام (مثل <b>dmesg</b> أو
+    <b>journalctl</b>) لمزيد من المعلومات.</p>
+<p class="Pp">تجدر الإشارة إلى أن الأداة <b>swapon</b> تخرج برسالة لا تقول ما
+    الذي فشل:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># swapon /path/swapfile
+swapon: /path/swapfile: swapon failed: Invalid argument</pre>
+</div>
+</div>
+<p class="Pp">من المحتمل أن يتم طباعة السبب المحدد في سجل النظام بواسطة وحدة
+    btrfs:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># journalctl -t kernel | grep swapfile
+kernel: BTRFS warning (device sda): swapfile must have single data profile</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CHECKSUM_ALGORITHMS'><a class='permalink' href='#CHECKSUM_ALGORITHMS'>خوارزميات التحقق (CHECKSUM ALGORITHMS)</a></h1>
+<p class="Pp">يتم حساب قيمة التحقق (checksum) للبيانات والبيانات الوصفية بشكل افتراضي.
+    يتم حساب قيمة التحقق قبل الكتابة والتحقق منها بعد قراءة الكتل من الأجهزة.
+    تحتوي كتلة البيانات الوصفية بأكملها على قيمة تحقق مضمنة مخزنة في رأس عقدة
+    b-tree. تحتوي كل كتلة بيانات على قيمة تحقق منفصلة مخزنة في شجرة قيم التحقق.</p>
+<p class="Pp"><b>ملاحظة:</b></p>
+<div class="Bd-indent">
+<div class="Bd-indent">منذ أن يتم حساب قيمة تحقق البيانات قبل تقديمها إلى جهاز
+    الكتلة مباشرة، فإن btrfs لديه متطلب قوي بأن كتلة البيانات المقابلة لا يجب
+    تعديلها حتى تنتهي عملية الكتابة.
+<p class="Pp">يتم تلبية هذا المتطلب للكتابة المخزنة مؤقتًا حيث يمتلك btrfs السيطرة
+    الكاملة على ذاكرة التخزين المؤقت للصفحات الخاصة به، ولكن الكتابة المباشرة (<b>O_DIRECT</b>)
+    تتجاوز ذاكرة التخزين المؤقت للصفحات، ولا يمكن لـ btrfs التحكم في مخزن الكتابة
+    المباشرة (حيث يمكن أن يكون في ذاكرة مساحة المستخدم). وبالتالي، من الممكن أن
+    يقوم برنامج مساحة المستخدم بتعديل مخزن الكتابة المباشرة الخاص به قبل كتابة
+    المخزن بالكامل، وهذا يمكن أن يؤدي إلى عدم تطابق في قيمة التحقق للبيانات.</p>
+<p class="Pp">لتجنب ذلك، فإن النواة بدءًا من الإصدار 6.14 ستجبر الكتابة المباشرة
+    على الرجوع إلى الكتابة المخزنة مؤقتًا، إذا كان الـ inode يتطلب قيمة تحقق للبيانات.
+    سيؤدي هذا إلى فرض عقوبة أداء صغيرة. إذا كنت تتطلب كتابات مباشرة حقيقية بدون
+    نسخ، فقم بتعيين العلامة <b>NODATASUM</b> للـ inode وتأكد من أن مخزن الكتابة
+    المباشرة متوافق تمامًا مع حجم الكتلة.</p>
+</div>
+</div>
+<p class="Pp">هناك العديد من خوارزميات قيم التحقق المدعومة. الخوارزمية الافتراضية
+    والمتوافقة مع الإصدارات السابقة هي <i>crc32c</i>. منذ النواة 5.5، هناك
+    ثلاث خوارزميات إضافية بخصائص مختلفة ومقايضات فيما يتعلق بالسرعة والقوة. قد
+    تساعدك القائمة التالية في اختيار واحدة منها.</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="CRC32C"><a class="permalink" href="#CRC32C"><b>CRC32C (مُلخّص 32 بت)</b></a></dt>
+  <dd>افتراضي، أفضل توافق مع الإصدارات السابقة. سريع جدًا، CPUs الحديثة لديها
+      دعم على مستوى التعليمات، ليست مقاومة للتصادمات ولكن لا تزال لديها قدرات جيدة
+      لاكتشاف الأخطاء.</dd>
+  <dt id="XXHASH"><a class="permalink" href="#XXHASH"><b>XXHASH (مُلخّص 64 بت)</b></a></dt>
+  <dd>يمكن استخدامه كبديل لـ CRC32C. سريع جدًا، مُحسن لوحدات المعالجة المركزية
+      الحديثة التي تستفيد من خطوط أنابيب التعليمات، مقاومة جيدة للتصادمات واكتشاف
+      الأخطاء.</dd>
+  <dt id="SHA256"><a class="permalink" href="#SHA256"><b>SHA256 (مُلخّص 256 بت)</b></a></dt>
+  <dd>تجزئة ذات قوة تشفيرية. بطيئة نسبيًا ولكن مع تسريع محتمل لتعليمات وحدة
+      المعالجة المركزية أو بطاقات الأجهزة المتخصصة. معتمدة من FIPS ومستخدمة على
+      نطاق واسع.</dd>
+  <dt id="BLAKE2b"><a class="permalink" href="#BLAKE2b"><b>BLAKE2b (مُلخّص 256 بت)</b></a></dt>
+  <dd>تجزئة ذات قوة تشفيرية. سريعة نسبيًا، مع تسريع محتمل لوحدة المعالجة المركزية
+      باستخدام امتدادات SIMD. ليست موحدة ولكنها تستند إلى BLAKE التي كانت من بين
+      النهائيات لـ SHA3، ومستخدمة على نطاق واسع. الخوارزمية المستخدمة هي BLAKE2b-256
+      التي تم تحسينها لمنصات 64 بت.</dd>
+</dl>
+</div>
+<p class="Pp">يؤثر <i>حجم الملخص</i> على الحجم الإجمالي لملخصات كتل البيانات المخزنة
+    في نظام الملفات. تحتوي كتل البيانات الوصفية على منطقة ثابتة تصل إلى 256 بت
+    (32 بايت)، لذا لا يوجد زيادة. تحتوي كل كتلة بيانات على ملخص منفصل مخزن، مع
+    عبء إضافي لأوراق b-tree.</p>
+<p class="Pp">الأداء النسبي التقريبي للخوارزميات، مقاسًا مقابل CRC32C باستخدام
+    تطبيقات على وحدة معالجة مركزية Intel بسعة 3.6 جيجاهرتز من الجيل الحادي عشر:</p>
+<table class="tbl" style="border-style: solid;">
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">ملخص</td>
+    <td style="border-right-style: solid;">دورات/4KiB</td>
+    <td style="border-right-style: solid;">نسبة</td>
+    <td>تطبيق</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">CRC32C</td>
+    <td style="border-right-style: solid;">470</td>
+    <td style="border-right-style: solid;">1.00</td>
+    <td>تعليمات وحدة المعالجة المركزية، مزيج PCL</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">XXHASH</td>
+    <td style="border-right-style: solid;">870</td>
+    <td style="border-right-style: solid;">1.9</td>
+    <td>تطبيق مرجعي</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">7600</td>
+    <td style="border-right-style: solid;">16</td>
+    <td>libgcrypt</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">8500</td>
+    <td style="border-right-style: solid;">18</td>
+    <td>openssl</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">8700</td>
+    <td style="border-right-style: solid;">18</td>
+    <td>botan</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">32000</td>
+    <td style="border-right-style: solid;">68</td>
+    <td>مدمج، تعليمات وحدة المعالجة المركزية</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">37000</td>
+    <td style="border-right-style: solid;">78</td>
+    <td>libsodium</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">SHA256</td>
+    <td style="border-right-style: solid;">78000</td>
+    <td style="border-right-style: solid;">166</td>
+    <td>مدمج، تطبيق مرجعي</td>
+  </tr>
+  <tr style="border-bottom-style: solid;">
+    <td style="border-right-style: solid;">BLAKE2b</td>
+    <td style="border-right-style: solid;">10000</td>
+    <td style="border-right-style: solid;">21</td>
+    <td>مدمج، SIMD</td>
+  </tr>
+</table>
+f Linux
+      VFS هو 263 (8 EiB)</dd>
+  <dt id="maximum~5"><a class="permalink" href="#maximum~5"><b>الحد الأقصى لعدد
+    الأقسام الفرعية</b></a></dt>
+  <dd>يمكن أن تصل معرفات الأقسام الفرعية إلى 248 ولكن عدد الأقسام الفرعية الفعلية
+      يعتمد على مساحة البيانات الوصفية المتاحة
+    <p class="Pp">المساحة التي تستهلكها جميع البيانات الوصفية للأقسام الفرعية، بما في ذلك
+        حفظ البيانات المتشاركة، يمكن أن تكون كبيرة (MiB، GiB). النطاق ليس
+        النطاق الكامل 64 بت بسبب مجموعات qgroups التي تستخدم 16 بت العليا لأغراض أخرى.</p>
+  </dd>
+  <dt id="maximum~6"><a class="permalink" href="#maximum~6"><b>الحد الأقصى لعدد
+    الروابط الصلبة لملف في دليل</b></a></dt>
+  <dd>65536 عندما تكون ميزة <i>extref</i> مفعلة أثناء mkfs (الافتراضي)،
+      حوالي 100 بخلاف ذلك ويعتمد على طول اسم الملف الذي يناسب عقدة بيانات وصفية واحدة</dd>
+  <dt id="minimum"><a class="permalink" href="#minimum"><b>الحد الأدنى لحجم نظام الملفات
+    </b></a></dt>
+  <dd>يعتمد الحد الأدنى لحجم كل جهاز على ميزة <i>mixed-bg</i>،
+      بدونها (الافتراضي) يكون حوالي 109MiB، مع mixed-bg يكون
+    16MiB</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BOOTLOADER_SUPPORT'><a class='permalink' href='#BOOTLOADER_SUPPORT'>دعم محمل الإقلاع</a></h1>
+<p class="Pp">يمتلك GRUB2 (<a href='https://www.gnu.org/software/grub'>https://www.gnu.org/software/grub</a>) الدعم الأكثر تقدمًا للإقلاع من BTRFS فيما يتعلق بالميزات.</p>
+<p class="Pp">يمتلك U-Boot (<a href='https://www.denx.de/wiki/U-Boot/'>https://www.denx.de/wiki/U-Boot/</a>) دعمًا لائقًا للإقلاع ولكن لم يتم تطبيق جميع ميزات BTRFS، تحقق من الوثائق.</p>
+<p class="Pp">بشكل عام، يتم استخدام أول 1MiB في كل جهاز، باستثناء البيانات الوصفية الأولية الموجودة في الإزاحة 64KiB وتمتد 4KiB.
+    يمكن استخدام الباقي بحرية بواسطة محملات الإقلاع أو لمعلومات النظام الأخرى.
+    لاحظ أن الإقلاع من نظام ملفات على جهاز مقسم &lt;&gt; غير مدعوم.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FILE_ATTRIBUTES'><a class='permalink' href='#FILE_ATTRIBUTES'>سمات الملف</a></h1>
+<p class="Pp">يدعم نظام ملفات btrfs تعيين سمات أو علامات للملفات.
+    لاحظ أن هناك واجهات قديمة وجديدة، بأسماء مربكة. يجب أن يوضح هذا القائمة التالية ذلك:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li><i>attributes</i>: الأدوات chattr(1)
+      <a href='https://man7.org/linux/man-pages/man1/chattr.1.html'>https://man7.org/linux/man-pages/man1/chattr.1.html</a> أو lsattr(1)
+      <a href='https://man7.org/linux/man-pages/man1/lsattr.1.html'>https://man7.org/linux/man-pages/man1/lsattr.1.html</a> (أوامر ioctls هي FS_IOC_GETFLAGS و FS_IOC_SETFLAGS)، بسبب أسماء أوامر ioctls، تسمى السمات أيضًا علامات</li>
+  <li><i>xflags</i>: للتمييز عن السابقة، إنها علامات موسعة، مع
+      بتات قابلة للضبط مشابهة للسمات ولكنها قابلة للتوسيع وسيتم إضافة بتات جديدة في المستقبل (أوامر ioctls هي FS_IOC_FSGETXATTR و
+      FS_IOC_FSSETXATTR ولكنها ليست مرتبطة بالسمات الموسعة التي تسمى أيضًا xattrs)، لا توجد أداة قياسية لتغيير البتات، هناك
+      دعم في xfs_io(8)
+      <a href='https://man7.org/linux/man-pages/man8/xfs_io.8.html'>https://man7.org/linux/man-pages/man8/xfs_io.8.html</a> كأمر
+      <b>xfs_io -c chattr</b></li>
+</ul>
+</div>
+<p class="Pp">للسمات قيود مرتبطة بها وليس كل التركيبات
+    يمكن تعيينها، ترتيب تعيينها مهم أيضًا. تنطبق معظم السمات على الملفات والأدلة ولكن الدلالات قد تختلف. بالنسبة للأدلة، قد تعني السمة فقط تعيين هذه السمة لجميع الملفات الجديدة
+    (<i>وراثية</i> في القائمة أدناه). بعض السمات تتطلب صلاحيات الجذر
+    لتعيينها.</p>
+<section class="Ss">
+<h2 class="Ss" id='Attributes'><a class='permalink' href='#Attributes'>السمات</a></h2>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="a"><a class="permalink" href="#a"><b>a</b></a></dt>
+  <dd>(ملف، دليل، جذر) <i>إلحاق فقط</i>، يتم دائمًا كتابة الكتابات الجديدة في نهاية الملف</dd>
+  <dt id="A"><a class="permalink" href="#A"><b>A</b></a></dt>
+  <dd>(ملف، دليل) <i>لا يتم تحديث atime</i></dd>
+  <dt id="c"><a class="permalink" href="#c"><b>c</b></a></dt>
+  <dd>(ملف، دليل، وراثي) <i>ضغط البيانات</i>، سيتم ضغط جميع البيانات المكتوبة بعد تعيين هذه السمة.
+    يرجى ملاحظة أن الضغط يتأثر أيضًا بخيارات التركيب أو سمات الدليل الأصل.
+    <p class="Pp">عند تعيينها على دليل، سترث جميع الملفات المنشأة حديثًا هذه
+        السمة. لا يمكن تعيين هذه السمة مع 'm' في نفس الوقت.</p>
+  </dd>
+  <dt id="C"><a class="permalink" href="#C"><b>C</b></a></dt>
+  <dd>(ملف، دليل، وراثي) <i>لا نسخ عند الكتابة</i>، يتم تعديل بيانات الملف في مكانها.
+    <p class="Pp">عند تعيينها على دليل، سترث جميع الملفات المنشأة حديثًا هذه
+        السمة.</p>
+    <p class="Pp"><b>ملاحظة:</b></p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">بسبب قيود التنفيذ، يمكن تعيين/إلغاء تعيين هذه العلامة فقط على الملفات الفارغة.</div>
+</div>
+<dl class="Bl-tag">
+  <dt id="d"><a class="permalink" href="#d"><b>d</b></a></dt>
+  <dd>(ملف) <i>لا يتم تفريغ</i>، له معنى مع أدوات الطرف الثالث مثل dump(8)
+      <a href='https://man7.org/linux/man-pages/man8/dump.8.html'>https://man7.org/linux/man-pages/man8/dump.8.html</a>، على BTRFS يمكن تعيين/إلغاء تعيين السمة ولكن لا يتم إجراء أي معالجة خاصة أخرى</dd>
+  <dt id="D"><a class="permalink" href="#D"><b>D</b></a></dt>
+  <dd>(دليل) <i>تحديثات دليل متزامنة</i>، لمزيد من التفاصيل ابحث عن open(2)
+      <a href='https://man7.org/linux/man-pages/man2/open.2.html'>https://man7.org/linux/man-pages/man2/open.2.html</a> لـ
+      <i>O_SYNC</i> و <i>O_DSYNC</i></dd>
+  <dt id="i"><a class="permalink" href="#i"><b>i</b></a></dt>
+  <dd>(ملف، دليل، جذر) <i>ثابت</i>، لا يُسمح بتغييرات بيانات أو بيانات وصفية للملف حتى للمستخدم الجذر طالما تم تعيين هذه السمة (من الواضح أن الاستثناء هو إلغاء تعيين السمة)</dd>
+  <dt id="m"><a class="permalink" href="#m"><b>m</b></a></dt>
+  <dd>(ملف، دليل) <i>لا ضغط</i>، قم بتعطيل الضغط بشكل دائم على الملف المحدد.
+      لن تؤثر أي خيارات تركيب للضغط على هذا الملف.
+      (تمت إضافة دعم chattr(1) <a href='https://man7.org/linux/man-pages/man1/chattr.1.html'>https://man7.org/linux/man-pages/man1/chattr.1.html</a> في 1.46.2)
+    <p class="Pp">عند تعيينها على دليل، سترث جميع الملفات المنشأة حديثًا هذه
+        السمة. لا يمكن تعيين هذه السمة مع <i>c</i> في نفس الوقت.</p>
+  </dd>
+  <dt id="S"><a class="permalink" href="#S"><b>S</b></a></dt>
+  <dd>(ملف) <i>تحديثات متزامنة</i>، لمزيد من التفاصيل ابحث عن open(2)
+      <a href='https://man7.org/linux/man-pages/man2/open.2.html'>https://man7.org/linux/man-pages/man2/open.2.html</a> لـ
+      <i>O_SYNC</i> و <i>O_DSYNC</i></dd>
+  <dt id="V"><a class="permalink" href="#V"><b>V</b></a></dt>
+  <dd>(ملف، للقراءة فقط) <i>fs-verity مفعل</i> على الملف</dd>
+</dl>
+</div>
+<p class="Pp">لا يتم دعم أي سمات أخرى. للحصول على القائمة الكاملة، يرجى الرجوع إلى صفحة الدليل chattr(1)
+    <a href='https://man7.org/linux/man-pages/man1/chattr.1.html'>https://man7.org/linux/man-pages/man1/chattr.1.html</a>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='XFLAGS'><a class='permalink' href='#XFLAGS'>XFLAGS</a></h2>
+<p class="Pp">هناك تداخل في الأحرف المعينة للبتات مع السمات، تشير هذه القائمة إلى ما يوفره xfs_io(8)
+    <a href='https://man7.org/linux/man-pages/man8/xfs_io.8.html'>https://man7.org/linux/man-pages/man8/xfs_io.8.html</a>:</p>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="i~2"><a class="permalink" href="#i~2"><b>i</b></a></dt>
+  <dd><i>ثابت</i>، نفس السمة</dd>
+  <dt id="a~2"><a class="permalink" href="#a~2"><b>a</b></a></dt>
+  <dd><i>إلحاق فقط</i>، نفس السمة</dd>
+  <dt id="s"><a class="permalink" href="#s"><b>s</b></a></dt>
+  <dd><i>تحديثات متزامنة</i>، نفس السمة <i>S</i></dd>
+  <dt id="A~2"><a class="permalink" href="#A~2"><b>A</b></a></dt>
+  <dd><i>لا يتم تحديث atime</i>، نفس السمة</dd>
+  <dt id="d~2"><a class="permalink" href="#d~2"><b>d</b></a></dt>
+  <dd><i>لا يتم تفريغ</i>، نفس السمة</dd>
+</dl>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ZONED_MODE'><a class='permalink' href='#ZONED_MODE'>وضع المناطق</a></h1>
+<p class="Pp">منذ الإصدار 5.12، يدعم btrfs ما يسمى "الوضع المناطقي".
+    هذا تنسيق خاص على القرص واستراتيجية تخصيص/كتابة ودية للأجهزة المناطقي. باختصار، يتم تقسيم الجهاز إلى مناطق ذات حجم ثابت ويمكن تحديث كل منطقة بطريقة الإلحاق فقط، أو إعادة تعيينها. نظرًا لأن btrfs لا يحتوي على هياكل بيانات ثابتة، باستثناء الكتل الفائقة، فإن الوضع المناطقي يتطلب فقط وضع الكتلة الذي يتبع قيود الجهاز. يمكنك معرفة المزيد عن البنية الكاملة على <a href='https://zonedstorage.io'>https://zonedstorage.io</a>.</p>
+<p class="Pp">تسمى الأجهزة أيضًا SMR/ZBC/ZNS، في وضع <i>المدارة بواسطة المضيف</i>. لاحظ أن هناك أجهزة تبدو غير مناطقي ولكنها في الواقع كذلك، وهذا هو <i>المدارة بواسطة محرك الأقراص</i> واستخدام الوضع المناطقي لن يساعد.</p>
+<p class="Pp">يعتمد حجم المنطقة على الجهاز، والأحجام النموذجية هي 256MiB أو 1GiB. بشكل عام، يجب أن تكون قوة للعدد 2. تسمح الأجهزة المناطقي المحاكاة مثل
+    <i>null_blk</i> بتعيين أحجام مناطق مختلفة.</p>
+<section class="Ss">
+<h2 class="Ss" id='Requirements,_limitations'><a class='permalink' href='#Requirements,_limitations'>المتطلبات، القيود</a></h2>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يجب أن تحتوي جميع الأجهزة على نفس حجم المنطقة</li>
+  <li>الحد الأقصى لحجم المنطقة هو 8GiB</li>
+  <li>الحد الأدنى لحجم المنطقة هو 4MiB</li>
+  <li>مزيج الأجهزة المناطقي وغير المناطقي ممكن، يتم محاكاة عمليات الكتابة المناطقي، ولكن هذا خصيصًا للاختبار</li>
+  <li>تتم معالجة الكتلة الفائقة بطريقة خاصة وهي في مواقع مختلفة عن نظام الملفات غير المناطقي:</li>
+</ul>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>أساسية: 0B (والمنطقتان التاليتان)</li>
+  <li>ثانوية: 512GiB (والمنطقتان التاليتان)</li>
+  <li>ثالثية: 4TiB (4096GiB، والمنطقتان التاليتان)</li>
+</ul>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Incompatible_features'><a class='permalink' href='#Incompatible_features'>ميزات غير متوافقة</a></h2>
+<p class="Pp">القيد الرئيسي للأجهزة المناطقي هو نقص التحديث في المكان للبيانات. هذا غير متوافق بطبيعته مع بعض الميزات:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>NODATACOW - الكتابة فوق مكانها، لا يمكن إنشاء مثل هذه الملفات</li>
+  <li>fallocate - حجز مساحة للكتابة الأولى في مكانها</li>
+  <li>mixed-bg - كتابات غير مرتبة للبيانات والبيانات الوصفية، إصلاح ذلك يعني استخدام
+      مجموعات بيانات وبيانات وصفية منفصلة</li>
+  <li>الإقلاع - تحتوي المنطقة عند الإزاحة 0 على كتلة فائقة، سيؤدي إعادة تعيين المنطقة
+      إلى تدمير بيانات محمل الإقلاع</li>
+</ul>
+</div>
+<p class="Pp">الدعم الأولي يفتقر إلى بعض الميزات ولكنها مخطط لها:</p>
+<div class="Bd-indent">
+<ul class="Bl-bullet">
+  <li>يتم دعم ملفات التعريف الفردية (بيانات، بيانات وصفية) وملف التعريف DUP (بيانات وصفية) فقط</li>
+  <li>fstrim - بسبب الاعتماد على ذاكرة التخزين المؤقت للمساحة الخالية v1</li>
+</ul>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Super_block'><a class='permalink' href='#Super_block'>الكتلة الفائقة</a></h2>
+<p class="Pp">كما ذكر أعلاه، تتم معالجة الكتلة الفائقة بطريقة خاصة. لكي تكون آمنة ضد الانهيار، يجب أن تحتوي منطقة واحدة على الأقل في موقع معروف على كتلة فائقة صالحة. يتم تنفيذ هذا كحلقة تخزين مؤقت في منطقتين متجاورتين، تبدأ من الإزاحات المعروفة 0B، 512GiB و 4TiB.</p>
+<p class="Pp">القيم مختلفة عن الأجهزة غير المناطقي. يتم إلحاق كل كتلة فائقة جديدة بنهاية المنطقة، بمجرد امتلائها، يتم إعادة تعيين المنطقة وتستمر الكتابات إلى المنطقة التالية</p>
+</section>
+</section>

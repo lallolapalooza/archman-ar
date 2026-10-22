@@ -1,0 +1,556 @@
+>على سبيل المثال، تعتمد مقتطفة الشفرة التالية على قيم
+    XMM1 (التي سيتم تعيينها بواسطة الأداة) والمخزن المؤقت للذاكرة الذي تم تمريره في RDI
+    (حالي).</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># LLVM-EXEGESIS-LIVEIN RDI
+# LLVM-EXEGESIS-DEFREG XMM1 42
+vmulps        (%rdi), %xmm1, %xmm2
+vhaddps       %xmm2, %xmm2, %xmm3
+addq $0x10, %rdi</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_3:_BENCHMARKING_WITH_MEMORY_ANNOTATIONS'><a class='permalink' href='#EXAMPLE_3:_BENCHMARKING_WITH_MEMORY_ANNOTATIONS'>مثال 3: القياس مع تعليقات الذاكرة</a></h1>
+<p class="Pp">تتطلب بعض المقتطفات إعداد الذاكرة في أماكن محددة للتنفيذ
+    دون تعطل. يمكن تحقيق إعداد الذاكرة باستخدام التعليقات التوضيحية
+    <i>LLVM-EXEGESIS-MEM-DEF</i> و <i>LLVM-EXEGESIS-MEM-MAP</i>. لتنفيذ المقتطفة التالية:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>movq $8192, %rax
+movq (%rax), %rdi</pre>
+</div>
+</div>
+<p class="Pp">نحتاج إلى تخصيص ثمانية بايتات على الأقل من الذاكرة بدءًا من
+    <i>0x2000</i>. يمكننا إنشاء بيئة التنفيذ اللازمة بالتعليقات التوضيحية التالية المضافة إلى المقتطفة:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># LLVM-EXEGESIS-MEM-DEF test1 4096 7fffffff
+# LLVM-EXEGESIS-MEM-MAP test1 8192
+movq $8192, %rax
+movq (%rax), %rdi</pre>
+</div>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE_4:_ANALYSIS'><a class='permalink' href='#EXAMPLE_4:_ANALYSIS'>مثال 4: التحليل</a></h1>
+<p class="Pp">بافتراض أن لديك مجموعة من التعليمات المقاسة (إما زمن الوصول أو وحدات العمليات) بصيغة YAML في الملف <i>/tmp/benchmarks.yaml</i>، يمكنك تحليل النتائج باستخدام الأمر التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>  $ llvm-exegesis --mode=analysis \
+--benchmarks-file=/tmp/benchmarks.yaml \
+--analysis-clusters-output-file=/tmp/clusters.csv \
+--analysis-inconsistencies-output-file=/tmp/inconsistencies.html</pre>
+</div>
+</div>
+<p class="Pp">سيؤدي هذا إلى تجميع التعليمات في مجموعات ذات خصائص أداء متطابقة. سيتم كتابة المجموعات إلى <i>/tmp/clusters.csv</i> بالتنسيق التالي:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>cluster_id,opcode_name,config,sched_class
+...
+2,ADD32ri8_DB,,WriteALU,1.00
+2,ADD32ri_DB,,WriteALU,1.01
+2,ADD32rr,,WriteALU,1.01
+2,ADD32rr_DB,,WriteALU,1.00
+2,ADD32rr_REV,,WriteALU,1.00
+2,ADD64i32,,WriteALU,1.01
+2,ADD64ri32,,WriteALU,1.01
+2,MOVSX64rr32,,BSWAP32r_BSWAP64r_MOVSX64rr32,1.00
+2,VPADDQYrr,,VPADDBYrr_VPADDDYrr_VPADDQYrr_VPADDWYrr_VPSUBBYrr_VPSUBDYrr_VPSUBQYrr_VPSUBWYrr,1.02
+2,VPSUBQYrr,,VPADDBYrr_VPADDDYrr_VPADDQYrr_VPADDWYrr_VPSUBBYrr_VPSUBDYrr_VPSUBQYrr_VPSUBWYrr,1.01
+2,ADD64ri8,,WriteALU,1.00
+2,SETBr,,WriteSETCC,1.01
+...</pre>
+</div>
+</div>
+<p class="Pp">سيقوم <b>llvm-exegesis</b> أيضًا بتحليل المجموعات للإشارة إلى التناقضات في معلومات الجدولة. الناتج هو ملف html. على سبيل المثال، سيحتوي <i>/tmp/inconsistencies.html</i> على رسائل مثل ما يلي: [صورة]</p>
+<p class="Pp">لاحظ أنه سيتم حل أسماء فئات الجدولة فقط عند تجميع <b>llvm-exegesis</b> في وضع التصحيح، وإلا سيتم عرض المعرف فقط. هذا لا يبطل أيًا من نتائج التحليل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>الخيارات</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="help"><a class="permalink" href="#help"><b>--help</b></a></dt>
+  <dd>طباعة ملخص لخيارات سطر الأوامر.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="opcode"><a class="permalink" href="#opcode"><b>--opcode-index=&lt;فهرس LLVM
+    للعملية&gt;</b></a></dt>
+  <dd>تحديد العملية المراد قياسها، عن طريق الفهرس. سيؤدي تحديد <i>-1</i> إلى
+      قياس كل عملية موجودة. انظر المثال 1 لمزيد من التفاصيل. يجب تعيين
+      <i>opcode-index</i> أو <i>opcode-name</i> أو <i>snippets-file</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="opcode~2"><a class="permalink" href="#opcode~2"><b>--opcode-name=&lt;اسم العملية 1&gt;،&lt;اسم العملية 2&gt;،...</b></a></dt>
+  <dd>تحديد العملية المراد قياسها، بالاسم. يمكن تحديد عدة عمليات كقائمة مفصولة بفواصل. انظر المثال 1 لمزيد من التفاصيل. يجب تعيين <i>opcode-index</i> أو <i>opcode-name</i> أو <i>snippets-file</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="snippets"><a class="permalink" href="#snippets"><b>--snippets-file=&lt;اسم الملف&gt;</b></a></dt>
+  <dd>تحديد مقتطفة الشفرة المخصصة المراد قياسها. انظر المثال 2 لمزيد من التفاصيل. يجب تعيين <i>opcode-index</i> أو <i>opcode-name</i> أو <i>snippets-file</i>.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="mode=_latency_uops_inverse_throughput_analysis_"><a class="permalink" href="#mode=_latency_uops_inverse_throughput_analysis_"><b>--mode=[latency|uops|inverse_throughput|analysis]</b></a></dt>
+  <dd>تحديد وضع التشغيل. لاحظ أن بعض الأوضاع لها متطلبات
+      وخيارات إضافية.
+    <p class="Pp">يمكن لوضع <i>latency</i> الاستفادة من RDTSC أو LBR.
+        <i>latency[LBR]</i> متاح فقط على X86 (على الأقل <i>Skylake</i>).
+        للعمل في وضع <i>latency</i>، يجب تحديد قيمة موجبة لـ
+        <i>x86-lbr-sample-period</i> و <i>--repetition-mode=loop</i>.</p>
+    <p class="Pp">في وضع <i>analysis</i>، تحتاج أيضًا إلى تحديد واحد على الأقل من
+        <i>-analysis-clusters-output-file=</i> و
+        <i>-analysis-inconsistencies-output-file=</i>.</p>
+  </dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="benchmark"><a class="permalink" href="#benchmark"><b>--benchmark-phase=[prepare-snippet|prepare-and-assemble-snippet|assemble-measured-code|measure]</b></a></dt>
+  <dd>بشكل افتراضي، عند تحديد <i>-mode=</i>، سيتم تنفيذ المقتطفة التي تم إنشاؤها وقياسها، ويتطلب ذلك أننا نعمل على الأجهزة التي تم إنشاء المقتطفة لها، والتي تدعم قياسات الأداء. ومع ذلك، من الممكن التوقف عند مرحلة ما قبل القياس. الخيارات هي: * <b>prepare-snippet</b>: إنشاء الحد الأدنى من تسلسل التعليمات فقط. * <b>prepare-and-assemble-snippet</b>: نفس <b>prepare-snippet</b>، ولكن يطرح أيضًا جزءًا من التسلسل (مشفر بالنظام الست عشري). * <b>assemble-measured-code</b>: نفس <b>prepare-and-assemble-snippet</b>. ولكن ينشئ أيضًا التسلسل الكامل الذي يمكن طرحه في ملف باستخدام <b>--dump-object-to-disk</b>. * <b>measure</b>: نفس <b>assemble-measured-code</b>. ولكن يقوم أيضًا بتشغيل القياس.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="x86"><a class="permalink" href="#x86"><b>--x86-lbr-sample-period=&lt;عدد الفروع/عينة&gt;</b></a></dt>
+  <dd>تحديد فترة أخذ عينات LBR - كم عدد الفروع قبل أن نأخذ عينة. عندما يتم تحديد قيمة موجبة لهذا الخيار وعندما يكون الوضع <i>latency</i>، سنستخدم LBRs للقياس. عند اختيار فترة أخذ العينات "الصحيحة"، يفضل قيمة صغيرة، ولكن يمكن أن يحدث اختناق إذا كان أخذ العينات متكررًا جدًا. يجب استخدام رقم أولي لتجنب تخطي كتل معينة باستمرار.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="x86~2"><a class="permalink" href="#x86~2"><b>--x86-disable-upper-sse-registers</b></a></dt>
+  <dd>استخدام سجلات xmm العلوية (xmm8-xmm15) يجبر على تشفير تعليمات أطول قد يضع ضغطًا أكبر على مراحل جلب وفك تشفير الواجهة الأمامية، مما قد يقلل من معدل إرسال التعليمات إلى الواجهة الخلفية، خاصة على الأجهزة القديمة. يمكن أن يساعد مقارنة النتائج الأساسية مع تمكين هذا الوضع في تحديد تأثيرات الواجهة الأمامية ويمكن استخدامه لتحسين تقديرات زمن الوصول والإنتاجية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="repetition"><a class="permalink" href="#repetition"><b>--repetition-mode=[duplicate|loop|min|middle-half-duplicate|middle-half-loop]</b></a></dt>
+  <dd>تحديد وضع التكرار. سيقوم <i>duplicate</i> بإنشاء كتلة أساسية كبيرة ومستقيمة تحتوي على <i>min-instructions</i> تعليمات (تكرار المقتطفة <i>min-instructions</i>/<i>حجم المقتطفة</i> مرات). سيقوم <i>loop</i>، اختياريًا، بتكرار المقتطفة حتى تحتوي على جسم الحلقة على الأقل <i>loop-body-size</i> تعليمات، ثم يغلف النتيجة في حلقة ستنفذ <i>min-instructions</i> تعليمات (وبالتالي، مرة أخرى، تكرار المقتطفة <i>min-instructions</i>/<i>حجم المقتطفة</i> مرات). وضع <i>loop</i>، خاصة مع تكرار الحلقة، يميل إلى إخفاء تأثيرات الواجهة الأمامية لوحدة المعالجة المركزية بشكل أفضل على البنى التي تخزن التعليمات المفككة مؤقتًا، ولكنه يستهلك سجلًا لحساب التكرارات. إذا كنت تقوم بإجراء تحليل على العديد من العمليات، فقد يكون من الأفضل استخدام وضع <i>min</i>، والذي سيقوم بتشغيل كل وضع آخر، وإنتاج الحد الأدنى من النتائج المقاسة. أوضاع تكرار النصف الأوسط ستقوم إما بتكرار المقتطفة أو تشغيلها في حلقة اعتمادًا على الوضع المحدد. أوضاع تكرار النصف الأوسط ستنفذ قياسين، أحدهما ضعف طول الأول، ثم تطرح الفرق بينهما للحصول على قيم بدون عبء إضافي.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="min"><a class="permalink" href="#min"><b>--min-instructions=&lt;عدد التعليمات&gt;</b></a></dt>
+  <dd>تحديد العدد المستهدف للتعليمات المنفذة. لاحظ أن عدد التكرارات الفعلي للمقتطفة سيكون <i>min-instructions</i>/<i>حجم المقتطفة</i>. تؤدي القيم الأعلى إلى قياسات أكثر دقة ولكنها تطيل مدة القياس.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="loop"><a class="permalink" href="#loop"><b>--loop-body-size=&lt;حجم جسم الحلقة المفضل&gt;</b></a></dt>
+  <dd>فعال فقط لـ <i>-repetition-mode=[loop|min]</i>. بدلاً من التكرار على المقتطفة مباشرة، قم أولاً بتكرارها بحيث يحتوي جسم الحلقة على عدد من التعليمات لا يقل عن هذا العدد. هذا قد يؤدي إلى تخزين جسم الحلقة مؤقتًا في ذاكرة التخزين المؤقت للتعليمات / ذاكرة التخزين المؤقت للحلقات بوحدة المعالجة المركزية، مما يسمح بنفاذية أعلى من وحدات فك التشفير بوحدة المعالجة المركزية.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="max"><a class="permalink" href="#max"><b>--max-configs-per-opcode=&lt;القيمة&gt;</b></a></dt>
+  <dd>تحديد الحد الأقصى للتكوينات التي يمكن إنشاؤها لكل عملية. افتراضيًا، هذا هو <i>1</i>، مما يعني أننا نفترض أن قياسًا واحدًا يكفي لوصف العملية. قد لا يكون هذا صحيحًا لجميع التعليمات: على سبيل المثال، تعتمد خصائص أداء تعليمة LEA على X86 على قيمة السجلات والمقادير الصحيحة المعينة. يسمح تعيين قيمة أكبر من <i>-max-configs-per-opcode</i> من <i>1</i> لـ <i>llvm-exegesis</i> باستكشاف المزيد من التكوينات لاكتشاف ما إذا كانت بعض تعيينات السجلات أو المقادير الصحيحة تؤدي إلى خصائص أداء مختلفة.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="benchmarks"><a class="permalink" href="#benchmarks"><b>--benchmarks-file=&lt;/مسار/إلى/الملف&gt;</b></a></dt>
+  <dd>الملف للقراءة (وضع <i>analysis</i>) أو الكتابة (أوضاع <i>latency</i>/<i>uops</i>/<i>inverse_throughput</i>) نتائج القياس. &quot;-&quot; يستخدم stdin/stdout.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="analysis"><a class="permalink" href="#analysis"><b>--analysis-clusters-output-file=&lt;/مسار/إلى/الملف&gt;</b></a></dt>
+  <dd>إذا تم توفيره، قم بكتابة مجموعات التحليل كـ CSV إلى هذا الملف.
+      &quot;-&quot; يطبع إلى stdout. افتراضيًا، لا يتم تشغيل هذا التحليل.</dd>
+</dl>
+</div>
+<div class="B
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>llvm-exegesis(1)</title>
+        <link rel="stylesheet" href="/assets/style.css">
+        <script src="/assets/script.js" defer></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">llvm-exegesis(1)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/llvm/">llvm</a></p>
+<p class="lic">التراخيص: Apache-2.0 WITH LLVM-exception</p>
+
+        
+        <main>
+            <article>
+                <section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp"><b>llvm-exegesis</b> &#x2010; Instruction Benchmarking Utility</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>llvm-exegesis</b> [<i>options</i>] [<i>input files</i>]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp"><b>llvm-exegesis</b> is a tool for benchmarking small code snippets
+    to measure instruction latency, throughput, and other performance
+    characteristics. It can benchmark individual instructions or entire code
+    snippets, and analyze the results to identify inconsistencies or performance
+    regressions.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SUPPORTED_PLATFORMS"><a class="permalink" href="#SUPPORTED_PLATFORMS">SUPPORTED PLATFORMS</a></h1>
+<p class="Pp">Currently, <b>llvm-exegesis</b> is primarily supported on x86-64 and
+    AArch64.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SNIPPET_ANNOTATIONS"><a class="permalink" href="#SNIPPET_ANNOTATIONS">SNIPPET ANNOTATIONS</a></h1>
+<p class="Pp">Code snippets can be annotated with special comments to guide
+    <b>llvm-exegesis</b>'s analysis and benchmarking process. These annotations
+    allow specifying details such as memory access patterns, execution constraints,
+    and performance counter configurations.</p>
+<dl class="Bl-tag">
+<dt><b>// Exegesis: latency</b></dt>
+<dd>Measures the latency of the instruction(s).</dd>
+<dt><b>// Exegesis: throughput</b></dt>
+<dd>Measures the throughput of the instruction(s).</dd>
+<dt><b>// Exegesis: num-instructions &lt;N&gt;</b></dt>
+<dd>Specifies the number of instructions to benchmark.</dd>
+<dt><b>// Exegesis: num-cycles &lt;N&gt;</b></dt>
+<dd>Specifies the expected number of cycles for the instruction(s).</dd>
+<dt><b>// Exegesis: max-latency &lt;N&gt;</b></dt>
+<dd>Sets the maximum acceptable latency.</dd>
+<dt><b>// Exegesis: max-throughput &lt;N&gt;</b></dt>
+<dd>Sets the maximum acceptable throughput.</dd>
+<dt><b>// Exegesis: memory[&lt;read|write|sequential|random&gt;]</b></dt>
+<dd>Annotates memory access patterns.</dd>
+<dt><b>// Exegesis: register[&lt;use|define&gt;]</b></dt>
+<dd>Annotates register usage.</dd>
+<dt><b>// Exegesis: cp-event[&lt;event-name&gt;]</b></dt>
+<dd>Specifies a performance counter event for validation.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLE_1:_BENCHMARKING_INSTRUCTIONS"><a class="permalink" href="#EXAMPLE_1:_BENCHMARKING_INSTRUCTIONS">EXAMPLE 1: BENCHMARKING INSTRUCTIONS</a></h1>
+<p class="Pp">To benchmark the latency of the `add` instruction:</p>
+<div class="Bd-example">
+<pre>
+cat &lt;&lt;EOF | llvm-exegesis --benchmark-instruction=add
+// Exegesis: latency
+ADD X0, X1, X2
+EOF</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLE_2:_BENCHMARKING_A_CUSTOM_CODE_SNIPPET"><a class="permalink" href="#EXAMPLE_2:_BENCHMARKING_A_CUSTOM_CODE_SNIPPET">EXAMPLE 2: BENCHMARKING A CUSTOM CODE SNIPPET</a></h1>
+<p class="Pp">To benchmark a custom code snippet and measure throughput:</p>
+<div class="Bd-example">
+<pre>
+cat &lt;&lt;EOF | llvm-exegesis --benchmark-mode=throughput
+// Exegesis: throughput
+ADD X0, X1, X2
+ADD X3, X4, X5
+EOF</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLE_3:_BENCHMARKING_WITH_MEMORY_ANNOTATIONS"><a class="permalink" href="#EXAMPLE_3:_BENCHMARKING_WITH_MEMORY_ANNOTATIONS">EXAMPLE 3: BENCHMARKING WITH MEMORY ANNOTATIONS</a></h1>
+<p class="Pp">Benchmarking a snippet with memory read annotations:</p>
+<div class="Bd-example">
+<pre>
+cat &lt;&lt;EOF | llvm-exegesis --benchmark-mode=latency
+// Exegesis: latency
+// Exegesis: memory=read
+LDR X0, [X1]
+ADD X2, X0, X3
+EOF</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLE_4:_ANALYSIS"><a class="permalink" href="#EXAMPLE_4:_ANALYSIS">EXAMPLE 4: ANALYSIS</a></h1>
+<p class="Pp">Analyzing benchmark results for inconsistencies:</p>
+<div class="Bd-example">
+<pre>
+llvm-exegesis --analysis-inconsistencies-output-file=inconsistencies.txt \
+              --analysis-filter=all --analysis-clustering=naive \
+              --benchmark-input-file=benchmarks.ll
+</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~2"><a class="permalink" href="#analysis~2"><b>--analysis-inconsistencies-output-file=&lt;/path/to/file&gt;</b></a></dt>
+<dd>If non-empty, write inconsistencies found during analysis to this file.
+    <i>-</i> prints to stdout. By default, this analysis is not run.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~3"><a class="permalink" href="#analysis~3"><b>--analysis-filter=[all|reg-only|mem-only]</b></a></dt>
+<dd>By default, all benchmark results are analysed, but sometimes it may be
+    useful to only look at those that to not involve memory, or vice versa.
+    This option allows to either keep all benchmarks, or filter out (ignore)
+    either all the ones that do involve memory (involve instructions that may
+    read or write to memory), or the opposite, to only keep such
+    benchmarks.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~4"><a class="permalink" href="#analysis~4"><b>--analysis-clustering=[dbscan,naive]</b></a></dt>
+<dd>Specify the clustering algorithm to use. By default DBSCAN will be used.
+    Naive clustering algorithm is better for doing further work on the
+    <i>-analysis-inconsistencies-output-file=</i> output, it will create one
+    cluster per opcode, and check that the cluster is stable (all points are
+    neighbours).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~5"><a class="permalink" href="#analysis~5"><b>--analysis-numpoints=&lt;dbscan
+  numPoints parameter&gt;</b></a></dt>
+<dd>Specify the numPoints parameters to be used for DBSCAN clustering
+    (<i>analysis</i> mode, DBSCAN only).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~6"><a class="permalink" href="#analysis~6"><b>--analysis-clustering-epsilon=&lt;dbscan
+  epsilon parameter&gt;</b></a></dt>
+<dd>Specify the epsilon parameter used for clustering of benchmark points
+    (<i>analysis</i> mode).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~7"><a class="permalink" href="#analysis~7"><b>--analysis-inconsistency-epsilon=&lt;epsilon&gt;</b></a></dt>
+<dd>Specify the epsilon parameter used for detection of when the cluster is
+    different from the LLVM schedule profile values (<i>analysis</i>
+  mode).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~8"><a class="permalink" href="#analysis~8"><b>--analysis-display-unstable-clusters</b></a></dt>
+<dd>If there is more than one benchmark for an opcode, said benchmarks may end
+    up not being clustered into the same cluster if the measured performance
+    characteristics are different. by default all such opcodes are filtered
+    out. This flag will instead show only such unstable opcodes.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="ignore"><a class="permalink" href="#ignore"><b>--ignore-invalid-sched-class=false</b></a></dt>
+<dd>If set, ignore instructions that do not have a sched class (class idx =
+    0).</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="mtriple=_triple"><a class="permalink" href="#mtriple=_triple"><b>--mtriple=&lt;triple
+  name&gt;</b></a></dt>
+<dd>Target triple. See <i>-version</i> for available targets.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="mcpu=_cpu"><a class="permalink" href="#mcpu=_cpu"><b>--mcpu=&lt;cpu
+  name&gt;</b></a></dt>
+<dd>If set, measure the cpu characteristics using the counters for this CPU.
+    This is useful when creating new sched models (the host CPU is unknown to
+    LLVM). (<i>-mcpu=help</i> for details)</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="analysis~9"><a class="permalink" href="#analysis~9"><b>--analysis-override-benchmark-triple-and-cpu</b></a></dt>
+<dd>By default, llvm-exegesis will analyze the benchmarks for the triple/CPU
+    they were measured for, but if you want to analyze them for some other
+    combination (specified via <i>-mtriple</i>/<i>-mcpu</i>), you can pass
+    this flag.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="dump"><a class="permalink" href="#dump"><b>--dump-object-to-disk=&lt;filename&gt;</b></a></dt>
+<dd>If set, llvm-exegesis will dump the generated code to a temporary file to
+    enable code inspection. Disabled by default.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="use"><a class="permalink" href="#use"><b>--use-dummy-perf-counters</b></a></dt>
+<dd>If set, llvm-exegesis will not read any real performance counters and
+    return a dummy value instead. This can be used to ensure a snippet doesn't
+    crash when hardware performance counters are unavailable and for debugging
+    <b>llvm-exegesis</b> itself.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="execution"><a class="permalink" href="#execution"><b>--execution-mode=[inprocess,subprocess]</b></a></dt>
+<dd>This option specifies what execution mode to use. The <i>inprocess</i>
+    execution mode is the default. The <i>subprocess</i> execution mode allows
+    for additional features such as memory annotations but is currently
+    restricted to X86-64 on Linux.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="benchmark~2"><a class="permalink" href="#benchmark~2"><b>--benchmark-repeat-count=&lt;repeat-count&gt;</b></a></dt>
+<dd>This option enables specifying the number of times to repeat the
+    measurement when performing latency measurements. By default,
+    llvm-exegesis will repeat a latency measurement enough times to balance
+    run-time and noise reduction.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="validation"><a class="permalink" href="#validation"><b>--validation-counter=[instructions-retired,l1d-cache-load-misses,</b></a></dt>
+<dd></dd>
+<dt id="l1d"><a class="permalink" href="#l1d"><b>l1d-cache-store-misses,l1i-cache-load-misses,data-tlb-load-misses,</b></a></dt>
+<dd></dd>
+<dt id="data"><a class="permalink" href="#data"><b>data-tld-store-misses,instruction-tlb-load-misses]</b></a></dt>
+<dd>This option enables the use of validation counters, which measure
+    additional microarchitectural events like cache misses to validate snippet
+    execution conditions. These events are measured using the perf subsystem
+    in a group with the performance counter used to measure the value of
+    interest. This flag can be specified multiple times to measure multiple
+    events. The maximum number of validation counters is platform
+  dependent.</dd>
+</dl>
+</div>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+<dt id="benchmark~3"><a class="permalink" href="#benchmark~3"><b>--benchmark-process-cpu=&lt;cpu
+  id&gt;</b></a></dt>
+<dd>This option specifies the number of the CPU that should be used to run the
+    benchmarking subprocess. When starting the subprocess,
+    <b>llvm-exegesis</b> will set the affinity of the subprocess to only
+    include the specified CPU. This option only works in the subprocess
+    execution mode.</dd>
+</dl>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXIT_STATUS'><a class='permalink' href='#EXIT_STATUS'>EXIT   STATUS</a></h1>
+<p class="Pp"><b>llvm-exegesis</b> returns 0 on success. Otherwise, an error
+    message is printed to standard error, and the tool returns a non 0
+  value.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Author'><a class='permalink' href='#Author'>Author</a></h1>
+<p class="Pp">Maintained by the LLVM Team (<a href='https://llvm.org/'>https://llvm.org/</a>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Copyright'><a class='permalink' href='#Copyright'>Copyright</a></h1>
+<p class="Pp">2003-2025, LLVM Project</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-19</td>
+    <td class="foot-os">21</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/llvm/">extra/llvm</a></dd>
+        <dt>Version:</dt>
+        <dd>21.1.6-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="https://llvm.org/">https://llvm.org/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>Apache-2.0 WITH LLVM-exception</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/llvm/">/listing/extra/llvm/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+        
+            <li><a href="#SUPPORTED_PLATFORMS">SUPPORTED PLATFORMS</a></li>
+        
+            <li><a href="#SNIPPET_ANNOTATIONS">SNIPPET ANNOTATIONS</a></li>
+        
+            <li><a href="#EXAMPLE_1:_BENCHMARKING_INSTRUCTIONS">EXAMPLE 1: BENCHMARKING INSTRUCTIONS</a></li>
+        
+            <li><a href="#EXAMPLE_2:_BENCHMARKING_A_CUSTOM_CODE_SNIPPET">EXAMPLE 2: BENCHMARKING A CUSTOM CODE SNIPPET</a></li>
+        
+            <li><a href="#EXAMPLE_3:_BENCHMARKING_WITH_MEMORY_ANNOTATIONS">EXAMPLE 3: BENCHMARKING WITH MEMORY ANNOTATIONS</a></li>
+        
+            <li><a href="#EXAMPLE_4:_ANALYSIS">EXAMPLE 4: ANALYSIS</a></li>
+        
+            <li><a href="#OPTIONS">OPTIONS</a></li>
+        
+            <li><a href="#EXIT_STATUS">EXIT STATUS</a></li>
+        
+            <li><a href="#Author">Author</a></li>
+        
+            <li><a href="#Copyright">Copyright</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/llvm-exegesis.1.en.txt">txt</a>, 
+        
+            <a href="/man/llvm-exegesis.1.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

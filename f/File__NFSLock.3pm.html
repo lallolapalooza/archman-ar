@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>File::NFSLock(3pm) — صفحات دليل آرتش</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">File__NFSLock(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">File::NFSLock(3)</td>
+    <td class="head-vol">توثيق بيرل مساهمة المستخدم</td>
+    <td class="head-rtitle">File::NFSLock(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">File::NFSLock - وحدة بيرل لعمل قفل NFS (أو لا).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<pre>use File::NFSLock qw(uncache);
+use Fcntl qw(LOCK_EX LOCK_NB);
+my $file = &quot;somefile&quot;;
+### إعداد قفل - يستمر حتى يفقد الكائن نطاقه
+if (my $lock = new File::NFSLock {
+  file      =&gt; $file,
+  lock_type =&gt; LOCK_EX|LOCK_NB,
+  blocking_timeout   =&gt; 10,      # 10 ثواني
+  stale_lock_timeout =&gt; 30 * 60, # 30 دقيقة
+}) {
+  ### أو
+  ### my $lock = File::NFSLock-&gt;new($file,LOCK_EX|LOCK_NB,10,30*60);
+  ### قم بعمل أشياء محمية بالكتابة على $file
+  ### في هذه النقطة، تم إلغاء تخزين $file مؤقتاً من NFS (الأحدث)
+  open(FILE, &quot;+&lt;$file&quot;) || die $!;
+  ### أو افتحه بأي طريقة تفضلها
+  ### my $fh = IO::File-&gt;open( $file, 'w' ) || die $!
+  ### تحديث (إلغاء التخزين المؤقت عبر NFS) ملفات أخرى
+  uncache(&quot;someotherfile1&quot;);
+  uncache(&quot;someotherfile2&quot;);
+  # open(FILE2,&quot;someotherfile1&quot;);
+  ### إلغاء قفل الملف
+  $lock-&gt;unlock();
+  ### أو
+  ### undef $lock;
+  ### أو اتركه يفقد نطاقه
+}else{
+  die &quot;لم أتمكن من قفل الملف [$File::NFSLock::errstr]&quot;;
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">برنامج يعتمد على مفهوم الربط الصلب للملفات كعملية ذرية عبر NFS.
+    تم ذكر هذا المفهوم في Mail::Box::Locker (والذي تم تقديمه في الأصل في Mail::Folder::Maildir).
+    تم أخذ بعض التدفق الروتيني منه -- خاصة فكرة إنشاء ملف محلي عشوائي، وربط ملف مشترك بالملف المحلي،
+    ثم التحقق من حالة nlink. بعض الأيديولوجيات لم تكن كاملة (آلية إلغاء التخزين المؤقت، الأقفال المشتركة)
+    وكانت بعض البرمجة خاطئة (مؤشر stat خاطئ). تمت كتابة File::NFSLock لتكون خفيفة وعامة وسريعة.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USAGE'><a class='permalink' href='#USAGE'>الاستخدام</a></h1>
+<p class="Pp">يحدث القفل عن طريق إنشاء كائن File::NFSLock. إذا تم إنشاء الكائن بنجاح،
+    يكون القفل سارياً حالياً ويظل سارياً حتى يخرج كائن القفل من نطاقه (أو يستدعي طريقة unlock).</p>
+<p class="Pp">يتم إنشاء كائن قفل عن طريق استدعاء الطريقة new وتمرير معلمتين إلى أربع
+    بالمعنى التالي:</p>
+<pre>my $lock = File::NFSLock-&gt;new($file,
+                              $lock_type,
+                              $blocking_timeout,
+                              $stale_lock_timeout,
+                              );</pre>
+<p class="Pp">بالإضافة إلى ذلك، يمكن تمرير المعلمات كـ hashref:</p>
+<pre>my $lock = File::NFSLock-&gt;new({
+  file               =&gt; $file,
+  lock_type          =&gt; $lock_type,
+  blocking_timeout   =&gt; $blocking_timeout,
+  stale_lock_timeout =&gt; $stale_lock_timeout,
+});</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PARAMETERS'><a class='permalink' href='#PARAMETERS'>المعلمات</a></h1>
+<dl class="Bl-tag">
+  <dt id="Parameter"><a class="permalink" href="#Parameter">المعلمة 1:
+    file</a></dt>
+  <dd>اسم الملف الذي يُتوقع حدوث عملية كتابة عليه. سيوفر القفل أحدث نسخة (غير مخزنة مؤقتاً)
+      من هذا الملف عند نجاح قفل الملف. ليس من الضروري أن يكون هذا الملف موجوداً.</dd>
+  <dt id="Parameter~2"><a class="permalink" href="#Parameter~2">المعلمة 2:
+    lock_type</a></dt>
+  <dd>يجب أن يكون نوع القفل أحد ما يلي:
+        <pre>BLOCKING
+BL
+EXCLUSIVE (BLOCKING)
+EX
+NONBLOCKING
+NB
+SHARED
+SH
+</pre>
+    <p class="Pp">أو واحد أو أكثر مما يلي مرتبط بـ '|':</p>
+        <pre>Fcntl::LOCK_EX() (BLOCKING)
+Fcntl::LOCK_NB() (NONBLOCKING)
+Fcntl::LOCK_SH() (SHARED)
+</pre>
+    <p class="Pp">يحدد نوع القفل ما إذا كان القفل سيكون مانعاً، غير مانع، أو مشتركاً.
+        ستنتظر الأقفال المانعة حتى تتم إزالة الأقفال الأخرى قبل استمرار العملية.
+        ستعيد الأقفال غير المانعة قيمة undef إذا كان هناك عملية أخرى تحمل القفل حالياً.
+        سيسمح القفل المشترك لعملية أخرى بعمل قفل مشترك في نفس الوقت طالما لا يوجد بالفعل قفل حصري تم الحصول عليه.</p>
+  </dd>
+  <dt id="Parameter~3"><a class="permalink" href="#Parameter~3">المعلمة 3:
+    blocking_timeout (اختياري)</a></dt>
+  <dd>يتم استخدام المهلة بالاقتران مع مهلة الحظر. إذا تم تحديدها،
+      فسيتم حظر File::NFSLock حتى عدد الثواني المحدد في المهلة
+      قبل إرجاع undef (تعذر الحصول على قفل).</dd>
+  <dt id="Parameter~4"><a class="permalink" href="#Parameter~4">المعلمة 4:
+    stale_lock_timeout (اختياري)</a></dt>
+  <dd>تُستخدم المهلة للتحقق مما إذا كان ملف القفل الحالي أقدم من مهلة القفل المتقادم.
+      إذا فشل do_lock في الحصول على قفل، يتم فحص وقت التعديل ويتم محاولة do_lock مرة أخرى.
+      إذا تم تعيين stale_lock_timeout على قيمة منخفضة جداً، قد يحدث حمل تكراري، لذلك
+      سيتكرر do_lock 10 مرات فقط (هذه مشكلة فقط إذا تم تعيين stale_lock_timeout على قيمة منخفضة جداً -- من رتبة
+      ثانية أو ثانيتين).</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='METHODS'><a class='permalink' href='#METHODS'>الطرق</a></h1>
+<p class="Pp">بعد تهيئة كائن <span class="Li">$lock</span> باستخدام new، كما هو موضح أعلاه،
+    يمكن استخدام بعض الطرق لوظائف إضافية.</p>
+<section class="Ss">
+<h2 class="Ss" id='unlock'><a class='permalink' href='#unlock'>unlock</a></h2>
+<pre>$lock-&gt;unlock;</pre>
+<p class="Pp">يمكن استخدام هذه الطريقة لتحرير قفل تم الحصول عليه بشكل صريح.
+    في معظم الحالات، ليس من الضروري استدعاء unlock مباشرة لأنه سيتم استدعاؤه ضمنياً
+    عندما يخرج الكائن من أي نطاق يكون فيه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='uncache'><a class='permalink' href='#uncache'>uncache</a></h2>
+<pre>$lock-&gt;uncache;
+$lock-&gt;uncache(&quot;otherfile1&quot;);
+uncache(&quot;otherfile2&quot;);</pre>
+<p class="Pp">تُستخدم هذه الطريقة لتحديث محتويات ملف عبر NFS، متجاهلة ما هو موجود
+    في ذاكرة التخزين المؤقت للعميل NFS. يتم استدعاؤها دائماً من داخل المنشئ new
+    للملف الذي يتم محاولة قفله. يمكن استخدام uncache إما كطريقة كائن أو كإجراء
+    قائم بذاته.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='fork'><a class='permalink' href='#fork'>fork</a></h2>
+<pre>my $pid = $lock-&gt;fork;
+if (!defined $pid) {
+  # فشل الانقسام
+} elsif ($pid) {
+  # الأب ...
+} else {
+  # الابن ...
+}</pre>
+<p class="Pp"><b>fork()</b> هي طريقة مساعدة تعمل تماماً مثل <b>CORE::fork()</b>
+    العادية باستثناء أنها تضمن بأمان الاحتفاظ بالقفل داخل كل من عمليتي الأب والابن.
+    بدون هذا، عند تحرير القفل من قبل أي من العمليتين الأب أو الابن، سيتم فقدان القفل
+    بأكمله، مما يسمح للعمليات الخارجية بإعادة الحصول على قفل على نفس الملف،
+    حتى لو كان لدى العملية الأخرى كائن القفل في النطاق. يمكن أن يسبب هذا تلفاً
+    لأن كلا العمليتين قد تعتقدان أنهما لديهما وصول حصري إلى الملف.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='newpid'><a class='permalink' href='#newpid'>newpid</a></h2>
+<pre>my $pid = fork;
+if (!defined $pid) {
+  # فشل الانقسام
+} elsif ($pid) {
+  $lock-&gt;newpid;
+  # الأب ...
+} else {
+  $lock-&gt;newpid;
+  # الابن ...
+}</pre>
+<p class="Pp">الملخص المستخدم لطريقة <b>fork()</b> أعلاه مكافئ للملخص المستخدم
+    لطريقة <b>fork()</b> العادية، ولكنه غير مخصص للاستدعاء المباشر. يتم استدعاؤه داخلياً
+    بواسطة طريقة <b>fork()</b>. لضمان السلامة، يوصى باستخدام <span class="Li">$lock</span>-&gt;<b>fork()</b>
+    من الآن فصاعداً.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FAILURE'><a class='permalink' href='#FAILURE'>الفشل</a></h1>
+<p class="Pp">عند الفشل، يجب تعيين متغير عام،
+    <span class="Li">$File::NFSLock::errstr</span>، ويجب أن يحتوي على سبب الفشل في
+    الحصول على قفل. مفيد بشكل أساسي لأغراض التصحيح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LOCK_EXTENSION'><a class='permalink' href='#LOCK_EXTENSION'>امتداد القفل</a></h1>
+<p class="Pp">افتراضياً، سيستخدم File::NFSLock امتداد ملف القفل
+    &quot;.NFSLock&quot;. يوجد هذا في متغير عام
+    <span class="Li">$File::NFSLock::LOCK_EXTENSION</span> والذي يمكن تغييره ليناسب
+    أغراضاً أخرى (مثل التوافق في أنظمة البريد).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='REPO'><a class='permalink' href='#REPO'>المستودع</a></h1>
+<p class="Pp">المصدر الآن على github:</p>
+<p class="Pp">git clone <a href='https://github.com/hookbot/File-NFSLock'>https://github.com/hookbot/File-NFSLock</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء</a></h1>
+<p class="Pp">إذا لاحظت أي شيء، يرجى تقديم طلب سحب (pull request) على github و/أو
+    تقديم تذكرة مع RT:
+    <a href='https://rt.cpan.org/Dist/Display.html?Queue=File-NFSLock'>https://rt.cpan.org/Dist/Display.html?Queue=File-NFSLock</a></p>
+<section class="Ss">
+<h2 class="Ss" id='FIFO'><a class='permalink' href='#FIFO'>FIFO</a></h2>
+<p class="Pp">الأقفال ليست بالضرورة أن يتم الحصول عليها على أساس الأولوية. لا يبدو هذا
+    عادلاً للعمليات الجديدة التي تحاول الحصول على قفل فحسب، بل قد يسبب حالة
+    حرمان من العملية على الملفات المقفلة بكثافة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='DIRECTORIES'><a class='permalink' href='#DIRECTORIES'>المجلدات</a></h2>
+<p class="Pp">لا يمكن الحصول على أقفال على عقد المجلدات، ولا يمكن إلغاء تخزين عقدة مجلد
+    بشكل مؤقت باستخدام روتين uncache.</p>
+</section>
+</section>
+</div>
+</section>
+
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>

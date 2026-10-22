@@ -1,0 +1,281 @@
+<section class="Sh">
+<h1 class="Sh" id='CREATING_A_NEW_EVENT_SOURCE'><a class='permalink' href='#CREATING_A_NEW_EVENT_SOURCE'>إنشاء مصدر حدث جديد</a></h1>
+<p class="Pp">يتكون مصدر الحدث من ثلاثة إجراءات يتم استدعاؤها بواسطة المُخطِر، بالإضافة إلى إجراءات C إضافية يتم استدعاؤها بواسطة كود عالي المستوى لتنظيم استدعاءات الأحداث غير المتزامنة. الإجراءات الثلاثة التي يستدعيها المُخطِر تتكون من إجراءات الإعداد والتحقق الموضحة أعلاه، بالإضافة إلى إجراء إضافي يتم استدعاؤه عند إزالة حدث من طابور الأحداث لتتم معالجته.</p>
+<p class="Pp">يقوم الإجراء <b>Tcl_CreateEventSource</b> بإنشاء مصدر حدث جديد. تحدد وسيطاته إجراء الإعداد والتحقق لمصدر الحدث. يجب أن يتوافق <i>SetupProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef void <b>Tcl_EventSetupProc</b>(
+        ClientData <i>clientData</i>,
+        int <i>flags</i>);</pre>
+</div>
+<p class="Pp">سيتم استخدام الوسيطة <i>clientData</i> للإجراء بنفس <i>clientData</i> للإجراء <b>Tcl_CreateEventSource</b>؛ وعادة ما تستخدم للإشارة إلى معلومات خاصة يديرها مصدر الحدث. سيتم استخدام الوسيطة <i>flags</i> بنفس <i>flags</i> التي تم تمريرها إلى <b>Tcl_DoOneEvent</b>، ما لم تكن 0 (في هذه الحالة، تستبدل <b>Tcl_DoOneEvent</b> القيمة 0 بـ <b>TCL_ALL_EVENTS</b>). تشير <i>Flags</i> إلى أنواع الأحداث التي يجب مراعاتها؛ إذا لم يكن البت المقابل لمصدر الحدث هذا نشطًا، فيجب أن يعود مصدر الحدث فورًا دون القيام بأي شيء. على سبيل المثال، يتحقق مصدر حدث الملف من البت <b>TCL_FILE_EVENTS</b>.</p>
+<p class="Pp">يجب أن يضمن <i>SetupProc</i> إيقاظ التطبيق عند وقوع أحداث من النوع المطلوب. يتم تنفيذ ذلك بشكل يعتمد على المنصة. على سبيل المثال، تحت Unix، قد يستدعي مصدر حدث <b>Tcl_CreateFileHandler</b>؛ تحت Windows، قد يطلب إشعارًا باستخدام حدث Windows. بالنسبة لأحداث النوع المؤقت، مثل أحداث المؤقت أو أي حدث يتم فحصه، يمكن لمصدر الحدث استدعاء <b>Tcl_SetMaxBlockTime</b> لإجبار التطبيق على الاستيقاظ حتى لو لم يقع أي حدث. إذا لم يستدعي أي مصدر حدث <b>Tcl_SetMaxBlockTime</b>، فستنتظر <b>Tcl_WaitForEvent</b> بالقدر اللازم لحدوث حدث؛ بخلاف ذلك، فإنها تنتظر فقط بالقدر المحدد من قبل أقصر فترة زمنية حددها أحد مصادر الحدث في <b>Tcl_SetMaxBlockTime</b>. إذا عرف مصدر حدث أن لديه بالفعل أحداثًا جاهزة للإبلاغ عنها، فيمكنه طلب وقت حظر أقصى يساوي صفرًا. على سبيل المثال، يبحث إعداد مصدر حدث X عن ما إذا كانت هناك أحداث مدرجة بالفعل. إذا كان الأمر كذلك، فإنه يستدعي <b>Tcl_SetMaxBlockTime</b> بوقت أقصى قدره 0 بحيث لا تقوم <b>Tcl_WaitForEvent</b> بحظر إذا لم تكن هناك بيانات جديدة في اتصال X. تشير الوسيطة <i>timePtr</i> لـ <b>Tcl_WaitForEvent</b> إلى هيكل يصف فترة زمنية بالثواني وأجزاء الثانية:</p>
+<div class="Bd-indent">
+<pre>typedef struct Tcl_Time {
+    long <i>sec</i>;
+    long <i>usec</i>;
+} <b>Tcl_Time</b>;</pre>
+</div>
+<p class="Pp">يجب أن يكون الحقل <i>usec</i> أقل من 1000000.</p>
+<p class="Pp">تُستخدم المعلومات المقدمة إلى <b>Tcl_SetMaxBlockTime</b> فقط للاستدعاء التالي لـ <b>Tcl_WaitForEvent</b>؛ ويتم تجاهلها بعد عودة <b>Tcl_WaitForEvent</b>. في المرة التالية التي يتم فيها إجراء انتظار حدث، سيتم استدعاء كل إجراء إعداد لمصدر الحدث مرة أخرى، ويمكنهم تحديد معلومات جديدة لذلك انتظار الحدث.</p>
+<p class="Pp">إذا كان التطبيق يستخدم حلقة أحداث خارجية بدلاً من <b>Tcl_DoOneEvent</b>، فقد تحتاج مصادر الأحداث إلى استدعاء <b>Tcl_SetMaxBlockTime</b> في أوقات أخرى. على سبيل المثال، إذا تم تسجيل معالج حدث جديد يحتاج إلى مراقبة الأحداث، فقد يستدعي مصدر الحدث <b>Tcl_SetMaxBlockTime</b> لتعيين وقت حظر أقصى يساوي صفرًا، مما يجبر حلقة الأحداث الخارجية على استدعاء Tcl. في هذه الحالة، تستدعي <b>Tcl_SetMaxBlockTime</b> <b>Tcl_SetTimer</b> بأقصر فترة زمنية شوهدت منذ آخر استدعاء لـ <b>Tcl_DoOneEvent</b> أو <b>Tcl_ServiceAll</b>.</p>
+<p class="Pp">بالإضافة إلى الإجراء العام <b>Tcl_SetMaxBlockTime</b>، قد تكون هناك إجراءات أخرى خاصة بالمنصة متاحة لـ <i>setupProc</b>، إذا كانت هناك معلومات إضافية مطلوبة بواسطة <b>Tcl_WaitForEvent</b> على تلك المنصة. على سبيل المثال، في أنظمة Unix، يمكن استخدام الواجهة <b>Tcl_CreateFileHandler</b> للانتظار أحداث الملفات.</p>
+<p class="Pp">الإجراء الثاني الذي يوفره كل مصدر حدث هو إجراء التحقق الخاص به، والمشار إليه بالوسيطة <i>checkProc</i> إلى <b>Tcl_CreateEventSource</b>. يجب أن يتوافق <i>CheckProc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef void <b>Tcl_EventCheckProc</b>(
+        ClientData <i>clientData</i>,
+        int <i>flags</i>);</pre>
+</div>
+<p class="Pp">الوسيطات لهذا الإجراء هي نفس وسيطات <i>setupProc</i>. يتم استدعاء <b>CheckProc</b> بواسطة <b>Tcl_DoOneEvent</b> بعد انتظاره للأحداث. من المفترض أن يكون مصدر حدث واحد على الأقل مستعدًا لإدراج حدث. تستدعي <b>Tcl_DoOneEvent</b> كل مصدر حدث بالترتيب، لذلك كل لديه فرصة لإدراج أي أحداث جاهزة. يقوم إجراء التحقق بشيئين. أولاً، يجب أن يرى ما إذا كانت هناك أحداث قد تم تنشيطها. تقوم مصادر الأحداث المختلفة بذلك بطرق مختلفة.</p>
+<p class="Pp">إذا اكتشف مصدر حدث حدثًا مثيرًا للاهتمام، فيجب عليه إضافة الحدث إلى طابور أحداث Tcl. للقيام بذلك، يستدعي مصدر الحدث <b>Tcl_QueueEvent</b>. الوسيطة <i>evPtr</i> هي مؤشر إلى هيكل تم تخصيصه ديناميكيًا يحتوي على الحدث (انظر معلومات أكثر تفصيلاً حول قضايا إدارة الذاكرة). يمكن لكل مصدر حدث تحديد هيكل الحدث الخاص به بمعلومات ذات صلة بمصدر الحدث هذا. ومع ذلك، يجب أن يكون العنصر الأول في الهيكل هو هيكل من النوع <b>Tcl_Event</b>، ويتم استخدام المؤشر إلى هذا الهيكل عند الاتصال بين مصدر الحدث وبقية المُخطِر. يحتوي <b>Tcl_Event</b> على التعريف التالي:</p>
+<div class="Bd-indent">
+<pre>typedef struct {
+    Tcl_EventProc *<i>proc</i>;
+    struct Tcl_Event *<i>nextPtr</i>;
+} <b>Tcl_Event</b>;</pre>
+</div>
+<p class="Pp">يجب ملء الحقل <i>proc</i> للحدث قبل استدعاء <b>Tcl_QueueEvent</b>. يستخدم <i>nextPtr</i> لربط الأحداث في الطابور ولا يجب تعديله بواسطة مصدر الحدث.</p>
+<p class="Pp">يمكن إضافة حدث إلى الطابور في أحد المواضع الثلاثة، اعتمادًا على الوسيطة <i>position</i> لـ <b>Tcl_QueueEvent</b>:</p>
+<dl class="Bl-tag">
+  <dt id="TCL_QUEUE_TAIL"><a class="permalink" href="#TCL_QUEUE_TAIL"><b>TCL_QUEUE_TAIL</b></a></dt>
+  <dd>إضافة الحدث إلى نهاية الطابور، بحيث تتم معالجة الأحداث المعلقة أولاً. هذا هو دائمًا أفضل موضع للأحداث الجديدة.</dd>
+  <dt id="TCL_QUEUE_HEAD"><a class="permalink" href="#TCL_QUEUE_HEAD"><b>TCL_QUEUE_HEAD</b></a></dt>
+  <dd>إضافة الحدث إلى بداية الطابور، بحيث تتم معالجته قبل الأحداث الأخرى في الطابور.</dd>
+  <dt id="TCL_QUEUE_MARK"><a class="permalink" href="#TCL_QUEUE_MARK"><b>TCL_QUEUE_MARK</b></a></dt>
+  <dd>إضافة الحدث إلى بداية الطابور، إلا إذا كانت هناك أحداث أخرى في رأس الطابور بالموضع <b>TCL_QUEUE_MARK</b>. في حالة وجودها، أضف الحدث الجديد مباشرة بعد جميع <b>TCL_QUEUE_MARK</b> الموجودة. تُستخدم قيمة <i>position</i> هذه لإدراج تسلسل مرتب من الأحداث في رأس الطابور، مثل سلسلة من أحداث Enter و Leave التي تم إنشاؤها أثناء عملية تسجيل أو إلغاء تسجيل في Tk.</dd>
+</dl>
+<p class="Pp">عندما يحين وقت معالجة حدث من الطابور (الخطوتان 1 و 4 أعلاه)، سيقوم <b>Tcl_ServiceEvent</b> باستدعاء <i>proc</i> المحدد في أول <b>Tcl_Event</b> في الطابور. يجب أن يتوافق <i>Proc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_EventProc</b>(
+        Tcl_Event *<i>evPtr</i>,
+        int <i>flags</i>);</pre>
+</div>
+<p class="Pp">الوسيطة الأولى لـ <i>proc</i> هي مؤشر إلى الحدث، والذي سيتم استخدامه كالوسيطة الأولى لاستدعاء <b>Tcl_QueueEvent</b> الذي أضاف الحدث إلى الطابور. الوسيطة الثانية لـ <i>proc</i> هي <i>flags</i> للاستدعاء الحالي لـ <b>Tcl_ServiceEvent</b>؛ يستخدمها مصدر الحدث للعودة فورًا إذا لم تكن أحداثه ذات صلة.</p>
+<p class="Pp">تقع على عاتق <i>proc</i> مسؤولية معالجة الحدث، وعادة ما يستدعي أمر Tcl واحدًا أو أكثر أو استدعاءات C. بمجرد الانتهاء من معالجة الحدث بواسطة مصدر الحدث، فإنه يعيد 1 للإشارة إلى أنه يمكن إزالة الحدث من الطابور. إذا قرر مصدر الحدث، لأي سبب، أنه لا يمكن معالجة الحدث في الوقت الحالي، فيمكنه إعادة 0 للإشارة إلى أنه يجب تأجيل الحدث للمعالجة لاحقًا؛ في هذه الحالة، سيواصل <b>Tcl_ServiceEvent</b> إلى الحدث التالي في الطابور ويحاول معالجته. هناك عدة أسباب قد تجعل مصدر حدث يؤجل حدثًا. أحد الاحتمالات هو أن أحداث هذا النوع مستبعدة بواسطة الوسيطة <i>flags</i>. على سبيل المثال، يعيد مصدر حدث الملف 0 إذا لم يكن البت <b>TCL_FILE_EVENTS</b> نشطًا في <i>flags</i>. مثال آخر على تأجيل الأحداث يحدث في Tk إذا تم استدعاء <b>Tk_RestrictEvents</b> لتأجيل أحداث نوافذ معينة.</p>
+<p class="Pp">عندما يعيد <i>proc</i> القيمة 1، ستقوم <b>Tcl_ServiceEvent</b> بإزالة الحدث من الطابور وتحرير مساحته. لاحظ أنه يجب تخصيص مساحة الحدث بواسطة مصدر الحدث (باستخدام <b>Tcl_Alloc</b> أو الماكرو <b>ckalloc</b>) قبل استدعاء <b>Tcl_QueueEvent</b>، ولكن سيتم تحريرها بواسطة <b>Tcl_ServiceEvent</b>، وليس بواسطة مصدر الحدث.</p>
+<p class="Pp">تعمل التطبيقات متعددة الخيوط بشكل مشابه، إلا أن هناك طابور أحداث منفصل لكل خيط يحتوي على مترجم Tcl. يؤدي استدعاء <b>Tcl_QueueEvent</b> في تطبيق متعدد الخيوط إلى إضافة حدث إلى طابور الخيط الحالي. لإضافة حدث إلى طابور خيط آخر، استخدم <b>Tcl_ThreadQueueEvent</b>. تقبل <b>Tcl_ThreadQueueEvent</b> وسيطة <b>Tcl_ThreadId</b>، التي تحدد خيطًا فريدًا في تطبيق Tcl. للحصول على <b>Tcl_ThreadId</b> للخيط الحالي، استخدم الإجراء <b>Tcl_GetCurrentThread</b>. (سيحتاج الخيط بعد ذلك إلى تمرير هذا المعرف إلى خيوط أخرى حتى يتمكنوا من إضافة أحداث إلى طابوره.) بعد إضافة حدث إلى طابور خيط آخر، يلزم عادةً استدعاء <b>Tcl_ThreadAlert</b> "لإيقاظ" مُخطِر هذا الخيط لإعلامه بالحدث الجديد.</p>
+<p class="Pp">يمكن استخدام <b>Tcl_DeleteEvents</b> صراحة لإزالة حدث واحد أو أكثر من طابور الأحداث. يستدعي <b>Tcl_DeleteEvents</b> <i>proc</i> لكل حدث في الطابور، وإزالة تلك التي يعيد الإجراء لها القيمة 1. تظل الأحداث التي يعيد الإجراء لها القيمة 0 في الطابور. يجب أن يتوافق <i>Proc</i> مع النموذج الأولي التالي:</p>
+<div class="Bd-indent">
+<pre>typedef int <b>Tcl_EventDeleteProc</b>(
+        Tcl_Event *<i>evPtr</i>,
+        ClientData <i>clientData</i>);</pre>
+</div>
+<p class="Pp">سيتم استخدام الوسيطة <i>clientData</i> بنفس <i>clientData</i> الوسيطة لـ <b>Tcl_DeleteEvent</b>؛ وهي تستخدم عادة للإشارة إلى معلومات خاصة يديرها مصدر الحدث.</p>
+</section>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8" />
+        <title>Tcl_DeleteEventSource(3) - Tcl</title>
+        <link rel="stylesheet" href="/style.css" type="text/css" />
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Tcl_DeleteEventSource(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/x86_64/tcl/">tcl</a></p>
+<p class="lic">التراخيص: TCL</p>
+
+        
+        <main>
+            <article>
+                
+
+<section class="man-page">
+    <div class="man-page-header">
+        <h1>Tcl_DeleteEventSource(3)</h1>
+        <h2>Tcl</h2>
+    </div>
+    <section>
+        <h3>NAME</h3>
+        <p>Tcl_DeleteEventSource, Tcl_CreateEventSource, Tcl_QueueEvent, Tcl_DeleteEvent, Tcl_SetTimer, Tcl_Sleep, Tcl_CreateTimerHandler, Tcl_DeleteTimerHandler, Tcl_GetTimerHandler - event loop and event processing primitives</p>
+    </section>
+    <section>
+        <h3>SYNOPSIS</h3>
+        <pre>
+            #include &lt;tcl.h&gt;
+
+            void
+            Tcl_DeleteEventSource(
+                ClientData clientData)
+
+            ClientData
+            Tcl_CreateEventSource(
+                Tcl_EventProc *proc,
+                Tcl_EventProc *lostProc,
+                ClientData clientData)
+
+            void
+            Tcl_QueueEvent(
+                Tcl_Event *evPtr)
+
+            void
+            Tcl_DeleteEvent(
+                Tcl_Event *evPtr)
+
+            int
+            Tcl_SetTimer(
+                Tcl_TimerToken timerToken,
+                Tcl_Time *timePtr)
+
+            void
+            Tcl_Sleep(
+                int ms)
+
+            Tcl_TimerToken
+            Tcl_CreateTimerHandler(
+                Tcl_Time *timePtr,
+                Tcl_TimerProc *proc,
+                ClientData clientData)
+
+            void
+            Tcl_DeleteTimerHandler(
+                Tcl_TimerToken token)
+
+            Tcl_TimerToken
+            Tcl_GetTimerHandler(
+                Tcl_TimerProc *proc,
+                ClientData clientData)
+        </pre>
+    </section>
+    <section>
+        <h3>INTRODUCTION</h3>
+        <p>The Tcl event loop is the heart of any Tcl application. It is responsible for monitoring various sources of events and dispatching them to the appropriate handlers. This document describes the core primitives of the Tcl event loop and how to interact with them.</p>
+    </section>
+    <section>
+        <h3>NOTIFIER BASICS</h3>
+        <p>The Tcl event loop is managed by a <i>notifier</i>. The notifier is responsible for waiting for events and dispatching them. Tcl provides a default notifier, but it can be replaced with a custom one if needed.</p>
+        <p>Events in Tcl are represented by the <code>Tcl_Event</code> structure. Events can be generated by various sources, including file descriptors, timers, and idle handlers. Events are queued in an event queue before being processed by the notifier.</p>
+        <p>The following are the key components of the Tcl event loop:</p>
+        <ul>
+            <li><b>Event Sources:</b> These are the sources from which events can originate. Examples include file descriptors (for I/O events), timers, and idle time.</li>
+            <li><b>Event Queue:</b> A queue where incoming events are stored before being processed.</li>
+            <li><b>Notifier:</b> The component responsible for waiting for events and dispatching them to the appropriate handlers.</li>
+            <li><b>Event Handlers:</b> Procedures that are called when a specific type of event occurs.</li>
+        </ul>
+        <p>The main Tcl event loop function is <code>Tcl_DoOneEvent</code>, which processes a single event from the queue. Applications typically call this function repeatedly in a loop to handle events.</p>
+    </section>
+    <section>
+        <h3>CREATING A NEW EVENT SOURCE</h3>
+        <p>You can create new event sources by using <code>Tcl_CreateEventSource</code>. This function takes a procedure to be called when the source becomes ready, a procedure to be called when the source is lost, and client data. The event source is typically associated with a file descriptor.</p>
+        <p>When the event source becomes ready (e.g., a file descriptor has data to read), Tcl will queue an event. You then need to provide a handler for this event.</p>
+    </section>
+    <section>
+        <h3>CREATING A NEW NOTIFIER</h3>
+        <p>A notifier is responsible for waiting for events from various sources and dispatching them. You can create a custom notifier by implementing the <code>Tcl_NotifierProcs</code> structure and registering it with <code>Tcl_SetNotifier</code>. The default notifier handles file events, timer events, and idle events.</p>
+    </section>
+    <section>
+        <h3>REPLACING THE NOTIFIER</h3>
+        <p>You can replace the default Tcl notifier with your own implementation by calling <code>Tcl_SetNotifier</code>. This allows you to customize how Tcl waits for and dispatches events. Your custom notifier must implement the `Tcl_NotifierProcs` structure, which includes functions for waiting for events, checking for pending events, and performing other notifier-specific operations.</p>
+    </section>
+    <section>
+        <h3>EXTERNAL EVENT LOOPS</h3>
+        <p>In some cases, you might want to integrate the Tcl event loop with an external event loop, such as the event loop of a GUI toolkit (e.g., Tk, GTK+, Qt). Tcl provides mechanisms to allow this integration. You can use functions like <code>Tcl_SetMaxBlockTime</code> to control how long Tcl's event loop will block, allowing the external loop to process events.</p>
+        <p>You can also use <code>Tcl_ServiceModeHook</code> to be notified when Tcl enters or exits its event loop servicing mode. This can be useful for performing application-specific tasks during event loop processing.</p>
+    </section>
+    <section>
+        <h3>SEE ALSO</h3>
+        <p>Tcl_DoOneEvent(3), Tcl_Event(3), Tcl_SetNotifier(3)</p>
+    </section>
+    <section>
+        <h3>KEYWORDS</h3>
+        <p>event, notifier, event queue, event sources, file events, timer,
+    idle, service mode, threads</p>
+    </section>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">8.1</td>
+    <td class="foot-os">Tcl</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>Package information:</p>
+    <dl>
+        <dt>Package name:</dt>
+        <dd><a href="https://www.archlinux.org/packages/extra/x86_64/tcl/">extra/tcl</a></dd>
+        <dt>Version:</dt>
+        <dd>8.6.16-1</dd>
+        <dt>Upstream:</dt>
+        <dd><a href="http://tcl.sourceforge.net/">http://tcl.sourceforge.net/</a></dd>
+        <dt>Licenses:</dt>
+        <dd>TCL</dd>
+        <dt>Manuals:</dt>
+        <dd><a href="/listing/extra/tcl/">/listing/extra/tcl/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>Table of contents</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">NAME</a></li>
+        
+            <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+        
+            <li><a href="#ARGUMENTS">ARGUMENTS</a></li>
+        
+            <li><a href="#INTRODUCTION">INTRODUCTION</a></li>
+        
+            <li><a href="#NOTIFIER_BASICS">NOTIFIER BASICS</a></li>
+        
+            <li><a href="#CREATING_A_NEW_EVENT_SOURCE">CREATING A NEW EVENT SOURCE</a></li>
+        
+            <li><a href="#CREATING_A_NEW_NOTIFIER">CREATING A NEW NOTIFIER</a></li>
+        
+            <li><a href="#REPLACING_THE_NOTIFIER">REPLACING THE NOTIFIER</a></li>
+        
+            <li><a href="#EXTERNAL_EVENT_LOOPS">EXTERNAL EVENT LOOPS</a></li>
+        
+            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+        
+            <li><a href="#KEYWORDS">KEYWORDS</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>Other formats:
+        
+            <a href="/man/Tcl_DeleteEventSource.3.en.txt">txt</a>, 
+        
+            <a href="/man/Tcl_DeleteEventSource.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

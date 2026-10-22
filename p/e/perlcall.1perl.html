@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>perlcall(1perl) — صفحات دليل آرتش</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlcall.1perl</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/perl/">perl</a></p>
+<p class="lic">التراخيص: Artistic-1.0-Perl OR GPL-1.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">PERLCALL(1perl)</td>
+    <td class="head-vol">دليل مبرمجي بيرل</td>
+    <td class="head-rtitle">PERLCALL(1perl)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">perlcall - اصطلاحات استدعاء بيرل من C</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">الغرض من هذا المستند هو إظهار كيفية استدعاء روتينات بيرل الفرعية مباشرة من C، أي كيفية كتابة <i>الاستدعاءات العكسية</i>.</p>
+<p class="Pp">إلى جانب مناقشة واجهة C التي توفرها بيرل لكتابة الاستدعاءات العكسية، يستخدم المستند سلسلة من الأمثلة لإظهار كيفية عمل الواجهة فعليًا في الممارسة العملية. بالإضافة إلى ذلك، يتم تناول بعض التقنيات لترميز الاستدعاءات العكسية.</p>
+<p class="Pp">تشمل الأمثلة التي تكون فيها الاستدعاءات العكسية ضرورية</p>
+<ul class="Bl-bullet">
+  <li>معالج الأخطاء
+    <p class="Pp">لقد قمت بإنشاء واجهة XSUB لواجهة برمجة تطبيقات C الخاصة بالتطبيق.</p>
+    <p class="Pp">ميزة شائعة إلى حد ما في التطبيقات هي السماح لك بتحديد دالة C سيتم استدعاؤها كلما حدث شيء سيء. ما نود هو أن نكون قادرين على تحديد روتينة فرعية بيرل سيتم استدعاؤها بدلاً من ذلك.</p>
+  </li>
+  <li>برنامج يعتمد على الأحداث
+    <p class="Pp">المثال الكلاسيكي لمكان استخدام الاستدعاءات العكسية هو عند كتابة برنامج يعتمد على الأحداث، مثل تطبيق X11. في هذه الحالة، تقوم بتسجيل الدوال ليتم استدعاؤها عند وقوع أحداث معينة، مثل الضغط على زر الماوس، أو تحريك المؤشر داخل نافذة، أو تحديد عنصر قائمة.</p>
+  </li>
+</ul>
+<p class="Pp">على الرغم من أن التقنيات الموضحة هنا قابلة للتطبيق عند تضمين بيرل في برنامج C، فإن هذا ليس الهدف الأساسي لهذا المستند. هناك تفاصيل أخرى يجب مراعاتها وهي خاصة بتضمين بيرل. للحصول على تفاصيل حول تضمين بيرل في C، ارجع إلى perlembed.</p>
+<p class="Pp">قبل أن تبدأ في بقية هذا المستند، سيكون من الجيد قراءة المستندين التاليين - perlxs و perlguts.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='THE_CALL_FUNCTIONS'><a class='permalink' href='#THE_CALL_FUNCTIONS'>دوال الاستدعاء</a></h1>
+<p class="Pp">على الرغم من أن هذه الأشياء أسهل في الشرح باستخدام الأمثلة، إلا أنك تحتاج أولاً إلى أن تكون على دراية ببعض التعريفات المهمة.</p>
+<p class="Pp">لدى بيرل عدد من دوال C التي تسمح لك باستدعاء روتينات بيرل الفرعية. وهي:</p>
+<pre>I32 call_sv(SV* sv, I32 flags);
+I32 call_pv(char *subname, I32 flags);
+I32 call_method(char *methname, I32 flags);
+I32 call_argv(char *subname, I32 flags, char **argv);</pre>
+<p class="Pp">الدالة الرئيسية هي <i>call_sv</i>. جميع الدوال الأخرى هي مجرد أغلفة بسيطة تجعل من السهل استدعاء روتينات بيرل الفرعية في حالات خاصة. في نهاية المطاف، ستستدعي جميعها <i>call_sv</i> لاستدعاء روتينة بيرل الفرعية.</p>
+<p class="Pp">تحتوي جميع دوال <i>call_*</i> على معلمة
+    <span class="Li">"flags"</span> تُستخدم لتمرير قناع بت من الخيارات إلى بيرل. يعمل قناع البت هذا بنفس الطريقة لكل من الدوال. تتم مناقشة الإعدادات المتاحة في قناع البت في &quot;قيم العلامات&quot;.</p>
+<p class="Pp">سيتم مناقشة كل دالة على حدة الآن.</p>
+<dl class="Bl-tag">
+  <dt id="call_sv"><a class="permalink" href="#call_sv">call_sv</a></dt>
+  <dd>تأخذ <i>call_sv</i> معلمتين. الأولى،
+      <span class="Li">"sv"</span>، هي SV*. يسمح لك هذا بتحديد روتينة بيرل الفرعية التي سيتم استدعاؤها إما كسلسلة C (تم تحويلها أولاً إلى SV) أو كمرجع لروتينة. يوضح القسم &quot;استخدام call_sv&quot; كيف يمكنك الاستفادة من
+      <i>call_sv</i>.</dd>
+  <dt id="call_pv"><a class="permalink" href="#call_pv">call_pv</a></dt>
+  <dd>الدالة <i>call_pv</i> مشابهة لـ <i>call_sv</i> باستثناء أنها تتوقع أن تكون معلمتها الأولى حرف C* يحدد روتينة بيرل الفرعية التي تريد استدعاءها، على سبيل المثال،
+      <span class="Li">"call_pv(\&quot;fred\&quot;, 0)"</span>. إذا كانت الروتينة الفرعية التي تريد استدعاءها في حزمة أخرى، فما عليك سوى تضمين اسم الحزمة في السلسلة، على سبيل المثال،
+      <span class="Li">"pkg::fred"</span>.</dd>
+  <dt id="call_method"><a class="permalink" href="#call_method">call_method</a></dt>
+  <dd>تُستخدم الدالة <i>call_method</i> لاستدعاء طريقة من فئة بيرل. تتوافق المعلمة <span class="Li">"methname"</span>
+      مع اسم الطريقة المراد استدعاؤها. لاحظ أن الفئة التي تنتمي إليها الطريقة يتم تمريرها على مكدس بيرل بدلاً من قائمة المعلمات. يمكن أن تكون هذه الفئة إما اسم الفئة (لطريقة ثابتة) أو مرجعًا لكائن (لطريقة افتراضية). انظر perlobj لمزيد من المعلومات حول الطرق الثابتة والافتراضية و &quot;استخدام call_method&quot; للحصول على مثال على استخدام
+      <i>call_method</i>.</dd>
+  <dt id="call_argv"><a class="permalink" href="#call_argv">call_argv</a></dt>
+  <dd>تستدعي <i>call_argv</i> روتينة بيرل الفرعية المحددة بواسطة سلسلة C المخزنة في المعلمة <span class="Li">"subname"</span>. كما تأخذ معلمة <span class="Li">"flags"</span> المعتادة. تتكون المعلمة الأخيرة، <span class="Li">"argv"</span>، من قائمة NULL-terminated من سلاسل C ليتم تمريرها كمعلمات لروتينة بيرل الفرعية. انظر &quot;استخدام call_argv&quot;.</dd>
+</dl>
+<p class="Pp">ترجع جميع الدوال عددًا صحيحًا. هذا هو عدد العناصر التي تم إرجاعها بواسطة روتينة بيرل الفرعية. يتم تخزين العناصر الفعلية التي تم إرجاعها بواسطة الروتينة الفرعية على مكدس بيرل.</p>
+<p class="Pp">كقاعدة عامة، يجب عليك <i>دائمًا</i> التحقق من القيمة المرجعة من هذه الدوال. حتى لو كنت تتوقع فقط عددًا معينًا من القيم ليتم إرجاعها من روتينة بيرل الفرعية، فلا يوجد ما يمنع شخصًا ما من فعل شيء غير متوقع - لا تقل أنك لم يتم تحذيرك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='FLAG_VALUES'><a class='permalink' href='#FLAG_VALUES'>قيم العلامات</a></h1>
+<p class="Pp">المعلمة <span class="Li">"flags"</span> في جميع دوال
+    <i>call_*</i> هي إما
+    <span class="Li">"G_VOID"</span>،
+    <span class="Li">"G_SCALAR"</span>، أو
+    <span class="Li">"G_LIST"</span>، والتي تشير إلى سياق الاستدعاء، ممزوجة بـ OR مع قناع بت لأي مزيج من رموز G_* الأخرى المعرفة أدناه.</p>
+<section class="Ss">
+<h2 class="Ss" id='G_VOID'><a class='permalink' href='#G_VOID'>G_VOID</a></h2>
+<p class="Pp">يستدعي روتينة بيرل الفرعية في سياق فارغ.</p>
+<p class="Pp">هذه العلامة لها تأثيران:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تشير إلى الروتينة الفرعية التي يتم استدعاؤها أنها تعمل في سياق فارغ (إذا نفذت <i>wantarray</i>، ستكون النتيجة القيمة غير المعرفة).</dd>
+  <dt>2.</dt>
+  <dd>تضمن عدم إرجاع أي شيء فعليًا من الروتينة الفرعية.</dd>
+</dl>
+<p class="Pp">القيمة التي تم إرجاعها بواسطة دالة <i>call_*</i> تشير إلى عدد العناصر التي تم إرجاعها بواسطة روتينة بيرل الفرعية - في هذه الحالة، ستكون 0.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='G_SCALAR'><a class='permalink' href='#G_SCALAR'>G_SCALAR</a></h2>
+<p class="Pp">يستدعي روتينة بيرل الفرعية في سياق القياس. هذا هو الإعداد الافتراضي لعلامة السياق لجميع دوال <i>call_*</i>.</p>
+<p class="Pp">هذه العلامة لها تأثيران:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تشير إلى الروتينة الفرعية التي يتم استدعاؤها أنها تعمل في سياق القياس (إذا نفذت <i>wantarray</i>، ستكون النتيجة خاطئة).</dd>
+  <dt>2.</dt>
+  <dd>تضمن أنه سيتم إرجاع قياس واحد فقط فعليًا من الروتينة الفرعية. يمكن للروتينة الفرعية، بالطبع، تجاهل <i>wantarray</i> وإرجاع قائمة على أي حال. إذا كان الأمر كذلك، فسيتم إرجاع العنصر الأخير فقط من القائمة.</dd>
+</dl>
+<p class="Pp">القيمة التي تم إرجاعها بواسطة دالة <i>call_*</i> تشير إلى عدد العناصر التي تم إرجاعها بواسطة روتينة بيرل الفرعية - في هذه الحالة، ستكون إما 0 أو 1.</p>
+<p class="Pp">إذا كانت 0، فقد حددت علامة G_DISCARD.</p>
+<p class="Pp">إذا كانت 1، فسيتم تخزين العنصر الذي تم إرجاعه فعليًا بواسطة روتينة بيرل الفرعية على مكدس بيرل - يوضح القسم &quot;إرجاع قياس&quot; كيفية الوصول إلى هذه القيمة على المكدس. تذكر أنه بغض النظر عن عدد العناصر التي ترجعها روتينة بيرل الفرعية، فإن العنصر الأخير فقط سيكون متاحًا من المكدس - فكر في الحالة التي يتم فيها إرجاع قيمة واحدة كقائمة بعنصر واحد فقط. أي عناصر أخرى تم إرجاعها لن تكون موجودة بحلول الوقت الذي تعود فيه السيطرة من دالة <i>call_*</i>. يوضح القسم &quot;إرجاع قائمة في سياق القياس&quot; مثالاً على هذا السلوك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='G_LIST'><a class='permalink' href='#G_LIST'>G_LIST</a></h2>
+<p class="Pp">يستدعي روتينة بيرل الفرعية في سياق قائمة. قبل إصدار بيرل 5.35.1، كان يطلق عليه <span class="Li">"G_ARRAY"</span>.</p>
+<p class="Pp">كما هو الحال مع G_SCALAR، فإن هذه العلامة لها تأثيران:</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تشير إلى الروتينة الفرعية التي يتم استدعاؤها أنها تعمل في سياق قائمة (إذا نفذت <i>wantarray</i>، ستكون النتيجة صحيحة).</dd>
+  <dt>2.</dt>
+  <dd>تضمن أن جميع العناصر التي تم إرجاعها من الروتينة الفرعية ستكون متاحة عند عودة السيطرة من دالة <i>call_*</i>.</dd>
+</dl>
+<p class="Pp">القيمة التي تم إرجاعها بواسطة دالة <i>call_*</i> تشير إلى عدد العناصر التي تم إرجاعها بواسطة روتينة بيرل الفرعية.</p>
+<p class="Pp">إذا كانت 0، فقد حددت علامة G_DISCARD.</p>
+<p class="Pp">إذا لم تكن 0، فستتم</p>
+</section>
+</section>
+</div>
+</section>
+                
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+            
+            
+        </footer>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id='Perl_Stack_Management'><a class='permalink' href='#Perl_Stack_Management'>Perl Stack Management</a></h1>
+<dl class="Bl-tag">
+  <dt>2.</dt>
+  <dd>If you are going to put something onto the Perl stack, you need to know
+      where to put it. This is the purpose of the macro
+      <span class="Li">&quot;dSP&quot;</span>--it declares and initializes a
+      <i>local</i> copy of the Perl stack pointer.
+    <p class="Pp">All the other macros which will be used in this example
+        require you to have used this macro.</p>
+    <p class="Pp">The exception to this rule is if you are calling a Perl
+        subroutine directly from an XSUB function. In this case it is not
+        necessary to use the <span class="Li">&quot;dSP&quot;</span> macro
+        explicitly--it will be declared for you automatically.</p>
+  </dd>
+  <dt>3.</dt>
+  <dd>Any parameters to be pushed onto the stack should be bracketed by the
+      <span class="Li">&quot;PUSHMARK&quot;</span> and
+      <span class="Li">&quot;PUTBACK&quot;</span> macros. The purpose of these
+      two macros, in this context, is to count the number of parameters you are
+      pushing automatically. Then whenever Perl is creating the
+      <span class="Li">@_</span> array for the subroutine, it knows how big to
+      make it.
+    <p class="Pp">The <span class="Li">&quot;PUSHMARK&quot;</span> macro tells
+        Perl to make a mental note of the current stack pointer. Even if you
+        aren't passing any parameters (like the example shown in the section
+        &quot;No Parameters, Nothing Returned&quot;) you must still call the
+        <span class="Li">&quot;PUSHMARK&quot;</span> macro before you can call
+        any of the <i>call_*</i> functions--Perl still needs to know that there
+        are no parameters.</p>
+    <p class="Pp">The <span class="Li">&quot;PUTBACK&quot;</span> macro sets the
+        global copy of the stack pointer to be the same as our local copy. If we
+        didn't do this, <i>call_pv</i> wouldn't know where the two parameters we
+        pushed were--remember that up to now all the stack pointer manipulation
+        we have done is with our local copy, <i>not</i> the global copy.</p>
+  </dd>
+  <dt>4.</dt>
+  <dd>Next, we come to EXTEND and PUSHs. This is where the parameters actually
+      get pushed onto the stack. In this case we are pushing a string and an
+      integer.
+    <p class="Pp">Alternatively you can use the <b>XPUSHs()</b> macro, which
+        combines a <span class="Li">&quot;EXTEND(SP, 1)&quot;</span> and
+        <span class="Li">PUSHs()</span>. This is less efficient if you're
+        pushing multiple values.</p>
+    <p class="Pp">See &quot;XSUBs and the Argument Stack&quot; in perlguts for
+        details on how the PUSH macros work.</p>
+  </dd>
+  <dt>5.</dt>
+  <dd>Because we created temporary values (by means of <b>sv_2mortal()</b>
+      calls) we will have to tidy up the Perl stack and dispose of mortal SVs.
+    <p class="Pp">This is the purpose of</p>
+        <pre>ENTER;
+SAVETMPS;
+</pre>
+    <p class="Pp">at the start of the function, and</p>
+        <pre>FREETMPS;
+LEAVE;
+</pre>
+    <p class="Pp">at the end. The
+        <span class="Li">&quot;ENTER&quot;</span>/<span class="Li">&quot;SAVETMPS&quot;</span>
+        pair creates a boundary for any temporaries we create. This means that
+        the temporaries we get rid of will be limited to those which were
+        created after these calls.</p>
+    <p class="Pp">The
+        <span class="Li">&quot;FREETMPS&quot;</span>/<span class="Li">&quot;LEAVE&quot;</span>
+        pair will get rid of any values returned by the Perl subroutine (see
+        next example), plus it will also dump the mortal SVs we have created.
+        Having
+        <span class="Li">&quot;ENTER&quot;</span>/<span class="Li">&quot;SAVETMPS&quot;</span>
+        at the beginning of the code makes sure that no other mortals are
+        destroyed.</p>
+    <p class="Pp">Think of these macros as working a bit like
+        <span class="Li">&quot;{&quot;</span> and
+        <span class="Li">&quot;}&quot;</span> in Perl to limit the scope of
+        local variables.</p>
+    <p class="Pp">See the section &quot;Using Perl to Dispose of
+        Temporaries&quot; for details of an alternative to using these
+      macros.</p>
+  </dd>
+  <dt>6.</dt>
+  <dd>Finally, <i>LeftString</i> can now be called via the <i>call_pv</i>
+      function. The only flag specified this time is G_DISCARD. Because we are
+      passing 2 parameters to the Perl subroutine this time, we have not
+      specified G_NOARGS.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Returning_a_Scalar'><a class='permalink' href='#Returning_a_Scalar'>إرجاع قيمة قياسية</a></h2>
+<p class="Pp">الآن، مثال على التعامل مع العناصر التي تم إرجاعها من روتين فرعي في Perl.</p>
+<p class="Pp">إليك روتين فرعي في Perl، <i>Adder</i>، يأخذ معلمتين صحيحتين ويعيد مجموعهما ببساطة.</p>
+<pre>sub Adder
+{
+    my($x, $y) = @_;
+    $x + $y;
+}</pre>
+<p class="Pp">نظرًا لأننا نهتم الآن بقيمة الإرجاع من <i>Adder</i>، فإن دالة C المطلوبة لاستدعائها أصبحت أكثر تعقيدًا بعض الشيء.</p>
+<pre>static void
+call_Adder(a, b)
+int a;
+int b;
+{
+    dSP;
+    int count;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    EXTEND(SP, 2);
+    PUSHs(sv_2mortal(newSViv(a)));
+    PUSHs(sv_2mortal(newSViv(b)));
+    PUTBACK;
+    count = call_pv(&quot;Adder&quot;, G_SCALAR);
+    SPAGAIN;
+    if (count != 1)
+        croak(&quot;Big trouble\n&quot;);
+    printf (&quot;The sum of %d and %d is %d\n&quot;, a, b, POPi);
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}</pre>
+<p class="Pp">النقاط التي يجب ملاحظتها هذه المرة هي</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>العلامة الوحيدة المحددة هذه المرة كانت G_SCALAR. هذا يعني أنه سيتم إنشاء مصفوفة
+      <span class="Li">@_</span> وستظل القيمة التي تم إرجاعها بواسطة <i>Adder</i> موجودة بعد استدعاء
+      <i>call_pv</i>.</dd>
+  <dt>2.</dt>
+  <dd>الغرض من الماكرو <span class="Li">&quot;SPAGAIN&quot;</span> هو تحديث النسخة المحلية لمؤشر المكدس. هذا ضروري لأنه من الممكن أن تكون الذاكرة المخصصة لمكدس Perl قد أعيد تخصيصها أثناء استدعاء
+      <i>call_pv</i>.
+    <p class="Pp">إذا كنت تستخدم مؤشر مكدس Perl في الكود الخاص بك، يجب عليك دائمًا تحديث النسخة المحلية باستخدام SPAGAIN كلما استخدمت دوال <i>call_*</i> أو أي دالة داخلية أخرى في Perl.</p>
+  </dd>
+  <dt>3.</dt>
+  <dd>على الرغم من أنه كان من المتوقع إرجاع قيمة واحدة فقط من <i>Adder</i>، إلا أنه لا يزال من الممارسات الجيدة التحقق من رمز الإرجاع من <i>call_pv</i> على أي حال.
+    <p class="Pp">توقع قيمة واحدة ليس بالضبط نفس معرفة أنها ستكون هناك. إذا قام شخص ما بتعديل <i>Adder</i> لإرجاع قائمة ولم نتحقق من هذا الاحتمال واتخذنا الإجراء المناسب، سينتهي الأمر بمكدس Perl في حالة غير متسقة. هذا شيء لا تريده حقًا أن يحدث أبدًا.</p>
+  </dd>
+  <dt>4.</dt>
+  <dd>يستخدم الماكرو <span class="Li">&quot;POPi&quot;</span> هنا لإزالة قيمة الإرجاع من المكدس. في هذه الحالة، أردنا عددًا صحيحًا، لذلك تم استخدام
+      <span class="Li">&quot;POPi&quot;</span>.
+    <p class="Pp">هذه هي القائمة الكاملة لماكرو POPs المتاحة، بالإضافة إلى الأنواع التي تعيدها.</p>
+        <pre>POPs        SV
+POPp        pointer (PV)
+POPpbytex   pointer to bytes (PV)
+POPn        double (NV)
+POPi        integer (IV)
+POPu        unsigned integer (UV)
+POPl        long
+POPul       unsigned long
+</pre>
+    <p class="Pp">نظرًا لأن هذه الماكرو لها آثار جانبية، فلا تستخدمها كمعلمات للماكرو التي قد تقوم بتقييم معالماتها عدة مرات، على سبيل المثال:</p>
+        <pre>/* Bad idea, don't do this */
+STRLEN len;
+const char *s = SvPV(POPs, len);
+</pre>
+    <p class="Pp">بدلاً من ذلك، استخدم متغيرًا مؤقتًا:</p>
+        <pre>STRLEN len;
+SV *sv = POPs;
+const char *s = SvPV(sv, len);
+</pre>
+    <p class="Pp">أو ماكرو يضمن أنه سيقوم بتقييم معلماته مرة واحدة فقط:</p>
+        <pre>STRLEN len;
+const char *s = SvPVx(POPs, len);
+</pre>
+  </dd>
+  <dt>5.</dt>
+  <dd>يتم استخدام <span class="Li">&quot;PUTBACK&quot;</span> النهائية لترك مكدس Perl في حالة متسقة قبل الخروج من الدالة. هذا ضروري لأنه عندما قمنا بإزالة قيمة الإرجاع من المكدس باستخدام
+      <span class="Li">&quot;POPi&quot;</span>، قامت بتحديث نسختنا المحلية من مؤشر المكدس فقط. تذكر أن <span class="Li">&quot;PUTBACK&quot;</span> يقوم بتعيين مؤشر المكدس العام ليكون هو نفسه نسختنا المحلية.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Returning_a_List_of_Values'><a class='permalink' href='#Returning_a_List_of_Values'>إرجاع قائمة قيم</a></h2>
+<p class="Pp">الآن، دعنا نوسع المثال السابق لإرجاع كل من مجموع المعلمات والفرق بينهما.</p>
+<p class="Pp">إليك الروتين الفرعي في Perl</p>
+<pre>sub AddSubtract
+{
+   my($x, $y) = @_;
+   ($x+$y, $x-$y);
+}</pre>
+<p class="Pp">وهذه هي دالة C</p>
+<pre>static void
+call_AddSubtract(a, b)
+int a;
+int b;
+{
+    dSP;
+    int count;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    EXTEND(SP, 2);
+    PUSHs(sv_2mortal(newSViv(a)));
+    PUSHs(sv_2mortal(newSViv(b)));
+    PUTBACK;
+    count = call_pv(&quot;AddSubtract&quot;, G_LIST);
+    SPAGAIN;
+    if (count != 2)
+        croak(&quot;Big trouble\n&quot;);
+    printf (&quot;%d - %d = %d\n&quot;, a, b, POPi);
+    printf (&quot;%d + %d = %d\n&quot;, a, b, POPi);
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}</pre>
+<p class="Pp">إذا تم استدعاء <i>call_AddSubtract</i> بهذه الطريقة</p>
+<pre>call_AddSubtract(7, 4);</pre>
+<p class="Pp">فإليك المخرجات</p>
+<pre>7 - 4 = 3
+7 + 4 = 11</pre>
+<p class="Pp">ملاحظات</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>أردنا سياق قائمة، لذلك تم استخدام G_LIST.</dd>
+  <dt>2.</dt>
+  <dd>ليس من المستغرب أن يتم استخدام <span class="Li">&quot;POPi&quot;</span> مرتين هذه المرة لأننا كنا نسترد قيمتين من المكدس. الشيء المهم الذي يجب ملاحظته هو أنه عند استخدام ماكرو
+      <span class="Li">&quot;POP*&quot;</span>، فإنها تأتي من المكدس بترتيب <i>عكسي</i>.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Returning_a_List_in_Scalar_Context'><a class='permalink' href='#Returning_a_List_in_Scalar_Context'>إرجاع قائمة في سياق قياسي</a></h2>
+<p class="Pp">لنفترض أن الروتين الفرعي في Perl في القسم السابق تم استدعاؤه في سياق قياسي، مثل هذا</p>
+<pre>static void
+call_AddSubScalar(a, b)
+int a;
+int b;
+{
+    dSP;
+    int count;
+    int i;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    EXTEND(SP, 2);
+    PUSHs(sv_2mortal(newSViv(a)));
+    PUSHs(sv_2mortal(newSViv(b)));
+    PUTBACK;
+    count = call_pv(&quot;AddSubtract&quot;, G_SCALAR);
+    SPAGAIN;
+    printf (&quot;Items Returned = %d\n&quot;, count);
+    for (i = 1; i &lt;= count; ++i)
+        printf (&quot;Value %d = %d\n&quot;, i, POPi);
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}</pre>
+<p class="Pp">التعديل الآخر الذي تم إجراؤه هو أن <i>call_AddSubScalar</i> ستطبع عدد العناصر التي تم إرجاعها من الروتين الفرعي في Perl وقيمتها (للتبسيط تفترض أنها أعداد صحيحة). لذلك إذا تم استدعاء
+      <i>call_AddSubScalar</i></p>
+<pre>call_AddSubScalar(7, 4);</pre>
+<p class="Pp">فستكون المخرجات</p>
+<pre>Items Returned = 1
+Value 1 = 3</pre>
+<p class="Pp">في هذه الحالة، النقطة الرئيسية التي يجب ملاحظتها هي أنه يتم إرجاع العنصر الأخير فقط في القائمة من الروتين الفرعي. <i>AddSubtract</i> عاد فعليًا إلى <i>call_AddSubScalar</i>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Returning_Data_from_Perl_via_the_Parameter_List'><a class='permalink' href='#Returning_Data_from_Perl_via_the_Parameter_List'>إرجاع بيانات من Perl عبر قائمة المعلمات</a></h2>
+<p class="Pp">من الممكن أيضًا إرجاع القيم مباشرة عبر قائمة المعلمات - سواء كان ذلك مرغوبًا فيه بالفعل هو مسألة أخرى تمامًا.</p>
+<p class="Pp">الروتين الفرعي في Perl، <i>Inc</i>، أدناه يأخذ معلمتين ويزيدهما</p>
+<p class="Pp">وسيكون هذا كافياً إذا احتجت في أي وقت إلى تسجيل رد اتصال واحد فقط في أي وقت. قد يكون مثالاً على ذلك معالج أخطاء مثل الكود الذي تم رسمه أعلاه. تذكر مع ذلك، أن الاستدعاءات المتكررة إلى <span class="Li">&quot;register_fatal&quot;</span> ستحل محل دالة رد الاتصال المسجلة سابقاً بالدالة الجديدة.</p>
+<p class="Pp">لنفترض على سبيل المثال أنك تريد التفاعل مع مكتبة تسمح بعمليات الإدخال/الإخراج للملفات غير المتزامنة. في هذه الحالة، قد تتمكن من تسجيل رد اتصال كلما اكتملت عملية قراءة. لكي تكون مفيدة، نريد أن نكون قادرين على استدعاء روتينات Perl منفصلة لكل ملف مفتوح. كما هي الحال، فإن مثال معالج الأخطاء أعلاه لن يكون كافياً لأنه يسمح بتعريف رد اتصال واحد فقط في أي وقت. ما نحتاجه هو وسيلة لتخزين التعيين بين الملف المفتوح وروتين Perl الذي نريد استدعاءه لهذا الملف.</p>
+<p class="Pp">لنفترض أن مكتبة الإدخال/الإخراج لديها دالة <span class="Li">&quot;asynch_read&quot;</span> تربط دالة C <span class="Li">&quot;ProcessRead&quot;</span> بمقبض ملف <span class="Li">&quot;fh&quot;</span> - هذا يفترض أنها قدمت أيضاً روتيناً لفتح الملف والحصول على مقبض الملف.</p>
+<pre>asynch_read(fh, ProcessRead)</pre>
+<p class="Pp">قد يتوقع هذا دالة C <i>ProcessRead</i> بالشكل التالي</p>
+<pre>void
+ProcessRead(fh, buffer)
+int fh;
+char *      buffer;
+{
+     ...
+}</pre>
+<p class="Pp">لتوفير واجهة Perl لهذه المكتبة، نحتاج إلى أن نكون قادرين على التعيين بين المعامل <span class="Li">&quot;fh&quot;</span> وروتين Perl الذي نريد استدعاءه. الـ "hash" هي آلية ملائمة لتخزين هذا التعيين. يوضح الكود أدناه تنفيذاً محتملاً</p>
+<pre>static HV * Mapping = (HV*)NULL;
+void
+asynch_read(fh, callback)
+    int     fh
+    SV *    callback
+    CODE:
+    /* إذا لم يكن الـ hash موجوداً بالفعل، قم بإنشائه */
+    if (Mapping == (HV*)NULL)
+        Mapping = newHV();
+    /* احفظ التعيين fh -> callback */
+    hv_store(Mapping, (char*)&amp;fh, sizeof(fh), newSVsv(callback), 0);
+    /* سجل مع مكتبة C */
+    asynch_read(fh, asynch_read_if);</pre>
+<p class="Pp">و <span class="Li">&quot;asynch_read_if&quot;</span> يمكن أن تبدو هكذا</p>
+<pre>static void
+asynch_read_if(fh, buffer)
+int fh;
+char *      buffer;
+{
+    dSP;
+    SV ** sv;
+    /* احصل على رد الاتصال المرتبط بـ fh */
+    sv =  hv_fetch(Mapping, (char*)&amp;fh , sizeof(fh), FALSE);
+    if (sv == (SV**)NULL)
+        croak(&quot;خطأ داخلي...\n&quot;);
+    PUSHMARK(SP);
+    EXTEND(SP, 2);
+    PUSHs(sv_2mortal(newSViv(fh)));
+    PUSHs(sv_2mortal(newSVpv(buffer, 0)));
+    PUTBACK;
+    /* استدعاء روتين Perl */
+    call_sv(*sv, G_DISCARD);
+}</pre>
+<p class="Pp">للتكامل، إليك <span class="Li">&quot;asynch_close&quot;</span>. يوضح هذا كيفية إزالة الإدخال من الـ hash <span class="Li">&quot;Mapping&quot;</span>.</p>
+<pre>void
+asynch_close(fh)
+    int     fh
+    CODE:
+    /* إزالة الإدخال من الـ hash */
+    (void) hv_delete(Mapping, (char*)&amp;fh, sizeof(fh), G_DISCARD);
+    /* الآن استدعاء asynch_close الحقيقي */
+    asynch_close(fh);</pre>
+<p class="Pp">لذلك ستبدو واجهة Perl هكذا</p>
+<pre>sub callback1
+{
+    my($handle, $buffer) = @_;
+}
+# تسجيل رد اتصال Perl
+asynch_read($fh, \&amp;callback1);
+asynch_close($fh);</pre>
+<p class="Pp">يتم تخزين التعيين بين رد اتصال C ورد اتصال Perl في الـ hash العام <span class="Li">&quot;Mapping&quot;</span> هذه المرة. استخدام الـ hash له ميزة واضحة تتمثل في أنه يسمح بتسجيل عدد غير محدود من ردود الاتصال.</p>
+<p class="Pp">ماذا لو لم تحتوي الواجهة التي توفرها دالة رد اتصال C على معامل يسمح بالتعيين بين مقبض الملف وروتين Perl؟ لنفترض في حزمة الإدخال/الإخراج غير المتزامنة، أن دالة رد الاتصال تستقبل المعامل <span class="Li">&quot;buffer&quot;</span> فقط كما يلي</p>
+<pre>void
+ProcessRead(buffer)
+char *      buffer;
+{
+    ...
+}</pre>
+<p class="Pp">بدون مقبض الملف، لا توجد طريقة مباشرة للتعيين من دالة رد اتصال C إلى روتين Perl.</p>
+<p class="Pp">في هذه الحالة، هناك طريقة ممكنة للتغلب على هذه المشكلة وهي تعريف سلسلة من دوال C مسبقاً لتعمل كواجهة لـ Perl، وبالتالي</p>
+<pre>#define MAX_CB              3
+#define NULL_HANDLE -1
+typedef void (*FnMap)();
+struct MapStruct {
+    FnMap    Function;
+    SV *     PerlSub;
+    int      Handle;
+  };
+static void  fn1();
+static void  fn2();
+static void  fn3();
+static struct MapStruct Map [MAX_CB] =
+    {
+        { fn1, NULL, NULL_HANDLE },
+        { fn2, NULL, NULL_HANDLE },
+        { fn3, NULL, NULL_HANDLE }
+    };
+static void
+Pcb(index, buffer)
+int index;
+char * buffer;
+{
+    dSP;
+    PUSHMARK(SP);
+    XPUSHs(sv_2mortal(newSVpv(buffer, 0)));
+    PUTBACK;
+    /* استدعاء روتين Perl */
+    call_sv(Map[index].PerlSub, G_DISCARD);
+}
+static void
+fn1(buffer)
+char * buffer;
+{
+    Pcb(0, buffer);
+}
+static void
+fn2(buffer)
+char * buffer;
+{
+    Pcb(1, buffer);
+}
+static void
+fn3(buffer)
+char * buffer;
+{
+    Pcb(2, buffer);
+}
+void
+array_asynch_read(fh, callback)
+    int             fh
+    SV *    callback
+    CODE:
+    int index;
+    int null_index = MAX_CB;
+    /* ابحث عن نفس المقبض أو إدخال فارغ */
+    for (index = 0; index &lt; MAX_CB; ++index)
+    {
+        if (Map[index].Handle == fh)
+            break;
+        if (Map[index].Handle == NULL_HANDLE)
+            null_index = index;
+    }
+    if (index == MAX_CB &amp;&amp; null_index == MAX_CB)
+        croak (&quot;تم تسجيل عدد كبير جداً من دوال رد الاتصال\n&quot;);
+    if (index == MAX_CB)
+        index = null_index;
+    /* احفظ مقبض الملف */
+    Map[index].Handle = fh;
+    /* تذكر روتين Perl */
+    if (Map[index].PerlSub == (SV*)NULL)
+        Map[index].PerlSub = newSVsv(callback);
+    else
+        SvSetSV(Map[index].PerlSub, callback);
+    asynch_read(fh, Map[index].Function);
+void
+array_asynch_close(fh)
+    int     fh
+    CODE:
+    int index;
+    /* ابحث عن مقبض الملف */
+    for (index = 0; index &lt; MAX_CB; ++ index)
+        if (Map[index].Handle == fh)
+            break;
+    if (index == MAX_CB)
+        croak (&quot;تعذر إغلاق fh %d\n&quot;, fh);
+    Map[index].Handle = NULL_HANDLE;
+    SvREFCNT_dec(Map[index].PerlSub);
+    Map[index].PerlSub = (SV*)NULL;
+    asynch_close(fh);</pre>
+<p class="Pp">في هذه الحالة، تُستخدم الدوال <span class="Li">&quot;fn1&quot;</span> و <span class="Li">&quot;fn2&quot;</span> و <span class="Li">&quot;fn3&quot;</span> لتذكر روتين Perl الذي سيتم استدعاؤه. كل دالة تحتفظ بفهرس ثابت منفصل يتم استخدامه في الدالة <span class="Li">&quot;Pcb&quot;</span> للوصول إلى مصفوفة <span class="Li">&quot;Map&quot;</span> واستدعاء روتين Perl فعلياً.</p>
+<p class="Pp">هناك بعض العيوب الواضحة لهذه التقنية.</p>
+<p class="Pp">أولاً، الكود أكثر تعقيداً بشكل ملحوظ من المثال السابق.</p>
+<p class="Pp">ثانياً، هناك حد ثابت (في هذه الحالة 3) لعدد ردود الاتصال التي يمكن أن توجد في وقت واحد. الطريقة الوحيدة لزيادة الحد هي عن طريق تعديل الكود لإضافة المزيد من الدوال ثم إعادة الترجمة. ومع ذلك، طالما تم اختيار عدد الدوال بعناية، فإنه لا يزال حلاً قابلاً للتطبيق وفي بعض الحالات هو الوحيد المتاح.</p>
+<p class="Pp">لتلخيص، إليك عدد من الطرق الممكنة لك للنظر فيها لتخزين التعيين بين C ورد اتصال Perl</p>
+<dl class="Bl-tag">
+  <dt>1. تجاهل المشكلة - السماح برد اتصال واحد فقط</dt>
+  <dd>في كثير من الحالات، مثل التفاعل مع معالج أخطاء، قد يكون هذا حلاً كافياً تماماً.</dd>
+  <dt>2. إنشاء سلسلة من ردود الاتصال - حد ثابت</dt>
+  <dd>إذا كان من المستحيل معرفة السياق من المعاملات التي تم إرجاعها من رد اتصال C، فقد تحتاج إلى إنشاء سلسلة من دوال واجهة رد اتصال C، وتخزين مؤشرات إلى كل منها في مصفوفة.</dd>
+  <dt>3. استخدام معامل للتعيين إلى رد اتصال Perl</dt>
+  <dd>الـ "hash" هو آلية مثالية لتخزين التعيين بين C و Perl.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Alternate_Stack_Manipulation'><a class='permalink' href='#Alternate_Stack_Manipulation'>التلاعب بالكومة البديل</a></h2>
+<p class="Pp">على الرغم من أنني استخدمت فقط وحدات الماكرو <span class="Li">&quot;POP*&quot;</span> للوصول إلى القيم التي تم إرجاعها من روتينات Perl، إلا أنه من الممكن أيضاً تجاوز هذه الوحدات الماكرو وقراءة الكومة باستخدام وحدة الماكرو <span class="Li">&quot;ST&quot;</span> (راجع perlxs للحصول على وصف كامل لوحدة الماكرو <span class="Li">&quot;ST&quot;</span>).</p>
+<p class="Pp">في معظم الأوقات، يجب أن تكون وحدات الماكرو <span class="Li">&quot;POP*&quot;</span> كافية؛ المشكلة الرئيسية معها هي أنها تجبرك على معالجة القيم المرتجعة بالتسلسل. قد لا تكون هذه هي الطريقة الأنسب لمعالجة القيم في بعض الحالات. ما نريده هو أن نكون قادرين على الوصول إلى الكومة بترتيب عشوائي. وحدة الماكرو <span class="Li">&quot;ST&quot;</span> كما تم استخدامها عند ترميز XSUB مثالية لهذا الغرض.</p>
+<p class="Pp">الكود أدناه هو المثال المقدم في قسم "إرجاع قائمة بالقيم" معاد ترميزه لاستخدام <span class="Li">&quot;ST&quot;</span> بدلاً من <span class="Li">&quot;POP*&quot;</span>.</p>
+<pre>static void
+call_AddSubtract2(a, b)
+int a;
+int b;
+{
+    dSP;
+    I32 ax;
+    int count;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    EXTEND(SP, 2);
+    PUSHs(sv_2mortal(newSViv(a)));
+    PUSHs(sv_2mortal(newSViv(b)));
+    PUTBACK;
+    count = call_pv(&quot;AddSubtract&quot;, G_LIST);
+    SPAGAIN;
+    SP -= count;
+    ax = (SP - PL_stack_base) + 1;
+    if (count != 2)
+        croak(&quot;مشكلة كبيرة\n&quot;);
+    printf (&quot;%d + %d = %d\n&quot;, a, b, SvIV(ST(0)));
+    printf (&quot;%d - %d = %d\n&quot;, a, b, SvIV(ST(1)));
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}</pre>
+<p class="Pp">ملاحظات</p>
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>لاحظ أنه كان من الضروري تعريف المتغير <span class="Li">&quot;ax&quot;</span>. هذا لأن وحدة الماكرو <span class="Li">&quot;ST&quot;</span> تتوقع وجوده. لو كنا في XSUB، فلن يكون من الضروري تعريف <span class="Li">&quot;ax&quot;</span> لأنه معرف لنا بالفعل.</dd>
+  <dt>2.</dt>
+  <dd>الكود
+        <pre>SPAGAIN;
+SP -= count;
+ax = (SP - PL_stack_base) + 1;
+</pre>
+    <p class="Pp">يضبط الكومة بحيث يمكننا استخدام وحدة الماكرو <span class="Li">&quot;ST&quot;</span>.</p>
+  </dd>
+  <dt>3.</dt>
+  <dd>على عكس الترميز الأصلي لهذا المثال، لم يتم الوصول إلى القيم المرتجعة بترتيب عكسي. لذا فإن <span class="Li">ST(0)</span> تشير إلى القيمة الأولى التي أعادتها روتين Perl و <span class="Li">ST(count-1)</span> تشير إلى القيمة الأخيرة.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Creating_and_Calling_an_Anonymous_Subroutine_in_C'><a class='permalink' href='#Creating_and_Calling_an_Anonymous_Subroutine_in_C'>إنشاء واستدعاء روتين فرعي مجهول في C</a></h2>
+<p class="Pp">كما أظهرنا بالفعل، يمكن استخدام <span class="Li">&quot;call_sv&quot;</span> لاستدعاء روتين فرعي مجهول. ومع ذلك، أظهر مثالنا أن سكربت Perl يستدعي XSUB للقيام بهذه العملية. دعنا نرى كيف يمكن القيام بذلك داخل كود C الخاص بنا:</p>
+<pre>...
+SV *cvrv
+   = eval_pv(&quot;sub {
+               print 'لن تجدني أزعج أي مساحة أسماء!'
+              }&quot;, TRUE);
+...
+call_sv(cvrv, G_VOID|G_NOARGS);</pre>
+<p class="Pp"><span class="Li">&quot;eval_pv&quot;</span> يستخدم لتجميع الروتين الفرعي المجهول، والذي سيكون أيضاً القيمة المرتجعة (اقرأ المزيد عن <span class="L"></code><!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="generator" content="mandoc 1.2.4">
+        <title>perlcall - Calling Perl subroutines from C</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1.5.6/css/pico.min.css">
+        <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@1.5.6/css/pico.classless.min.css">
+        <link rel="stylesheet" href="/css/style.css">
+        <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    </head>
+    <body>
+        
+        <main class="container">
+            <article>
+                <section class="Sh">
+                    <h1 class="Sh" id="NAME">NAME</h1>
+                    <p class="Pp">perlcall - Calling Perl subroutines from C</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+                    <p class="Pp">This document describes how to call Perl subroutines from C code. This is useful when writing XS extensions for Perl, or when embedding Perl in a C application.</p>
+                    <p class="Pp">The primary mechanism for calling Perl code from C is through the <code class="Li">Perl_call_sv</code> function (or its simpler wrapper <code class="Li">perl_call_sv</code>). This function takes a subroutine reference (an <code class="Li">SV*</code>), the number of arguments, and an array of arguments, and executes the subroutine.</p>
+                    <p class="Pp">For example, to call a subroutine named 'my_sub' with two arguments:</p>
+                    <pre>
+    SV *subref = get_sv("my_sub", TRUE); /* Get a reference to the subroutine */
+    if (subref) {
+        AV *args = newAV();
+        av_store(args, 0, sv_2mortal(newSVpv("hello", 0)));
+        av_store(args, 1, sv_2mortal(newSViv(123)));
+        SV *ret = perl_call_sv(subref, args);
+        /* Process the return value 'ret' */
+        if (ret) {
+            /* ... */
+        }
+    }
+                    </pre>
+                    <p class="Pp">The arguments are passed as an <code class="Li">AV*</code>. The return value is an <code class="Li">SV*</code>, or <code class="Li">NULL</code> if the subroutine returns <code class="Li">undef</code>.</p>
+                    <p class="Pp">The return value of <code class="Li">perl_call_sv</code> is an <code class="Li">SV*</code>. If the Perl subroutine returns <code class="Li">undef</code>, this will be a <code class="Li">NULL</code> pointer. Otherwise, it will point to the <code class="Li">SV</code> representing the return value. It is the caller's responsibility to <code class="Li">sv_free</code> this value if it is no longer needed.</p>
+                    <p class="Pp">Many other functions are available for calling Perl code, including functions that handle different argument and return types, and functions that allow for more control over the calling context.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="THE_CALL_FUNCTIONS">THE CALL_ FUNCTIONS</h1>
+                    <p class="Pp"><code class="Li">Perl_call_sv</code> is the most basic function. It takes a subroutine reference and an argument list as an <code class="Li">AV*</code>.</p>
+                    <p class="Pp"><code class="Li">Perl_call_pv</code> is similar, but takes the subroutine name as a string (<code class="Li">char*</code>).</p>
+                    <p class="Pp"><code class="Li">Perl_call_method</code> is used to call methods on objects.</p>
+                    <p class="Pp">There are also functions for calling subroutines with specific return types, such as <code class="Li">Perl_call_sv_pv</code> (returns a string), <code class="Li">Perl_call_sv_iv</code> (returns an integer), etc.</p>
+                    <p class="Pp">These functions are typically found in the <code class="Li">EXTERN.h</code> header file, which is part of the Perl C API.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="FLAG_VALUES">FLAG VALUES</h1>
+                    <p class="Pp">Most calling functions accept a flag argument that controls the context of the call. Common flags include:</p>
+                    <dl>
+                        <dt><code class="Li">G_SCALAR</code></dt>
+                        <dd>Call the subroutine in scalar context.</dd>
+                        <dt><code class="Li">G_LIST</code></dt>
+                        <dd>Call the subroutine in list context.</dd>
+                        <dt><code class="Li">G_VOID</code></dt>
+                        <dd>Call the subroutine in void context (ignore return value).</dd>
+                        <dt><code class="Li">G_KEEPERR</code></dt>
+                        <dd>Keep any Perl error messages that occur during the call.</dd>
+                    </dl>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="EXAMPLES">EXAMPLES</h1>
+                    <p class="Pp">Here are a few more examples of calling Perl subroutines from C:</p>
+                    <p class="Pp">Calling a subroutine that returns a scalar:</p>
+                    <pre>
+    SV *subref = get_sv("get_scalar", TRUE);
+    if (subref) {
+        SV *ret = perl_call_sv(subref, NULL); /* No arguments */
+        if (ret) {
+            printf("Scalar return: %s\n", SvPV_nolen(ret));
+            sv_free(ret); /* Free the return value */
+        }
+    }
+                    </pre>
+                    <p class="Pp">Calling a subroutine in list context:</p>
+                    <pre>
+    SV *subref = get_sv("get_list", TRUE);
+    if (subref) {
+        AV *ret_list = perl_call_list(subref, NULL); /* No arguments */
+        if (ret_list) {
+            int len = av_len(ret_list) + 1;
+            for (int i = 0; i &lt; len; i++) {
+                SV **elem = av_fetch(ret_list, i, 0);
+                if (elem) {
+                    printf("List element %d: %s\n", i, SvPV_nolen(*elem));
+                }
+            }
+            sv_free(ret_list);
+        }
+    }
+                    </pre>
+                    <p class="Pp">Calling a subroutine with arguments:</p>
+                    <pre>
+    SV *subref = get_sv("process_args", TRUE);
+    if (subref) {
+        AV *args = newAV();
+        av_store(args, 0, sv_2mortal(newSVpv("arg1", 0)));
+        av_store(args, 1, sv_2mortal(newSViv(42)));
+        SV *ret = perl_call_sv(subref, args);
+        if (ret) {
+            printf("Return value: %d\n", SvIV(ret));
+            sv_free(ret);
+        }
+    }
+                    </pre>
+                    <p class="Pp">The <code class="Li">sv_2mortal()</code> function is used to mark an <code class="Li">SV*</code> as mortal, meaning it will be automatically freed when control returns to the Perl interpreter. This is convenient for temporary <code class="Li">SV*</code>s like arguments.</p>
+                    <p class="Pp">The <code class="Li">perlapi</code> documentation provides a comprehensive list of all available functions for interacting with the Perl interpreter from C.</p>
+                    <p class="Pp">Once this code reference is in hand, it can be mixed in with all the previous examples we've shown.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="LIGHTWEIGHT_CALLBACKS">LIGHTWEIGHT CALLBACKS</h1>
+                    <p class="Pp">Sometimes you need to invoke the same subroutine repeatedly. This usually happens with a function that acts on a list of values, such as Perl's built-in <b>sort()</b>. You can pass a comparison function to <b>sort()</b>, which will then be invoked for every pair of values that needs to be compared. The <b>first()</b> and <b>reduce()</b> functions from List::Util follow a similar pattern.</p>
+                    <p class="Pp">In this case it is possible to speed up the routine (often quite substantially) by using the lightweight callback API. The idea is that the calling context only needs to be created and destroyed once, and the sub can be called arbitrarily many times in between.</p>
+                    <p class="Pp">It is usual to pass parameters using global variables (typically <span class="Li">$_</span> for one parameter, or <span class="Li">$a</span> and <span class="Li">$b</span> for two parameters) rather than via <span class="Li">@_</span>. (It is possible to use the <span class="Li">@_</span> mechanism if you know what you're doing, though there is as yet no supported API for it. It's also inherently slower.)</p>
+                    <p class="Pp">The pattern of macro calls is like this:</p>
+                    <pre>
+dMULTICALL;                 /* Declare local variables */
+U8 gimme = G_SCALAR;        /* context of the call: G_SCALAR,
+                             * G_LIST, or G_VOID */
+PUSH_MULTICALL(cv);         /* Set up the context for calling cv,
+                               and set local vars appropriately */
+/* loop */ {
+    /* set the value(s) af your parameter variables */
+    MULTICALL;              /* Make the actual call */
+} /* end of loop */
+POP_MULTICALL;              /* Tear down the calling context */
+                    </pre>
+                    <p class="Pp">For some concrete examples, see the implementation of the <b>first()</b> and <b>reduce()</b> functions of List::Util 1.18. There you will also find a header file that emulates the multicall API on older versions of perl.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="SEE_ALSO">SEE ALSO</h1>
+                    <p class="Pp">perlxs, perlguts, perlembed</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="AUTHOR">AUTHOR</h1>
+                    <p class="Pp">Paul Marquess</p>
+                    <p class="Pp">Special thanks to the following people who assisted in the creation of the document.</p>
+                    <p class="Pp">Jeff Okamoto, Tim Bunce, Nick Gianniotis, Steve Kelem, Gurusamy Sarathy and Larry Wall.</p>
+                </section>
+                <section class="Sh">
+                    <h1 class="Sh" id="DATE">DATE</h1>
+                    <p class="Pp">Last updated for perl 5.23.1.</p>
+                </section>
+            </article>
+            <aside id="sidebar">
+                <section class="search">
+                    <form action="/search" class="search direct-search" role="search">
+                        <input type="search" placeholder="Search manual page" name="q" value="">
+                        <input type="submit" name="go" value="Go">
+                    </form>
+                </section>
+                <section class="package-info">
+                    <p>Package information:</p>
+                    <dl>
+                        <dt>Package name:</dt>
+                        <dd><a href="https://www.archlinux.org/packages/core/x86_64/perl/">core/perl</a></dd>
+                        <dt>Version:</dt>
+                        <dd>5.42.0-1</dd>
+                        <dt>Upstream:</dt>
+                        <dd><a href="https://www.perl.org">https://www.perl.org</a></dd>
+                        <dt>Licenses:</dt>
+                        <dd>Artistic-1.0-Perl OR GPL-1.0-or-later</dd>
+                        <dt>Manuals:</dt>
+                        <dd><a href="/listing/core/perl/">/listing/core/perl/</a></dd>
+                    </dl>
+                </section>
+                <details>
+                    <summary>Table of contents</summary>
+                    <nav class="toc">
+                        <ul>
+                            <li><a href="#NAME">NAME</a></li>
+                            <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+                            <li><a href="#THE_CALL_FUNCTIONS">THE CALL_ FUNCTIONS</a></li>
+                            <li><a href="#FLAG_VALUES">FLAG VALUES</a></li>
+                            <li><a href="#EXAMPLES">EXAMPLES</a></li>
+                            <li><a href="#LIGHTWEIGHT_CALLBACKS">LIGHTWEIGHT CALLBACKS</a></li>
+                            <li><a href="#SEE_ALSO">SEE ALSO</a></li>
+                            <li><a href="#AUTHOR">AUTHOR</a></li>
+                            <li><a href="#DATE">DATE</a></li>
+                        </ul>
+                    </nav>
+                </details>
+                <nav class="other-formats">
+                    <p>Other formats:
+                        <a href="/man/perlcall.1perl.en.txt">txt</a>,
+                        <a href="/man/perlcall.1perl.en.raw">raw</a>
+                    </p>
+                </nav>
+            </aside>
+        </main>
+        <footer>
+            
+            <p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               license, except for the contents of the manual pages, which have their own license
+               specified in the corresponding Arch Linux package.
+            </p>
+        </footer>
+    </body>
+</html>

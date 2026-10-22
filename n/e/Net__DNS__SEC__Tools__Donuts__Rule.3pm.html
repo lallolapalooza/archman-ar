@@ -1,0 +1,168 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Net__DNS__SEC__Tools__Donuts__Rule(3pm)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Sh">
+<h1 class="Sh" id="NAME">NAME</h1>
+<p class="Pp">donuts-rule, donuts-policy - Manual pages for donuts rules and policies</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION">DESCRIPTION</h1>
+<p class="Pp">This document describes the format for rules and policies that are
+    used by the <a href="/man/donuts.8.en">donuts(8)</a> utility.</p>
+<p class="Pp">Rules are written in Perl and are evaluated against DNS data. They
+    are primarily used to enforce policy or to perform checks on DNS data.</p>
+<p class="Pp">The following sections detail the format of the rule file.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id="RULE_FILE_FORMAT">RULE FILE FORMAT</h1>
+<p class="Pp">A rule file is a text file consisting of a series of tags, each
+    followed by its value. The tags are case-sensitive. Tags may span multiple
+    lines if they are enclosed in parentheses or curly braces. Comments begin with
+    a '#' and continue to the end of the line.</p>
+<p class="Pp">The following tags are recognized:</p>
+<dl class="Bl-tag">
+    <dt id="name:"><i>name:</i> <b>RULE_NAME</b></dt>
+    <dd>A short, descriptive name for the rule. This name is used when reporting
+        errors or when enabling/disabling rules.</dd>
+    <dt id="level:"><i>level:</i> <b>NUMBER</b></dt>
+    <dd>A numeric severity level for the rule. Higher numbers indicate higher
+        severity. Common values range from 1 to 10.</dd>
+    <dt id="type:"><i>type:</i> <b>TYPE</b></dt>
+    <dd>The type of data the rule applies to. Recognized types include:</dd>
+    <dd>
+        <ul class="Bl-tag">
+            <li><span class="Li">record</span>: The rule applies to individual DNS records.</li>
+            <li><span class="Li">name</span>: The rule applies to a DNS name and all its associated records.</li>
+            <li><span class="Li">zone</span>: The rule applies to an entire DNS zone.</li>
+        </ul>
+    </dd>
+    <dt id="condition:"><i>condition:</i> <b>EXPRESSION</b></dt>
+    <dd>A Perl expression that must evaluate to true for the rule's test code to
+        be executed. If omitted, the test code is always executed.</dd>
+    <dt id="test:"><i>test:</i> <b>PERL_CODE</b></dt>
+    <dd>The Perl code that performs the actual test. This code is executed only
+        if the rule's type matches the data being processed and the condition
+        (if any) is met. The code is expected to return a string if the test fails
+        (indicating an error), and an empty string or false value if the test
+        passes.</dd>
+    <dd>
+        <p class="Pp">Inside the test code, the following variables are
+            available:</p>
+        <dl class="Bl-tag">
+            <dt><span class="Li">$rule</span></dt>
+            <dd>A hash reference containing information about the rule itself,
+                including any configuration tokens defined using the <span class="Li">help:</span>
+                tag.</dd>
+            <dt><span class="Li">$record</span></dt>
+            <dd>A hash reference containing information about the current DNS
+                record being processed. Available when <span class="Li">type:</span>
+                is <span class="Li">record</span>.</dd>
+            <dt><span class="Li">$name</span></dt>
+            <dd>The DNS name being processed. Available when <span class="Li">type:</span>
+                is <span class="Li">name</span> or <span class="Li">zone</span>.</dd>
+            <dt><span class="Li">$records</span></dt>
+            <dd>A hash reference where keys are record types (e.g., 'A', 'MX') and
+                values are arrays of record objects. Available when <span class="Li">type:</span>
+                is <span class="Li">name</span> or <span class="Li">zone</span>.</dd>
+            <dt><span class="Li">$recordname</span></dt>
+            <dd>The name of the record being processed. Available when <span class="Li">type:</span>
+                is <span class="Li">name</span>.</dd>
+        </dl>
+    </dd>
+</dl>
+<div class="Bd-indent">
+<p class="Pp">The <span class="Li">$rule</span>, <span class="Li">$recordname</span>,
+    and <span class="Li">$records</span> variables are automatically populated
+    for the test code to use.</p>
+</div>
+<p class="Pp">Example rules:</p>
+<pre># local rule to mandate that each record must have a
+# TTL &gt; 60 seconds
+name: DNS_TTL_AT_LEAST_60
+level: 8
+type: record
+&lt;test&gt;
+  return &quot;TTL for $record-&gt;{name} is too small&quot; if ($record-&gt;ttl &lt; 60);
+&lt;/test&gt;
+# local policy rule to mandate that anything with an A record
+# must have an HINFO record too
+name: DNS_MX_MUST_HAVE_A
+level: 8
+type: name
+&lt;test&gt;
+  return &quot;$recordname has an A record but does not have an HINFO record&quot;
+    if (exists($records-&gt;{'A'}) &amp;&amp; !exists($records-&gt;{'HINFO'}));
+&lt;/test&gt;</pre>
+</div>
+<dl class="Bl-tag">
+    <dt id="feature:"><i>feature:</i> <b>NAME</b></dt>
+    <dd>The feature tag prevents this rule from running unless the <b>NAME</b>
+        keyword was specified using the <i>--features</i> flag.</dd>
+    <dt id="desc:"><i>desc:</i> <b>DESCRIPTION</b></dt>
+    <dd>A short description of what the rule tests that will be printed to the
+        user in help output or in the error summary when <b>donuts</b> outputs the
+        results.</dd>
+    <dt id="requires:"><i>requires:</i> <b>PERLMODULE1</b> <b>PERLMODULE2</b>
+        ...</dt>
+    <dd>This allows rules to depend on installed perl modules. They'll be
+        <i>required</i> and <i>imported</i> as the rule starts executing. If they
+        don't exist, an error will be logged using <b>donuts_error()</b> stating
+        that the module is required for that rule to work.</dd>
+    <dt id="help:"><i>help:</i> <b>TOKEN:</b> <b>TOKEN-HELP</b></dt>
+    <dd>If the rule is configurable via the user's <b>.donuts.conf</b> file, this
+        describes the configuration tokens for the user when they request
+        configuration help via the <i>-H</i> or <i>--help-config</i> flags. Tokens
+        may be used within rules by accessing them using the <span class="Li">$rule</span>
+        reference passed to the code (the second argument).
+        <p class="Pp">Examples:</p>
+        <pre>1) In the rule file (this is an incomplete rule definition):
+   name:           SOME_TEST
+   myconfig:       40
+   help: myconfig: A special number to configure this test
+   &lt;test&gt;
+    # ... use $rule-&gt;{'myconfig'}
+   &lt;/test&gt;
+2) This allows the user to change the value of myconfig via their
+   .donuts.conf file:
+   # change SOME_TEST config...
+   name:     SOME_TEST
+   myconfig: 40
+3) and running donuts -H will show the help line for myconfig.
+</pre>
+    </dd>
+    <dt id="noindent:"><i>noindent
+        1</i></dt>
+    <dd></dd>
+    <dt id="nowrap:"><i>nowrap
+        1</i></dt>
+    <dd>Normally <b>donuts</b> will line-wrap the error summary produced by a rule
+        to enable automatic pretty-printing of error results. Sometimes, however,
+        rules may wish to self-format their outputs. The <i>nowrap</i> option
+        indicates to <b>donuts</b> that the output is pre-formatted but should
+        still be indented to align with the output of the rest of the error text
+        (currently about 15 spaces.) The <i>noindent</i> tag, however, indicates
+        that neither wrapping nor indenting should be performed, but that the
+        error should be printed as is.</dd>
+</dl>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT'>COPYRIGHT</h1>
+<p class="Pp">Copyright 2004-2013 SPARTA, Inc. All rights reserved. See the
+    COPYING file included with the DNSSEC-Tools package for details.</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'>AUTHOR</h1>
+<p class="Pp">Wes Hardaker &lt;hardaker@users.sourceforge.net&gt;</p>
+</section>
+
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'>SEE ALSO</h1>
+<p class="Pp"><a href='/man/donuts.8.en'>donuts(8)</a></p>
+<p class="Pp"><b>Net::DNS</b>, <b>Net::DNS::RR</b>,
+    <b>Net::DNS::SEC::Tools::Donuts</b></p>
+<p class="Pp"><a href='http://www.dnssec-tools.org/'>http://www.dnssec-tools.org/</a></p>
+</section>

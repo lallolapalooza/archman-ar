@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>openvpn-examples(5) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">openvpn-examples(5)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">openvpn examples(5)</td>
+    <td class="head-vol">ملفات التهيئة</td>
+    <td class="head-rtitle">openvpn examples(5)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='Name'><a class='permalink' href='#Name'>الاسم</a></h1>
+<p class="Pp">openvpn examples - خادم نفق IP آمن</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='INTRODUCTION'><a class='permalink' href='#INTRODUCTION'>مقدمة</a></h1>
+<p class="Pp">يقدم صفحة الدليل هذه بعض الأمثلة البسيطة لإنشاء إعدادات وملفات تهيئة OpenVPN.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Small_OpenVPN_setup_with_peer-fingerprint'><a class='permalink' href='#Small_OpenVPN_setup_with_peer-fingerprint'>إعداد OpenVPN صغير مع peer-fingerprint</a></h1>
+<p class="Pp">يتكون هذا القسم من تعليمات حول كيفية بناء إعداد OpenVPN صغير باستخدام خيار
+    <b>peer-fingerprint</b>. يتميز هذا الإعداد بسهولة الإنشاء ويجب أن يكون مناسبًا لمعظم المختبرات الصغيرة والإعدادات المنزلية دون الحاجة إلى PKI. بالنسبة للإعدادات على نطاق أوسع، لا يزال إنشاء PKI (على سبيل المثال، عبر easy-rsa) موصى به.</p>
+<p class="Pp">يمكن تعديل تهيئة الخادم والعميل بشكل أكبر لتخصيص الإعداد.</p>
+<section class="Ss">
+<h2 class="Ss" id='Server_setup'><a class='permalink' href='#Server_setup'>إعداد الخادم</a></h2>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تثبيت openvpn
+    <p class="Pp">قم بالتجميع من الشفرة المصدرية (راجع ملف <i>INSTALL</i>) أو التثبيت عبر توزيعة (apt/yum/ports) أو عبر المثبت (Windows).</p>
+  </dd>
+  <dt>2.</dt>
+  <dd>إنشاء شهادة موقعة ذاتيًا للخادم:</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -keyout server.key -out server.crt -nodes -sha256 -days 3650 -subj '/CN=server'</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>3.</dt>
+  <dd>إنشاء بصمة SHA256 لشهادة الخادم
+    <p class="Pp">استخدم أداة سطر أوامر OpenSSL لعرض بصمة الشهادة التي تم إنشاؤها للتو:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>openssl x509 -fingerprint -sha256 -in server.crt -noout</pre>
+</div>
+</div>
+<p class="Pp">سيؤدي هذا إلى إخراج شيء مشابه لـ:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>SHA256 Fingerprint=00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>4.</dt>
+  <dd>كتابة تهيئة خادم (<i>server.conf</i>):</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># الشهادة التي أنشأناها في الخطوة 1
+cert server.crt
+key server.key
+dh none
+dev tun
+# الاستماع على IPv6+IPv4 في وقت واحد
+proto udp6
+# عنوان IP الذي سيقوم الخادم بتوزيعه
+server 10.8.0.0 255.255.255.0
+server-ipv6 fd00:6f76:706e::/64
+# قيمة tun-mtu تبلغ 1400 تتجنب مشاكل الحزم الكبيرة جدًا بعد تغليف VPN
+tun-mtu 1400
+# بصمات أصابع عملائك. بعد إضافة/إزالة واحدة هنا، أعد تشغيل
+# الخادم
+&lt;peer-fingerprint&gt;
+&lt;/peer-fingerprint&gt;
+# إعلام العملاء عند إعادة تشغيل الخادم لإعادة الاتصال بسرعة
+explicit-exit-notify 1
+# قم بالمسح كل 60 ثانية، وأعد التشغيل إذا لم يتم استلام أي بيانات لمدة 5 دقائق
+keepalive 60 300
+# إلغاء التعليق على السطر أدناه إذا كنت تريد عناوين IP ثابتة
+# ifconfig-pool-persist  /etc/openvpn/server/ipp.txt
+# إلغاء التعليق على السطر أدناه لدفع خادم DNS إلى العملاء
+# push &quot;dhcp-option DNS 1.1.1.1&quot;</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>5.</dt>
+  <dd>أضف عميلًا واحدًا على الأقل كما هو موضح في قسم العميل.</dd>
+  <dt>6.</dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt id="Start"><a class="permalink" href="#Start"><b>ابدأ
+    الخادم.</b></a></dt>
+  <dd></dd>
+</dl>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>في التوزيعات المستندة إلى systemd، انقل <i>server.crt</i> و <i>server.key</i> و <i>server.conf</i> إلى <b>/etc/openvpn/server</b> وابدأه عبر systemctl</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>sudo mv server.conf server.key server.crt /etc/openvpn/server
+sudo systemctl start openvpn-server@server</pre>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Adding_a_client'><a class='permalink' href='#Adding_a_client'>إضافة عميل</a></h2>
+<div class="Bd-indent">
+<dl class="Bl-tag">
+  <dt>1.</dt>
+  <dd>تثبيت OpenVPN</dd>
+  <dt>2.</dt>
+  <dd>إنشاء شهادة موقعة ذاتيًا للعميل. في هذا المثال، اسم العميل هو alice. يجب أن يكون لكل عميل اسم فريد. استبدل alice باسم مختلف لكل عميل.</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -keyout - -nodes -sha256 -days 3650 -subj '/CN=alice'</pre>
+</div>
+</div>
+<p class="Pp">سيؤدي هذا إلى إنشاء شهادة ومفتاح للعميل. سيبدو ناتج الأمر شيئًا كهذا:</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>-----BEGIN PRIVATE KEY-----
+[محتوى base64]
+-----END PRIVATE KEY-----
+-----
+-----BEGIN CERTIFICATE-----
+[محتوى base64]
+-----END CERTIFICATE-----</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>3.</dt>
+  <dd>إنشاء ملف تهيئة عميل جديد. في هذا المثال، سنسمي الملف <i>alice.ovpn</i>:</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre># اسم خادمك للاتصال به
+remote yourserver.example.net
+client
+# استخدام منفذ مصدر عشوائي بدلاً من المنفذ الثابت 1194
+nobind
+# إلغاء التعليق على السطر التالي إذا كنت ترغب في توجيه
+# كل حركة المرور عبر VPN
+# redirect-gateway def1 ipv6
+# لتعيين خادم DNS
+# dhcp-option DNS 192.168.234.1
+&lt;key&gt;
+-----BEGIN PRIVATE KEY-----
+[أدخل المفتاح الذي تم إنشاؤه في الخطوة 2 هنا]
+-----END PRIVATE KEY-----
+&lt;/key&gt;
+&lt;cert&gt;
+-----BEGIN CERTIFICATE-----
+[أدخل الشهادة التي تم إنشاؤها في الخطوة 2 هنا]
+-----END CERTIFICATE-----
+&lt;/cert&gt;
+# هذه هي بصمة الخادم الذي نثق به. لقد أنشأنا هذه البصمة
+# في الخطوة 2 من إعداد الخادم
+peer-fingerprint 00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff
+# يجب أن تتطابق قيمة tun-mtu للعميل مع قيمة tun-mtu للخادم
+tun-mtu 1400
+dev tun</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>4.</dt>
+  <dd>إنشاء بصمة شهادة العميل. لهذا الغرض، سنجعل OpenSSL يقرأ ملف تهيئة العميل لأن الأمر x509 سيتجاهل أي شيء ليس بين علامتي البداية والنهاية للشهادة:</dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>openssl x509 -fingerprint -sha256 -noout -in alice.ovpn</pre>
+</div>
+</div>
+<p class="Pp">سيؤدي هذا مرة أخرى إلى إخراج شيء مثل</p>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>SHA256 Fingerprint=ff:ee:dd:cc:bb:aa:99:88:77:66:55:44:33:22:11:00:ff:ee:dd:cc:bb:aa:99:88:77:66:55:44:33:22:11:00</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>5.</dt>
+  <dd>قم بتحرير ملف تهيئة <i>server.conf</i> وأضف بصمة العميل الجديدة هذه كسطر إضافي بين <b>&lt;peer-fingerprint&gt;</b> و <b>&lt;/peer-fingerprint&gt;</b>
+    <p class="Pp">بعد إضافة عميلين، سيبدو جزء التهيئة كالتالي:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>&lt;peer-fingerprint&gt;
+ff:ee:dd:cc:bb:aa:99:88:77:66:55:44:33:22:11:00:ff:ee:dd:cc:bb:aa:99:88:77:66:55:44:33:22:11:00
+99:88:77:66:55:44:33:22:11:00:ff:ee:dd:cc:bb:aa:99:88:77:66:55:44:33:22:11:00:88:77:66:55:44:33
+&lt;/peer-fingerprint&gt;</pre>
+</div>
+</div>
+<dl class="Bl-tag">
+  <dt>6.</dt>
+  <dd>(اختياري) إذا كان العميل عميلًا قديمًا لا يدعم <b>peer-fingerprint</b> (على سبيل المثال، OpenVPN 2.5 والإصدارات الأقدم، OpenVPN Connect 3.3 والإصدارات الأقدم)، فيمكن تعديل تهيئة العميل <i>alice.ovpn</i> لتعمل مع هذه العملاء.
+    <p class="Pp">قم بإزالة السطر الذي يبدأ بـ <b>peer-fingerprint</b>. ثم أضف قسم <b>&lt;ca&gt;</b> جديدًا في نهاية ملف التهيئة مع محتويات <b>server.crt</b> التي تم إنشاؤها في الخطوة 2 من إعداد الخادم. يجب أن يبدو الجزء الأخير من ملف <i>alice.ovpn</i> كالتالي:</p>
+  </dd>
+</dl>
+<div class="Bd-indent">
+<div class="Bd-indent">
+<pre>[...] # بداية الملف تم تخطيها
+&lt;/cert&gt;
+# يجب أن تتطابق قيمة tun-mtu للعميل مع قيمة tun-mtu للخادم
+tun-mtu 1400
+dev tun
+&lt;ca&gt;
+[محتويات server.crt]
+&lt;/ca&gt;</pre>
+</div>
+</div>
+<p class="Pp">لاحظ أننا وضعنا قسم <b>&lt;ca&gt;</b> بعد قسم <b>&lt;cert&gt;</b> لجعل إنشاء البصمة من الخطوة 4 لا يزال يعمل لأنه سيستخدم فقط أول شهادة يجدها.</p>
+<dl class="Bl-tag">
+  <dt>7.</dt>
+  <dd>قم باستيراد الملف إلى عميل OpenVPN أو استخدم ببساطة <b>openvpn alice.ovpn</b> لبدء الـ VPN.</dd>
+</dl>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">قبل تشغيل هذه الأمثلة، يجب أن يكون لديك OpenVPN مثبتًا على جهازين مع اتصال شبكة بينهما. إذا لم تكن قد قمت بتثبيت OpenVPN بعد، فراجع ملف INSTALL المضمن في توزيع OpenVPN.</p>
+<section class="Ss">
+<h2 class="Ss" id='Firewall_Setup:'><a class='permalink' href='#Firewall_Setup:'>إعداد جدار الحماية:</a></h2>
+<p class="Pp">إذا كانت هناك جدران حماية بين الجهازين، فيجب تكوينها لتمرير المنفذ الذي تم تكوين OpenVPN لاستخدامه، في كلا الاتجاهين. الافتراضي لـ OpenVPN هو 1194/udp. إذا لم يكن لديك سيطرة على جدران الحماية بين الجهازين، فقد لا يزال بإمكانك استخدام OpenVPN عن طريق إضافة <b>--ping 15</b> إلى كل من أوامر <b>openvpn</b> المستخدمة أدناه في الأمثلة (سيؤدي هذا إلى قيام كل طرف بإرسال ping UDP إلى الطرف البعيد.</p>
+</div>
+</section>
+</section>
+</div>
+</section>
+
+            </article>
+        </main>
+    </body>
+</html>

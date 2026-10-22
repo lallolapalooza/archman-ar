@@ -1,0 +1,75 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">signalfd(2)</h1>
+<link rel="stylesheet" href="basic.css">
+{
+  "title": "signalfd(2) - Linux manual page",
+  "sections": [
+    {
+      "heading": "NAME",
+      "content": "signalfd - create a file descriptor that gathers signals"
+    },
+    {
+      "heading": "SYNOPSIS",
+      "content": "Header:\n     #include <sys/signalfd.h>\n\n   /* Using glibc */\n   int signalfd(int fd, const sigset_t *mask, int flags);\n\n   /* Using the kernel */\n   syscall(SYS_signalfd, int fd, const sigset_t *mask, size_t sizemask);\n   syscall(SYS_signalfd4, int fd, const sigset_t *mask, size_t sizemask, int flags);\n\nFeature Test Macro Requirements for glibc (from version 2.9):\n   signalfd(): _GNU_SOURCE\n"
+    },
+    {
+      "heading": "DESCRIPTION",
+      "content": "The signalfd() system call creates a new file descriptor that\nreceives a collection of signals specified by the set mask.  This\nallows signal handling to be implemented in an event-driven manner\nusing mechanisms like poll(2), select(2), or epoll(7).\n\n\n       fd      This is either -1, or a previously created signalfd file descriptor.\n               If fd is -1, then signalfd() creates a new signalfd file descriptor.\n               If fd is a valid signalfd file descriptor, then the\n               existing signalfd file descriptor is modified to use the new\n               mask and flags, and the original signalfd file descriptor is\n               returned.\n\n       mask    This is a pointer to a signal set (see sigsetops(3)). The set\n               specifies the signals that should be delivered via the\n               signalfd file descriptor. Signals in this set are blocked\n               by the calling thread, and any pending signals in the set\n               that are delivered to the thread will be placed onto the\n               signalfd file descriptor.\n\n       flags   This argument must be 0 or a bitwise OR of the following\n               flags:\n\n               SFD_CLOEXEC\n                      Set the close-on-exec (FD_CLOEXEC) flag on the new\n                      file descriptor.  See open(2) for more information.\n\n               SFD_NONBLOCK\n                      Set the O_NONBLOCK flag on the new file descriptor.\n                      See open(2) for more information.\n\n               SFD_DI           (since Linux 3.18)\n                      Return a structure signalfd_siginfo in a big-endian format\n                      when reading from the signalfd file descriptor. This is\n                      useful for embedded systems where the native endianness\n                      might be different from the host endianness.\n\n\nSignals that are specified in mask are blocked for the calling thread.  If\na signal that is specified in mask is delivered to the calling thread,\nthen the signal is not handled in the default manner (i.e., by terminating\nthe process), but is instead placed onto the signalfd file descriptor.\n\nWhen reading from the signalfd file descriptor, one or more signalfd_siginfo\nstructures are returned, each describing a signal that has been delivered\nand is pending. The read() call will return as many structures as can be\nheld in the buffer provided, up to the number of pending signals.\n\nThe structure signalfd_siginfo is defined as follows:\n\n       struct signalfd_siginfo {\n           siginfo_t ssi_signo;   /* Signal number */\n           int       ssi_errno;   /* Error number if any */\n           int       ssi_code;    /* Signal code */\n           pid_t     ssi_pid;     /* PID of sender */\n           uid_t     ssi_uid;     /* UID of sender */\n           int       ssi_int;     /* Integer value */\n           union {\n               struct {\n                   long ssi_band;\n                   int ssi_fd;\n               } ssi_addr_info;\n               char      ssi_padding[128 - sizeof(int) * 4];\n           } ssi_if_other;\n       };\n\n\nNote that the size of struct signalfd_siginfo is 128 bytes.  This means\nthat a read(2) call might return up to 128 bytes, and will return one or\nmore signalfd_siginfo structures.  If the buffer provided to read(2) is\nsmaller than sizeof(struct signalfd_siginfo), then the behavior is\nundefined.\n\nThe members of struct signalfd_siginfo are populated similarly to the\nfields of siginfo_t filled by sigaction(2) with the SA_SIGINFO flag.\nSee sigaction(2) for details.  However, some fields may be different or\nunused:\n\n       ssi_errno\n              This field contains an error number if the signal was generated\n              as a result of an error (e.g., SIGSEGV, SIGBUS).\n\n       ssi_code\n              This field contains the signal code. The value is often\n              set to SI_USER, SI_KERNEL, SI_QUEUE, or SI_TIMER, depending on\n              how the signal was generated.\n\n       ssi_pid, ssi_uid\n              These fields contain the process ID and user ID of the sender\n              of the signal.  If the signal was sent by the kernel, these\n              fields are set to 0.\n\n       ssi_int\n              If the signal was sent using sigqueue(3), this field contains\n              the integer value specified in the sigqueue(3) call.\n\n       ssi_addr_info.ssi_addr\n              If the signal was generated due to a hardware fault (e.g.,\n              SIGSEGV, SIGBUS), this field contains the address of the fault.\n\n       ssi_addr_info.ssi_band, ssi_addr_info.ssi_fd\n              If the signal was generated due to a SIGIO or SIGPOLL, these\n              fields contain the event mask and file descriptor associated\n              with the signal.\n\n\nIf the signalfd file descriptor is read from by multiple threads, the signals\nare distributed among the threads. Each signal is delivered to at most one\nthread. If a signal is blocked for all threads in the process, then the\nsignal remains pending until it is unblocked for at least one thread.\n\nIf the signalfd file descriptor is cloned using fork(2) or dup(2), then\nany signals delivered to the process are placed onto all the signalfd file\ndescriptors. That is, a signal can be read from any of the duplicated file\ndescriptors. However, a given signal occurrence is delivered only once, to\nthe first thread that reads it.\n\nIf the signalfd file descriptor is passed via a UNIX domain socket,\nthen any signals delivered to the process are placed onto the received\nsignalfd file descriptor. Similar to fork(2) and dup(2), the signal can be\nread from the received file descriptor, but it is delivered only once.\n\n\nThread semantics\n\nThe semantics of signalfd file descriptors in a multithreaded\nprogram mirror the standard semantics for signals. In other words, when a\nthread reads from a signalfd file descriptor, it will read the signals that\nare directed to the thread itself and the signals that are directed to the\nprocess (i.e., the entire thread group). (A thread will not be able to read\nsignals that are directed to other threads in the process.)\n\n\nepoll(7) semantics\n\nIf a process adds (via epoll_ctl(2)) a signalfd file\ndescriptor to an epoll(7) instance, then epoll_wait(2) returns\nevents only for signals sent to that process. In particular, if the process\nthen uses fork(2) to create a child process, then the child will be\nable to read(2) signals that are sent to it using the signalfd file\ndescriptor, but epoll_wait(2) will *not* indicate that the\nsignalfd file descriptor is ready. In this scenario, a possible workaround\nis that after the fork(2), the child process can close the signalfd\nfile descriptor that it inherited from the parent process and then create\nanother signalfd file descriptor and add it to the epoll instance.\nAlternatively, the parent and the child could delay creating their\n(separate) signalfd file descriptors and adding them to the epoll instance\nuntil after the call to fork(2).\n"
+    },
+    {
+      "heading": "RETURN VALUE",
+      "content": "On success, signalfd() returns a signalfd file descriptor; this is\neither a new file descriptor (if fd was -1), or fd if fd was a valid\nsignalfd file descriptor. On error, -1 is returned and errno is set to\nindicate the error."
+    },
+    {
+      "heading": "ERRORS",
+      "content": {
+        "EBADF": "The fd file descriptor is not a valid file descriptor.",
+        "EINVAL": "fd is not a valid signalfd file descriptor.\nflags is invalid; or, in Linux 2.6.26 or earlier, flags is nonzero.",
+        "EMFILE": "The per-process limit on the number of open file descriptors has been reached.",
+        "ENFILE": "The system-wide limit on the total number of open files has been reached.",
+        "ENODEV": "Could not mount (internal) anonymous inode device.",
+        "ENOMEM": "There was insufficient memory to create a new signalfd file descriptor."
+      }
+    },
+    {
+      "heading": "VERSIONS",
+      "subsections": [
+        {
+          "heading": "C library/kernel differences",
+          "content": "The underlying Linux system call requires an additional argument, sizemask,\nwhich specifies the size of the mask argument. The glibc signalfd() wrapper\nfunction does not include this argument, since it provides the required value\nfor the underlying system call.\n\nThere are two underlying Linux system calls: signalfd() and the more recent\nsignalfd4(). The former system call does not implement a flags argument. The\nlatter system call implements the flags values described above. Starting with\nglibc 2.9, the signalfd() wrapper function will use signalfd4() where it is\navailable."
+        }
+      ]
+    },
+    {
+      "heading": "STANDARDS",
+      "content": "Linux."
+    },
+    {
+      "heading": "HISTORY",
+      "content": {
+        "signalfd()": "Linux 2.6.22, glibc 2.8.",
+        "signalfd4()": "Linux 2.6.27."
+      }
+    },
+    {
+      "heading": "NOTES",
+      "content": "A process can create multiple signalfd file descriptors. This makes it\npossible to accept different signals on different file descriptors. (This may\nbe useful if monitoring the file descriptors using select(2),\npoll(2), or epoll(7): the arrival of different signals will make different\nfile descriptors ready.) If a signal appears in the mask of more than one of\nthe file descriptors, then occurrences of that signal can be read (once) from\nany one of the file descriptors.\n\nAttempts to include SIGKILL and SIGSTOP in mask are silently ignored.\n\nThe signal mask employed by a signalfd file descriptor can be viewed via the\nentry for the corresponding file descriptor in the process's /proc/pid/fdinfo\ndirectory. See proc(5) for further details.\n\nLimitations\nThe signalfd mechanism can't be used to receive signals that are\nsynchronously generated, such as the SIGSEGV signal that results from\naccessing an invalid memory address or the SIGFPE signal that results from an\narithmetic error. Such signals can be caught only via signal handler.\n\nAs described above, in normal usage one blocks the signals that will be\naccepted via signalfd(). If spawning a child process to execute a helper\nprogram (that does not need the signalfd file descriptor), then, after the\ncall to fork(2), you will normally want to unblock those signals before\ncalling execve(2), so that the helper program can see any signals that it\nexpects to see. Be aware, however, that this won't be possible in the case of\na helper program spawned behind the scenes by any library function that the\nprogram may call. In such cases, one must fall back to using a traditional\nsignal handler that writes to a file descriptor monitored by select(2),\npoll(2), or epoll(7).\n"
+    },
+    {
+      "heading": "BUGS",
+      "content": "Before Linux 2.6.25, the ssi_ptr and ssi_int fields are not filled in with\nthe data accompanying a signal sent by sigqueue(3).\n"
+    },
+    {
+      "heading": "EXAMPLES",
+      "content": "The program below accepts the signals SIGINT and SIGQUIT via a signalfd\nfile descriptor. The program terminates after accepting a SIGQUIT signal.\nThe following shell session demonstrates the use of the program:\n\n$ ./signalfd_demo\n^C                   # Control-C generates SIGINT\nGot SIGINT\n^C\nGot SIGINT\n^\\                    # Control-\ generates SIGQUIT\nGot SIGQUIT\n$\n\n\nProgram source\n\n#include <err.h>\n#include <signal.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/signalfd.h>\n#include <sys/types.h>\n#include <unistd.h>\nint\nmain(void)\n{\n    int                      sfd;\n    ssize_t                  s;\n    sigset_t                 mask;\n    struct signalfd_siginfo  fdsi;\n\n    sigemptyset(&amp;mask);\n    sigaddset(&amp;mask, SIGINT);\n    sigaddset(&amp;mask, SIGQUIT);\n\n    /* Block signals so that they aren't handled\n       according to their default dispositions.  */\n    if (sigprocmask(SIG_BLOCK, &amp;mask, NULL) == -1)\n        err(EXIT_FAILURE, \"sigprocmask\");\n\n    sfd = signalfd(-1, &amp;mask, 0);\n    if (sfd == -1)\n        err(EXIT_FAILURE, \"signalfd\");\n\n    for (;;) {\n        s = read(sfd, &amp;fdsi, sizeof(fdsi));\n        if (s != sizeof(fdsi))\n            err(EXIT_FAILURE, \"read\");\n\n        if (fdsi.ssi_signo == SIGINT) {\n            printf(\"Got SIGINT\\n\");\n        } else if (fdsi.ssi_signo == SIGQUIT) {\n            printf(\"Got SIGQUIT\\n\");\n            exit(EXIT_SUCCESS);\n        } else {\n            printf(\"Read unexpected signal\\n\");\n        }\n    }\n}"
+    },
+    {
+      "heading": "SEE ALSO",
+      "content": "eventfd(2), poll(2), read(2), select(2), sigaction(2), sigprocmask(2), sigwaitinfo(2), timerfd_create(2), sigsetops(3), sigwait(3), epoll(7), signal(7)"
+    }
+  ],
+  "footer": {
+    "date": "2025-09-21",
+    "version": "Linux man-pages 6.16"
+  }
+}

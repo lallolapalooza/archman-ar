@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Type::Tiny::Manual::UsingWithMoo3(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Type__Tiny__Manual__UsingWithMoo3(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Type::Tiny::Manual::UsingWithMoo3(3)</td>
+    <td class="head-vol">وثائق Perl المساهم بها من قبل المستخدم</td>
+    <td class="head-rtitle">Type::Tiny::Manual::UsingWithMoo3(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Type::Tiny::Manual::UsingWithMoo3 - استخدام بديل لـ Type::Tiny مع Moo</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MANUAL'><a class='permalink' href='#MANUAL'>دليل</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Type_Registries'><a class='permalink' href='#Type_Registries'>مسجلات الأنواع</a></h2>
+<p class="Pp">في جميع الأمثلة السابقة، قمنا باستيراد مجموعة من قيود الأنواع إلى كل فئة:</p>
+<pre>package Horse {
+  use Moo;
+  use Types::Standard qw( Str ArrayRef HashRef Int Any InstanceOf );
+  use Types::Common::Numeric qw( PositiveInt );
+  use Types::Common::String qw( NonEmptyStr );
+
+  has name    =&gt; ( is =&gt; 'ro', isa =&gt; Str );
+  has father  =&gt; ( is =&gt; 'ro', isa =&gt; InstanceOf[&quot;Horse&quot;] );
+  ...;
+}</pre>
+<p class="Pp">يقوم هذا بإنشاء مجموعة من الدوال الفرعية في مساحة أسماء Horse، واحدة لكل نوع. لقد استخدمنا namespace::autoclean لتنظيفها لاحقًا.</p>
+<p class="Pp">ولكن من الممكن أيضًا تجنب سحب كل هذه إلى مساحة أسماء Horse. بدلاً من ذلك، سنستخدم مسجل أنواع:</p>
+<pre>package Horse {
+  use Moo;
+  use Type::Registry qw( t );
+
+  t-&gt;add_types('-Standard');
+  t-&gt;add_types('-Common::String');
+  t-&gt;add_types('-Common::Numeric');
+
+  t-&gt;alias_type('InstanceOf[&quot;Horse&quot;]' =&gt; 'Horsey');
+
+  has name     =&gt; ( is =&gt; 'ro', isa =&gt; t('Str') );
+  has father   =&gt; ( is =&gt; 'ro', isa =&gt; t('Horsey') );
+  has mother   =&gt; ( is =&gt; 'ro', isa =&gt; t('Horsey') );
+  has children =&gt; ( is =&gt; 'ro', isa =&gt; t('ArrayRef[Horsey]') );
+  ...;
+}</pre>
+<p class="Pp">لا تحتاج حتى إلى استيراد الدالة <span class="Li">t()</span>. يمكن استخدام Type::Registry بطريقة موجهة للكائنات بالكامل.</p>
+<pre>package Horse {
+  use Moo;
+  use Type::Registry;
+
+  my $reg = Type::Registry-&gt;for_me;
+
+  $reg-&gt;add_types('-Standard');
+  $reg-&gt;add_types('-Common::String');
+  $reg-&gt;add_types('-Common::Numeric');
+
+  $reg-&gt;alias_type('InstanceOf[&quot;Horse&quot;]' =&gt; 'Horsey');
+
+  has name =&gt; ( is =&gt; 'ro', isa =&gt; $reg-&gt;lookup('Str') );
+  ...;
+}</pre>
+<p class="Pp">يمكنك إنشاء مسجلين بتعريفات مختلفة تمامًا لنفس النوع المسمى.</p>
+<pre>my $dracula = Aristocrat-&gt;new(name =&gt; 'Dracula');
+
+package AristocracyTracker {
+  use Type::Registry;
+
+  my $reg1 = Type::Registry-&gt;new;
+  $reg1-&gt;add_types('-Common::Numeric');
+  $reg1-&gt;alias_type('PositiveInt' =&gt; 'Count');
+
+  my $reg2 = Type::Registry-&gt;new;
+  $reg2-&gt;add_types('-Standard');
+  $reg2-&gt;alias_type('InstanceOf[&quot;Aristocrat&quot;]' =&gt; 'Count');
+
+  $reg1-&gt;lookup(&quot;Count&quot;)-&gt;assert_valid(&quot;1&quot;);
+  $reg2-&gt;lookup(&quot;Count&quot;)-&gt;assert_valid($dracula);
+}</pre>
+<p class="Pp">يستخدم Type::Registry <span class="Li">&quot;AUTOLOAD&quot;</span>، لذا تعمل أشياء مثل هذه:</p>
+<pre>$reg-&gt;ArrayRef-&gt;of( $reg-&gt;Int );</pre>
+<p class="Pp">على الرغم من أنه يمكنك إنشاء أكبر عدد تريده من المسجلات، إلا أن Type::Registry سينشئ مسجلًا افتراضيًا لكل حزمة.</p>
+<pre># إنشاء مسجل فارغ جديد.
+# 
+my $reg = Type::Registry-&gt;new;
+
+# الحصول على المسجل الافتراضي لحزمتي.
+# سيتم ملؤه مسبقًا بأي أنواع قمنا باستيرادها باستخدام `use`.
+#
+my $reg = Type::Registry-&gt;for_me;
+
+# الحصول على المسجل الافتراضي لحزمة أخرى.
+#
+my $reg = Type::Registry-&gt;for_class(&quot;Horse&quot;);</pre>
+<p class="Pp">مسجلات الأنواع هي مكان مناسب لتخزين مجموعة من الأنواع دون تلويث مساحة الأسماء الخاصة بك. إنها ليست مثل مكتبات الأنواع. Types::Standard و Types::Common::String و Types::Common::Numeric هي مكتبات أنواع؛ حزم تصدر أنواعًا ليستخدمها الآخرون. سننظر في كيفية إنشاء واحدة من هذه لاحقًا.</p>
+<p class="Pp">في الوقت الحالي، إليك أفضل طريقة للتفكير في الفرق:</p>
+<ul class="Bl-bullet">
+  <li>مسجل الأنواع
+    <p class="Pp">قم بتنسيق مجموعة من الأنواع لاستخدامها هنا في هذه الفئة. هذه المجموعة هي تفصيل تنفيذي.</p>
+  </li>
+  <li>مكتبة الأنواع
+    <p class="Pp">قم بتصدير مجموعة من الأنواع لاستخدامها عبر فئات متعددة. هذه المجموعة هي جزء من واجهة برمجة التطبيقات الخاصة بك.</p>
+  </li>
+</ul>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Importing_Functions'><a class='permalink' href='#Importing_Functions'>استيراد الدوال</a></h2>
+<p class="Pp">لقد رأينا كيف أن Types::Standard، على سبيل المثال، تصدر دالة فرعية تسمى <span class="Li">&quot;Int&quot;</span> تعيد كائن النوع <b>Int</b>.</p>
+<pre>use Types::Standard qw( Int );
+
+my $type = Int;
+$type-&gt;check($value) or die $type-&gt;get_message($value);</pre>
+<p class="Pp">مكتبات الأنواع قادرة أيضًا على تصدير دوال مساعدة أخرى.</p>
+<p class="Pp"><span class="Li"><i>&quot;is_*&quot;</i></span><i></i></p>
+<p class="Pp">هذا اختصار للتحقق مما إذا كانت القيمة تفي بشرط النوع:</p>
+<pre>use Types::Standard qw( is_Int );
+
+if ( is_Int $value ) {
+  ...;
+}</pre>
+<p class="Pp">قد يكون استدعاء <span class="Li">is_Int($value)</span> أسرع بشكل هامشي من استدعاء
+    <span class="Li">&quot;Int-&gt;check($value)&quot;</span> لأنه يتجنب استدعاء الطريقة. (استدعاءات الطريقة في Perl تنتهي بكونها أبطأ من استدعاءات الدوال العادية.)</p>
+<p class="Pp">قد يكون استخدام أشياء مثل <span class="Li">&quot;is_ArrayRef&quot;</span> في الكود الخاص بك مفضلًا على
+    <span class="Li">&quot;ref($value) eq &quot;ARRAY&quot;&quot;</span> لأنه أكثر أناقة، ويؤدي إلى فحص أنواع أكثر اتساقًا، وقد يكون أسرع أيضًا. (يمكن أن يكون Type::Tiny سريعًا جدًا؛ فهو قادر أحيانًا على تصدير هذه الدوال كدوال XS.)</p>
+<p class="Pp">إذا كنت تتحقق من قيود الأنواع مثل
+    <span class="Li">&quot;is_ArrayRef&quot;</span> أو
+    <span class="Li">&quot;is_InstanceOf&quot;</span>، فلا توجد طريقة لإعطاء معلمة. <span class="Li">&quot;is_ArrayRef[Int]($value)&quot;</span> لا يعمل، ولا
+    <span class="Li">&quot;is_ArrayRef(Int, $value)&quot;</span> ولا
+    <span class="Li">&quot;is_ArrayRef($value, Int)&quot;</span>. بالنسبة لبعض الأنواع مثل
+    <span class="Li">&quot;is_InstanceOf&quot;</span>، هذا يجعلها عديمة الفائدة تمامًا؛ بدون القدرة على إعطاء اسم فئة، فإنها تعمل بنفس طريقة
+    <span class="Li">&quot;is_Object&quot;</span>. انظر &quot;تصدير الأنواع المعلمة&quot; للحصول على حل. أيضًا، تحقق من isa.</p>
+<p class="Pp">يوجد أيضًا دالة <span class="Li">&quot;is&quot;</span> عامة.</p>
+<pre>use Types::Standard qw( ArrayRef Int );
+use Type::Utils qw( is );
+
+if ( is ArrayRef[Int], \@numbers ) {
+  ...;
+}</pre>
+<p class="Pp"><span class="Li"><i>&quot;assert_*&quot;</i></span><i></i></p>
+<p class="Pp">بينما تعيد <span class="Li">is_Int($value)</span> قيمة منطقية، فإن
+    <span class="Li">assert_Int($value)</span> سيثير خطأ إذا لم تتوافق القيمة مع القيد، ويعيد القيمة بخلاف ذلك. لذا يمكنك القيام بما يلي:</p>
+<pre>my $sum = assert_Int($x) + assert_Int($y);</pre>
+<p class="Pp">وستحصل على مجموع الأعداد الصحيحة <span class="Li">$x</span> و
+    <span class="Li">$y</span>، وانفجار إذا كان أي منهما ليس عددًا صحيحًا!</p>
+<p class="Pp">Assert مفيد للتحقق السريع من المعلمات إذا كنت تتجنب Type::Params لسبب غريب:</p>
+<pre>sub add_numbers {
+  my $x = assert_Num(shift);
+  my $y = assert_Num(shift);
+  return $x + $y;
+}</pre>
+<p class="Pp">يمكنك أيضًا استخدام دالة
+    <span class="Li">&quot;assert&quot;</span> عامة.</p>
+<pre>use Type::Utils qw( assert );
+
+sub add_numbers {
+  my $x = assert Num, shift;
+  my $y = assert Num, shift;
+  return $x + $y;
+}</pre>
+<p class="Pp"><span class="Li"><i>&quot;to_*&quot;</i></span><i></i></p>
+<p class="Pp">هذا اختصار للتحويل:</p>
+<pre>my $truthy = to_Bool($value);</pre>
+<p class="Pp">إنه يثق في أن التحويل قد تم بشكل جيد. يمكنك دمجه مع تأكيد إذا كنت تريد التأكد.</p>
+<pre>my $truthy = assert_Bool(to_Bool($value));</pre>
+<p class="Pp"><i>اختصارات لتصدير الدوال</i></p>
+<p class="Pp">هذا مطول بعض الشيء:</p>
+<pre>use Types::Standard qw( Bool is_Bool assert_Bool to_Bool );</pre>
+<p class="Pp">أليس هذا أفضل قليلاً؟</p>
+<pre>use Types::Standard qw( +Bool );</pre>
+<p class="Pp">العلامة الموجبة تخبر مكتبة الأنواع بتصدير ليس فقط النوع نفسه، ولكن جميع دوال المساعدة أيضًا.</p>
+<p class="Pp">يمكنك أيضًا استخدام:</p>
+<pre>use Types::Standard -types;   # تصدير Int, Bool, etc
+use Types::Standard -is;      # تصدير is_Int, is_Bool, etc
+use Types::Standard -assert;  # تصدير assert_Int, assert_Bool, etc
+use Types::Standard -to;      # تصدير to_Bool, etc
+use Types::Standard -all;     # تصدير كل شيء!!!</pre>
+<p class="Pp">لذا، إذا تخيلت أن الدوال التي تصدرها Types::Standard هي كالتالي:</p>
+<pre>qw(
+  Str             is_Str          assert_Str
+  Num             is_Num          assert_Num
+  Int             is_Int          assert_Int
+  Bool            is_Bool         assert_Bool     to_Bool
+  ArrayRef        is_ArrayRef     assert_ArrayRef
+);
+# ... والمزيد</pre>
+<p class="Pp">إذًا &quot;+&quot; تصدر مجموعة أفقية منها، و &quot;-&quot; تصدر مجموعة عمودية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Exporting_Parameterized_Types'><a class='permalink' href='#Exporting_Parameterized_Types'>تصدير الأنواع المعلمة</a></h2>
+<p class="Pp">من الممكن تصدير أنواع معلمة مثل
+    <b>ArrayRef</b>، ولكن من الممكن أيضًا تصدير أنواع *معلمة*.</p>
+<pre>use Types::Standard qw( ArrayRef Int );
+use Types::Stan</pre>
+</div>
+</section>
+            </article>
+            <aside id="content-right">
+                
+            </aside>
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>اسم</a></h1>
+<p class="Pp">Type::Tiny::Manual::UsingWithMoo - استخدام مكتبات الأنواع</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MANUAL'><a class='permalink' href='#MANUAL'>دليل</a></h1>
+<p class="Pp">هذه وثيقة دليل موجزة فقط. للحصول على شرح كامل، راجع:</p>
+<pre>perldoc Type::Tiny</pre>
+<section class="Ss">
+<h2 class="Ss" id='أنواع_معيارية_تُصدر_أسماء_مخصصة'><a class='permalink' href='#أنواع_معيارية_تُصدر_أسماء_مخصصة'>أنواع معيارية تُصدر أسماء مخصصة</a></h2>
+<p class="Pp">إذا كان لديك نوع معيار مُعرّف مسبقًا، يمكنك استخدامه كأسماء لأنواع جديدة:</p>
+<pre>use Types::Standard -types;
+use Types::Standard::ArrayRef (
+  IntList =&gt; { of =&gt; Int, -as =&gt; 'IntList' },
+);
+
+has numbers =&gt; (is =&gt; 'ro', isa =&gt; IntList);</pre>
+<p class="Pp">يجب أن يكون استخدام <span class="Li">is_IntList($value)</span> أسرع بكثير من
+    <span class="Li">&quot;ArrayRef-&gt;of(Int)-&gt;check($value)&quot;</span>.</p>
+<p class="Pp">هذه الحيلة تعمل فقط مع الأنواع المُعلمة التي لها معامل واحد، مثل
+    <b>ArrayRef</b>، <b>HashRef</b>، <b>InstanceOf</b>، إلخ.
+    (عذرًا، <span class="Li">&quot;Dict&quot;</span> و <span class="Li">&quot;Tuple&quot;</span>!)</p>
+<p class="Pp">منذ Type::Tiny 2.8.0، كان هناك دعم تجريبي لطريقة مختلفة لتصدير إصدارات مُعلمة
+    من بعض القيود النوعية القابلة للتعليم.</p>
+<pre>use Types::Standard -types;
+use Types::Standard::ArrayRef (
+  IntList         =&gt; { of =&gt; Int },
+  StrList         =&gt; { of =&gt; Str },
+  NonEmptyStrList =&gt; { of =&gt; Str-&gt;where( sub { length($_) &gt; 0 } ) },
+  StrNonEmptyList =&gt; { of =&gt; Str, where =&gt; sub { @$_ &gt; 0 } },
+  NEStrNEList     =&gt; {
+    of    =&gt; Str-&gt;where( sub { length($_) &gt; 0 } ),
+    where =&gt; sub { @$_ &gt; 0 },
+  },
+);
+
+assert_IntList [ 1.. 5 ];                      # لا يموت
+
+is_NonEmptyStrList [ &quot;foo&quot;, &quot;bar&quot; ];           # ==&gt; صحيح
+is_NonEmptyStrList [ &quot;foo&quot;, &quot;&quot; ];              # ==&gt; خطأ
+is_NonEmptyStrList [];                         # ==&gt; صحيح
+
+is_StrNonEmptyList [ &quot;foo&quot;, &quot;bar&quot; ];           # ==&gt; صحيح
+is_StrNonEmptyList [ &quot;foo&quot;, &quot;&quot; ];              # ==&gt; صحيح
+is_StrNonEmptyList [];                         # ==&gt; خطأ
+
+is_NEStrNEList [ &quot;foo&quot;, &quot;bar&quot; ];               # ==&gt; صحيح
+is_NEStrNEList [ &quot;foo&quot;, &quot;&quot; ];                  # ==&gt; خطأ
+is_NEStrNEList [];                             # ==&gt; خطأ</pre>
+<p class="Pp">وبالطبع، يقبل <span class="Li">&quot;where&quot;</span> أيضًا سلسلة من شيفرة Perl.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='استيرادات_معجمية'><a class='permalink' href='#استيرادات_معجمية'>استيرادات معجمية</a></h2>
+<p class="Pp">Type::Tiny 2.0 مع Perl 5.37.2+ تسمح بالاستيرادات ذات النطاق المعجمي. لذا:</p>
+<pre>my $is_ok = do {
+  use Types::Standard -lexical, qw( Str ArrayRef );
+  ArrayRef-&gt;of( Str )-&gt;check( \@things );
+};
+
+# أنواع Str و ArrayRef غير مُعرفة هنا.</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='افعل_ما_أقصده!'><a class='permalink' href='#افعل_ما_أقصده!'>افعل ما أقصده!</a></h2>
+<pre>use Type::Utils qw( dwim_type );
+
+my $type = dwim_type(&quot;ArrayRef[Int]&quot;);</pre>
+<p class="Pp"><span class="Li">&quot;dwim_type&quot;</span> سيبحث عن قيد نوع من سلسلة ويحاول تخمين ما قصدته.</p>
+<p class="Pp">إذا كان قيد نوع قمت باستيراده باستخدام <span class="Li">&quot;use&quot;</span>، فسيجده.
+    وإلا، إذا كنت تستخدم Moose أو Mouse، فسيبذل قصارى جهده للسؤال. أو إذا كان في
+    Types::Standard، فسيبحث هناك. وإذا لم يكن لديه فكرة بعد، فسيفترض أن
+    dwim_type(&quot;Foo&quot;) تعني
+    dwim_type(&quot;InstanceOf['Foo']&quot;).</p>
+<p class="Pp">إنه يقوم فقط بالكثير من التخمين.</p>
+<p class="Pp">ستستخدم الدالة <span class="Li">&quot;is&quot;</span>
+    <span class="Li">&quot;dwim_type&quot;</span> إذا مررت لها سلسلة كنوع.</p>
+<pre>use Type::Utils qw( is );
+
+if ( is &quot;ArrayRef[Int]&quot;, \@numbers ) {
+  ...;
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Types::Common'><a class='permalink' href='#Types::Common'>Types::Common</a></h2>
+<p class="Pp">لاحظ أننا في العديد من الأمثلة نستورد دالة أو اثنتين من وحدات قليلة مختلفة:</p>
+<pre>use Types::Common::Numeric qw( PositiveInt );
+use Types::Common::String qw( NonEmptyStr );
+use Types::Standard qw( ArrayRef Slurpy );
+use Type::Params qw( signature_for );</pre>
+<p class="Pp">توجد وحدة تسمى Types::Common تعمل كمكان واحد يمكنك استخدامه لاستيراد معظم
+    أنواع ووظائف Type::Tiny شائعة الاستخدام.</p>
+<pre>use Types::Common qw(
+  PositiveInt NonEmptyStr ArrayRef Slurpy
+  signature_for
+);</pre>
+<p class="Pp">يوفر Types::Common:</p>
+<ul class="Bl-bullet">
+  <li>جميع الأنواع من Types::Standard.</li>
+  <li>جميع الأنواع من Types::Common::Numeric و Types::Common::String.</li>
+  <li>جميع الأنواع من Types::TypeTiny.</li>
+  <li>العلامة <span class="Li">&quot;-sigs&quot;</span> من Type::Params.</li>
+  <li>الدالة <span class="Li">t()</span> من Type::Registry.</li>
+</ul>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NEXT_STEPS'><a class='permalink' href='#NEXT_STEPS'>الخطوات_التالية</a></h1>
+<p class="Pp">أنت تعرف الآن كل شيء تقريبًا عن كيفية استخدام مكتبات الأنواع.</p>
+<p class="Pp">إليك خطوتك التالية:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>Type::Tiny::Manual::Libraries
+    <p class="Pp">تعريف مكتبات الأنواع الخاصة بك، بما في ذلك توسيع المكتبات الموجودة،
+        وتعريف أنواع جديدة، وإضافة التحويلات، وتعريف أنواع قابلة للتعليم، والأسلوب
+        التصريحي.</p>
+  </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">Toby Inkster &lt;tobyink@cpan.org&gt;.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COPYRIGHT_AND_LICENCE'><a class='permalink' href='#COPYRIGHT_AND_LICENCE'>حقوق_النشر_والترخيص</a></h1>
+<p class="Pp">هذا البرنامج هو حقوق طبع ونشر (c) 2013-2014، 2017-2025 بواسطة Toby
+    Inkster.</p>
+<p class="Pp">هذا برنامج مجاني؛ يمكنك إعادة توزيعه و/أو تعديله بموجب نفس الشروط التي
+    تخضع لها نظام برمجة لغة Perl 5 نفسه.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DISCLAIMER_OF_WARRANTIES'><a class='permalink' href='#DISCLAIMER_OF_WARRANTIES'>إخلاء_المسؤولية_عن_الضمانات</a></h1>
+<p class="Pp">يتم توفير هذه الحزمة &quot;كما هي&quot; وبدون أي ضمانات صريحة أو ضمنية،
+    بما في ذلك، على سبيل المثال لا الحصر، الضمانات الضمنية الخاصة بقابلية التسويق
+    واللياقة لغرض معين.</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-11-02</td>
+    <td class="foot-os">perl v5.42.0</td>
+  </tr>
+</table>

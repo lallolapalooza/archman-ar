@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Params::Validate(3pm) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Params__Validate(3pm)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Params::Validate(3pm)</td>
+    <td class="head-vol">User Contributed Perl Documentation</td>
+    <td class="head-rtitle">Params::Validate(3pm)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">Params::Validate - التحقق من صحة معلمات الطرق/الوظائف</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='VERSION'><a class='permalink' href='#VERSION'>الإصدار</a></h1>
+<p class="Pp">version 1.31</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>use Params::Validate qw(:all);
+# تأخذ معلمات مسماة (تجزئة أو مرجع تجزئة)
+sub foo {
+    validate(
+        @_, {
+            foo =&gt; 1,    # مطلوب
+            bar =&gt; 0,    # اختياري
+        }
+    );
+}
+# تأخذ معلمات موضعية
+sub bar {
+    # أول اثنتين مطلوبة، الثالثة اختيارية
+    validate_pos( @_, 1, 1, 0 );
+}
+sub foo2 {
+    validate(
+        @_, {
+            foo =&gt;
+                # تحديد نوع
+                { type =&gt; ARRAYREF },
+            bar =&gt;
+                # تحديد واجهة
+                { can =&gt; [ 'print', 'flush', 'frobnicate' ] },
+            baz =&gt; {
+                type      =&gt; SCALAR,     # قيمة عددية ...
+                                         # ... يجب أن تكون عددًا صحيحًا عاديًا ...
+                regex     =&gt; qr/^\d+$/,
+                callbacks =&gt; {           # ... وأصغر من 90
+                    'أقل من 90' =&gt; sub { shift() &lt; 90 },
+                },
+            }
+        }
+    );
+}
+sub callback_with_custom_error {
+    validate(
+        @_,
+        {
+            foo =&gt; {
+                callbacks =&gt; {
+                    'عدد صحيح' =&gt; sub {
+                        return 1 if $_[0] =~ /^-?[1-9][0-9]*$/;
+                        die &quot;$_[0] ليست قيمة عدد صحيح صالحة&quot;;
+                    },
+                },
+            }
+        }
+    );
+}
+sub with_defaults {
+    my %p = validate(
+        @_, {
+            # مطلوب
+            foo =&gt; 1,
+            # ستكون $p{bar} تساوي 99 إذا لم يتم تقديم bar. bar الآن
+            # اختياري.
+            bar =&gt; { default =&gt; 99 }
+        }
+    );
+}
+sub pos_with_defaults {
+    my @p = validate_pos( @_, 1, { default =&gt; 99 } );
+}
+sub sets_options_on_call {
+    my %p = validate_with(
+        params =&gt; \@_,
+        spec   =&gt; { foo =&gt; { type =&gt; SCALAR, default =&gt; 2 } },
+        normalize_keys =&gt; sub { $_[0] =~ s/^-//; lc $_[0] },
+    );
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp"><b>أوصي بشدة بأن تفكر في استخدام
+    Params::ValidationCompiler</b> <b>بدلاً من ذلك. هذه الوحدة، على الرغم من كونها
+    Perl نقية، إلا أنها أسرع بشكل</b> <b><i>ملحوظ</i></b> <b>من هذه الوحدة، مقابل
+    تكلفة تبني نظام أنواع مثل Specio،</b> <b>Type::Tiny، أو النظام الذي يأتي مع
+    Moose</b>.</p>
+<p class="Pp">تتيح لك هذه الوحدة التحقق من صحة معلمات استدعاء الطريقة أو الوظيفة
+    بمستوى عشوائي من التحديد. في أبسط مستوياتها، فهي قادرة على التحقق من أن
+    المعلمات المطلوبة تم تقديمها وأنه لم يتم تمرير معلمات إضافية غير محددة.</p>
+<p class="Pp">وهي أيضًا قادرة على تحديد أن معلمة من نوع معين، أو أنها كائن من تسلسل
+    هرمي لفئة معينة، أو أنها تمتلك طرقًا معينة، أو تطبيق استدعاءات تحقق على
+    الوسائط.</p>
+<section class="Ss">
+<h2 class="Ss" id='EXPORT'><a class='permalink' href='#EXPORT'>تصدير</a></h2>
+<p class="Pp">تقوم الوحدة دائمًا بتصدير الدوال <span class="Li">validate()</span>
+    و <span class="Li">validate_pos()</span>.</p>
+<p class="Pp">لديها أيضًا وظيفة إضافية متاحة للتصدير،
+    <span class="Li">&quot;validate_with&quot;</span>، والتي يمكن استخدامها للتحقق من
+    أي نوع من المعلمات، وتعيين خيارات مختلفة على أساس كل استدعاء.</p>
+<p class="Pp">بالإضافة إلى ذلك، يمكنها تصدير الثوابت التالية، والتي تستخدم كجزء من
+    التحقق من النوع. هذه هي
+    <span class="Li">&quot;SCALAR&quot;</span>،
+    <span class="Li">&quot;ARRAYREF&quot;</span>،
+    <span class="Li">&quot;HASHREF&quot;</span>،
+    <span class="Li">&quot;CODEREF&quot;</span>،
+    <span class="Li">&quot;GLOB&quot;</span>،
+    <span class="Li">&quot;GLOBREF&quot;</span>، و
+    <span class="Li">&quot;SCALARREF&quot;</span>،
+    <span class="Li">&quot;UNDEF&quot;</span>،
+    <span class="Li">&quot;OBJECT&quot;</span>،
+    <span class="Li">&quot;BOOLEAN&quot;</span>، و
+    <span class="Li">&quot;HANDLE&quot;</span>. يتم شرح هذه في قسم التحقق من النوع.</p>
+<p class="Pp">الثوابت متاحة عبر العلامة <span class="Li">&quot;:types&quot;</span>
+    المصدرة. هناك أيضًا علامة
+    <span class="Li">&quot;:all&quot;</span> التي تتضمن جميع الثوابت بالإضافة إلى
+    الدالة <span class="Li">validation_options()</span>.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PARAMETER_VALIDATION'><a class='permalink' href='#PARAMETER_VALIDATION'>التحقق من صحة المعلمات</a></h1>
+<p class="Pp">يمكن لآليات التحقق التي توفرها هذه الوحدة التعامل مع معلمات مسماة أو
+    موضعية. في الغالب، تتوفر نفس الميزات لكليهما. الاختلاف الأكبر هو الطريقة التي
+    يتم بها تقديم مواصفات التحقق إلى الروتين الفرعي ذي الصلة. الاختلاف الآخر هو في
+    رسائل الخطأ التي يتم إنتاجها عند فشل فحوصات التحقق.</p>
+<p class="Pp">عند التعامل مع المعلمات المسماة، ستقبل الوحدة إما تجزئة أو مرجع تجزئة.</p>
+<p class="Pp">يجب على الروتينات الفرعية التي تتوقع معلمات مسماة استدعاء الروتين الفرعي
+    <span class="Li">validate()</span> هكذا:</p>
+<pre>validate(
+    @_, {
+        parameter1 =&gt; validation spec,
+        parameter2 =&gt; validation spec,
+        ...
+    }
+);</pre>
+<p class="Pp">يجب على الروتينات الفرعية التي تتوقع معلمات موضعية استدعاء الروتين الفرعي
+    <span class="Li">validate_pos()</span> هكذا:</p>
+<pre>validate_pos( @_, { validation spec }, { validation spec } );</pre>
+<section class="Ss">
+<h2 class="Ss" id='Mandatory/Optional_Parameters'><a class='permalink' href='#Mandatory/Optional_Parameters'>المعلمات المطلوبة/الاختيارية</a></h2>
+<p class="Pp">إذا كنت ترغب فقط في تحديد أن بعض المعلمات مطلوبة وأن البعض الآخر اختياري،
+    فيمكن القيام بذلك ببساطة شديدة.</p>
+<p class="Pp">بالنسبة لروتين فرعي يتوقع معلمات مسماة، ستقوم بما يلي:</p>
+<pre>validate( @_, { foo =&gt; 1, bar =&gt; 1, baz =&gt; 0 } );</pre>
+<p class="Pp">هذا يعني أن معلمتي &quot;foo&quot; و &quot;bar&quot; مطلوبتان وأن معلمة &quot;baz&quot;
+    اختيارية. وجود أي معلمات أخرى سيؤدي إلى حدوث خطأ.</p>
+<p class="Pp">بالنسبة لروتين فرعي يتوقع معلمات موضعية، ستقوم بما يلي:</p>
+<pre>validate_pos( @_, 1, 1, 0, 0 );</pre>
+<p class="Pp">هذا يعني أنك تتوقع ما لا يقل عن 2 ولا يزيد عن 4 معلمات. إذا كان لديك
+    روتين فرعي يحتوي على الحد الأدنى من المعلمات ولكنه يمكن أن يأخذ أي عدد أقصى،
+    يمكنك القيام بما يلي:</p>
+<pre>validate_pos( @_, 1, 1, (0) x (@_ - 2) );</pre>
+<p class="Pp">سيكون هذا صحيحًا دائمًا طالما تم تقديم معلمتين على الأقل. يمكن استخدام
+    بنية مماثلة للمعلمات التحقق الأكثر تعقيدًا الموضحة لاحقًا.</p>
+<p class="Pp">يرجى ملاحظة أن هذا:</p>
+<pre>validate_pos( @_, 1, 1, 0, 1, 1 );</pre>
+<p class="Pp">ليس له أي معنى على الإطلاق، لذا لا تفعل ذلك. يجب أن تأتي أي أصفار في نهاية
+    مواصفات التحقق.</p>
+<p class="Pp">بالإضافة إلى ذلك، إذا حددت أن معلمة يمكن أن يكون لها قيمة افتراضية،
+    فإنها تعتبر اختيارية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Type_Validation'><a class='permalink' href='#Type_Validation'>التحقق من النوع</a></h2>
+<p class="Pp">تدعم هذه الوحدة الأنواع البسيطة التالية، والتي يمكن تصديرها كثوابت:</p>
+<ul class="Bl-bullet">
+  <li>SCALAR
+    <p class="Pp">قيمة عددية ليست مرجعًا، مثل <span class="Li">10</span> أو
+        <span class="Li">'hello'</span>. القيمة غير المعرفة <b>لا</b> تُعامل كقيمة
+        عددية. إذا كنت تريد السماح بالقيم غير المعرفة، فستحتاج إلى تحديد
+        <span class="Li">&quot;SCALAR |</span>
+        <span class="Li">UNDEF&quot;</span>.</p>
+  </li>
+  <li>ARRAYREF
+    <p class="Pp">مرجع مصفوفة مثل <span class="Li">&quot;[1, 2,
+        3]&quot;</span> أو <span class="Li">&quot;\@foo&quot;</span>.</p>
+  </li>
+  <li>HASHREF
+    <p class="Pp">مرجع تجزئة مثل <span class="Li">&quot;{ a =&gt; 1, b
+        =&gt; 2 }&quot;</span> أو <span class="Li">&quot;\%bar&quot;</span>.</p>
+  </li>
+  <li>CODEREF
+    <p class="Pp">مرجع لدالة فرعية مثل
+        <span class="Li">&quot;\&amp;foo_sub&quot;</span> أو
+        <span class="Li">&quot;sub { print &quot;hello&quot; }&quot;</span>.</p>
+  </li>
+  <li>GLOB
+    <p class="Pp">هذه صعبة بعض الشيء. سيكون الـ glob شيئًا مثل
+        <span class="Li">*FOO</span>، ولكن ليس
+        <span class="Li">&quot;\*FOO&quot;</span>، وهو مرجع glob. تجدر الإشارة إلى
+        أن هذه الحيلة:</p>
+        <pre>my $fh = do { local *FH; };
+</pre>
+    <p class="Pp">تجعل <span class="Li">$fh</span> قيمة glob، وليس مرجع glob. من ناحية
+        أخرى، فإن القيمة المرجعة من
+        <span class="Li">&quot;Symbol::gensym&quot;</span> هي مرجع glob. يمكن استخدام
+        أي منهما كمقبض ملف أو دليل.</p>
+  </li>
+  <li>GLOBREF
+    <p class="Pp">مرجع glob مثل
+        <span class="Li">&quot;\*FOO&quot;</span>. انظر إدخال GLOB أعلاه لمزيد من
+        التفاصيل.</p>
+  </li>
+  <li>SCALARREF
+    <p class="Pp">مرجع لقيمة عددية مثل
+        <span class="Li">&quot;\$x&quot;</span>.</p>
+  </li>
+  <li>UNDEF
+    <p class="Pp">قيمة غير معرفة</p>
+  </<ul>
+  <li>
+  <li>OBJECT
+    <p class="Pp">مرجع مبارك.</p>
+  </li>
+  <li>BOOLEAN
+    <p class="Pp">هذا خيار خاص، وهو مجرد اختصار لـ
+        <span class="Li">&quot;UNDEF | SCALAR&quot;</span>.</p>
+  </li>
+  <li>HANDLE
+    <p class="Pp">هذا الخيار خاص أيضًا، وهو مجرد اختصار لـ
+        <span class="Li">&quot;GLOB |</span>
+        <span class="Li">GLOBREF&quot;</span>. ومع ذلك، يبدو من المحتمل أن
+        يكون معظم الأشخاص المهتمين إما بالـ globs أو بـ glob references مهتمين حقًا بما إذا كان المعلمة قيد الفحص يمكن أن تكون مقبض ملف أو دليل صالحًا.</p>
+  </li>
+</ul>
+<p class="Pp">لتحديد أن المعلمة يجب أن تكون من نوع معين عند استخدام معلمات مسماة، قم بما يلي:</p>
+<pre>validate(
+    @_, {
+        foo =&gt; { type =&gt; SCALAR },
+        bar =&gt; { type =&gt; HASHREF }
+    }
+);</pre>
+<p class="Pp">إذا كانت المعلمة يمكن أن تكون من أكثر من نوع واحد، فاستخدم عامل التشغيل OR الثنائي (bitwise or) (<span class="Li">&quot;|&quot;</span>) لدمجها.</p>
+<pre>validate( @_, { foo =&gt; { type =&gt; GLOB | GLOBREF } );</pre>
+<p class="Pp">بالنسبة للمعلمات الموضعية، يمكن تحديد ذلك على النحو التالي:</p>
+<pre>validate_pos( @_, { type =&gt; SCALAR | ARRAYREF }, { type =&gt; CODEREF } );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Interface_Validation'><a class='permalink' href='#Interface_Validation'>التحقق من الواجهة</a></h2>
+<p class="Pp">لتحديد أن المعلمة يُتوقع أن تحتوي على مجموعة معينة من الطرق، يمكننا القيام بما يلي:</p>
+<pre>   validate(
+       @_, {
+           foo =&gt;
+               # يجب أن تكون قادرة على -&gt;bar فقط
+               { can =&gt; 'bar' }
+       }
+   );
+... أو ...
+   validate(
+       @_, {
+           foo =&gt;
+               # يجب أن تكون قادرة على -&gt;bar و -&gt;print
+               { can =&gt; [qw( bar print )] }
+       }
+   );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Class_Validation'><a class='permalink' href='#Class_Validation'>التحقق من الفئة</a></h2>
+<p class="Pp">كلمة تحذير. عند بناء واجهاتك الخارجية، من الأفضل ربما تحديد الطرق التي تتوقع أن يمتلكها الكائن بدلاً من الفئة التي يجب أن ينتمي إليها (أو فئة فرعية منها). سيجعل هذا واجهة برمجة التطبيقات (API) الخاصة بك أكثر مرونة.</p>
+<p class="Pp">مع أخذ ذلك في الاعتبار، إذا كنت ترغب في التحقق من أن المعلمة الواردة تنتمي إلى فئة (أو فئة فرعية) أو فئات، فقم بما يلي:</p>
+<pre>   validate(
+       @_,
+       { foo =&gt; { isa =&gt; 'My::Frobnicator' } }
+   );
+... أو ...
+   validate(
+       @_,
+       # يجب أن يكونا كلاهما، وليس أي منهما!
+       { foo =&gt; { isa =&gt; [qw( My::Frobnicator IO::Handle )] } }
+   );</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Regex_Validation'><a class='permalink' href='#Regex_Validation'>التحقق من التعبيرات العادية</a></h2>
+<p class="Pp">إذا كنت ترغب في تحديد أن المعلمة المعطاة يجب أن تتطابق مع تعبير عادي محدد، يمكن القيام بذلك باستخدام مفتاح المواصفات "regex". على سبيل المثال:</p>
+<pre>validate(
+    @_,
+    { foo =&gt; { regex =&gt; qr/^\d+$/ } }
+);</pre>
+<p class="Pp">قد تكون قيمة "regex" إما سلسلة نصية أو تعبير عادي تم تجميعه مسبقًا تم إنشاؤه عبر <span class="Li">&quot;qr&quot;</span>.</p>
+<p class="Pp">إذا كانت القيمة التي يتم التحقق منها مقابل تعبير عادي غير محددة، يتم فحص التعبير العادي بشكل صريح مقابل السلسلة الفارغة ('')، لتجنب تحذيرات "استخدام قيمة غير مهيأة".</p>
+<p class="Pp">الوحدة <span class="Li">&quot;Regexp::Common&quot;</span> على CPAN هي مصدر ممتاز للتعبيرات العادية المناسبة للتحقق من صحة الإدخال.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Callback_Validation'><a class='permalink' href='#Callback_Validation'>التحقق من الاستدعاء</a></h2>
+<p class="Pp">إذا لم يكن أي مما سبق كافياً، فمن الممكن تمرير استدعاء واحد أو أكثر للتحقق من صحة المعلمة. سيتم إعطاء الاستدعاء <b>قيمة</b> المعلمة كوسيط أول لها. الوسيط الثاني سيكون جميع المعلمات، كمرجع إما لهاش أو مصفوفة. يتم تحديد الاستدعاءات كمرجع لهاش. المفتاح هو معرف للاستدعاء (يستخدم في رسائل الخطأ) والقيمة هي مرجع لروتين فرعي، مثل:</p>
+<pre>validate(
+    @_,
+    {
+        foo =&gt; {
+            callbacks =&gt; {
+                'smaller than a breadbox' =&gt; sub { shift() &lt; $breadbox },
+                'green or blue'           =&gt; sub {
+                    return 1 if $_[0] eq 'green' || $_[0] eq 'blue';
+                    die &quot;$_[0] is not green or blue!&quot;;
+                }
+            }
+        }
+    }
+);
+validate(
+    @_, {
+        foo =&gt; {
+            callbacks =&gt; {
+                'bigger than baz' =&gt; sub { $_[0] &gt; $_[1]-&gt;{baz} }
+            }
+        }
+    }
+);</pre>
+<p class="Pp">يجب أن يعيد الاستدعاء قيمة حقيقية إذا كانت القيمة صالحة. إذا لم يكن كذلك، يمكن أن يعيد قيمة خاطئة أو يموت. إذا قمت بإرجاع قيمة خاطئة، فسيتم طرح رسالة خطأ عامة بواسطة
+    <span class="Li">&quot;Params::Validate&quot;</span>.</p>
+<p class="Pp">إذا مات الاستدعاء بدلاً من ذلك، يمكنك توفير رسالة خطأ مخصصة. إذا مات الاستدعاء بسلسلة نصية عادية، فسيتم إلحاق هذه السلسلة برسالة استثناء تم إنشاؤها بواسطة
+    <span class="Li">&quot;Params::Validate&quot;</span>. إذا مات الاستدعاء بمرجع (مبارك أو غير مبارك)، فسيتم إعادة إطلاقه كما هو بواسطة
+    <span class="Li">&quot;Params::Validate&quot;</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Untainting'><a class='permalink' href='#Untainting'>إلغاء التدليس</a></h2>
+<p class="Pp">إذا كنت تريد أن تكون القيم غير مدلسة، قم بتعيين المفتاح "untaint" في مواصفات الهاش إلى قيمة حقيقية، كالتالي:</p>
+<pre>my %p = validate(
+    @_, {
+        foo =&gt; { type =&gt; SCALAR, untaint =&gt; 1 },
+        bar =&gt; { type =&gt; ARRAYREF }
+    }
+);</pre>
+<p class="Pp">سيؤدي هذا إلى إلغاء تدليس المعلمة "foo" إذا كانت المعلمات صالحة.</p>
+<p class="Pp">لاحظ أنه لا يتم إلغاء التدليس إلا إذا كانت <i>جميع المعلمات</i> صالحة. أيضًا، فقط قيم الإرجاع هي التي يتم إلغاء تدليسها، وليس القيم الأصلية التي تم تمريرها إلى دالة التحقق.</p>
+<p class="Pp">طلب إلغاء تدليس قيمة مرجعية لن يفعل شيئًا، حيث أن
+    <span class="Li">&quot;Params::Validate&quot;</span> سيحاول فقط إلغاء تدليس المرجع نفسه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Mandatory/Optional_Revisited'><a class='permalink' href='#Mandatory/Optional_Revisited'>الإلزامية/الاختيارية - نظرة أخرى</a></h2>
+<p class="Pp">إذا كنت ترغب في تحديد شيء مثل النوع أو الواجهة، بالإضافة إلى حقيقة أن المعلمة يمكن أن تكون اختيارية، فقم بما يلي:</p>
+<pre>validate(
+    @_, {
+        foo =&gt; { type =&gt; SCALAR },
+        bar =&gt; { type =&gt; ARRAYREF, optional =&gt; 1 }
+    }
+);</pre>
+<p class="Pp">أو هذا للمعلمات الموضعية:</p>
+<pre>validate_pos(
+    @_,
+    { type =&gt; SCALAR },
+    { type =&gt; ARRAYREF, optional =&gt; 1 }
+);</pre>
+<p class="Pp">افتراضيًا، تُفترض المعلمات أنها إلزامية ما لم يتم تحديدها على أنها اختيارية.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Dependencies'><a class='permalink' href='#Dependencies'>التبعيات</a></h2>
+<p class="Pp">من الممكن أيضًا تحديد أن معلمة اختيارية معينة تعتمد على وجود معلمة اختيارية أخرى واحدة أو أكثر.</p>
+<pre>validate(
+    @_, {
+        cc_number =&gt; {
+            type     =&gt; SCALAR,
+            optional =&gt; 1,
+            depends  =&gt; [ 'cc_expiration', 'cc_holder_name' ],
+        },
+        cc_expiration  =&gt; { type =&gt; SCALAR, optional =&gt; 1 },
+        cc_holder_name =&gt; { type =&gt; SCALAR, optional =&gt; 1 },
+    }
+);</pre>
+<p class="Pp">في هذه الحالة، "cc_number" و "cc_expiration" و "cc_holder_name" كلها اختيارية. ومع ذلك، إذا تم توفير "cc_number"، فيجب أيضًا توفير "cc_expiration" و "cc_holder_name".</p>
+<p class="Pp">يتيح لك هذا تجميع مجموعات من المعلمات التي يجب توفيرها معًا.</p>
+<p class="Pp">نسخة <span class="Li">validate_pos()</span> من التبعيات مختلفة قليلاً، حيث يمكنك الاعتماد على معلمة أخرى واحدة فقط. أيضًا، إذا كانت المعلمة الثانية، على سبيل المثال، تعتمد على المعلمة الرابعة، فإنها تعني ضمنًا تبعية على المعلمة الثالثة أيضًا. هذا لأنه إذا كانت المعلمة الرابعة مطلوبة، فيجب على المستخدم أيضًا توفير معلمة ثالثة حتى يكون هناك أربع معلمات في المجموع.</p>
+<p class="Pp"><span class="Li">&quot;Params::Validate&quot;</span> سيموت إذا حاولت الاعتماد على معلمة غير معلنة كجزء من مواصفات معلمتك.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Specifying_defaults'><a class='permalink' href='#Specifying_defaults'>تحديد القيم الافتراضية</a></h2>
+<p class="Pp">إذا تم استدعاء الدوال <span class="Li">validate()</span> أو
+    <span class="Li">validate_pos()</span> في سياق قائمة، فستعيد تجزئة أو تحتوي على المعلمات الأصلية بالإضافة إلى القيم الافتراضية كما هو موضح في مواصفات التحقق.</p>
+<p class="Pp">إذا لم يتم استدعاء الدالة في سياق قائمة، فإن توفير قيمة افتراضية في مواصفات التحقق لا يزال يشير إلى أن المعلمة اختيارية.</p>
+<p class="Pp">التجزئة أو المصفوفة التي تم إرجاعها من الدالة ستكون دائمًا نسخة من المعلمات الأصلية، وذلك لترك <span class="Li">@_</span> دون تغيير للدالة المستدعية.</p>
+<p class="Pp">أمثلة بسيطة للقيم الافتراضية ستكون:</p>
+<pre>my %p = validate( @_, { foo =&gt; 1, bar =&gt; { default =&gt; 99 } } );
+my @p = validate_pos( @_, 1, { default =&gt; 99 } );</pre>
+<p class="Pp">في سياق القياسي، سيتم إرجاع مرجع تجزئة أو مرجع مصفوفة، حسب الاقتضاء.</p>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='USAGE_NOTES'><a class='permalink' href='#USAGE_NOTES'>ملاحظات الاستخدام</a></h1>
+<section class="Ss">
+<h2 class="Ss" id='Validation_failure'><a class='permalink' href='#Validation_failure'>فشل التحقق</a></h2>
+<p class="Pp">افتراضيًا، عند فشل التحقق، تستدعي
+    <span class="Li">&quot;Params::Validate&quot;</span>
+    <span class="Li">Carp::confess()</span>. يمكن تجاوز هذا عن طريق تعيين
+    الخيار "on_fail"، والذي تم وصفه في قسم "OPTIONS GLOBAL".</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Method_calls'><a class='permalink' href='#Method_calls'>استدعاءات الدوال</a></h2>
+<p class="Pp">عند استخدام هذه الوحدة للتحقق من صحة المعلمات التي تم تمريرها إلى استدعاء دالة، قد ترغب في إزالة الفئة/الكائن من قائمة المعلمات <b>قبل</b> استدعاء
+    <span class="Li">validate()</span> أو
+    <span class="Li">validate_pos()</span>. إذا كانت دالتك تتوقع معلمات مسماة،
+    فهذا ضروري لكي تعمل دالة
+    <span class="Li">validate()</span> بالفعل، وإلا فإن
+    <span class="Li">@_</span> لن تكون قابلة للاستخدام كتجزئة، لأنها ستحتوي أولاً
+    على الكائن الخاص بك (أو الفئة) <b>متبوعًا</b> بمجموعة من المفاتيح والقيم.</p>
+<p class="Pp">لذلك، فإن الاستخدام الاصطلاحي لـ
+    <span class="Li">validate()</span> في استدعاء دالة سيبدو كالتالي:</p>
+<pre>sub method {
+    my $self = shift;
+    my %params = validate(
+        @_, {
+            foo =&gt; 1,
+            bar =&gt; { type =&gt; ARRAYREF },
+        }
+    );
+}</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Speeding_Up_Validation'><a class='permalink' href='#Speeding_Up_Validation'>تسريع التحقق</a></h2>
+<p class="Pp">في معظم الحالات، ستظل مواصفات التحقق كما هي لكل استدعاء لدالة فرعية. في هذه الحالة، يمكنك تسريع التحقق عن طريق تحديد مواصفات التحقق مرة واحدة فقط، بدلاً من كل استدعاء للدالة الفرعية:</p>
+<pre>my %spec = ( ... );
+sub foo {
+    my %params = validate( @_, \%spec );
+}</pre>
+<p class="Pp">يمكنك أيضًا استخدام</p>
+</section>
+</section>
+Mantén toda la estructura del archivo.
+<p class="Pp">Utiliza la funcionalidad <span class="Li">&quot;state&quot;</span> para realizar esto:</p>
+<pre>use feature 'state';
+sub foo {
+    state $spec = { ... };
+    my %params = validate( @_, $spec );
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='&amp;quot;GLOBAL&amp;quot;_OPTIONS'><a class='permalink' href='#&amp;quot;GLOBAL&amp;quot;_OPTIONS'>&quot;GLOBAL&quot;   OPTIONS</a></h1>
+<p class="Pp">Porque la API para las funciones <span class="Li">validate()</span> y <span class="Li">validate_pos()</span> no permite especificar cualquier opción aparte de la especificación de validación, es posible establecer algunas opciones como "globales pseudométricos". Estas permiten especificar cosas como si la validación de parámetros nombrados debe ser sensible al caso, por ejemplo.</p>
+<p class="Pp">Estas opciones se denominan "globales pseudométricos" porque estas configuraciones se aplican <b>sólo a llamadas que provengan del paquete que establece las opciones</b>.</p>
+<p class="Pp">En otras palabras, si estoy en el paquete <span class="Li">&quot;Foo&quot;</span> y llamo a <span class="Li">validation_options()</span>, estos ajustes solo se aplican cuando llamo a <span class="Li">validate()</span> desde el mismo paquete <span class="Li">&quot;Foo&quot;</span>.</p>
+<p class="Pp">Aunque esto es bastante diferente de cómo operan otros módulos, me siento que es necesario para permitir que una sola módulo/aplicación use <span class="Li">Params::Validate</span> mientras continúe utilizando otros módulos que también usen <span class="Li">Params::Validate</span>, tal vez con opciones diferentes.</p>
+<p class="Pp">La desventaja es que si estás escribiendo una aplicación con estilo de invocación estándar para todas las funciones y tu aplicación tiene diez módulos, <b>cada</b> <b>módulo debe incluir una llamada a</b> <span class="Li"><b>validation_options()</b></span>. Puedes escribir un módulo que todos tus módulos usen que use trucos para hacer esto cuando se importe.</p>
+<section class="Ss">
+<h2 class="Ss" id='Options'><a class='permalink' href='#Options'>Options</a></h2>
+<ul class="Bl-bullet">
+  <li>normalize_keys =&gt; <span class="Li">$callback</span>
+    <p class="Pp">Esta opción es relevante solo cuando se trata de parámetros nombrados.</p>
+    <p class="Pp">Este callback se utilizará para transformar las claves del hash de ambos los parámetros y la especificación de parámetros cuando se llame a <span class="Li">validate()</span> o <span class="Li">validate_with()</span>.</p>
+    <p class="Pp">Cualquier alteración realizada por este callback se reflejará en el hash de parámetros devuelto por la función de validación. Por ejemplo:</p>
+    <pre>sub foo {
+        return validate_with(
+            params =&gt; \@_,
+            spec   =&gt; { foo =&gt; { type =&gt; SCALAR } },
+            normalize_keys =&gt;
+                sub { my $k = shift; $k =~ s/^-//; return uc $k },
+        );
+    }
+    %p = foo( foo =&gt; 20 );
+    # $p{FOO} es ahora 20
+    %p = foo( -fOo =&gt; 50 );
+    # $p{FOO} es ahora 50
+</pre>
+    <p class="Pp">El callback debe retornar un valor definido.</p>
+    <p class="Pp">Si se proporciona un callback, los opciones antiguas <span class="Li">ignore_case</span> y <span class="Li">strip_leading</span> se ignoran.</p>
+  </li>
+  <li>allow_extra =&gt; <span class="Li">$boolean</span>
+    <p class="Pp">Si es verdadero, la rutina de validación permitirá parámetros no nombrados en la especificación de validación. En el caso de parámetros posicionales, permite un número ilimitado de parámetros máximos (aunque un mínimo puede aún ser establecido). Por defecto es falso.</p>
+  </li>
+  <li>on_fail =&gt; <span class="Li">$callback</span>
+    <p class="Pp">Si se proporciona, este callback se llama cuando se produce una verificación de validación que falle. Se le pasa un único parámetro, que será una cadena describiendo la falla. Esto es útil si deseas que este módulo lances objetos en lugar de strings, por ejemplo.</p>
+    <p class="Pp">Este callback es esperado para <span class="Li">die()</span> internamente. Si no lo hace, la validación continuará con resultados impredecibles.</p>
+    <p class="Pp">El default es usar la función <span class="Li">confess()</span> de <span class="Li">Carp</span> por defecto.</p>
+  </li>
+  <li>stack_skip =&gt; <span class="Li">$number</span>
+    <p class="Pp">Este indica a Params::Validate cuántos frames de pila deben ser omitidos cuando se busca el nombre de la subroutine para mensajes de error. Por defecto, busca uno frame atrás, en el llamador inmediato a <span class="Li">validate()</span> o <span class="Li">validate_pos()</span>. Si esta opción se establece, se omiten el número dado.</p>
+  </li>
+  <li>ignore_case =&gt; <span class="Li">$boolean</span>
+    <p class="Pp">DEPRECATED</p>
+    <p class="Pp">Esta es solo relevante cuando se tratan parámetros nombrados. Si es verdadero, el código de validación ignorará el caso de los nombres de parámetros. Por defecto es falso.</p>
+  </li>
+  <li>strip_leading =&gt; <span class="Li">$characters</span>
+    <p class="Pp">DEPRECATED</p>
+    <p class="Pp">Esta también es solo relevante cuando se tratan parámetros nombrados. Si se proporciona, cualquier parámetro que comience con estos caracteres se considera equivalente a uno que no lo tenga. Por ejemplo, si se especifica '-', <span class="Li">&quot;-foo&quot;</span> y <span class="Li">&quot;foo&quot;</span> se consideran idénticos.</p>
+  </li>
+</ul>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PER-INVOCATION_OPTIONS'><a class='permalink' href='#PER-INVOCATION_OPTIONS'>PER-INVOCATION   OPTIONS</a></h1>
+<p class="Pp">La función <span class="Li">validate_with()</span> puede usarse para establecer las opciones listadas anteriormente de forma per-invocación. Por ejemplo:</p>
+<pre>my %p = validate_with(
+    params =&gt; \@_,
+    spec   =&gt; {
+        foo =&gt; { type    =&gt; SCALAR },
+        bar =&gt; { default =&gt; 10 }
+    },
+    allow_extra =&gt; 1,
+);
+</pre>
+<p class="Pp">Además de las opciones listadas anteriormente, también es posible establecer la opción <span class="Li">called</span>, que debe ser una cadena. Esta cadena se utilizará en cualquier mensaje de error causado por una falla en la especificación de validación.</p>
+<p class="Pp">Esta subrutina validará los parámetros nombrados como un hash si el parámetro <span class="Li">spec</span> es un referencia a un hash. Si es un arreglo, los parámetros se asumen como posicionales.</p>
+<pre>my %p = validate_with(
+    params =&gt; \@_,
+    spec   =&gt; {
+        foo =&gt; { type    =&gt; SCALAR },
+        bar =&gt; { default =&gt; 10 }
+    },
+    allow_extra =&gt; 1,
+    called      =&gt; 'The Quux::Baz class constructor',
+);
+my @p = validate_with(
+    params =&gt; \@_,
+    spec   =&gt; [
+        { type    =&gt; SCALAR },
+        { default =&gt; 10 }
+    ],
+    allow_extra =&gt; 1,
+    called      =&gt; 'The Quux::Baz class constructor',
+);
+</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DISABLING_VALIDATION'><a class='permalink' href='#DISABLING_VALIDATION'>DISABLING   VALIDATION</a></h1>
+<p class="Pp">Si la variable entorno <span class="Li">&quot;PERL_NO_VALIDATION&quot;</span> está establecida a algo verdadero, se desactiva la validación. Esto puede ser útil si solo quieres usar este módulo durante el desarrollo pero no quieres el impacto de la velocidad en producción.</p>
+<p class="Pp">La única error que se capturará será cuando se le pasen un número impar de parámetros a una función o método que espera un hash.</p>
+<p class="Pp">Si quieres activar y desactivar la validación en tiempo de ejecución, puedes directamente establecer la variable global <span class="Li">$Params::Validate::NO_VALIDATION</span>. Es <b>fuertemente recomendado</b> que localices cualquier cambio a esta variable, ya que otros módulos que estés usando puedan esperar que la validación esté activa cuando se ejecuten. Por ejemplo:</p>
+<pre>
+{
+    local $Params::Validate::NO_VALIDATION = 1;
+    # no error
+    foo( bar =&gt; 2 );
+}
+# error
+foo( bar =&gt; 2 );
+sub foo {
+    my %p = validate( @_, { foo =&gt; 1 } );
+    ...;
+}
+</pre>
+<p class="Pp">Pero si quieres dispararte la pierna y simplemente apagarla, hazlo!</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SPECIFYING_AN_IMPLEMENTATION'><a class='permalink' href='#SPECIFYING_AN_IMPLEMENTATION'>SPECIFYING   AN IMPLEMENTATION</a></h1>
+<p class="Pp">Este módulo viene con dos implementaciones equivalentes, una en XS y otra en Perl pura. Por defecto, intentará cargar la versión XS y se basará en la implementación Perl pura cuando sea necesario. Si quieres solicitar una versión específica, puedes establecer la variable entorno <span class="Li">&quot;PARAMS_VALIDATE_IMPLEMENTATION&quot;</span> en <span class="Li">&quot;XS&quot;</span> o <span class="Li">&quot;PP&quot;</span>. Si la implementación que solicitas no puede cargarse, este módulo se cargará y se crashará.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='TAINT_MODE'><a class='permalink' href='#TAINT_MODE'>TAINT   MODE</a></h1>
+<p class="Pp">La implementación XS del módulo tiene algunos problemas bajo modo taint con versiones de Perl anteriores a 5.14. Si la validación <i>falla</i>, en lugar de recibir el mensaje de error esperado, obtendrás un mensaje como <span class="Li">Insecure dependency in eval_sv</span>. Esto puede ser trabajado alrededor con una desactivación de taint manual, usando la implementación Perl pura o actualizando tu Perl.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIMITATIONS'><a class='permalink' href='#LIMITATIONS'>LIMITATIONS</a></h1>
+<p class="Pp">Hasta ahora no hay manera (a menos de un callback) de especificar que algo debe ser de una lista de clases o que debe poseer una lista de métodos. Si deseas esto, puede agregarse en el futuro.</p>
+<p class="Pp">Idealmente, habría solo una función de validación. Si alguien figura out cómo hacer esto, por favor avísame.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SUPPORT'><a class='permalink' href='#SUPPORT'>SUPPORT</a></h1>
+<p class="Pp">Los errores pueden ser enviados a <a href='https://github.com/houseabsolute/Params-Validate/issues'>https://github.com/houseabsolute/Params-Validate/issues</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SOURCE'><a class='permalink' href='#SOURCE'>SOURCE</a></h1>
+<p class="Pp">El repositorio de código fuente del módulo Params-Validate puede encontrarse en <a href='https://github.com/houseabsolute/Params-Validate'>https://github.com/houseabsolute/Params-Validate</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DONATIONS'><a class='permalink' href='#DONATIONS'>DONATIONS</a></h1>
+<p class="Pp">Si quieres agradecerme por el trabajo que he realizado en este módulo, considera hacer una donación a mí a través de PayPal. Dedico un gran tiempo a crear software libre y apreciaría cualquier apoyo que puedas ofrecer.</p>
+<p class="Pp">Por favor note que <b>no sugiero que debas hacer esto</b> para que pueda continuar trabajando en este particular software. Lo haré, en tanto que pueda, siempre que me interese.</p>
+<p class="Pp">De igual manera, una donación realizada de esta manera probablemente no me hará trabajar más en este software, a menos que reciba tantas donaciones que pueda considerar trabajar en software libre full time (jóvenes, ¡jóvenes!).</p>
+<p class="Pp">Para donar, entra en PayPal y envía dinero a autarch@urth.org, o usa el botón en <a href='https://houseabsolute.com/foss-donations/'>https://houseabsolute.com/foss-donations/</a>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHORS'><a class='permalink' href='#AUTHORS'>AUTHORS</a></h1>
+<ul class="Bl-bullet">
+  <li>Dave Rolsky &lt;autarch@urth.org&gt;</li>
+  <li>Ilya Martynov &lt;ily</li>
+</ul>
+</section>

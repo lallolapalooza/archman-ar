@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Log::Log4perl::Appender::DBI(3pm) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">Log__Log4perl__Appender__DBI(3pm)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/extra/any/perl-log-log4perl/">perl-log-log4perl</a></p>
+<p class="lic">التراخيص: PerlArtistic, GPL</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">Appender::DBI(3)</td>
+    <td class="head-vol">وثائق مساهمة من مستخدمي Perl</td>
+    <td class="head-rtitle">Appender::DBI(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<br/>
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">Log::Log4perl::Appender::DBI - يطبق Appender لقاعدة البيانات</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<pre>  my $config = q{
+   log4j.category = WARN, DBAppndr
+   log4j.appender.DBAppndr             = Log::Log4perl::Appender::DBI
+   log4j.appender.DBAppndr.datasource  = DBI:CSV:f_dir=t/tmp
+   log4j.appender.DBAppndr.username    = bobjones
+   log4j.appender.DBAppndr.password    = 12345
+   log4j.appender.DBAppndr.sql         = \
+      insert into log4perltest           \
+      (loglevel, custid, category, message, ipaddr) \
+      values (?,?,?,?,?)
+   log4j.appender.DBAppndr.params.1 = %p    
+                                 #2 هو custid من استدعاء log()
+   log4j.appender.DBAppndr.params.3 = %c
+                                 #4 هي الرسالة من log()
+                                 #5 هو ipaddr من log()
+   log4j.appender.DBAppndr.usePreparedStmt = 1
+    #--أو--
+   log4j.appender.DBAppndr.bufferSize = 2
+   #مرر ببساطة مصفوفة عناصر الرسالة في عبارة log
+   log4j.appender.DBAppndr.layout    = Log::Log4perl::Layout::NoopLayout
+   log4j.appender.DBAppndr.warp_message = 0
+   #دعم سمات المشغل
+   log4j.appender.DBAppndr.attrs.f_encoding = utf8
+  };
+&#x00A0; Log::Log4perl::init ( \$config ) ;                                      
+&#x00A0; my $logger = Log::Log4perl-&gt;get_logger () ;                             
+  $logger-&gt;warn( $custid, 'big problem!!', $ip_addr );</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CAVEAT"><a class='permalink' href='#CAVEAT'>CAVEAT</a></h1>
+<p class="Pp">هذه الوحدة جديدة جداً وهناك العديد من التنوعات في الإعدادات مع قواعد بيانات وطرق اتصال مختلفة، لذا تأكد من اختبارها جيداً! إذا أردت، يمكنك ترك تعليق!</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp">هذا كائن متخصص من Log::Dispatch مخصص للعمل مع Log4perl وقدراته، مستند أصلاً على Log::Dispatch::DBI بواسطة Tatsuhiko Miyagawa، ولكن مع تعديلات كبيرة.</p>
+<p class="Pp">إنها محاولة لفهم التوازن بين ما كان يفعله Log::Dispatch::DBI وما يفعله JDBCAppender في log4j. لاحظ أن وثائق log4j تقول أن JDBCAppender "من المحتمل جداً أن يتم استبداله بالكامل في المستقبل".</p>
+<p class="Pp">الاستخدام الأبسط هو هذا:</p>
+<pre>log4j.category = WARN, DBAppndr
+log4j.appender.DBAppndr            = Log::Log4perl::Appender::DBI
+log4j.appender.DBAppndr.datasource = DBI:CSV:f_dir=t/tmp
+log4j.appender.DBAppndr.username   = bobjones
+log4j.appender.DBAppndr.password   = 12345
+log4j.appender.DBAppndr.sql        = \
+   INSERT INTO logtbl                \
+      (loglevel, message)            \
+      VALUES ('%c','%m')
+log4j.appender.DBAppndr.layout    = Log::Log4perl::Layout::PatternLayout
+$logger-&gt;fatal('fatal message');
+$logger-&gt;warn('warning message');
+===============================
+|FATAL|fatal message          |
+|WARN |warning message        |
+===============================</pre>
+<p class="Pp">لكن عيوب هذا الاستخدام هي:</p>
+<ul class="Bl-bullet">
+  <li>يجب عليك التأكد من عدم وجود علامات اقتباس في رسالة السجل الخاصة بك، وإلا فقد يكون للإدخال عواقب غير متوقعة! هذه طريقة غير آمنة للغاية للتعامل مع إدخالات قاعدة البيانات، استخدام العناصر النائبة والقيم المرتبطة أفضل بكثير، تابع القراءة. (ملاحظة: وثائق log4j ستحذر "كن حذراً من علامات الاقتباس في رسائلك!" ) <b>*</b>.</li>
+  <li>إنه ليس سريعًا جدًا من حيث الأداء، حيث يتم إنشاء وتنفيذ عبارة لكل استدعاء log.</li>
+  <li>المعلمة الوحيدة وقت التشغيل التي يمكنك الحصول عليها هي <span class="Li">%m</span>، في الواقع، من المحتمل أن ترغب في تسجيل بيانات محددة في أعمدة محددة من الجدول.</li>
+</ul>
+<p class="Pp">لذا، حاول استخدام العناصر النائبة، وأخبر المسجل بإنشاء مقبض معد مسبقًا في البداية وإعادة استخدامه (كما يفعل Log::Dispatch::DBI).</p>
+<pre>log4j.appender.DBAppndr.sql = \
+   INSERT INTO logtbl \
+      (custid, loglevel, message) \
+      VALUES (?,?,?)
+#---------------------------------------------------
+#الآن قيم الربط:
+                              #1 هو custid
+log4j.appender.DBAppndr.params.2 = %p    
+                              #3 هي الرسالة
+#---------------------------------------------------
+log4j.appender.DBAppndr.layout    = Log::Log4perl::Layout::NoopLayout
+log4j.appender.DBAppndr.warp_message = 0
+
+log4j.appender.DBAppndr.usePreparedStmt = 1
+
+
+$logger-&gt;warn( 1234, 'warning message' );</pre>
+<p class="Pp">الآن انظر كيف نستخدم العناصر النائبة '؟' في استعلامنا؟ هذا يعني أنك لن تضطر للقلق بشأن الرسائل التي تبدو</p>
+<pre>invalid input: 1234';drop table custid;</pre>
+<p class="Pp">تعطيل قاعدة بياناتنا!</p>
+<p class="Pp">عادةً، يتم ربط قائمة العناصر في استعلام السجل في سلسلة واحدة، ولكن عن طريق تعيين</p>
+<pre>warp_message = 0</pre>
+<p class="Pp">واستخدام NoopLayout يعني أنه في</p>
+<pre>$logger-&gt;warn( 1234, 'warning message', 'bgates' );</pre>
+<p class="Pp">سيتم الاحتفاظ بالعناصر الفردية متاحة لمسجل DBI لاحقًا. (إذا لم يتم تعيين warp_message على 0، فإن السلوك الافتراضي هو توحيد عناصر القائمة. إذا تم استخدام PatternLayout أو SimpleLayout، فإن محاولتك لعرض التخطيط الخاص بك ستعطي شيئًا مثل &quot;ARRAY(0x841d8dc)&quot; في سجلاتك. المزيد حول warp_message موجود في Log::Log4perl::Appender.)</p>
+<p class="Pp">في استعلام SQL الخاص بك، يمكنك مزج العناصر النائبة '؟' مع محددات التحويل مثل %c، %p، إلخ، كما تقوم بالتحويل. سيقوم المسجل بربط علامات الاستفهام هذه بالمعلمات التي حددتها في ملف التكوين وسيملأ الباقي بالقيم من قائمتك. إذا كان هناك المزيد من العناصر النائبة '؟' أكثر من القيم في رسالتك، فسيستخدم undef للباقي. على سبيل المثال،</p>
+<pre>log4j.appender.DBAppndr.sql =                 \
+   insert into log4perltest                   \
+   (loglevel, message, datestr, subpoena_id)\
+   values (?,?,?,?)
+log4j.appender.DBAppndr.params.1 = %p
+log4j.appender.DBAppndr.params.3 = %d
+log4j.appender.DBAppndr.warp_message=0
+$logger-&gt;info('arrest him!', $subpoena_id);</pre>
+<p class="Pp">يؤدي إلى ربط العنصر النائب الأول '؟' بـ %p، والثاني بـ 'arrest him!'، والثالث بالتاريخ من %d، والرابع بـ $subpoenaid الخاص بك. إذا نسيت $subpoena_id وسجلت فقط</p>
+<pre>$logger-&gt;info('arrest him!');</pre>
+<p class="Pp">فستحصل على undef فقط في العمود الرابع.</p>
+<p class="Pp">إذا كان يتم التعامل مع عبارة المسجل بواسطة ملحقات غير DBI أخرى أيضًا، فسوف تقوم فقط بربط القائمة في سلسلة واحدة، موحدة بحرف الربط الافتراضي لـ $Log::Log4perl::JOIN_MSG_ARRAY_CHAR (افتراضيًا هو سلسلة فارغة).</p>
+<p class="Pp">وانظر استخدام "usePreparedStmt"؟ هذا ينشئ مقبض عبارة عند إنشاء كائن المسجل ويعيد استخدامه. ومع ذلك، قد يكون مشكلة للعمليات الطويلة مثل خوادم الويب، في هذه الحالة يمكنك استخدام هذه المعلمة بدلاً من ذلك.</p>
+<pre>log4j.appender.DBAppndr.bufferSize=2</pre>
+<p class="Pp">هذا ينسخ سلوك JDBCAppender في log4j، ويحتفظ بعدد من عبارات السجل ويكتبها جميعًا في مكان واحد. إذا كان استعلام INSERT الخاص بك يستخدم فقط عناصر نائبة '؟' وليس '%x'، فيجب أن يكون فعالاً جدًا لأن المسجل يمكنه إعادة استخدام نفس مقبض العبارة للإدخالات.</p>
+<p class="Pp">إذا انتهى البرنامج بينما المخزن المؤقت ممتلئ جزئيًا، فيجب أن يفرغ كتلة DESTROY العبارات المتبقية، إذا عملت كتلة DESTROY.</p>
+<p class="Pp">* <i>أثناء كتابة هذا، كان Danko Mannhaupt يعمل على</i> <i> JDBCAppender محسّن لـ log4j</i> <a href='http://www.mannhaupt.com/danko/projects/' title='http://www.mannhaupt.com/danko/projects/'>http://www.mannhaupt.com/danko/projects/</a> <i>الذي يتجاوز العديد من عيوب JDBCAppender الأصلي.</i></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION_2"><a class='permalink' href='#DESCRIPTION_2'>DESCRIPTION   2</a></h1>
+<p class="Pp">أو بطريقة أخرى لقول الشيء نفسه:</p>
+<p class="Pp">الفكرة هي أنه إذا كنت تسجل في جدول قاعدة بيانات، فمن المحتمل أن ترغب في الحصول على أجزاء محددة من معلومات السجل الخاصة بك في أعمدة معينة. لهذا، تمرر قائمة إلى عبارة السجل، مثل</p>
+<pre>$logger-&gt;warn('big problem!!',$userid,$subpoena_nr,$ip_addr);</pre>
+<p class="Pp">ويتم إدراج عناصر القائمة في المواضع المحددة بواسطة العناصر النائبة في استعلام SQL الخاص بك. يمكنك أيضًا تحديد معلومات في ملف التكوين مثل</p>
+<pre>log4j.appender.DBAppndr.params.2 = %p</pre>
+<p class="Pp">حيث سيتم ربط هذه العناصر النائبة المرقمة بالقيم المحددة، وسيتم ملء الباقي بالقيم من عبارة السجل الخاصة بك.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="MISC_PARAMETERS"><a class='permalink' href='#MISC_PARAMETERS'>MISC   PARAMETERS</a></h1>
+<dl class="Bl-tag">
+  <dt id="usePreparedStmt"><a class="permalink" href="#usePreparedStmt">usePreparedStmt</a></dt>
+  <dd>انظر أعلاه.</dd>
+  <dt id="warp_message"><a class="permalink" href="#warp_message">warp_message</a></dt>
+  <dd>انظر Log::Log4perl::Appender</dd>
+  <dt id="max_col_size"><a class="permalink" href="#max_col_size">max_col_size</a></dt>
+</dl>
+</div>
+</section>
+                
+            </article>
+        </main>
+        <footer>
+        </footer>
+    </body>
+</html>
+<section class="Sh">
+<h1 class="Sh" id="max_col_size">max_col_size</h1>
+<dl class="Nl">
+<dt class="Nl"><a class="permalink" href="#max_col_size">max_col_size</a></dt>
+<dd>إذا كنت معتادًا على مجرد رمي رسائل تصحيح الأخطاء مثل تتبعات المكدس الضخمة في المسجل الخاص بك، فقد تفاجئك بعض قواعد البيانات (DBD الخاص بـ Sybase!!) بتعطل بسبب قيود حجم البيانات. في العادة، سيتم اقتطاع البيانات لتناسب العمود، ولكن DBD الخاص بـ Sybase يصل إلى 255 حرفًا. استخدم هذه المعلمة في مثل هذا الموقف لاقتطاع الرسائل الطويلة قبل وصولها إلى عبارة INSERT.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CHANGING_DBH_CONNECTIONS_(POOLING)"><a class="permalink" href="#CHANGING_DBH_CONNECTIONS_(POOLING)">تغيير اتصالات DBH (التجميع)</a></h1>
+<p class="Pp">إذا كنت ترغب في الحصول على dbh الخاص بك من مكان معين، مثل مجمع (pool)، فقم بإنشاء فئة فرعية وتجاوز <b>_init()</b> و/أو <b>create_statement()</b>، على سبيل المثال</p>
+<pre>sub _init {
+    ; # لا تفعل شيئًا، لا يوجد تجميع على هذا المستوى
+}
+sub create_statement {
+    my ($self, $stmt) = @_;
+
+    $stmt || croak &quot;Log4perl: sql not set in &quot;.__PACKAGE__;
+
+    return My::Connections-&gt;getConnection-&gt;prepare($stmt) 
+        || croak &quot;Log4perl: DBI-&gt;prepare failed $DBI::errstr\n$stmt&quot;;
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIFE_OF_CONNECTIONS"><a class="permalink" href="#LIFE_OF_CONNECTIONS">عمر الاتصالات</a></h1>
+<p class="Pp">إذا كنت تستخدم
+<span class="Li">&quot;log4j.appender.DBAppndr.usePreparedStmt&quot;</span>، تقوم هذه الوحدة بإنشاء sth عند بدئها وتحتفظ به طوال عمر البرنامج. بالنسبة للعمليات طويلة الأمد (مثل mod_perl)، قد تصبح الاتصالات قديمة، ولكن إذا حاول
+<span class="Li">&quot;Log::Log4perl::Appender::DBI&quot;</span> كتابة رسالة واكتشف أن اتصال قاعدة البيانات لم يعد يعمل (باستخدام طريقة ping الخاصة بـ DBI)، فسيقوم بإعادة الاتصال.</p>
+<p class="Pp">يمكن التحكم في عملية إعادة الاتصال بواسطة معلمتين:
+<span class="Li">&quot;reconnect_attempts&quot;</span> و
+<span class="Li">&quot;reconnect_sleep&quot;</span>.
+<span class="Li">&quot;reconnect_attempts&quot;</span> تحدد عدد محاولات إعادة الاتصال التي يقوم بها ملحق DBI حتى يستسلم ويموت.
+<span class="Li">&quot;reconnect_sleep&quot;</span> هو الوقت بين محاولات إعادة الاتصال، مقاسًا بالثواني.
+<span class="Li">&quot;reconnect_attempts&quot;</span> افتراضيًا 1،
+<span class="Li">&quot;reconnect_sleep&quot;</span> افتراضيًا 0.</p>
+<p class="Pp">بدلاً من ذلك، استخدم
+<span class="Li">&quot;Apache::DBI&quot;</span> أو
+<span class="Li">&quot;Apache::DBI::Cache&quot;</span> واقرأ قسم "تغيير اتصالات DB" أعلاه.</p>
+<p class="Pp">لاحظ أن
+<span class="Li">&quot;Log::Log4perl::Appender::DBI&quot;</span> تحتفظ باتصال واحد مفتوح لكل ملحق، مما قد يكون كثيرًا.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">انظر أيضًا</a></h1>
+<p class="Pp">Log::Dispatch::DBI</p>
+<p class="Pp">Log::Log4perl::JavaMap::JDBCAppender</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LICENSE"><a class="permalink" href="#LICENSE">الترخيص</a></h1>
+<p class="Pp">Copyright 2002-2013 by Mike Schilli &lt;m@perlmeister.com&gt; and
+Kevin Goess &lt;cpan@goess.org&gt;.</p>
+<p class="Pp">هذه المكتبة هي برنامج مجاني؛ يمكنك إعادة توزيعها و/أو تعديلها تحت نفس الشروط التي تنطبق على Perl نفسها.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="AUTHOR"><a class="permalink" href="#AUTHOR">المؤلف</a></h1>
+<p class="Pp">يرجى المساهمة بتصحيحات للمشروع على Github:</p>
+<a href="http://github.com/mschilli/log4perl">http://github.com/mschilli/log4perl</a>
+<p class="Pp">أرسل تقارير الأخطاء أو طلبات التحسينات إلى المؤلفين عبر</p>
+<p class="Pp">القائمة البريدية (أسئلة، تقارير أخطاء، اقتراحات/تصحيحات):
+log4perl-devel@lists.sourceforge.net</p>
+<p class="Pp">المؤلفون (يرجى الاتصال بهم عبر القائمة أعلاه، وليس مباشرة): Mike Schilli &lt;m@perlmeister.com&gt;، Kevin Goess
+&lt;cpan@goess.org&gt;</p>
+<p class="Pp">المساهمون (بترتيب أبجدي): Ateeq Altaf، Cory Bennett،
+Jens Berthold، Jeremy Bopp، Hutton Davidson، Chris R. Donnelly، Matisse
+Enzer، Hugh Esco، Anthony Foiani، James FitzGibbon، Carl Franks، Dennis
+Gregorovic، Andy Grundman، Paul Harrington، Alexander Hartmaier David Hull،
+Robert Jacobson، Jason Kohles، Jeff Macdonald، Markus Peter، Brett Rann،
+Peter Rabbitson، Erik Selberg، Aaron Straup Cope، Lars Thegler، David Viner،
+Mac Yang.</p>
+</section>
+</div>
+<table class="foot">
+<tr>
+<td class="foot-date">2025-07-13</td>
+<td class="foot-os">perl v5.42.0</td>
+</tr>
+</table>
+
+</section>
+
+</article>
+<aside id="sidebar">
+<section class="search">
+<form action="/search" class="search direct-search" role="search">
+<input type="search" placeholder="Search manual page" name="q" value=""
+/>
+<input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+<p>Package information:</p>
+<dl>
+<dt>Package name:</dt>
+<dd><a href="https://www.archlinux.org/packages/extra/any/perl-log-log4perl/">extra/perl-log-log4perl</a></dd>
+<dt>Version:</dt>
+<dd>1.57-5</dd>
+<dt>Upstream:</dt>
+<dd><a href="https://metacpan.org/release/Log-Log4perl">https://metacpan.org/release/Log-Log4perl</a></dd>
+<dt>Licenses:</dt>
+<dd>PerlArtistic, GPL</dd>
+<dt>Manuals:</dt>
+<dd><a href="/listing/extra/perl-log-log4perl/">/listing/extra/perl-log-log4perl/</a></dd>
+</dl>
+</section>
+
+<details>
+<summary>Table of contents</summary>
+<nav class="toc">
+<ul>
+<li><a href="#NAME">NAME</a></li>
+<li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+<li><a href="#CAVEAT">CAVEAT</a></li>
+<li><a href="#DESCRIPTION">DESCRIPTION</a></li>
+<li><a href="#DESCRIPTION_2">DESCRIPTION 2</a></li>
+<li><a href="#MISC_PARAMETERS">MISC PARAMETERS</a></li>
+<li><a href="#CHANGING_DBH_CONNECTIONS_(POOLING)">CHANGING DBH CONNECTIONS (POOLING)</a></li>
+<li><a href="#LIFE_OF_CONNECTIONS">LIFE OF CONNECTIONS</a></li>
+<li><a href="#SEE_ALSO">SEE ALSO</a></li>
+<li><a href="#LICENSE">LICENSE</a></li>
+<li><a href="#AUTHOR">AUTHOR</a></li>
+</ul>
+</nav>
+</details>
+
+<nav class="other-formats">
+<p>Other formats:
+<a href="/man/Log::Log4perl::Appender::DBI.3pm.en.txt">txt</a>, 
+<a href="/man/Log::Log4perl::Appender::DBI.3pm.en.raw">raw</a>
+</p>
+</nav>
+
+</aside>
+
+</main>
+<footer>
+
+<p>The website is available under the terms of the <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+license, except for the contents of the manual pages, which have their own license
+specified in the corresponding Arch Linux package.
+</p>
+</footer>
+</body>
+</html>

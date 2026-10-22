@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>open_by_handle_at(2) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">open_by_handle_at(2)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">open_by_handle_at(2)</td>
+    <td class="head-vol">دليل استدعاءات النظام</td>
+    <td class="head-rtitle">open_by_handle_at(2)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">name_to_handle_at, open_by_handle_at - الحصول على مقبض لمسار واسم ملف وفتح ملف عبر مقبض</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIBRARY'><a class='permalink' href='#LIBRARY'>المكتبة</a></h1>
+<p class="Pp">مكتبة C القياسية (<i>libc</i>، &#x00A0;-lc)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>ملخص</a></h1>
+<pre><b>#define _GNU_SOURCE</b>         /* انظر feature_test_macros(7) */
+<b>#include &lt;fcntl.h&gt;</b></pre>
+<pre><b>int name_to_handle_at(int </b><i>dirfd</i><b>, const char *</b><i>path</i><b>,</b>
+<b>                      struct file_handle *</b><i>handle</i><b>,</b>
+<b>                      int *</b><i>mount_id</i><b>, int </b><i>flags</i><b>);</b>
+<b>int open_by_handle_at(int </b><i>mount_fd</i><b>, struct file_handle *</b><i>handle</i><b>,</b>
+<b>                      int </b><i>flags</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تقوم استدعاءات النظام <b>name_to_handle_at</b>() و <b>open_by_handle_at</b>() بتقسيم وظيفة <a href='/man/openat.2.en'>openat(2)</a> إلى جزأين: تقوم <b>name_to_handle_at</b>() بإرجاع مقبض مبهم يتوافق مع ملف محدد؛ وتقوم <b>open_by_handle_at</b>() بفتح الملف المقابل لمقبض تم إرجاعه بواسطة استدعاء سابق لـ <b>name_to_handle_at</b>() وإرجاع واصف ملف مفتوح.</p>
+<section class="Ss">
+<h2 class="Ss" id='name_to_handle_at()'><a class='permalink' href='#name_to_handle_at()'>name_to_handle_at()</a></h2>
+<p class="Pp">يُرجع استدعاء النظام <b>name_to_handle_at</b>() مقبض ملف ومعرف تثبيت يتوافقان مع الملف المحدد بواسطة الوسيطين <i>dirfd</i> و <i>path</i>. يتم إرجاع مقبض الملف عبر الوسيط <i>handle</i>، وهو مؤشر إلى بنية من الشكل التالي:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>struct file_handle {
+    unsigned int  handle_bytes;   /* حجم f_handle [إدخال، إخراج] */
+    int           handle_type;    /* نوع المقبض [إخراج] */
+    unsigned char f_handle[0];    /* معرف الملف (يتم تحديد حجمه بواسطة
+                                     المستدعي) [إخراج] */
+};</pre>
+<p class="Pp">تقع على عاتق المستدعي مسؤولية تخصيص البنية بحجم كافٍ لاستيعاب المقبض الذي تم إرجاعه في <i>f_handle</i>. قبل الاستدعاء، يجب تهيئة الحقل <i>handle_bytes</i> ليحتوي على الحجم المخصص لـ <i>f_handle</i>. (الثابت <b>MAX_HANDLE_SZ</b>، المعرف في <i>&lt;fcntl.h&gt;</i>، يحدد أقصى حجم متوقع لمقبض الملف. إنه ليس حدًا علويًا مضمونًا حيث قد تتطلب أنظمة الملفات المستقبلية مساحة أكبر.) عند العودة بنجاح، يتم تحديث الحقل <i>handle_bytes</i> ليحتوي على عدد البايتات التي تم كتابتها فعليًا إلى <i>f_handle</i>.</p>
+<p class="Pp">يمكن للمستدعي اكتشاف الحجم المطلوب لبنية <i>file_handle</i> عن طريق إجراء استدعاء يكون فيه <i>handle-&gt;handle_bytes</i> صفرًا؛ في هذه الحالة، يفشل الاستدعاء بالخطأ <b>EOVERFLOW</b> ويتم تعيين <i>handle-&gt;handle_bytes</i> للإشارة إلى الحجم المطلوب؛ يمكن للمستدعي بعد ذلك استخدام هذه المعلومات لتخصيص بنية بالحجم الصحيح (انظر الأمثلة أدناه). يلزم بعض الحذر هنا لأن <b>EOVERFLOW</b> يمكن أن يشير أيضًا إلى عدم توفر مقبض ملف لهذا الاسم المحدد في نظام ملفات يدعم عادةً البحث عن مقبض الملف. يمكن اكتشاف هذه الحالة عندما يتم إرجاع الخطأ <b>EOVERFLOW</b> دون زيادة <i>handle_bytes</i>.</p>
+<p class="Pp">بخلاف استخدام الحقل <i>handle_bytes</i>، يجب على المستدعي التعامل مع بنية <i>file_handle</i> كنوع بيانات مبهم: يمكن استخدام حقلي <i>handle_type</i> و <i>f_handle</i> في استدعاء لاحق لـ <b>open_by_handle_at</b>(). يمكن للمستدعي أيضًا استخدام <i>file_handle</i> المبهم لمقارنة هوية كائنات نظام الملفات التي تم الاستعلام عنها في أوقات مختلفة وربما في مسارات مختلفة. يمكن لنظام 
+<a href='/man/fanotify.7.en'>fanotify(7)</a> الفرعي الإبلاغ عن الأحداث بسجل معلومات يحتوي على <i>file_handle</i> لتحديد كائن نظام الملفات.</p>
+<p class="Pp">الوسيط <i>flags</i> هو قناع بت يتم إنشاؤه عن طريق ORing صفرًا أو أكثر من <b>AT_HANDLE_FID</b> و <b>AT_HANDLE_MNT_ID_UNIQUE</b> و <b>AT_HANDLE_CONNECTABLE</b> و <b>AT_EMPTY_PATH</b> و <b>AT_SYMLINK_FOLLOW</b>، الموضحة أدناه.</p>
+<p class="Pp">عندما يحتوي <i>flags</i> على العلامة <b>AT_HANDLE_FID</b> (منذ Linux 6.5)، يشير المستدعي إلى أن <i>file_handle</i> المُرجع مطلوب لتحديد كائن نظام الملفات، وليس لفتح الملف لاحقًا، لذلك يجب توقع أن استدعاءًا لاحقًا لـ <b>open_by_handle_at</b>() باستخدام <i>file_handle</i> المُرجع قد يفشل.</p>
+<p class="Pp">عندما يحتوي <i>flags</i> على العلامة <b>AT_HANDLE_MNT_ID_UNIQUE</b> (منذ Linux 6.12)، يشير المستدعي إلى أن عرض المخزن المؤقت <i>mount_id</i> هو 64 بت على الأقل، وبعد ذلك فإن معرف التثبيت المُرجع في هذا المخزن المؤقت هو معرف التثبيت الفريد كما هو مُرجع بواسطة <a href='/man/statx.2.en'>statx(2)</a> مع العلامة <b>STATX_MNT_ID_UNIQUE</b>.</p>
+<p class="Pp">عندما يحتوي <i>flags</i> على العلامة <b>AT_HANDLE_CONNECTABLE</b> (منذ Linux 6.13)، يشير المستدعي إلى أن <i>file_handle</i> المُرجع مطلوب لفتح ملف بمسار معروف لاحقًا، لذلك يجب توقع أن استدعاءًا لاحقًا لـ <b>open_by_handle_at</b>() باستخدام <i>file_handle</i> المُرجع قد يفشل إذا تم نقل الملف، ولكن بخلاف ذلك، من المتوقع أن يكون مسار الملف المفتوح مرئيًا من الرابط السحري <i>/proc/</i>pid<i>/fd/</i>*.</p>
+<p class="Pp">معًا، يحدد الوسيطان <i>path</i> و <i>dirfd</i> الملف الذي سيتم الحصول على مقبض له. هناك أربع حالات متميزة:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>path</i> سلسلة غير فارغة تحتوي على مسار اسم مطلق، فسيتم إرجاع مقبض للملف الذي يشير إليه هذا المسار. في هذه الحالة، يتم تجاهل <i>dirfd</i>.</dd>
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>path</i> سلسلة غير فارغة تحتوي على اسم مسار نسبي وكان <i>dirfd</i> له القيمة الخاصة <b>AT_FDCWD</b>، فسيتم تفسير <i>path</i> بالنسبة لدليل العمل الحالي للمستدعي، وسيتم إرجاع مقبض للملف الذي يشير إليه.</dd>
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>path</i> سلسلة غير فارغة تحتوي على اسم مسار نسبي وكان <i>dirfd</i> واصف ملف يشير إلى دليل، فسيتم تفسير <i>path</i> بالنسبة للدليل الذي يشير إليه <i>dirfd</i>، وسيتم إرجاع مقبض للملف الذي يشير إليه. (انظر <a href='/man/openat.2.en'>openat(2)</a> لشرح سبب فائدة "واصفات ملفات الدليل").</dd>
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>path</i> سلسلة فارغة ويحدد <i>flags</i> القيمة <b>AT_EMPTY_PATH</b>، فيمكن أن يكون <i>dirfd</i> واصف ملف مفتوح يشير إلى أي نوع من الملفات، أو <b>AT_FDCWD</b>، مما يعني دليل العمل الحالي، وسيتم إرجاع مقبض للملف الذي يشير إليه.</dd>
+</dl>
+<p class="Pp">يعيد الوسيط <i>mount_id</i> معرفًا لتثبيت نظام الملفات الذي يتوافق مع <i>path</i>. يتوافق هذا مع الحقل الأول في أحد السجلات في <i>/proc/self/mountinfo</i>. يؤدي فتح مسار الاسم في الحقل الخامس لذلك السجل إلى الحصول على واصف ملف لنقطة التثبيت؛ يمكن استخدام واصف الملف هذا في استدعاء لاحق لـ <b>open_by_handle_at</b>(). يتم إرجاع <i>mount_id</i> لكل من الاستدعاء الناجح والاستدعاء الذي يؤدي إلى الخطأ <b>EOVERFLOW</b>.</p>
+<p class="Pp">بشكل افتراضي، لا تقوم <b>name_to_handle_at</b>() بإلغاء مرجعية <i>path</i> إذا كان رابطًا رمزيًا، وبالتالي تُرجع مقبضًا للرابط نفسه. إذا تم تحديد <b>AT_SYMLINK_FOLLOW</b> في <i>flags</i>، فسيتم إلغاء مرجعية <i>path</i> إذا كان رابطًا رمزيًا (بحيث يُرجع الاستدعاء مقبضًا للملف الذي يشير إليه الرابط).</p>
+<p class="Pp">لا تؤدي <b>name_to_handle_at</b>() إلى تشغيل تثبيت عندما يكون المكون الأخير من اسم المسار نقطة تثبيت تلقائية. عندما يدعم نظام الملفات المقابض والتركيبات التلقائية، فإن استدعاء <b>name_to_handle_at</b>() على نقطة تثبيت تلقائية سيُرجع بالخطأ <b>EOVERFLOW</b> دون زيادة <i>handle_bytes</i>. يمكن أن يحدث هذا منذ Linux 4.13 مع NFS عند الوصول إلى دليل موجود على نظام ملفات منفصل على الخادم. في هذه الحالة، يمكن تشغيل التثبيت التلقائي عن طريق إضافة "/" إلى نهاية اسم المسار.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='open_by_handle_at()'><a class='permalink' href='#open_by_handle_at()'>open_by_handle_at()</a></h2>
+<p class="Pp">يقوم استدعاء النظام <b>open_by_handle_at</b>() بفتح الملف الذي يشير إليه <i>handle</i>، وهو مقبض ملف تم إرجاعه بواسطة استدعاء سابق لـ <b>name_to_handle_at</b>().</p>
+<p class="Pp">الوسيط <i>mount_fd</i> هو واصف ملف لأي كائن (ملف، دليل، إلخ) في نظام الملفات المثبت بالنسبة له يجب تفسير <i>handle</i>. يمكن تحديد القيمة الخاصة <b>AT_FDCWD</b>، مما يعني دليل العمل الحالي للمستدعي.</p>
+<p class="Pp">الوسيط <i>flags</i> هو كما في <a href='/man/open.2.en'>open(2)</a>. إذا كان <i>handle</i> يشير إلى رابط رمزي، يجب على المستدعي تحديد العلامة <b>O_PATH</b>، و</p>
+</div>
+</section>
+
+</article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>

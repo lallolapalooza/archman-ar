@@ -1,0 +1,421 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">syncthing-bep(7)</h1>
+<link rel="stylesheet" href="basic.css">
+section:
+  - title: Protocol Buffer Schema
+    content: |
+      message FileInfo {
+          string        name           = 1;
+          Vector        version        = 2;
+          int64         size           = 3;
+          repeated BlockInfo blocks         = 4;
+          LinkInfo      link_info      = 5;
+          FileType      type           = 6;
+          bytes         hash           = 7;
+          int32         symlink_target = 8;
+      }
+      enum FileType {
+          FILE = 0;
+          SYMLINK = 1;
+          DIRECTORY = 2;
+      }
+      message BlockInfo {
+          int64  offset = 1;
+          int32  size = 2;
+          bytes  hash = 3;
+      }
+      message Vector {
+          repeated int32 data = 1;
+      }
+      message LinkInfo {
+          string target = 1;
+      }
+  - title: Fields (FileInfo Message)
+    content: |
+      The name, version, size, and hash fields are as documented for the Index
+      message. The type field indicates whether the entry is a regular file, a
+      symbolic link, or a directory.
+
+      The blocks field is a list of BlockInfo messages, each describing a chunk
+      of the file. The offset and size fields specify the region of the file
+      that the block represents. The last block in the list may represent a
+      smaller amount of data than the others. The block list is empty for
+      directories and symlinks.
+
+      The symlink_target field contains the symlink target, for entries of
+      symlink type. It is empty for all other entry types.
+
+- title: Request
+  content: |
+    The Request message expresses the desire to receive a data block
+    corresponding to a part of a certain file in the peer’s folder.
+
+    Protocol Buffer Schema:
+
+    ```protobuf
+    message Request {
+        int32  id             = 1;
+        string folder         = 2;
+        string name           = 3;
+        int64  offset         = 4;
+        int32  size           = 5;
+        bytes  hash           = 6;
+        bool   from_temporary = 7;
+        int32 block_no        = 9;
+        reserved 8;
+    }
+    ```
+
+    Fields:
+
+    The id is the request identifier. It will be matched in the
+    corresponding Response message. Each outstanding request must have a
+    unique ID.
+
+    The folder and name fields are as documented for the Index message. The
+    offset and size fields specify the region of the file to be transferred.
+    This SHOULD equate to exactly one block as seen in an Index message.
+
+    The hash field MAY be set to the expected hash value of the
+    block. If set, the other device SHOULD ensure that the transmitted block
+    matches the requested hash. The other device MAY reuse a block from a
+    different file and offset having the same size and hash, if one exists.
+
+    The from_temporary field is set to indicate that the read
+    should be performed from the temporary file (converting name to it’s
+    temporary form) and falling back to the non temporary file if any error
+    occurs. Knowledge of contents of temporary files comes from DownloadProgress
+    messages.
+
+- title: Response
+  content: |
+    The Response message is sent in response to a Request message.
+
+    Protocol Buffer Schema:
+
+    ```protobuf
+    message Response {
+        int32     id   = 1;
+        bytes     data = 2;
+        ErrorCode code = 3;
+    }
+    enum ErrorCode {
+        NO_ERROR     = 0;
+        GENERIC      = 1;
+        NO_SUCH_FILE = 2;
+        INVALID_FILE = 3;
+    }
+    ```
+
+    Fields:
+
+    The id field is the request identifier. It must match the
+    ID of the Request that is being responded to.
+
+    The data field contains either the requested data block or
+    is empty if the requested block is not available.
+
+    The code field contains an error code describing the reason a Request could
+    not be fulfilled, in the case where zero length data was
+    returned. The following values are defined:
+
+    - 0: No Error (data should be present)
+    - 1: Generic Error
+    - 2: No Such File (the requested file does not exist, or the offset is
+      outside the acceptable range for the file)
+    - 3: Invalid (file exists but has invalid bit set or is otherwise
+      unavailable)
+
+- title: DownloadProgress
+  content: |
+    The DownloadProgress message is used to notify remote devices
+    about partial availability of files. By default, these messages are sent
+    every 5 seconds, and only in the cases where progress or state changes have
+    been detected. Each DownloadProgress message is addressed to a specific
+    folder and MUST contain zero or more FileDownloadProgressUpdate
+    messages.
+
+    Protocol Buffer Schema:
+
+    ```protobuf
+    message DownloadProgress {
+        string                              folder  = 1;
+        repeated FileDownloadProgressUpdate updates = 2;
+    }
+    message FileDownloadProgressUpdate {
+        FileDownloadProgressUpdateType update_type   = 1;
+        string                         name          = 2;
+        Vector                         version       = 3;
+        repeated int32                 block_indexes = 4;
+    }
+    enum FileDownloadProgressUpdateType {
+        APPEND = 0;
+        FORGET = 1;
+    }
+    ```
+
+    Fields (DownloadProgress Message):
+
+    The folder field represents the ID of the folder for which
+    the update is being provided.
+
+    The updates field is a list of progress update
+    messages.
+
+    Fields (FileDownloadProgressUpdate Message):
+
+    The update_type indicates whether the update is of type
+    APPEND (0) (new blocks are available) or FORGET (1) (the file
+    transfer has completed or failed).
+
+    The name field defines the file name from the global index
+    for which this update is being sent.
+
+    The version message defines the version of the file for
+    which this update is being sent.
+
+    The block_indexes field is a list of positive integers,
+    where each integer represents the index of the block in the FileInfo message
+    Blocks array that has become available for download.
+
+    For example an integer with value 3 represents that the data
+    defined in the fourth BlockInfo message of the FileInfo message of that file
+    is now available. Please note that matching should be done on name
+    AND version. Furthermore, each update received is incremental, for
+    example the initial update message might contain indexes 0, 1, 2, an update
+    5 seconds later might contain indexes 3, 4, 5 which should be appended to
+    the original list, which implies that blocks 0-5 are currently
+    available.
+
+    Block indexes MAY be added in any order. An implementation MUST
+    NOT assume that block indexes are added in any specific order.
+
+    The forget field being set implies that previously
+    advertised file is no longer available, therefore the list of block indexes
+    should be truncated.
+
+    Messages with the forget field set MUST NOT have any block
+    indexes.
+
+    Any update message which is being sent for a different
+    version of the same file name must be preceded with an update message
+    for the old version of that file with the forget field set.
+
+    As a safeguard on the receiving side, the value of version
+    changing between update messages implies that the file has changed and that
+    any indexes previously advertised are no longer available. The list of
+    available block indexes MUST be replaced (rather than appended) with the
+    indexes specified in this message.
+
+- title: Ping
+  content: |
+    The Ping message is used to determine that a connection is alive,
+    and to keep connections alive through state tracking network elements such
+    as firewalls and NAT gateways. A Ping message is sent every 90 seconds, if
+    no other message has been sent in the preceding 90 seconds.
+
+    Protocol Buffer Schema:
+
+    ```protobuf
+    message Ping {
+    }
+    ```
+
+- title: Close
+  content: |
+    The Close message MAY be sent to indicate that the connection will
+    be torn down due to an error condition. A Close message MUST NOT be followed
+    by further messages.
+
+    Protocol Buffer Schema:
+
+    ```protobuf
+    message Close {
+        string reason = 1;
+    }
+    ```
+
+    Fields:
+
+    The reason field contains a human readable description of
+    the error condition.
+
+section:
+  - title: SHARING MODES
+    subsections:
+      - title: Trusted
+        content: |
+          Trusted mode is the default sharing mode. Updates are exchanged in
+          both directions.
+
+          ```
+          +------------+     Updates      /---------\
+          |            |  -----------+>   /           \
+          |   Device   |                 |  Cluster  |
+          |            |  <-----------   \           /
+          +------------+     Updates      \---------/
+          ```
+      - title: Send Only
+        content: |
+          In send only mode, a device does not apply any updates from the
+          cluster, but publishes changes of its local folder to the cluster as
+          usual.
+
+          ```
+          +------------+     Updates      /---------\
+          |            |  -----------+>   /           \
+          |   Device   |                 |  Cluster  |
+          |            |                 \           /
+          +------------+                  \---------/
+          ```
+      - title: Receive Only
+        content: |
+          In receive only mode, a device does not send any updates to the
+          cluster, but accepts changes to its local folder from the cluster as
+          usual.
+
+          ```
+          +------------+     Updates      /---------\
+          |            |  <-----------   /           \
+          |   Device   |                 |  Cluster  |
+          |            |                 \           /
+          +------------+                  \---------/
+          ```
+  - title: DELTA INDEX EXCHANGE
+    content: |
+      Index data must be exchanged whenever two devices connect so that
+      one knows the files available on the other. In the most basic case this
+      happens by way of sending an Index message followed by one or more
+      Index Update messages. Any previous index data known for a remote
+      device is removed and replaced with the new index data received in an
+      Index message, while the contents of an Index Update message
+      is simply added to the existing index data.
+
+      For situations with large indexes or frequent reconnects this can
+      be quite inefficient. A mechanism can then be used to retain index data
+      between connections and only transmit any changes since that data on
+      connection start. This is called “delta indexes”. To enable
+      this mechanism the sequence and index ID fields are used.
+{
+  "content": "<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h1>\n<p class=\"Pp\">syncthing - decentralized synchronization tool</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"INTRODUCTION_AND_DEFINITIONS\"><a class=\"permalink\" href=\"#INTRODUCTION_AND_DEFINITIONS\">INTRODUCTION AND DEFINITIONS</a></h1>\n<p class=\"Pp\">Syncthing is a continuous file synchronization program. It synchronizes files between two or more computers in real time, safely encrypted and with no central server. It is free and open source, easy to use, and powerful. It is a direct replacement for Dropbox, Google Drive, OneDrive, etc. etc. while being fully decentralized.</p>\n<p class=\"Pp\">This document describes the protocol used by Syncthing for communication between its nodes.</p>\n<dl class=\"Bl-tag\">\n<dt id=\"Block\"><a class=\"permalink\" href=\"#Block\"><b>Block</b></a></dt>\n<dd>A contiguous chunk of bytes within a file. For the purpose of this protocol, blocks are 1,048,576 bytes (1 MiB) in size.</dd>\n<dt id=\"Index\"><a class=\"permalink\" href=\"#Index\"><b>Index</b></a></dt>\n<dd>A list of all files and directories on a filesystem. It is used to determine what files are present, their metadata, and their integrity.</dd>\n<dt id=\"IndexItem\"><a class=\"permalink\" href=\"#IndexItem\"><b>IndexItem</b></a></dt>\n<dd>A single item within an Index, representing either a file, directory or symlink.</dd>\n<dt id=\"SequenceNumber\"><a class=\"permalink\" href=\"#SequenceNumber\"><b>SequenceNumber</b></a></dt>\n<dd>A monotonically increasing integer associated with an <a href=\"#IndexItem\">IndexItem</a>. It represents the time at which the <a href=\"#IndexItem\">IndexItem</a> was last modified.</dd>\n<dt id=\"Hash\"><a class=\"permalink\" href=\"#Hash\"><b>Hash</b></a></dt>\n<dd>A cryptographic hash of a file's contents. Used to verify file integrity.</dd>\n<dt id=\"LocalDiscovery\"><a class=\"permalink\" href=\"#LocalDiscovery\"><b>LocalDiscovery</b></a></dt>\n<dd>The process of discovering other Syncthing nodes on the local network.</dd>\n<dt id=\"GlobalDiscovery\"><a class=\"permalink\" href=\"#GlobalDiscovery\"><b>GlobalDiscovery</b></a></dt>\n<dd>The process of discovering Syncthing nodes on the internet via public discovery servers.</dd>\n<dt id=\"RelayServer\"><a class=\"permalink\" href=\"#RelayServer\"><b>RelayServer</b></a></dt>\n<dd>A server that relays traffic between Syncthing nodes that cannot connect directly.</dd>\n<dt id=\"Node\"><a class=\"permalink\" href=\"#Node\"><b>Node</b></a></dt>\n<dd>A single instance of Syncthing running on a computer.</dd>\n<dt id=\"Device\"><a class=\"permalink\" href=\"#Device\"><b>Device</b></a></dt>\n<dd>A remote Syncthing node that a local node is configured to synchronize with.</dd>\n<dt id=\"Folder\"><a class=\"permalink\" href=\"#Folder\"><b>Folder</b></a></dt>\n<dd>A directory that is being synchronized between nodes.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"TRANSPORT_AND_AUTHENTICATION\"><a class=\"permalink\" href=\"#TRANSPORT_AND_AUTHENTICATION\">TRANSPORT AND AUTHENTICATION</a></h1>\n<p class=\"Pp\">Syncthing uses TLS for transport encryption and authentication. Each node is identified by a cryptographic key pair. Nodes authenticate each other by exchanging their public keys.</p>\n<p class=\"Pp\">The protocol is designed to be run over a TCP connection. Each message is prefixed with its length, allowing the receiver to read the entire message.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"PRE-AUTHENTICATION_MESSAGES\"><a class=\"permalink\" href=\"#PRE-AUTHENTICATION_MESSAGES\">PRE-AUTHENTICATION MESSAGES</a></h1>\n<p class=\"Pp\">Before authentication, the following messages are exchanged:</p>\n<dl class=\"Bl-tag\">\n<dt id=\"Hello\"><a class=\"permalink\" href=\"#Hello\"><b>Hello</b></a></dt>\n<dd>Sent by the client to initiate a connection. Contains the client's node ID and supported protocol versions.</dd>\n<dt id=\"Hello-Ack\"><a class=\"permalink\" href=\"#Hello-Ack\"><b>Hello-Ack</b></a></dt>\n<dd>Sent by the server in response to a <a href=\"#Hello\">Hello</a> message. Contains the server's node ID and selected protocol version.</dd>\n<dt id=\"Connect\"><a class=\"permalink\" href=\"#Connect\"><b>Connect</b></a></dt>\n<dd>Sent by the client after receiving <a href=\"#Hello-Ack\">Hello-Ack</a>. Contains the client's TLS certificate.</dd>\n<dt id=\"Connect-Ack\"><a class=\"permalink\" href=\"#Connect-Ack\"><b>Connect-Ack</b></a></dt>\n<dd>Sent by the server in response to a <a href=\"#Connect\">Connect</a> message. Contains the server's TLS certificate.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"POST-AUTHENTICATION_MESSAGES\"><a class=\"permalink\" href=\"#POST-AUTHENTICATION_MESSAGES\">POST-AUTHENTICATION MESSAGES</a></h1>\n<p class=\"Pp\">After successful authentication, the following messages are exchanged:</p>\n<dl class=\"Bl-tag\">\n<dt id=\"ClusterConfig\"><a class=\"permalink\" href=\"#ClusterConfig\"><b>ClusterConfig</b></a></dt>\n<dd>Contains the cluster configuration, including the list of known nodes and their addresses.</dd>\n<dt id=\"Index\"><a class=\"permalink\" href=\"#Index\"><b>Index</b></a></dt>\n<dd>Contains a list of files and directories in a folder. Used for initial synchronization and to establish the current state of a folder.</dd>\n<dt id=\"IndexUpdate\"><a class=\"permalink\" href=\"#IndexUpdate\"><b>IndexUpdate</b></a></dt>\n<dd>Contains a list of changes to the index. Used to notify other nodes of modifications to files and directories.</dd>\n<dt id=\"Request\"><a class=\"permalink\" href=\"#Request\"><b>Request</b></a></dt>\n<dd>Used to request specific blocks of a file. Sent by a node that is missing data.</dd>\n<dt id=\"Response\"><a class=\"permalink\" href=\"#Response\"><b>Response</b></a></dt>\n<dd>Contains the requested data blocks. Sent in reply to a <a href=\"#Request\">Request</a> message.</dd>\n<dt id=\"Ping\"><a class=\"permalink\" href=\"#Ping\"><b>Ping</b></a></dt>\n<dd>A keep-alive message to check if the connection is still active.</dd>\n<dt id=\"Pong\"><a class=\"permalink\" href=\"#Pong\"><b>Pong</b></a></dt>\n<dd>A response to a <a href=\"#Ping\">Ping</a> message.</dd>\n<dt id=\"Disconnect\"><a class=\"permalink\" href=\"#Disconnect\"><b>Disconnect</b></a></dt>\n<dd>Sent by a node to gracefully close the connection.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"MESSAGE_SUBTYPES\"><a class=\"permalink\" href=\"#MESSAGE_SUBTYPES\">MESSAGE SUBTYPES</a></h1>\n<p class=\"Pp\">The following messages are subtypes of other messages:</p>\n<dl class=\"Bl-tag\">\n<dt id=\"Index-File\"><a class=\"permalink\" href=\"#Index-File\"><b>Index::File</b></a></dt>\n<dd>Represents a file within an <a href=\"#Index\">Index</a> message.</dd>\n<dt id=\"Index-Directory\"><a class=\"permalink\" href=\"#Index-Directory\"><b>Index::Directory</b></a></dt>\n<dd>Represents a directory within an <a href=\"#Index\">Index</a> message.</dd>\n<dt id=\"Index-Symlink\"><a class=\"permalink\" href=\"#Index-Symlink\"><b>Index::Symlink</b></a></dt>\n<dd>Represents a symbolic link within an <a href=\"#Index\">Index</a> message.</dd>\n<dt id=\"IndexUpdate-Add\"><a class=\"permalink\" href=\"#IndexUpdate-Add\"><b>IndexUpdate::Add</b></a></dt>\n<dd>Indicates that a new file or directory has been added.</dd>\n<dt id=\"IndexUpdate-Modify\"><a class=\"permalink\" href=\"#IndexUpdate-Modify\"><b>IndexUpdate::Modify</b></a></dt>\n<dd>Indicates that an existing file or directory has been modified.</dd>\n<dt id=\"IndexUpdate-Delete\"><a class=\"permalink\" href=\"#IndexUpdate-Delete\"><b>IndexUpdate::Delete</b></a></dt>\n<dd>Indicates that a file or directory has been deleted.</dd>\n<dt id=\"Request-Blocks\"><a class=\"permalink\" href=\"#Request-Blocks\"><b>Request::Blocks</b></a></dt>\n<dd>Requests a list of blocks for a given file.</dd>\n<dt id=\"Request-Data\"><a class=\"permalink\" href=\"#Request-Data\"><b>Request::Data</b></a></dt>\n<dd>Requests specific data blocks for a given file.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"SHARING_MODES\"><a class=\"permalink\" href=\"#SHARING_MODES\">SHARING MODES</a></h1>\n<p class=\"Pp\">Syncthing supports two sharing modes:</p>\n<dl class=\"Bl-tag\">\n<dt id=\"ReceiveOnly\"><a class=\"permalink\" href=\"#ReceiveOnly\"><b>ReceiveOnly</b></a></dt>\n<dd>The node will only receive files, not send them.</dd>\n<dt id=\"SendOnly\"><a class=\"permalink\" href=\"#SendOnly\"><b>SendOnly</b></a></dt>\n<dd>The node will only send files, not receive them.</dd>\n</dl>\n<p class=\"Pp\">By default, nodes operate in read-write mode, allowing both sending and receiving.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"DELTA_INDEX_EXCHANGE\"><a class=\"permalink\" href=\"#DELTA_INDEX_EXCHANGE\">DELTA INDEX EXCHANGE</a></h1>\n<p class=\"Pp\">Delta index exchange is a mechanism that allows nodes to synchronize only the changes that have occurred since the last synchronization. This significantly reduces the amount of data that needs to be transferred.</p>\n<div class=\"Bl-tag\">\n<dt id=\"Sequence:\"><a class=\"permalink\" href=\"#Sequence:\"><b>Sequence:</b></a></dt>\n<dd>Each index item (i.e., file, directory or symlink) has a sequence number\n    field. It contains the value of a counter at the time the index item was\n    updated. The counter increments by one for each change. That is, as files\n    are scanned and added to the index they get assigned sequence numbers 1, 2,\n    3 and so on. The next file to be changed or detected gets sequence\n    number 4, and future updates continue in the same fashion.</dd>\n<dt id=\"Index1\"><a class=\"permalink\" href=\"#Index\"><b>Index ID:</b></a></dt>\n<dd>Each folder has an Index ID. This is a 64 bit random identifier set at\n    index creation time.</dd>\n</dl>\n</div>\n<p class=\"Pp\">Given the above, we know that the tuple {index ID, maximum\n    sequence number} uniquely identifies a point in time of a given index. Any\n    further changes will increase the sequence number of some item, and thus the\n    maximum sequence number for the index itself. Should the index be reset or\n    removed (i.e., the sequence number reset to zero), a new index ID must be\n    generated.</p>\n<p class=\"Pp\">By letting a device know the {index ID, maximum sequence number}\n    we have for their index data, that device can arrange to only transmit\n    <b>Index Update</b> messages for items with a higher sequence number. This\n    is the delta index mechanism.</p>\n<p class=\"Pp\">The index ID and maximum sequence number known for each device is\n    transmitted in the <b>Cluster Config</b> message at connection start.</p>\n<p class=\"Pp\">For this mechanism to be reliable it is essential that outgoing\n    index information is ordered by increasing sequence number. Devices\n    announcing a non-zero index ID in the <b>Cluster Config</b> message MUST\n    send all index data ordered by increasing sequence number. Devices not\n    intending to participate in delta index exchange MUST send a zero index ID\n    or, equivalently, not send the <b>index_id</b> attribute at all.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"MESSAGE_LIMITS\"><a class=\"permalink\" href=\"#MESSAGE_LIMITS\">MESSAGE\n    LIMITS</a></h1>\n<p class=\"Pp\">An implementation MAY impose reasonable limits on the length of\n    messages and message fields to aid robustness in the face of corruption or\n    broken implementations. An implementation should strive to keep messages\n    short and to the point, favouring more and smaller messages over fewer and\n    larger. For example, favour a smaller Index message followed by one or more\n    Index Update messages rather than sending a very large Index message.</p>\n<p class=\"Pp\">The Syncthing implementation imposes a hard limit of 500,000,000\n    bytes on all messages. Attempting to send or receive a larger message will\n    result in a connection close. This size was chosen to accommodate Index\n    messages containing a large block list. It&#x2019;s intended that the limit\n    may be further reduced in a future protocol update supporting variable block\n    sizes (and thus shorter block lists for large files).</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"SELECTION_OF_BLOCK_SIZE\"><a class=\"permalink\" href=\"#SELECTION_OF_BLOCK_SIZE\">SELECTION\n    OF BLOCK SIZE</a></h1>\n<p class=\"Pp\">The desired block size for any given file is the smallest block\n    size that results in fewer than 2000 blocks, or the maximum block size for\n    larger files. This rule results in the following table of block sizes per\n    file size:</p>\n<table class=\"tbl\" style=\"border-style: solid;\">\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">File Size</td>\n<td>Block Size</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">0 - 250 MiB</td>\n<td>128 KiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">250 MiB - 500 MiB</td>\n<td>256 KiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">500 MiB - 1 GiB</td>\n<td>512 KiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">1 GiB - 2 GiB</td>\n<td>1 MiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">2 GiB - 4 GiB</td>\n<td>2 MiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">4 GiB - 8 GiB</td>\n<td>4 MiB</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">8 GiB - 16 GiB</td>\n<td>8 MiB</td>\n</tr>\n<tr>\n<td style=\"border-right-style: solid;\">16 GiB - up</td>\n<td>16 MiB</td>\n</tr>\n</table>\n<p class=\"Pp\">An implementation MAY deviate from the block size rule when there\n    is good reason to do so. For example, if a file has been indexed at a\n    certain block size and grows beyond 2000 blocks it may be retained at the\n    current block size for practical reasons. When there is no overriding reason\n    to the contrary, such as when indexing a new file for the first time, the\n    block size rule above SHOULD be followed.</p>\n<p class=\"Pp\">An implementation MUST therefore accept files with a block size\n    differing from the above rule. This does not mean that arbitrary block sizes\n    are allowed. The block size used MUST be exactly one of the power-of-two\n    block sizes listed in the table above.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"EXAMPLE_EXCHANGE\"><a class=\"permalink\" href=\"#EXAMPLE_EXCHANGE\">EXAMPLE\n    EXCHANGE</a></h1>\n<table class=\"tbl\" style=\"border-style: solid;\">\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">#</td>\n<td style=\"border-right-style: solid;\">A</td>\n<td>B</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">1</td>\n<td style=\"border-right-style: solid;\">ClusterConfiguration-&gt;</td>\n<td>&lt;-ClusterConfiguration</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">2</td>\n<td style=\"border-right-style: solid;\">Index-&gt;</td>\n<td>&lt;-Index</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">3</td>\n<td style=\"border-right-style: solid;\">IndexUpdate-&gt;</td>\n<td>&lt;-IndexUpdate</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">4</td>\n<td style=\"border-right-style: solid;\">IndexUpdate-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">5</td>\n<td style=\"border-right-style: solid;\">Request-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">6</td>\n<td style=\"border-right-style: solid;\">Request-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">7</td>\n<td style=\"border-right-style: solid;\">Request-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">8</td>\n<td style=\"border-right-style: solid;\">Request-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">9</td>\n<td style=\"border-right-style: solid;\"></td>\n<td>&lt;-Response</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">10</td>\n<td style=\"border-right-style: solid;\"></td>\n<td>&lt;-Response</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">11</td>\n<td style=\"border-right-style: solid;\"></td>\n<td>&lt;-Response</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">12</td>\n<td style=\"border-right-style: solid;\"></td>\n<td>&lt;-Response</td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">13</td>\n<td style=\"border-right-style: solid;\">Index Update-&gt;</td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">&#x2026;</td>\n<td style=\"border-right-style: solid;\"></td>\n<td></td>\n</tr>\n<tr style=\"border-bottom-style: solid;\">\n<td style=\"border-right-style: solid;\">14</td>\n<td style=\"border-right-style: solid;\"></td>\n<td>&lt;-Ping</td>\n</tr>\n<tr>\n<td style=\"border-right-style: solid;\">15</td>\n<td style=\"border-right-style: solid;\">Ping-&gt;</td>\n<td></td>\n</tr>\n</table>\n<p class=\"Pp\">The connection is established and at 1. both peers send\n    ClusterConfiguration messages and then Index records. The Index records are\n    received and both peers recompute their knowledge of the data in the\n    cluster. In this example, peer A has four missing or outdated blocks. At 5\n    through 8 peer A sends requests for these blocks. The requests are received\n    by peer B, who retrieves the data from the folder and transmits Response\n    records (9 through 12). Device A updates their folder contents and transmits\n    an Index Update message (13). Both peers enter idle state after 13. At some\n    later time 14, the ping timer on device B expires and a Ping message is\n    sent. The same process occurs for device A at 15.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"AUTHOR\"><a class=\"permalink\" href=\"#AUTHOR\">AUTHOR</a></h1>\n<p class=\"Pp\">The Syncthing Authors</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id=\"COPYRIGHT\"><a class=\"permalink\" href=\"#COPYRIGHT\">COPYRIGHT</a></h1>\n<p class=\"Pp\">2014-2025, The Syncthing Authors</p>\n</section>\n</div>\n<table class=\"foot\">\n<tr>\n<td class=\"foot-date\">November 23, 2025</td>\n<td class=\"foot-os\">v2.0.0</td>\n</tr>\n</table>\n\n</section>",
+  "sidebar": {
+    "search": {
+      "form_action": "/search",
+      "placeholder": "Search manual page",
+      "button_value": "Go"
+    },
+    "package_info": {
+      "title": "Package information:",
+      "package_name": {
+        "label": "Package name:",
+        "link": "https://www.archlinux.org/packages/extra/x86_64/syncthing/",
+        "text": "extra/syncthing"
+      },
+      "version": {
+        "label": "Version:",
+        "text": "2.0.12-1"
+      },
+      "upstream": {
+        "label": "Upstream:",
+        "link": "https://syncthing.net/",
+        "text": "https://syncthing.net/"
+      },
+      "licenses": {
+        "label": "Licenses:",
+        "text": "MPL-2.0"
+      },
+      "manuals": {
+        "label": "Manuals:",
+        "link": "/listing/extra/syncthing/",
+        "text": "/listing/extra/syncthing/"
+      }
+    },
+    "toc": {
+      "summary": "Table of contents",
+      "nav": [
+        {
+          "link": "#NAME",
+          "text": "NAME"
+        },
+        {
+          "link": "#INTRODUCTION_AND_DEFINITIONS",
+          "text": "INTRODUCTION AND DEFINITIONS"
+        },
+        {
+          "link": "#TRANSPORT_AND_AUTHENTICATION",
+          "text": "TRANSPORT AND AUTHENTICATION"
+        },
+        {
+          "link": "#PRE-AUTHENTICATION_MESSAGES",
+          "text": "PRE-AUTHENTICATION MESSAGES"
+        },
+        {
+          "link": "#POST-AUTHENTICATION_MESSAGES",
+          "text": "POST-AUTHENTICATION MESSAGES"
+        },
+        {
+          "link": "#MESSAGE_SUBTYPES",
+          "text": "MESSAGE SUBTYPES"
+        },
+        {
+          "link": "#SHARING_MODES",
+          "text": "SHARING MODES"
+        },
+        {
+          "link": "#DELTA_INDEX_EXCHANGE",
+          "text": "DELTA INDEX EXCHANGE"
+        },
+        {
+          "link": "#MESSAGE_LIMITS",
+          "text": "MESSAGE LIMITS"
+        },
+        {
+          "link": "#SELECTION_OF_BLOCK_SIZE",
+          "text": "SELECTION OF BLOCK SIZE"
+        },
+        {
+          "link": "#EXAMPLE_EXCHANGE",
+          "text": "EXAMPLE EXCHANGE"
+        },
+        {
+          "link": "#AUTHOR",
+          "text": "AUTHOR"
+        },
+        {
+          "link": "#COPYRIGHT",
+          "text": "COPYRIGHT"
+        }
+      ]
+    }
+  }
+}
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>صيغ أخرى:
+        
+            <a href="/man/syncthing-bep.7.en.txt">txt</a>، 
+        
+            <a href="/man/syncthing-bep.7.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

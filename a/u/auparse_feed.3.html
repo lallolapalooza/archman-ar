@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>auparse_feed(3) — صفحات دليل Arch</title>
+        
+        
+        
+        
+        
+    
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">auparse_feed(3)</h1>
+<p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/audit/">audit</a></p>
+<p class="lic">التراخيص: GPL-2.0-or-later, LGPL-2.0-or-later</p>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">AUPARSE_FEED(3)</td>
+    <td class="head-vol">واجهة برمجة تطبيقات تدقيق لينكس</td>
+    <td class="head-rtitle">AUPARSE_FEED(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">auparse_feed - تغذية البيانات إلى المحلل</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp"><b>#include &lt;auparse.h&gt;</b></p>
+<pre><b>int auparse_feed(auparse_state_t *</b><i>au,</i><b>const</b><i>char</i><b>*&quot;</b><i>data,</i><b>size_t&quot;</b><i>data_len);&quot;</i></pre>
+<dl class="Bl-tag">
+  <dt id="au"><a class="permalink" href="#au"><i>au</i></a></dt>
+  <dd>حالة محلل التدقيق</dd>
+  <dt id="data"><a class="permalink" href="#data"><i>data</i></a></dt>
+  <dd>مخزن مؤقت للبيانات لتغذيتها إلى المحلل، طوله <i>data_len</i> بايت. يتم نسخ البيانات إلى المحلل، عند العودة يمكن للمتصل تحرير أو إعادة استخدام مخزن البيانات المؤقت.</dd>
+  <dt id="data_len"><a class="permalink" href="#data_len"><i>data_len</i></a></dt>
+  <dd>عدد البايتات في <i>data</i>
+      </dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp"><i>auparse_feed</i> يوفر بيانات جديدة للمحلل لاستهلاكها. يجب أن يكون قد تم استدعاء <i>auparse_init()</i> بنوع مصدر AUSOURCE_FEED ومؤشر NULL.</p>
+<p class="Pp">يستهلك المحلل أكبر قدر ممكن من البيانات، مستدعيًا دالة استدعاء مزودة من قبل المستخدم محددة باستخدام <i>auparse_add_callback</i> بنوع حدث cb_event_type من <i>AUPARSE_CB_EVENT_READY</i> في كل مرة يتعرف فيها المحلل على حدث كامل في تدفق البيانات. البيانات التي لم يتم تحليلها بالكامل ستظل قائمة وسيتم إلحاقها ببيانات التغذية التالية. بعد تغذية جميع البيانات إلى المحلل، يجب استدعاء <i>auparse_flush_feed</i> للإشارة إلى نهاية بيانات الإدخال وتمرير أي بيانات تحليل معلقة عبر نظام التحليل.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة الإرجاع</a></h1>
+<p class="Pp">يعيد -1 في حالة حدوث خطأ؛ بخلاف ذلك، يعيد 0 للنجاح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLE'><a class='permalink' href='#EXAMPLE'>مثال</a></h1>
+<pre>void
+auparse_callback(auparse_state_t *au, auparse_cb_event_t cb_event_type,
+                 void *user_data)
+{
+    int *event_cnt = (int *)user_data;
+    if (cb_event_type == AUPARSE_CB_EVENT_READY) {
+        if (auparse_first_record(au) &lt;= 0) return;
+        printf(&quot;event: %d\n&quot;, *event_cnt);
+        printf(&quot;records:%d\n&quot;, auparse_get_num_records(au));
+        do {
+            printf(&quot;fields:%d\n&quot;, auparse_get_num_fields(au));
+            printf(&quot;type=%d &quot;, auparse_get_type(au));
+            const au_event_t *e = auparse_get_timestamp(au);
+            if (e == NULL) return;
+            printf(&quot;event time: %lu.%u:%lu\n&quot;,
+                    (long unsigned)e-&gt;sec, e-&gt;milli, e-&gt;serial);
+            auparse_first_field(au);
+            do {
+                printf(&quot;%s=%s (%s)\n&quot;, auparse_get_field_name(au),
+                       auparse_get_field_str(au),
+                       auparse_interpret_field(au));
+            } while (auparse_next_field(au) &gt; 0);
+            printf(&quot;\n&quot;);
+        } while(auparse_next_record(au) &gt; 0);
+        (*event_cnt)++;
+    }
+}
+main(int argc, char **argv)
+{
+    char *filename = argv[1];
+    FILE *fp;
+    char buf[256];
+    size_t len;
+    int *event_cnt = malloc(sizeof(int));
+    au = auparse_init(AUSOURCE_FEED, 0);
+    auparse_set_eoe_timeout(2);
+    *event_cnt = 1;
+    auparse_add_callback(au, auparse_callback, event_cnt, free);
+    if ((fp = fopen(filename, &quot;r&quot;)) == NULL) {
+        fprintf(stderr, &quot;could not open '%s', %s\n&quot;, filename, strerror(errno));
+        return 1;
+    }
+    while ((len = fread(buf, 1, sizeof(buf), fp))) {
+        auparse_feed(au, buf, len);
+    }
+    auparse_flush_feed(au);
+    auparse_destroy(au);
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر أيضًا</a></h1>
+<p class="Pp"><a href='/man/auparse_add_callback.3.en'>auparse_add_callback(3)</a>, <a href='/man/auparse_flush_feed.3.en'>auparse_flush_feed(3)</a>,
+    <a href='/man/auparse_feed_age_events.3.en'>auparse_feed_age_events(3)</a>, <a href='/man/auparse_feed_has_data.3.en'>auparse_feed_has_data(3)</a>,
+    <a href='/man/auparse_metrics.3.en'>auparse_metrics(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>المؤلف</a></h1>
+<p class="Pp">John Dennis</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">سبتمبر 2023</td>
+    <td class="foot-os">Red Hat</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="بحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/audit/">core/audit</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>4.1.2-1</dd>
+        <dt>المطور:</dt>
+        <dd><a href="https://github.com/linux-audit/audit-userspace">https://github.com/linux-audit/audit-userspace</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>GPL-2.0-or-later, LGPL-2.0-or-later</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="/listing/core/audit/">/listing/core/audit/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#EXAMPLE">مثال</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#AUTHOR">المؤلف</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+<nav class="other-formats">
+    <p>تنسيقات أخرى:
+        
+            <a href="/man/auparse_feed.3.en.txt">txt</a>, 
+        
+            <a href="/man/auparse_feed.3.en.raw">raw</a>
+        
+    </p>
+</nav>
+
+            </aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح تحت شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               ، باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
+</html>

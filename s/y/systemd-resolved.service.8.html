@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>systemd-resolved.service(8) — Arch manual pages</title>
+        
+        
+        
+        
+        
+    
+    
+        <link rel="alternate" href="/man/systemd-resolved.service.8.de" hreflang="de">
+    
+
+    <link rel="stylesheet" href="basic.css">
+</head>
+    <body>
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">systemd-resolved.service(8)</h1>
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SYSTEMD-RESOLVED.SERVICE(8)</td>
+    <td class="head-vol">systemd-resolved.service</td>
+    <td class="head-rtitle">SYSTEMD-RESOLVED.SERVICE(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
+<p class="Pp">systemd-resolved.service, systemd-resolved - Network Name
+    Resolution manager</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
+<p class="Pp">systemd-resolved.service</p>
+<p class="Pp">/usr/lib/systemd/systemd-resolved</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
+<p class="Pp"><b>systemd-resolved</b> is a system service that provides network
+    name resolution to local applications. It implements a caching and
+    validating DNS/DNSSEC stub resolver, as well as an LLMNR and MulticastDNS
+    resolver and responder. Local applications may submit network name
+    resolution requests via three interfaces:</p>
+<div class="Bd-indent">&#x2022;The native, fully-featured API
+  <b>systemd-resolved</b> exposes via D-Bus, see
+  <a href='/man/org.freedesktop.resolve1.5.en'>org.freedesktop.resolve1(5)</a> and <a href='/man/org.freedesktop.LogControl1.5.en'>org.freedesktop.LogControl1(5)</a>
+  for details. Usage of this API is generally recommended to clients as it is
+  asynchronous and fully featured (for example, properly returns DNSSEC
+  validation status and interface scope for addresses as necessary for
+  supporting link-local networking).</div>
+<div class="Bd-indent">&#x2022;The native API <b>systemd-resolved</b> exposes
+  via Varlink on the /run/systemd/resolve/io.systemd.Resolve AF_UNIX socket.
+  This provides similar functionality as the D-Bus interface, but is available
+  during the entire runtime, without requiring a running D-Bus system bus broker
+  service.</div>
+<div class="Bd-indent">&#x2022;The glibc <a href='/man/getaddrinfo.3.en'>getaddrinfo(3)</a> API as defined by
+  <b>RFC3493</b>[1] and its related resolver functions, including
+  <a href='/man/gethostbyname.3.en'>gethostbyname(3)</a>. This API is widely supported, including beyond the
+  Linux platform. In its current form it does not expose DNSSEC validation
+  status information however, and is synchronous only. This API is backed by the
+  glibc Name Service Switch (<a href='/man/nss.5.en'>nss(5)</a>). Usage of the glibc NSS module
+  <a href='/man/nss-resolve.8.en'>nss-resolve(8)</a> is required in order to allow glibc's NSS resolver
+  functions to resolve hostnames via <b>systemd-resolved</b>.</div>
+<div class="Bd-indent">&#x2022;Additionally, <b>systemd-resolved</b> provides a
+  local DNS stub listener on the IP addresses 127.0.0.53 and 127.0.0.54 on the
+  local loopback interface. Programs issuing DNS requests directly, bypassing
+  any local API may be directed to this stub, in order to connect them to
+  <b>systemd-resolved</b>. Note however that it is strongly recommended that
+  local programs use the glibc NSS or bus APIs instead (as described above), as
+  various network resolution concepts (such as link-local addressing, or LLMNR
+  Unicode domains) cannot be mapped to the unicast DNS protocol.
+<p class="Pp">The DNS stub resolver on 127.0.0.53 provides the full feature set
+    of the local resolver, which includes offering LLMNR/MulticastDNS
+    resolution. The DNS stub resolver on 127.0.0.54 provides a more limited
+    resolver, that operates in &quot;proxy&quot; mode only, i.e. it will pass
+    most DNS messages relatively unmodified to the current upstream DNS servers
+    and back, but not try to process the messages locally, and hence does not
+    validate DNSSEC, or offer up LLMNR/MulticastDNS. (It will translate to
+    DNS-over-TLS communication if needed however.)</p>
+</div>
+<p class="Pp">The DNS servers contacted are determined from the global settings
+    in /etc/systemd/resolved.conf, the per-link static settings in
+    /etc/systemd/network/*.network files (in case
+    <a href='/man/systemd-networkd.service.8.en'>systemd-networkd.service(8)</a> is used), the per-link dynamic settings
+    received over DHCP, information provided via <a href='/man/resolvectl.1.en'>resolvectl(1)</a>, and any
+    DNS server information made available by other system services. See
+    <a href='/man/resolved.conf.5.en'>resolved.conf(5)</a> and <a href='/man/systemd.network.5.en'>systemd.network(5)</a> for details about
+    systemd's own configuration files for DNS servers. To improve compatibility,
+    /etc/resolv.conf is read in order to discover configured system DNS servers,
+    but only if it is not a symlink to /run/systemd/resolve/stub-resolv.conf,
+    /usr/lib/systemd/resolv.conf or /run/systemd/resolve/resolv.conf (see
+    below).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNTHETIC_RECORDS'><a class='permalink' href='#SYNTHETIC_RECORDS'>SYNTHETIC   RECORDS</a></h1>
+<p class="Pp"><b>systemd-resolved</b> synthesizes DNS resource records (RRs) for
+    the following cases:</p>
+<div class="Bd-indent">&#x2022;The local, configured hostname is resolved to all
+  locally configured IP addresses ordered by their scope, or &#x2014; if none
+  are configured &#x2014; the IPv4 address 127.0.0.2 (which is on the local
+  loopback interface) and the IPv6 address ::1 (which is the local host).</div>
+<div class="Bd-indent">&#x2022;The hostnames &quot;localhost&quot; and
+  &quot;localhost.localdomain&quot; as well as any hostname ending in
+  &quot;.localhost&quot; or &quot;.localhost.localdomain&quot; are resolved to
+  the IP addresses 127.0.0.1 and ::1.</div>
+<div class="Bd-indent">&#x2022;The hostname &quot;_gateway&quot; is resolved to
+  all current default routing gateway addresses, ordered by their metric. This
+  assigns a stable hostname to the current gateway, useful for referencing it
+  independently of the current network configuration state.</div>
+<div class="Bd-indent">&#x2022;The hostname &quot;_outbound&quot; is resolved to
+  the local IPv4 and IPv6 addresses that are most likely used for communication
+  with other hosts. This is the preferred source addresses of default gateways
+  if specified, or determined by requesting a routing decision to the configured
+  default gateways from the kernel and then using the local IP addresses
+  selected by this decision. This hostname is only available if there is at
+  least one local default gateway configured. This assigns a stable hostname to
+  the local outbound IP addresses, useful for referencing them independently of
+  the current network configuration state.</div>
+<div class="Bd-indent">&#x2022;The hostname &quot;_localdnsstub&quot; is
+  resolved to the IP address 127.0.0.53, i.e. the address the local DNS stub
+  (see above) is listening on.</div>
+<div class="Bd-indent">&#x2022;The hostname &quot;_localdnsproxy&quot; is
+  resolved to the IP address 127.0.0.54, i.e. the address the local DNS proxy
+  (see above) is listening on.</div>
+<div class="Bd-indent">&#x2022;The mappings defined in /etc/hosts are resolved
+  to their configured addresses and back, but they will not affect lookups for
+  non-address types (like MX). Support for /etc/hosts may be disabled with
+  <i>ReadEtcHosts=no</i>, see <a href='/man/resolved.conf.5.en'>resolved.conf(5)</a>.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='PROTOCOLS_AND_ROUTING'><a class='permalink' href='#PROTOCOLS_AND_ROUTING'>PROTOCOLS   AND ROUTING</a></h1>
+<p class="Pp">The lookup requests that systemd-resolved.service receives are
+    routed to the available DNS servers, LLMNR, and MulticastDNS interfaces
+    according to the following rules:</p>
+<div class="Bd-indent">&#x2022;Names for which synthetic records are generated
+  (the local hostname, &quot;localhost&quot; and &quot;localdomain&quot;, local
+  gateway, as listed in the previous section) and addresses configured in
+  /etc/hosts are never routed to the network and a reply is sent
+  immediately.</div>
+<div class="Bd-indent">&#x2022;Single-label names are resolved using LLMNR on
+  all local interfaces where LLMNR is enabled. Lookups for IPv4 addresses are
+  only sent via LLMNR on IPv4, and lookups for IPv6 addresses are only sent via
+  LLMNR on IPv6. Note that lookups for single-label synthesized names are not
+  routed to LLMNR, MulticastDNS or unicast DNS.</div>
+<div class="Bd-indent">&#x2022;Queries for the address records (A and AAAA) of
+  single-label non-synthesized names are resolved via unicast DNS using search
+  domains. For any interface which defines search domains, such look-ups are
+  routed to the servers defined for that interface, suffixed with each of those
+  search domains. When global search domains are defined, such look-ups are
+  routed to the global servers. For each search domain, queries are performed by
+  suffixing the name with each of the search domains in turn. Additionally,
+  lookup of single-label names via unicast DNS may be enabled with the
+  <i>ResolveUnicastSingleLabel=yes</i> setting. The details of which servers are
+  queried and how the final reply is chosen are described below. Note that this
+  means that address queries for single-label names are never sent out to remote
+  DNS servers by default, and resolution is only possible if search domains are
+  defined.</div>
+<div class="Bd-indent">&#x2022;Multi-label names with the domain suffix
+  &quot;.local&quot; are resolved using MulticastDNS on all local interfaces
+  where MulticastDNS is enabled. As with LLMNR, IPv4 address lookups are sent
+  via IPv4 and IPv6 address lookups are sent via IPv6.</div>
+<div class="Bd-indent">&#x2022;Queries for multi-label names are routed via
+  unicast DNS on local interfaces that have a DNS server configured, plus the
+  globally configured DNS servers if there are any. Which interfaces are used is
+  determined by the routing logic based on search and route-only domains,
+  described below. Note that b</div>
+</section>
+</div>
+</section>
+                
+            </article>
+            
+        </main>
+        <footer>
+            
+        </footer>
+    </body>
+</html>
+افتراضيًا، لا يتم توجيه عمليات البحث عن النطاقات ذات اللاحقة ".local" إلى خوادم DNS، ما لم يتم تحديد النطاق صراحةً كنطاق توجيه أو بحث لخادم DNS والواجهة. هذا يعني أنه في الشبكات التي تم فيها تعريف نطاق ".local" في خادم DNS خاص بالموقع، يلزم تكوين نطاقات بحث أو توجيه صريحة لجعل عمليات البحث تعمل ضمن نطاق DNS هذا. لاحظ أنه في الوقت الحاضر، يوصى بشكل عام بتجنب تعريف ".local" في خادم DNS، حيث أن RFC6762 [2] يحجز هذا النطاق للاستخدام الحصري لـ MulticastDNS.</div>
+<div class="Bd-indent">• يتم توجيه عمليات البحث عن العناوين (البحث العكسي) بشكل مشابه للأسماء متعددة التسميات، مع استثناء أن عناوين نطاق عنوان الارتباط المحلي لا يتم توجيهها أبدًا إلى DNS أحادي البث ويتم حلها فقط باستخدام LLMNR و MulticastDNS (عند تمكينها).</div>
+<p class="Pp">إذا تم توجيه عمليات البحث إلى واجهات متعددة، يتم إرجاع الاستجابة الناجحة الأولى (وبالتالي دمج مناطق البحث بفعالية على جميع الواجهات المطابقة). إذا فشل البحث على جميع الواجهات، يتم إرجاع آخر استجابة فاشلة.</p>
+<p class="Pp">يتم تحديد توجيه عمليات البحث بواسطة نطاقات التوجيه لكل واجهة (البحث والتوجهات فقط) ونطاقات البحث العامة. انظر systemd.network(5) و resolvectl(1) لوصف كيفية تعيين هذه الإعدادات ديناميكيًا ومناقشة Domains= في resolved.conf(5) لوصف إعدادات DNS المكونة عالميًا.</p>
+<p class="Pp">ينطبق منطق توجيه الاستعلام التالي على عمليات بحث DNS أحادية البث التي بدأتها systemd-resolved.service:</p>
+<div class="Bd-indent">• إذا كان الاسم المراد البحث عنه مطابقًا (أي: مساويًا أو له كلاحقة) لأي من نطاقات التوجيه المكونة (البحث أو التوجهات فقط) لأي رابط، أو إعدادات DNS المكونة عالميًا، يتم تحديد نطاق التوجيه "الأفضل تطابقًا": وهو النطاق المطابق الذي يحتوي على أكبر عدد من التسميات. ثم يتم إرسال الاستعلام إلى جميع خوادم DNS لأي روابط أو خوادم DNS المكونة عالميًا المرتبطة بنطاق التوجيه "الأفضل تطابقًا" هذا. (لاحظ أنه قد يكون لدى أكثر من رابط نفس نطاق التوجيه "الأفضل تطابقًا" المكون، وفي هذه الحالة يتم إرسال الاستعلام إلى جميعها بالتوازي).
+<p class="Pp">في حالة الأسماء ذات التسمية الواحدة، عندما يتم تعريف نطاقات البحث، ينطبق نفس المنطق، باستثناء أنه يتم إضافة لاحقة للاسم أولاً بكل واحد من نطاقات البحث بالتناوب. لاحظ أن منطق البحث هذا لا ينطبق على أي أسماء تحتوي على نقطة واحدة على الأقل. انظر أيضًا المناقشة حول التوافق مع محلول glibc التقليدي أدناه.</p>
+</div>
+<div class="Bd-indent">• إذا لم يطابق الاستعلام أي نطاق توجيه مكون (إما لكل رابط أو عام)، فسيتم إرساله إلى جميع خوادم DNS المكونة على الروابط المكونة كمسار افتراضي، بالإضافة إلى خادم DNS المكون عالميًا.</div>
+<div class="Bd-indent">• إذا لم تكن هناك خوادم DNS مكونة على أي رابط تم تكوينه أيضًا كمسار افتراضي ولا يوجد خادم DNS عام مكون، فسيتم استخدام أحد خوادم DNS الاحتياطية المضمنة.</div>
+<div class="Bd-indent">• بخلاف ذلك، تفشل استعلامات DNS أحادية البث، حيث لا يمكن تحديد خوادم DNS مناسبة.</div>
+<p class="Pp">يمكن تكوين ما إذا كان الرابط هو المسار الافتراضي أم لا باستخدام الأمر resolvectl default-route أو الإعداد DNSDefaultRoute= في ملفات .network. إذا لم يتم تكوينه صراحةً، فسيتم تحديده ضمنيًا بناءً على نطاقات DNS المكونة لرابط: إذا كان هناك نطاق توجيه فقط بخلاف "~."، فسيكون الافتراضي هو false، وإلا فسيكون true.</p>
+<p class="Pp">فعليًا، هذا يعني: لدعم الأسماء ذات التسمية الواحدة غير المصطنعة، قم بتعريف نطاقات البحث المناسبة. لتوجيه جميع استعلامات DNS التي لا تتطابق بشكل صريح مع تكوين نطاق التوجيه إلى رابط معين بشكل مفضل، قم بتكوين نطاق توجيه فقط "~." عليه. سيضمن ذلك عدم اعتبار الروابط الأخرى لهذه الاستعلامات (ما لم تحمل هي أيضًا نطاق توجيه كهذا). لتوجيه جميع استعلامات DNS هذه إلى رابط معين فقط إذا لم يتم تفضيل رابط آخر، قم بتكوين الرابط كمسار افتراضي ولا تقم بتكوين نطاق توجيه فقط "~." عليه. أخيرًا، لتجنب تلقي رابط معين لأي حركة مرور DNS لا تتطابق مع أي من نطاقات التوجيه المكونة الخاصة به، لا تجعله مسارًا افتراضيًا.</p>
+<p class="Pp">راجع org.freedesktop.resolve1(5) للحصول على معلومات حول واجهات برمجة تطبيقات D-Bus التي توفرها systemd-resolved.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COMPATIBILITY_WITH_THE_TRADITIONAL_GLIBC_STUB_RESOLVER'><a class='permalink' href='#COMPATIBILITY_WITH_THE_TRADITIONAL_GLIBC_STUB_RESOLVER'>التوافق مع محلول GLIBC التقليدي</a></h1>
+<p class="Pp">يقدم هذا القسم ملخصًا موجزًا للاختلافات في المحلول الذي تنفذه nss-resolve(8) جنبًا إلى جنب مع systemd-resolved والمحلول المساعد التقليدي المنفذ في nss-dns.</p>
+<div class="Bd-indent">• يتم دائمًا حل بعض الأسماء داخليًا (انظر السجلات الاصطناعية أعلاه). تقليديًا، يتم حلها بواسطة nss-files إذا تم توفيرها في /etc/hosts. ولكن لاحظ أن تفاصيل كيفية بناء الاستعلام تخضع لسيطرة مكتبة العميل. ستحاول nss-dns أولاً حل الأسماء باستخدام نطاقات البحث وحتى لو تم توجيه هذه الاستعلامات إلى systemd-resolved، فسترسلها عبر الشبكة باستخدام القواعد المعتادة لتوجيه الأسماء متعددة التسميات [3].</div>
+<div class="Bd-indent">• لا يتم حل الأسماء ذات التسمية الواحدة لسجلات A و AAAA باستخدام DNS أحادي البث (ما لم يتم تجاوزها باستخدام ResolveUnicastSingleLabel=، انظر resolved.conf(5)). هذا مشابه لتعيين خيار no-tld-query في resolv.conf(5).</div>
+<div class="Bd-indent">• لا تُستخدم نطاقات البحث لـ "إضافة لاحقة" للأسماء متعددة التسميات. (ومع ذلك، تُستخدم نطاقات البحث لـ "توجيه" عمليات البحث، للأسماء التي تم تحديدها في الأصل كتسمية واحدة أو متعددة التسميات). أي اسم يحتوي على نقطة واحدة على الأقل يتم تفسيره دائمًا كاسم مجال مؤهل بالكامل. كانت nss-dns تحل الأسماء كنسبية (باستخدام نطاقات البحث) وكأسماء مجال مؤهلة بالكامل مطلقة. سيتم حل بعض الأسماء كنسبية أولاً، وبعد فشل هذا الاستعلام، ك مطلقة، بينما سيتم حل أسماء أخرى بترتيب عكسي. تم استخدام خيار ndots في /etc/resolv.conf للتحكم في عدد النقاط التي يجب أن يحتوي عليها الاسم ليتم حله كنسبي أولاً. محلول المساعد هذا لا ينفذ هذا على الإطلاق: يتم حل الأسماء متعددة التسميات فقط كأسماء مجال مؤهلة بالكامل. [4]</div>
+<div class="Bd-indent">• يحتوي هذا المحلول على مفهوم خاص للنطاق ".local" المستخدم لـ MulticastDNS، ولن يقوم بتوجيه الاستعلامات ذات هذه اللاحقة إلى خوادم DNS أحادية البث ما لم يتم تكوينها صراحةً، انظر أعلاه. أيضًا، لا يتم إرسال عمليات البحث العكسي لعناوين الارتباط المحلي إلى خوادم DNS أحادية البث.</div>
+<div class="Bd-indent">• يقرأ هذا المحلول ويخزن /etc/hosts داخليًا. (بمعنى آخر، nss-resolve يحل محل nss-files بالإضافة إلى nss-dns). الإدخالات في /etc/hosts لها الأولوية القصوى.</div>
+<div class="Bd-indent">• ينفذ هذا المحلول أيضًا LLMNR و MulticastDNS بالإضافة إلى بروتوكول DNS أحادي البث الكلاسيكي، وسيقوم بحل الأسماء ذات التسمية الواحدة باستخدام LLMNR (عند تمكينها) والأسماء التي تنتهي بـ ".local" باستخدام MulticastDNS (عند تمكينها).</div>
+<div class="Bd-indent">• متغيرات البيئة $LOCALDOMAIN و $RES_OPTIONS الموصوفة في resolv.conf(5) غير مدعومة حاليًا.</div>
+<div class="Bd-indent">• يحتفظ محلول nss-dns بحالة قليلة بين استعلامات DNS اللاحقة، ولكل استعلام يتصل دائمًا بالخادم الأول المدرج من /etc/resolv.conf أولاً، وعند الفشل يستمر مع التالي حتى يصل إلى نهاية القائمة وهذا هو وقت فشل الاستعلام. ومع ذلك، يحتفظ المحلول في systemd-resolved بالحالة، وسيتحدث باستمرار إلى نفس الخادم لجميع الاستعلامات في نطاق بحث معين حتى يتم رؤية شكل من أشكال الخطأ عندها سيتحول إلى الخادم التالي، ثم يبقى معه لجميع الاستعلامات في النطاق حتى الفشل التالي، وهكذا، ويعود في النهاية إلى الخادم الأول المكون. يتم ذلك لتحسين أوقات البحث، خاصة بالنظر إلى أن المحلول يجب عليه عادةً أولاً اختبار ميزات الخادم عند التحدث إلى خادم، وهذا يستغرق وقتًا. يعني هذا السلوك المختلف أن خوادم DNS المدرجة لكل نطاق بحث يجب أن تكون مكافئة في المناطق التي تخدمها، بحيث يؤدي إرسال استعلام إلى أحدها إلى نفس النتائج كما لو تم إرساله إلى خادم DNS مكون آخر.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='/ETC/RESOLV.CONF'><a class='permalink' href='#/ETC/RESOLV.CONF'>/ETC/RESOLV.CONF</a></h1>
+<p class="Pp">يتم دعم أربعة أوضاع لمعالجة /etc/resolv.conf (انظر resolv.conf(5)):</p>
+<div class="Bd-indent">• تحتفظ systemd-resolved بالملف /run/systemd/resolve/stub-resolv.conf للتوافق مع برامج Linux التقليدية. يسرد هذا الملف المساعد DNS 127.0.0.53 (انظر أعلاه) كخادم DNS الوحيد. كما أنه يحتوي على قائمة بنطاقات البحث التي تستخدمها systemd-resolved. يتم دائمًا تحديث قائمة نطاقات البحث. لاحظ أنه لا ينبغي للتطبيقات استخدام /run/systemd/resolve/stub-resolv.conf مباشرة، ولكن فقط من خلال رابط رمزي من /etc/resolv.conf. يمكن ربط هذا الملف كرمز رمزي من /etc/resolv.conf لتوصيل جميع العملاء المحليين الذين يتجاوزون واجهات برمجة تطبيقات DNS المحلية بـ systemd-resolved مع إعدادات نطاقات البحث الصحيحة. يوصى بهذا الوضع التشغيلي.</div>
+<div class="Bd-indent">• يتم توفير ملف ثابت /usr/lib/systemd/resolv.conf يسرد المساعد DNS 127.0.0.53 (انظر أعلاه) كخادم DNS الوحيد. يمكن ربط هذا الملف كرمز رمزي من /etc/resolv.conf لتوصيل جميع العملاء المحليين الذين يتجاوزون واجهات برمجة تطبيقات DNS المحلية بـ systemd-resolved. لا يحتوي هذا الملف على أي نطاقات بحث.</div>
+<div class="Bd-indent">• تحتفظ systemd-resolved بالملف /run/systemd/resolve/resolv.conf للتوافق مع برامج Linux التقليدية. يمكن ربط هذا الملف كرمز رمزي من /etc/resolv.conf ويتم تحديثه دائمًا، ويحتوي على معلومات حول جميع خوادم DNS المعروفة. لاحظ قيود تنسيق الملف: إنه لا يعرف مفهوم خوادم DNS لكل واجهة وبالتالي يحتوي فقط على تعريفات خوادم DNS على مستوى النظام. لاحظ أنه لا ينبغي للتطبيقات استخدام /run/systemd/resolve/resolv.conf مباشرة، ولكن فقط من خلال رابط رمزي من /etc/resolv.conf. إذا تم استخدام وضع التشغيل هذا، فإن العملاء المحليين الذين يتجاوزون أي واجهة برمجة تطبيقات DNS محلية سيتجاوزون أيضًا systemd-resolved وسيتحدثون مباشرة إلى خوادم DNS المعروفة.</div>
+<div class="Bd-indent">• بدلاً من ذلك، يمكن إدارة /etc/resolv.conf بواسطة حزم أخرى، وفي هذه الحالة ستقرأها systemd-resolved لبيانات تكوين DNS. في وضع التشغيل هذا، تعد systemd-resolved مستهلكًا لملف التكوين هذا بدلاً من موفر له.</div>
+<p class="Pp">لاحظ أن وضع التشغيل المختار لهذا الملف يتم اكتشافه تلقائيًا بالكامل، اعتمادًا على ما إذا كان /etc/resolv.conf رابطًا رمزيًا إلى /run/systemd/resolve/resolv.conf أو يسرد 127.0.0.53 كخادم DNS.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SIGNALS'><a class='permalink' href='#SIGNALS'>الإشارات</a></h1>
+<p class="Pp"><b>SIGUSR1</b></p>
+<div class="Bd-indent">عند استقبال إشارة العملية SIGUSR1، ستقوم systemd-resolved بإفراغ محتويات جميع DN</div>

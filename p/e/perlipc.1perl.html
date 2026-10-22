@@ -1,0 +1,524 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">perlipc.1perl</h1>
+<link rel="stylesheet" href="basic.css">
+fo $FIFO: $!&quot;;
+    }
+    # next line blocks till there's a reader
+    open (my $fh, "&gt;", $FIFO) || die "can't open $FIFO: $!";
+    print $fh "John Smith (smith\@host.org)\n", `fortune -s`;
+    close($fh)                || die "can't close $FIFO: $!";
+    sleep 2;                # to avoid dup signals
+}</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='Using_<b>open()</b>_for_IPC'><a class='permalink' href='#Using_<b>open()</b>_for_IPC'>استخدام <b>open()</b> للتواصل بين العمليات</a></h1>
+<p class="Pp">يمكن أيضًا استخدام عبارة <b>open()</b> الأساسية في Perl للتواصل أحادي الاتجاه بين العمليات عن طريق تحديد وضع الفتح كـ <span class="Li">"|-</span>" أو <span class="Li>"-|"</span>. إليك كيفية بدء شيء ما في عملية فرعية تنوي الكتابة إليها:</p>
+<pre>open(my $spooler, "|-", "cat -v | lpr -h 2&gt;/dev/null")
+                    || die "can't fork: $!";
+local $SIG{PIPE} = sub { die "spooler pipe broke" };
+print $spooler "stuff\n";
+close $spooler      || die "bad spool: $! $?";</pre>
+<p class="Pp">وهنا كيفية بدء عملية فرعية تنوي القراءة منها:</p>
+<pre>open(my $status, "-|", "netstat -an 2&gt;&amp;1")
+                    || die "can't fork: $!";
+while (&lt;$status&gt;) {
+    next if /^(tcp|udp)/;
+    print;
+}
+close $status       || die "bad netstat: $! $?";</pre>
+<p class="Pp">كن على علم بأن هذه العمليات هي عمليات Unix كاملة، مما يعني أنها قد لا تكون مطبقة بشكل صحيح على جميع الأنظمة الغريبة. راجع "open" في perlport للحصول على تفاصيل حول قابلية النقل.</p>
+<p class="Pp">في الصيغة ذات الوسيطين لـ <b>open()</b>، يمكن تحقيق فتح الأنابيب عن طريق إضافة أو إلحاق رمز الأنبوب بالحجة الثانية:</p>
+<pre>open(my $spooler, "| cat -v | lpr -h 2&gt;/dev/null")
+                    || die "can't fork: $!";
+open(my $status, "netstat -an 2&gt;&amp;1 |")
+                    || die "can't fork: $!";</pre>
+<p class="Pp">يمكن استخدام هذا حتى على الأنظمة التي لا تدعم إنشاء العمليات الفرعية، ولكن هذا قد يسمح للكود المخصص لقراءة الملفات بتنفيذ البرامج بشكل غير متوقع. إذا كان يمكن التأكد من أن برنامجًا معينًا هو نص Perl يتوقع أسماء ملفات في <span class="Li">@ARGV</span> باستخدام الصيغة ذات الوسيطين لـ <b>open()</b> أو عامل التشغيل <span class="Li>"&lt;&gt;"</span>، فيمكن للمبرمج الماهر كتابة شيء كهذا:</p>
+<pre>% program f1 "cmd1|" - f2 "cmd2|" f3 &lt; tmpfile</pre>
+<p class="Pp">وبغض النظر عن نوع الصدفة التي يتم استدعاؤها منها، سيقرأ برنامج Perl من الملف <i>f1</i>، والعملية <i>cmd1</i>، والإدخال القياسي (<i>tmpfile</i> في هذه الحالة)، والملف <i>f2</i>، والأمر <i>cmd2</i>، وأخيرًا الملف <i>f3</i>. أليس هذا رائعًا؟</p>
+<p class="Pp">قد تلاحظ أنه يمكنك استخدام الاقتباسات المائلة (backticks) لنفس التأثير تقريبًا مثل فتح أنبوب للقراءة:</p>
+<pre>print grep { !/^(tcp|udp)/ } `netstat -an 2&gt;&amp;1`;
+die "bad netstatus ($?)" if $?;</pre>
+<p class="Pp">بينما هذا صحيح ظاهريًا، إلا أنه أكثر كفاءة معالجة الملف سطرًا بسطر أو سجلًا بسجل لأنه لا يتعين عليك قراءة كل شيء في الذاكرة مرة واحدة. كما أنه يمنحك تحكمًا أدق في العملية برمتها، مما يسمح لك بقتل العملية الفرعية مبكرًا إذا أردت.</p>
+<p class="Pp">احرص على التحقق من القيم المرجعة من كل من <b>open()</b> و <b>close()</b>. إذا كنت <i>تكتب</i> إلى أنبوب، فيجب عليك أيضًا اعتراض SIGPIPE. بخلاف ذلك، فكر فيما يحدث عندما تبدأ أنبوبًا إلى أمر غير موجود: من المرجح أن تنجح <b>open()</b> (إنها تعكس فقط نجاح <b>fork()</b>)، ثم ستفشل كتابتك - بشكل مروع. لا يمكن لـ Perl معرفة ما إذا كان الأمر قد نجح، لأن أمرك قيد التشغيل بالفعل في عملية منفصلة قد يكون <b>exec()</b> الخاص بها قد فشل. لذلك، بينما يعيد قراء الأوامر المزيفة نهاية ملف سريعة، فإن الكتاب إلى الأوامر المزيفة سيتم ضربهم بإشارة، والتي من الأفضل أن يكونوا مستعدين للتعامل معها. فكر في:</p>
+<pre>open(my $fh, "|-", "bogus") || die "can't fork: $!";
+print $fh "bang\n";         #  neither necessary nor sufficient
+                            #  to check print retval!
+close($fh)                  || die "can't close: $!";</pre>
+<p class="Pp">سبب عدم التحقق من القيمة المرجعة من <b>print()</b> هو التخزين المؤقت للأنابيب؛ يتم تأخير عمليات الكتابة الفعلية. لن ينفجر ذلك حتى الإغلاق، وسينفجر مع SIGPIPE. للقبض عليه، يمكنك استخدام هذا:</p>
+<pre>$SIG{PIPE} = "IGNORE";
+open(my $fh, "|-", "bogus") || die "can't fork: $!";
+print $fh "bang\n";
+close($fh)                  || die "can't close: status=$?";</pre>
+<section class="Ss">
+<h2 class="Ss" id='Filehandles'><a class='permalink' href='#Filehandles'>مقابض الملفات</a></h2>
+<p class="Pp">كل من العملية الرئيسية وأي عمليات فرعية تقوم بإنشائها تشترك في نفس مقابض الملفات STDIN و STDOUT و STDERR. إذا حاولت كلتا العمليتين الوصول إليها في نفس الوقت، فقد تحدث أشياء غريبة. قد ترغب أيضًا في إغلاق أو إعادة فتح مقابض الملفات للعملية الفرعية. يمكنك التغلب على هذا عن طريق فتح الأنبوب الخاص بك باستخدام <b>open()</b>، ولكن على بعض الأنظمة هذا يعني أن العملية الفرعية لا يمكن أن تعيش أطول من العملية الأم.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Background_Processes'><a class='permalink' href='#Background_Processes'>العمليات الخلفية</a></h2>
+<p class="Pp">يمكنك تشغيل أمر في الخلفية باستخدام:</p>
+<pre>system("cmd &amp;");</pre>
+<p class="Pp">سيكون STDOUT و STDERR للأمر (وربما STDIN، اعتمادًا على الصدفة الخاصة بك) هي نفسها العملية الأم. لن تحتاج إلى اعتراض SIGCHLD بسبب إنشاء العملية المزدوجة؛ انظر أدناه للحصول على التفاصيل.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Complete_Dissociation_of_Child_from_Parent'><a class='permalink' href='#Complete_Dissociation_of_Child_from_Parent'>الفصل التام للعملية الفرعية عن العملية الأم</a></h2>
+<p class="Pp">في بعض الحالات (بدء عمليات الخادم، على سبيل المثال) سترغب في فصل العملية الفرعية تمامًا عن العملية الأم. غالبًا ما يطلق على هذا اسم "daemonization". سيقوم الخادم الذي يتصرف بشكل جيد أيضًا بـ <b>chdir()</b> إلى الدليل الجذر حتى لا يمنع إلغاء تحميل نظام الملفات الذي يحتوي على الدليل الذي تم تشغيله منه، وإعادة توجيه واصفات ملفاته القياسية من وإلى <i>/dev/null</i> حتى لا ينتهي الإخراج العشوائي على طرفية المستخدم.</p>
+<pre>use POSIX "setsid";
+sub daemonize {
+    chdir("/")                     || die "can't chdir to /: $!";
+    open(STDIN,  "&lt;", "/dev/null") || die "can't read /dev/null: $!";
+    open(STDOUT, "&gt;", "/dev/null") || die "can't write /dev/null: $!";
+    defined(my $pid = fork())      || die "can't fork: $!";
+    exit if $pid;              # non-zero now means I am the parent
+    (setsid() != -1)           || die "Can't start a new session: $!";
+    open(STDERR, "&gt;&amp;", STDOUT) || die "can't dup stdout: $!";
+}</pre>
+<p class="Pp">يجب أن تأتي <b>fork()</b> قبل <b>setsid()</b> للتأكد من أنك لست قائد مجموعة عمليات؛ ستفشل <b>setsid()</b> إذا كنت كذلك. إذا لم يكن نظامك يحتوي على الدالة <b>setsid()</b>، افتح <i>/dev/tty</i> واستخدم <b>ioctl()</b> <span class="Li>"TIOCNOTTY"</span> عليها بدلاً من ذلك. راجع <a href='/man/tty.4.en'>tty(4)</a> للحصول على التفاصيل.</p>
+<p class="Pp">يجب على مستخدمي غير Unix التحقق من وحدة <span class="Li>"</span><span class="Li"><i>Your_OS</i></span><span class="Li">::Process&quot;</span> الخاصة بهم للحصول على حلول أخرى ممكنة.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Safe_Pipe_Opens'><a class='permalink' href='#Safe_Pipe_Opens'>فتح الأنابيب الآمن</a></h2>
+<p class="Pp">نهج مثير للاهتمام آخر للتواصل بين العمليات هو جعل برنامجك الواحد متعدد العمليات والتواصل بين - أو حتى بين - بعضها البعض. تقبل الصيغة ذات الوسيطين للدالة <b>open()</b> وسيط ملف إما <span class="Li>"|-</span>" أو <span class="Li>"|-</span>" للقيام بشيء مثير للاهتمام جدًا: إنها تنشئ عملية فرعية متصلة بمقبض الملف الذي فتحته. العملية الفرعية تقوم بتشغيل نفس البرنامج مثل العملية الأم. هذا مفيد لفتح ملف بأمان عند التشغيل تحت معرف مستخدم أو مجموعة معرف مفترضة، على سبيل المثال. إذا فتحت أنبوبًا <i>إلى</i> ناقص، يمكنك الكتابة إلى مقبض الملف الذي فتحته وسيجدها طفلك في STDIN الخاص به. إذا فتحت أنبوبًا <i>من</i> ناقص، يمكنك القراءة من مقبض الملف الذي فتحته مهما كان ما يكتبه طفلك إلى STDOUT الخاص به.</p>
+<pre>my $PRECIOUS = "/path/to/some/safe/file";
+my $sleep_count;
+my $pid;
+my $kid_to_write;
+do {
+    $pid = open($kid_to_write, "|-");
+    unless (defined $pid) {
+        warn "cannot fork: $!";
+        die "bailing out" if $sleep_count++ &gt; 6;
+        sleep 10;
+    }
+} until defined $pid;
+if ($pid) {                 # I am the parent
+    print $kid_to_write @some_data;
+    close($kid_to_write)    || warn "kid exited $?";
+} else {                    # I am the child
+    # drop permissions in setuid and/or setgid programs:
+    ($&gt;, $)) = ($&lt;, $();
+    open (my $outfile, "&gt;", $PRECIOUS)
+                            || die "can't open $PRECIOUS: $!";
+    while (&lt;STDIN&gt;) {
+        print $outfile;     # child STDIN is parent $kid_to_write
+    }
+    close($outfile)         || die "can't close $PRECIOUS: $!";
+    exit(0);                # don't forget this!!
+}</pre>
+<p class="Pp">استخدام شائع آخر لهذا البناء هو عندما تحتاج إلى تنفيذ شيء ما دون تدخل الصدفة. مع <b>system()</b>، يكون الأمر مباشرًا، ولكن لا يمكنك استخدام فتح الأنابيب أو الاقتباسات المائلة بأمان. هذا لأنه لا توجد طريقة لمنع الصدفة من الحصول على حججك. بدلاً من ذلك، استخدم تحكمًا منخفض المستوى لاستدعاء <b>exec()</b> مباشرة.</p>
+<p class="Pp">إليك اقتباس مائل آمن أو فتح أنبوب للقراءة:</p>
+<pre>my $pid = open(my $kid_to_read, "-|");
+defined($pid)            || die "can't fork: $!";
+if ($pid) {             # parent
+    while (&lt;$kid_to_read&gt;) {
+                        # do something interesting
+    }
+    close($kid_to_read)  || warn "kid exited $?";
+} else {                # child
+    ($&gt;, $)) = ($&lt;, $(); # suid only
+    exec($program, @options, @args)
+                         || die "can't exec program: $!";
+    # NOTREACHED
+}</pre>
+<p class="Pp">وهنا فتح أنبوب آمن للكتابة:</p>
+<pre>my $pid = open(my $kid_to_write, "|-");
+defined($pid)            || die "can't fork: $!";
+$SIG{PIPE} = sub { die "whoops, $program pipe broke" };
+if ($pid) {             # parent
+    print $kid_to_write @data;
+    close($kid_to_write) || warn "kid exited $?";
+} else {                # child
+    ($&gt;, $)) = ($&lt;, $();
+    exec($program, @options, @args)
+                         || die "can't exec program: $!";
+    # NOTREACHED
+}</pre>
+<p class="Pp">من السهل جدًا حدوث جمود في عملية باستخدام هذا الشكل من <b>open()</b>، أو بالفعل مع أي استخدام لـ <b>pipe()</b> مع عمليات فرعية متعددة. المثال أعلاه "آمن" لأنه بسيط ويستدعي <b>exec()</b>. راجع "تجنب جمود الأنابيب" للحصول على مبادئ السلامة العامة، ولكن هناك مشاكل إضافية مع فتح الأنابيب الآمن.</p>
+<p class="Pp">على وجه الخصوص، إذا فتحت الأنبوب باستخدام <span class="Li>"open
+{
+  "title": "Perl FAQ: Pipes and Sockets",
+  "sections": [
+    {
+      "title": "Pipes",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "A pipe is a unidirectional data channel. You can use pipes to communicate with other processes. When you open a pipe, you create a filehandle that is connected to the pipe. You can then read from or write to the pipe using this filehandle. Pipes are often used to connect the standard input or output of one process to the standard input or output of another process."
+        },
+        {
+          "type": "paragraph",
+          "text": "Perl provides several ways to create and use pipes. The most common way is to use the `open()` function with a pipe specifier. For example, to open a pipe to a command, you can use the following syntax:"
+        },
+        {
+          "type": "code",
+          "code": "open(my $fh, \"|-\", \"command\") || die \"Can't open pipe: $!\";"
+        },
+        {
+          "type": "paragraph",
+          "text": "This opens a pipe to the command \"command\". The `$fh` filehandle can then be used to write to the command's standard input. To read from the command's standard output, you would use the following syntax:"
+        },
+        {
+          "type": "code",
+          "code": "open(my $fh, \"-|\", \"command\") || die \"Can't open pipe: $!\";"
+        },
+        {
+          "type": "paragraph",
+          "text": "This opens a pipe from the command \"command\". The `$fh` filehandle can then be used to read from the command's standard output."
+        },
+        {
+          "type": "paragraph",
+          "text": "When you use `open()` with a pipe specifier, Perl implicitly forks a child process. The parent process can then communicate with the child process through the pipe. It is important to close the pipe when you are finished with it, as this will signal the end of the data to the other process."
+        }
+      ]
+    },
+    {
+      "title": "Avoiding Pipe Deadlocks",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "One common problem when working with pipes is deadlocks. A deadlock can occur when a parent process and a child process are both trying to write to a pipe, but neither is reading from it. This can happen if both processes block indefinitely while waiting for the other to finish writing."
+        },
+        {
+          "type": "paragraph",
+          "text": "To avoid deadlocks, you must ensure that each process closes the ends of the pipe that it is not using. This is especially important when dealing with multiple child processes or complex communication patterns. Explicitly calling `close()` on unused pipe ends as soon as possible is a good practice."
+        },
+        {
+          "type": "paragraph",
+          "text": "Perl's `open()` function with the `\"|-\"` or `\"-|\"` specifiers has a special behavior: closing the filehandle calls `waitpid()`, which waits for the subprocess to exit. If the child process is waiting for something from the parent, and the parent closes the pipe expecting the child to exit, this can lead to a deadlock. The solution is to manually use `pipe()`, `fork()`, and `open()` with file descriptor duplication."
+        },
+        {
+          "type": "code",
+          "code": "pipe(my $reader, my $writer)   || die \"pipe failed: $!\\n\";\nmy $pid = fork();\ndefined($pid)                  || die \"first fork failed: $!\\n\";\nif ($pid) {\n    close $reader;\n    if (my $sub_pid = fork()) {\n        defined($sub_pid)      || die \"first fork failed: $!\\n\";\n        close($writer)         || die \"can't close writer: $!\\n\";\n    } else {\n        # write to $writer...\n        close($writer)         || die \"can't close writer: $!\\n\";\n        exit(0);\n    }\n} else {\n    open(STDIN, \"<&\":, $reader) || die \"can't reopen STDIN: $!\\n\";\n    close($writer)             || die \"can't close writer: $!\\n\";\n    # do something...\n    exit(0);\n}"
+        },
+        {
+          "type": "paragraph",
+          "text": "Since Perl 5.8.0, the list form of `open()` for pipes is preferred. This avoids shell interpretation of metacharacters in command strings and is safer when arguments might contain special characters."
+        },
+        {
+          "type": "code",
+          "code": "open(my $ps_pipe, \"-|\", \"ps\", \"aux\") || die \"can't open ps pipe: $!\\n\";"
+        },
+        {
+          "type": "paragraph",
+          "text": "This form forks the command directly without a shell. The corresponding syntax for writing to a command pipe is to use `\"|-|\"` instead of `\"-|\"`. This multi-argument form is especially useful when command arguments might contain shell metacharacters."
+        }
+      ]
+    },
+    {
+      "title": "Bidirectional Communication with Another Process",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "Bidirectional communication with another process (i.e., reading from and writing to the same process) is more complex. A simple `open(my $fh, \"|-\", \"some program\")` does not work for bidirectional pipes. Perl provides modules like `IPC::Open2` and `IPC::Open3` to handle this. `IPC::Open2` allows you to communicate via standard input and output, while `IPC::Open3` also allows you to capture standard error. These modules typically use low-level system calls like `pipe()` and `exec()`."
+        },
+        {
+          "type": "code",
+          "code": "use IPC::Open2;\nmy $pid = open2(my $reader, my $writer, \"cat -un\");\nprint $writer \"stuff\\n\";\nmy $got = <$reader>;\nwaitpid $pid, 0;"
+        },
+        {
+          "type": "paragraph",
+          "text": "A significant challenge with bidirectional communication is buffering. Even if you flush your writes, the other process might buffer its output, preventing you from reading it in a timely manner. Using the `-u` flag for commands like `cat` can make them unbuffered, but this is not always an option. For more robust interaction with programs that expect a terminal, modules like `Expect` (which relies on `IO::Pty` and `IO::Stty`) are recommended."
+        }
+      ]
+    },
+    {
+      "title": "Bidirectional Communication with Yourself",
+      "content": [
+        {
+          "type": "paragraph",
+          "text": "You can also set up bidirectional communication between processes you control, such as a parent and child process created with `fork()`. This can be achieved by creating two pairs of pipes: one for the parent to write to the child, and another for the child to write to the parent."
+        },
+        {
+          "type": "code",
+          "code": "#!/usr/bin/perl\nuse v5.36;\nuse IO::Handle;\npipe(my $parent_rdr, my $child_wtr);\npipe(my $child_rdr,  my $parent_wtr);\n$child_wtr->autoflush(1);\n$parent_wtr->autoflush(1);\nif ($pid = fork()) {\n    close $parent_rdr;\n    close $parent_wtr;\n    print $child_wtr \"Parent Pid $$ is sending this\\n\";\n    chomp(my $line = <$child_rdr>);\n    print \"Parent Pid $$ just read this: '$line'\\n\";\n    close $child_rdr; close $child_wtr;\n    waitpid($pid, 0);\n} else {\n    die \"cannot fork: $!\" unless defined $pid;\n    close $child_rdr;\n    close $child_wtr;\n    chomp(my $line = <$parent_rdr>);\n    print \"Child Pid $$ just read this: '$line'\\n\";\n    print $parent_wtr \"Child Pid $$ is sending this\\n\";\n    close $parent_rdr; close $parent_wtr;\n    exit(0);\n}"
+        },
+        {
+          "type": "paragraph",
+          "text": "A more convenient way to achieve bidirectional communication, if your system supports it, is using the `socketpair()` system call. This creates a pair of connected sockets, which can be used for full-duplex communication between two processes."
+        },
+        {
+          "type": "code",
+          "code": "#!/usr/bin/perl\nuse v5.36;\nuse Socket;\nuse IO::Handle;\nsocketpair(my $child, my $parent, AF_UNIX, SOCK_STREAM, PF_UNSPEC)\n                            ||  die \"socketpair: $!\\n\";\n$child->autoflush(1);\n$parent->autoflush(1);\nif ($pid = fork()) {\n    close $parent;\n    print $child \"Parent Pid $$ is sending this\\n\";\n    chomp(my $line = <$child>);\n    print \"Parent Pid $$ just read this: '$line'\\n\";\n    close $child;\n    waitpid($pid, 0);\n} else {\n    die \"cannot fork: $!\" unless defined $pid;\n    close $child;\n    chomp(my $line = <$parent>);\n    print \"Child Pid $$ just read this: '$line'\\n\";\n    print $parent \"Child Pid $$ is sending this\\n\";\n    close $parent;\n    exit(0);\n}"
+        }
+      ]
+    }
+  ]
+}
+sections:
+- name: NAME
+  content: |
+    perlipc - Perl interprocess communication
+sections:
+- name: DESCRIPTION
+  content: |
+    This chapter covers interprocess communication (IPC) in Perl. It begins with
+    the simpler forms of IPC, such as named pipes, and then moves on to more
+    complex mechanisms like sockets and SysV IPC.
+sections:
+- name: Signals
+  content: |
+    Perl makes it easy to handle signals, which are asynchronous notifications
+    sent to a process. You can use the `signal` function or the `sigaction`
+    module to handle signals.
+sections:
+- name: Named Pipes
+  content: |
+    Named pipes, also known as FIFOs (First-In, First-Out), are special files
+    that allow processes to communicate with each other. One process writes data
+    to the pipe, and another process reads from it.
+sections:
+- name: Using <B>open()</B> for IPC
+  content: |
+    Perl's `open` function can be used to create and access named pipes, allowing
+    you to treat them like regular files.
+    For example, to create a pipe named `my_pipe`:
+    <pre>
+    use strict;
+    use warnings;
+    use IPC::Open2;
+
+    # Create a named pipe
+    my $pipe_name = "my_pipe";
+    mkfifo($pipe_name) or die "Could not create pipe: $!";
+
+    # Open the pipe for reading and writing
+    open my $pipe_fh, "<", $pipe_name or die "Could not open pipe: $!";
+
+    # ... (rest of your IPC logic) ...
+
+    # Close the pipe and remove it when done
+    close $pipe_fh;
+    unlink $pipe_name;
+    </pre>
+sections:
+- name: Sockets: Client/Server Communication
+  content: |
+    Sockets provide a more powerful and flexible way for processes to communicate,
+    especially across networks. Perl's `Socket` module provides low-level
+    access to the socket API, while `IO::Socket` offers a higher-level,
+    object-oriented interface.
+sections:
+- name: TCP Clients with IO::Socket
+  content: |
+    Here's a simple TCP client that connects to a server and sends a message:
+    <pre>
+    use IO::Socket;
+    use strict;
+    use warnings;
+
+    # Server details
+    my $host = "localhost";
+    my $port = 12345;
+
+    # Create a socket and connect to the server
+    my $socket = IO::Socket::INET->new(
+        PeerAddr => "$host:$port",
+        Proto    => "tcp",
+    ) or die "Cannot connect to [$host:$port]: $@";
+
+    # Send a message
+    print $socket "Hello, server!\n";
+
+    # Read the response (optional)
+    my $response = <$socket>;
+    print "Server responded: $response";
+
+    # Close the socket
+    close $socket;
+    </pre>
+sections:
+- name: TCP Servers with IO::Socket
+  content: |
+    This is a basic TCP server that listens for incoming connections and
+    responds to clients.
+    <pre>
+    use IO::Socket;
+    use strict;
+    use warnings;
+
+    my $port = 12345;
+
+    # Create a listening socket
+    my $server_socket = IO::Socket::INET->new(
+        LocalPort => $port,
+        Listen    => 5,    # Number of pending connections
+        Proto     => "tcp",
+    ) or die "Cannot create server socket: $@";
+
+    print "Server listening on port $port...\n";
+
+    # Accept incoming connections
+    while (my $client_socket = $server_socket->accept()) {
+        print "Accepted connection from: ", $client_socket->peerhost(), "\n";
+
+        # Read the message from the client
+        my $request = <$client_socket>;
+        chomp $request;
+        print "Received: $request\n";
+
+        # Send a response
+        print $client_socket "Hello, client! You sent: $request\n";
+
+        # Close the client connection
+        close $client_socket;
+    }
+
+    close $server_socket;
+    </pre>
+sections:
+- name: UDP: Message Passing
+  content: |
+    UDP (User Datagram Protocol) is a connectionless protocol suitable for
+    sending discrete messages.
+    <pre>
+    use IO::Socket;
+    use strict;
+    use warnings;
+
+    # Sender
+    my $sender_socket = IO::Socket::INET->new(
+        Proto => "udp",
+    ) or die "Cannot create sender socket: $@";
+
+    my $server_host = "localhost";
+    my $server_port = 12346;
+
+    # Send a message
+    $sender_socket->send("Hello UDP world!");
+
+    # Receiver
+    my $receiver_socket = IO::Socket::INET->new(
+        LocalPort => $server_port,
+        Proto     => "udp",
+    ) or die "Cannot create receiver socket: $@";
+
+    print "Listening for UDP messages on port $server_port...\n";
+
+    while (1) {
+        my $message;
+        my $sender_addr = $receiver_socket->recv($message, 1024);
+        print "Received from $sender_addr: $message\n";
+    }
+
+    close $receiver_socket;
+    close $sender_socket;
+    </pre>
+sections:
+- name: SysV IPC
+  content: |
+    Perl provides access to System V Inter-Process Communication (IPC)
+    mechanisms: semaphores, shared memory, and message queues. These are typically
+    used on Unix-like systems.
+    <pre>
+    # Example using semaphores (simplified)
+    use IPC::SysV qw(IPC_PRIVATE IPC_CREAT SEM_UNDO);
+
+    # Create a semaphore set with one semaphore
+    my $sem_key = 12345;
+    my $sem_id = semget($sem_key, 1, IPC_CREAT | 0666);
+    die "semget failed: $!" unless defined $sem_id;
+
+    print "Semaphore ID: $sem_id\n";
+
+    # Initialize the semaphore value to 0
+    semctl($sem_id, 0, SETVAL, 0) or die "semctl failed: $!";
+
+    # Example of using semaphores for synchronization
+    # (Requires separate processes for 'take' and 'give' scripts)
+
+    # File: take
+    # my $IPC_KEY = 1234;
+    # my $id = semget($IPC_KEY, 0, 0);
+    # defined($id) || die "semget: $!";
+    # my $semnum = 0;
+    # my $semop = 0; # Wait for semaphore to be zero
+    # my $semflag = 0;
+    # my $opstring1 = pack("s!s!s!", $semnum, $semop, $semflag);
+    # $semop = 1; # Increment semaphore count
+    # my $opstring2 = pack("s!s!s!", $semnum, $semop, $semflag);
+    # my $opstring = $opstring1 . $opstring2;
+    # semop($id, $opstring) || die "semop: $!";
+
+    # File: give
+    # my $IPC_KEY = 1234;
+    # my $id = semget($IPC_KEY, 0, 0);
+    # die unless defined($id);
+    # my $semnum = 0;
+    # my $semflag = 0;
+    # my $semop = -1; # Decrement semaphore count
+    # my $opstring = pack("s!s!s!", $semnum, $semop, $semflag);
+    # semop($id, $opstring) || die "semop: $!";
+
+    # Example demonstrating SysV message queues:
+    # use IPC::SysV qw(IPC_PRIVATE IPC_RMID IPC_CREAT S_IRUSR S_IWUSR);
+    # my $id = msgget(IPC_PRIVATE, IPC_CREAT | S_IRUSR | S_IWUSR);
+    # defined($id) || die "msgget failed: $!";
+    # my $sent = "message";
+    # my $type_sent = 1234;
+    # msgsnd($id, pack("l! a*", $type_sent, $sent), 0) || die "msgsnd failed: $!";
+    # msgrcv($id, my $rcvd_buf, 60, 0, 0) || die "msgrcv failed: $!";
+    # my ($type_rcvd, $rcvd) = unpack("l! a*", $rcvd_buf);
+    # if ($rcvd eq $sent) {
+    #     print "okay\n";
+    # } else {
+    #     print "not okay\n";
+    # }
+    # msgctl($id, IPC_RMID, 0) || die "msgctl failed: $!\n";
+    </pre>
+    The SysV IPC code above was written long ago, and it's definitely clunky
+    looking. For a more modern look, see the IPC::SysV module.
+sections:
+- name: NOTES
+  content: |
+    Most of these routines quietly but politely return <span class="Li">"undef"</span>
+    when they fail instead of causing your program to die right then and there
+    due to an uncaught exception. (Actually, some of the new <i>Socket</i>
+    conversion functions do <b>croak()</b> on bad arguments.) It is therefore
+    essential to check return values from these functions. Always begin your
+    socket programs this way for optimal success, and don't forget to add the
+    <b>-T</b> taint-checking flag to the <span class="Li">"#! "</span> line
+    for servers:
+    <pre>
+    #!/usr/bin/perl -T
+    use v5.36;
+    use sigtrap;
+    use Socket;
+    </pre>
+sections:
+- name: BUGS
+  content: |
+    These routines all create system-specific portability problems. As noted
+    elsewhere, Perl is at the mercy of your C libraries for much of its system
+    behavior. It's probably safest to assume broken SysV semantics for signals
+    and to stick with simple TCP and UDP socket operations; e.g., don't try to
+    pass open file descriptors over a local UDP datagram socket if you want your
+    code to stand a chance of being portable.
+sections:
+- name: AUTHOR
+  content: |
+    Tom Christiansen, with occasional vestiges of Larry Wall's original version
+    and suggestions from the Perl Porters.
+sections:
+- name: SEE ALSO
+  content: |
+    There's a lot more to networking than this, but this should get you started.
+
+    For intrepid programmers, the indispensable textbook is <i>Unix Network
+    Programming, 2nd Edition, Volume 1</i> by W. Richard Stevens (published by
+    Prentice-Hall). Most books on networking address the subject from the
+    perspective of a C programmer; translation to Perl is left as an exercise
+    for the reader.
+
+    The <a href='/man/IO::Socket.3.en'>IO::Socket(3)</a> manpage describes the
+    object library, and the <a href='/man/Socket.3.en'>Socket(3)</a> manpage
+    describes the low-level interface to sockets. Besides the obvious functions
+    in perlfunc, you should also check out the <i>modules</i> file at your
+    nearest CPAN site, especially <a href='https://www.cpan.org/modules/00modlist.long.html#ID5_Networking_'>https://www.cpan.org/modules/00modlist.long.html#ID5_Networking_</a>.
+    See perlmodlib or best yet, the <i>Perl FAQ</i> for a description of what
+    CPAN is and where to get it if the previous link doesn't work for you.
+
+    Section 5 of CPAN's <i>modules</i> file is devoted to "Networking, Device
+    Control (modems), and Interprocess Communication", and contains numerous
+    unbundled modules numerous networking modules, Chat and Expect operations,
+    CGI programming, DCE, FTP, IPC, NNTP, Proxy, Ptty, RPC, SNMP, SMTP, Telnet,
+    Threads, and ToolTalk--to name just a few.
+...

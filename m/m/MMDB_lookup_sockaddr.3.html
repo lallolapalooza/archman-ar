@@ -1,0 +1,140 @@
+<p class="back"><a href="/archman-ar/">← الفهرس</a></p>
+<h1 class="page-title">MMDB_lookup_sockaddr(3)</h1>
+<link rel="stylesheet" href="basic.css">
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_string()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_string(
+    MMDB_s *const mmdb,
+    const char *const ipstr,
+    int *const gai_error,
+    int *const mmdb_error);</pre>
+<p class="Pp">تبحث هذه الدالة عن عنوان IP يتم تمريره كسلسلة نصية منتهية بصفر. تقوم داخليًا باستدعاء <span class="Li">getaddrinfo()</span> لحل العنوان إلى شكله الثنائي. ثم تقوم باستدعاء <span class="Li">MMDB_lookup_sockaddr()</span> للبحث عن العنوان في قاعدة البيانات. إذا كنت قد قمت بالفعل بحل عنوان، يمكنك استدعاء <span class="Li">MMDB_lookup_sockaddr()</span> مباشرة دون حله مرتين.</p>
+<pre>int gai_error, mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_string(&amp;mmdb, &quot;1.2.3.4&quot;, &amp;gai_error, &amp;mmdb_error);
+if (0 != gai_error) { ... }
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+<p class="Pp">ترجع هذه الدالة دائمًا هيكل <span class="Li">MMDB_lookup_result_s</span>، ولكن يجب عليك أيضًا التحقق من معاملي <span class="Li">gai_error</span> و <span class="Li">mmdb_error</span>. إذا أشار أي منهما إلى خطأ، فإن الهيكل المرتجع يكون عديم الفائدة.</p>
+<p class="Pp">إذا لم يكن هناك خطأ، يجب عليك التأكد من أن عضو <span class="Li">found_entry</span> في الهيكل المرتجع صحيح. إذا لم يكن كذلك، فهذا يعني أن عنوان IP ليس له سجل في قاعدة البيانات.</p>
+<p class="Pp">تعمل هذه الدالة مع عناوين IPv4 حتى عندما تحتوي قاعدة البيانات على بيانات لكل من IPv4 و IPv6. سيتم البحث عن عنوان IPv4 كـ ::xxx.xxx.xxx.xxx، وليس كـ ::ffff:xxx.xxx.xxx.xxx.</p>
+<p class="Pp">إذا مررت عنوان IPv6 إلى قاعدة بيانات تحتوي على بيانات IPv4 فقط، فسيكون العضو <span class="Li">found_entry</span> خاطئًا، ولكن حالة <span class="Li">mmdb_error</span> ستظل <span class="Li">MMDB_SUCCESS</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_lookup_sockaddr()</span></h2>
+<pre>MMDB_lookup_result_s MMDB_lookup_sockaddr(
+    MMDB_s *const mmdb,
+    const struct sockaddr *const sockaddr,
+    int *const mmdb_error);</pre>
+<p class="Pp">تبحث هذه الدالة عن عنوان IP تم حله بالفعل بواسطة <span class="Li">getaddrinfo()</span>.</p>
+<p class="Pp">ما لم تكن تقوم باستدعاء <span class="Li">getaddrinfo()</span> بنفسك، فإن هذه الدالة متطابقة مع الدالة <span class="Li">MMDB_lookup_string()</span>.</p>
+<pre>int mmdb_error;
+MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+if (MMDB_SUCCESS != mmdb_error) { ... }
+if (result.found_entry) { ... }</pre>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Data_Lookup_Functions'><a class='permalink' href='#Data_Lookup_Functions'>البحث عن البيانات المرتبطة بعنوان IP</a></h2>
+<p class="Pp">هناك ثلاث دوال للبحث عن البيانات المرتبطة بعنوان IP.</p>
+<pre>int MMDB_get_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    ...);
+int MMDB_vget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    va_list va_path);
+int MMDB_aget_value(
+    MMDB_entry_s *const start,
+    MMDB_entry_data_s *const entry_data,
+    const char *const *const path);</pre>
+<p class="Pp">تسمح الدوال الثلاث بأنماط استدعاء مختلفة قليلاً، ولكنها جميعًا تقوم بنفس المهمة.</p>
+<p class="Pp">المعلمة الأولى هي قيمة <span class="Li">MMDB_entry_s</span>. في معظم الحالات، ستأتي هذه القيمة من هيكل <span class="Li">MMDB_lookup_result_s</span> المرتجع من <span class="Li">MMDB_lookup_string()</span> أو <span class="Li">MMDB_lookup_sockaddr()</span>.</p>
+<p class="Pp">المعلمة الثانية هي مرجع إلى هيكل <span class="Li">MMDB_entry_data_s</span>. سيتم ملء هذا بالبيانات التي يتم البحث عنها، إذا تم العثور على أي شيء. إذا لم يتم العثور على شيء، فسيكون العضو <span class="Li">has_data</span> في هذا الهيكل خاطئًا. إذا كان <span class="Li">has_data</span> صحيحًا، يمكنك رؤية العضو <span class="Li">data_type</span>.</p>
+<p class="Pp">المعلمة الأخيرة هي مسار بحث. يتكون المسار من سلسلة من السلاسل النصية التي تمثل مفاتيح الخريطة (على سبيل المثال، "city") أو فهارس المصفوفة (على سبيل المثال، "0"، "1"، "-1") لاستخدامها في البحث.</p>
+<p class="Pp">سيتم التعامل مع فهارس المصفوفات السالبة كإزاحة من نهاية المصفوفة. على سبيل المثال، "-1" يشير إلى العنصر الأخير في المصفوفة.</p>
+<p class="Pp">يسمح مسار البحث بالتنقل في هيكل معقد. على سبيل المثال، بالنظر إلى هيكل البيانات هذا:</p>
+<pre>{
+    &quot;names&quot;: {
+        &quot;en&quot;: &quot;Germany&quot;,
+        &quot;de&quot;: &quot;Deutschland&quot;
+    },
+    &quot;cities&quot;: [ &quot;Berlin&quot;, &quot;Frankfurt&quot; ]
+}</pre>
+<p class="Pp">يمكننا البحث عن الاسم باللغة الإنجليزية باستخدام هذا الكود:</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_s entry_data;
+int status =
+    MMDB_get_value(&amp;result.entry, &amp;entry_data,
+                   &quot;names&quot;, &quot;en&quot;, NULL);
+if (MMDB_SUCCESS != status) { ... }
+if (entry_data.has_data) { ... }</pre>
+<p class="Pp">إذا أردنا العثور على المدينة الأولى، فسيكون مسار البحث <span class="Li">&quot;cities&quot;</span> و <span class="Li">&quot;0&quot;</span>. إذا لم تقدم مسار بحث، فستحصل على السجل الذي يتوافق مع الخريطة الجذرية. يجب أن ينتهي مسار البحث دائمًا بـ <span class="Li">NULL</span>، بغض النظر عن الدالة التي تستخدمها.</p>
+<p class="Pp">تقبل الدالة <span class="Li">MMDB_get_value</span> عددًا متغيرًا من الوسائط. جميع الوسائط بعد المؤشر إلى <span class="Li">MMDB_entry_data_s</span> هي مسار البحث. يجب أن تكون الوسيطة الأخيرة <span class="Li">NULL</span>.</p>
+<p class="Pp">تقبل الدالة <span class="Li">MMDB_vget_value</span> قائمة <span class="Li">va_list</span> كمسار بحث. يجب أن يكون العنصر الأخير المسترد باستخدام <span class="Li">va_arg()</span> هو <span class="Li">NULL</span>.</p>
+<p class="Pp">أخيرًا، تقبل الدالة <span class="Li">MMDB_aget_value</span> مصفوفة من السلاسل النصية كمسار بحث. يجب أن يكون العنصر الأخير في هذه المصفوفة <span class="Li">NULL</span>.</p>
+<p class="Pp">إذا كنت ترغب في الحصول على جميع بيانات الإدخال في وقت واحد، يمكنك استدعاء <span class="Li">MMDB_get_entry_data_list()</span>.</p>
+<p class="Pp">لكل من الدوال الثلاث، القيمة المرتجعة هي رمز حالة كما هو محدد أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_entry_data_list()</span></h2>
+<pre>int MMDB_get_entry_data_list(
+    MMDB_entry_s *start,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">تتيح لك هذه الدالة الحصول على جميع بيانات هيكل معقد دفعة واحدة، بدلاً من البحث عن كل جزء عن طريق استدعاءات متكررة لـ <span class="Li">MMDB_get_value()</span>.</p>
+<pre>MMDB_lookup_result_s result =
+    MMDB_lookup_sockaddr(&amp;mmdb, address-&gt;ai_addr, &amp;mmdb_error);
+MMDB_entry_data_list_s *entry_data_list, *first;
+int status =
+    MMDB_get_entry_data_list(&amp;result.entry, &amp;entry_data_list);
+if (MMDB_SUCCESS != status) { ... }
+// save this so we can free this data later
+first = entry_data_list;
+while (1) {
+    MMDB_entry_data_list_s *next = entry_data_list = entry_data_list-&gt;next;
+    if (NULL == next) {
+        break;
+    }
+    switch (next-&gt;entry_data.type) {
+        case MMDB_DATA_TYPE_MAP: { ... }
+        case MMDB_DATA_TYPE_UTF8_STRING: { ... }
+        ...
+    }
+}
+MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">القيمة المرتجعة هي رمز حالة كما هو محدد أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_free_entry_data_list()</span></h2>
+<pre>void MMDB_free_entry_data_list(
+    MMDB_entry_data_list_s *const entry_data_list);</pre>
+<p class="Pp">تقوم الدوال <span class="Li">MMDB_get_entry_data_list()</span> و <span class="Li">MMDB_get_metadata_as_entry_data_list()</span> بتخصيص بنية القائمة المترابطة من الذاكرة. استدعِ هذه الدالة لتحرير هيكل <span class="Li">MMDB_entry_data_list_s</span>.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_get_metadata_as_entry_data_list()</span></h2>
+<pre>int MMDB_get_metadata_as_entry_data_list(
+    MMDB_s *const mmdb,
+    MMDB_entry_data_list_s **const entry_data_list);</pre>
+<p class="Pp">تسمح لك هذه الدالة باسترداد بيانات تعريف قاعدة البيانات كقائمة مترابطة من هياكل <span class="Li">MMDB_entry_data_list_s</span>. قد يكون هذا أكثر ملاءمة من استخدام هيكل بيانات التعريف مباشرة.</p>
+<pre>    MMDB_entry_data_list_s *entry_data_list, *first;
+    int status =
+        MMDB_get_metadata_as_entry_data_list(&amp;mmdb, &amp;entry_data_list);
+    if (MMDB_SUCCESS != status) { ... }
+    first = entry_data_list;
+    ... // افعل شيئًا بالبيانات
+    MMDB_free_entry_data_list(first);</pre>
+<p class="Pp">القيمة المرتجعة هي رمز حالة كما هو محدد أعلاه.</p>
+</section>
+<section class="Ss">
+<h2 class="Ss"><span class="Li">MMDB_dump_entry_data_list()</span></h2>
+<pre>int MMDB_dump_entry_data_list(
+    FILE *const stream,
+    MMDB_entry_data_list_s *const entry_data_list,
+    int indent);</pre>
+<p class="Pp">تستقبل هذه الدالة قائمة مترابطة من هياكل <span class="Li">MMDB_entry_data_list_s</span> وتقوم بتحويلها إلى تدفق محدد <span class="Li">stream</span>. المعلمة <span class="Li">indent</span> هي مستوى المسافة البادئة الأولي للإخراج الذي تم إنشاؤه. يتم زيادتها للهياكل المتداخلة (الخرائط، المصفوفات، إلخ).</p>
+<p class="Pp">يجب أن يكون <span class="Li">stream</span> مقبض ملف (<span class="Li">stdout</span>، إلخ). إذا كانت منصتك توفر شيئًا مثل <span class="Li">open_memstream()</span> (GNU)، يمكنك استخدامه لالتقاط الإخراج كسلسلة نصية.</p>
+<p class="Pp">الإخراج منسق بأسلوب يشبه JSON، ولكن القيم موسومة بنوع بياناتها (باستثناء الخرائط والمصفوفات التي يتم عرضها كـ "{}" و "[]" على التوالي).</p>
+<p class="Pp">قد يتغير تنسيق الإخراج المحدد في f...</p>
+</section>
