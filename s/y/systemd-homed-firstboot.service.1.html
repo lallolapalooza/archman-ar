@@ -1,564 +1,1122 @@
-- name: activate
-  description: |
-    Activates a user's home directory. The user must be authenticated
-    for this to succeed. This operation is synchronous and will not
-    complete until the home directory is activated.
-    This is primarily useful for accessing the home directory from
-    a different user account than the one it is associated with.
-    For example, if user 'foo' has a home directory, and user 'bar'
-    needs to access it (e.g. for backup purposes), 'bar' may use
-    this command to activate 'foo's home directory and then access it.
-    <p class="Pp">Added in version 245.</p>
-- name: deactivate
-  description: |
-    Deactivates a user's home directory. If the home directory was
-    previously activated by the caller, it is deactivated and its
-    associated cryptographic keys are flushed from memory.
-    This operation is synchronous and will not complete until the
-    home directory is deactivated.
-    If the home directory is not currently active, this operation
-    is a no-op.
-    <p class="Pp">Added in version 245.</p>
-- name: create
-  description: |
-    Creates a new home directory for the specified user. If the user
-    already exists, this fails.
-    The user name needs to follow the strict syntax defined in
-    <b>User/Group Name Syntax</b>[3].
-    <p class="Pp">Added in version 245.</p>
-- name: copy
-  description: |
-    Copies an existing home directory to a new user account. The user
-    account specified by <i>USER</i> must not exist yet. The contents
-    of the source home directory <i>FROM</i> are copied into the new
-    home directory. If <i>FROM</i> is not specified, the user's home
-    directory is copied from the system's default location.
-    <p class="Pp">Added in version 256.</p>
-- name: authenticate
-  description: |
-    Authenticates a user's home directory. This queries the caller
-    for a password (or similar) and checks that it correctly unlocks
-    the home directory. This leaves the home directory in the state
-    it is in, i.e. it leaves the home directory in inactive state if
-    it was inactive before, and in active state if it was active
-    before.
-    <p class="Pp">Added in version 245.</p>
-- name: create
-  args:
-    - USER
-    - --identity=
-  description: |
-    Create a new home directory/user account of the specified
-    name. Use the various user record property options (as documented
-    above) to control various aspects of the home directory and its
-    user accounts.
-    <p class="Pp">The specified user name should follow the strict syntax described
-      on <b>User/Group Name Syntax</b>[4].</p>
-    <p class="Pp">Added in version 245.</p>
-- name: adopt
-  args:
-    - PATH
-  description: |
-    Adopts one or more existing home directories on the local
-    system. Takes one or more paths to *.home LUKS home directories
-    or *.homedir/ standalone home directories or subvolumes previously
-    created by systemd-homed and makes them available locally for
-    login. The referenced files are not moved. This is an alternative
-    for moving such home directories into /home/ (where they would be
-    picked up automatically).
-    <p class="Pp">Added in version 258.</p>
-- name: register
-  args:
-    - FILE
-  description: |
-    Registers one or more users, without creating their home directories.
-    Takes one or more paths to JSON user record files. If the path is
-    specified as &quot;-&quot; reads the JSON user record from standard input.
-    <p class="Pp">Registering a user makes it accessible on the local system
-      without creating a new home directory. This is particularly useful for
-      making a user accessible on a system it was not originally created on.</p>
-    <p class="Pp">Here's an example how to make a local user account with its home
-      directory accessible on a remote system, using SMB/CIFS file sharing. With
-      Samba installed in its default configuration invoke as &quot;root&quot;:</p>
-    <div class="Bd-indent">
-      <pre># smbpasswd -a lennart</pre>
-    </div>
-    <p class="Pp">Continue as regular user &quot;lennart&quot;:</p>
-    <div class="Bd-indent">
-      <pre>$ homectl update lennart --ssh-authorized-keys=... -N --storage=cifs --cifs-service=&quot;//$HOSTNAME/lennart&quot;
-$ homectl get-signing-key | ssh targetsystem homectl add-signing-key --key-name=&quot;$HOSTNAME&quot;.public
-$ homectl inspect -E lennart | ssh targetsystem homectl register -
-$ ssh lennart@targetsystem</pre>
-    </div>
-    <p class="Pp">This first ensures the user account &quot;lennart&quot; is known
-      to and accessible by Samba. It then registers a local SSH access that shall
-      be used for accessing this user, and configures CIFS as default storage for
-      non-local systems on the account. It then adds the local system's account
-      signing key to the target system. Then it registers the local user account
-      with the target system. Finally it logs into the account on the target
-      system. The target system will then connect back via SMB/CIFS to access the
-      home directory.</p>
-    <p class="Pp">Added in version 258.</p>
-- name: unregister
-  args:
-    - USER
-  description: |
-    Unregisters one or more user accounts. This only removes the user
-    record from the local system, it does not delete the home directory.
-    The home directory can be readded via the <b>register</b> or <b>adopt</b>
-    command later, on this or another system. Note that unregistering a user
-    whose home directory is placed in /home/ will not make the user disappear
-    from the local user database, as all supported home directories placed
-    there will show up in the user database. However, the user record will
-    become &quot;unfixated&quot;, i.e. lose its binding to the local system.
-    When logged into it will automatically regain the binding, and acquire a
-    local UID/GID pair.
-    <p class="Pp">Added in version 258.</p>
-- name: remove
-  args:
-    - USER
-  description: |
-    Remove a home directory/user account. This will remove both the
-    home directory's user record and the home directory itself, and
-    thus delete all files and directories owned by the user.
-    <p class="Pp">Added in version 245.</p>
-- name: update
-  args:
-    - USER
-    - --identity=
-  description: |
-    Update a home directory/user account. Use the various user record
-    property options (as documented above) to make changes to the
-    account, or alternatively provide a full, updated JSON user record
-    via the <b>--identity=</b> option.
-    <p class="Pp">Note that changes to user records not signed by a cryptographic
-      private key available locally are not permitted, unless <b>--identity=</b>
-      is used with a user record that is already correctly signed by a
-      recognized private key.</p>
-    <p class="Pp">Added in version 245.</p>
-- name: passwd
-  args:
-    - USER
-  description: |
-    Change the password of the specified home directory/user account.
-    <p class="Pp">Added in version 245.</p>
-- name: resize
-  args:
-    - USER
-    - BYTES
-  description: |
-    Change the disk space assigned to the specified home directory. If
-    the LUKS2 storage mechanism is used this will automatically resize
-    the loopback file and the file system contained within. Note that if
-    &quot;ext4&quot; is used inside of the LUKS2 volume, it is necessary to
-    deactivate the home directory before shrinking it (i.e the user has to
-    log out). Growing can be done while the home directory is active. If
-    &quot;xfs&quot; is used inside of the LUKS2 volume the home directory may
-    not be shrunk whatsoever. On all three of &quot;ext4&quot;, &quot;xfs&quot;
-    and &quot;btrfs&quot; the home directory may be grown while the user is
-    logged in, and on the latter also shrunk while the user is logged in. If
-    the &quot;subvolume&quot;, &quot;directory&quot;, &quot;fscrypt&quot; storage
-    mechanisms are used, resizing will change file system quota. The size
-    parameter may make use of the usual suffixes B, K, M, G, T (to the base
-    of 1024). The special strings &quot;min&quot; and &quot;max&quot; may
-    be specified in place of a numeric size value, for minimizing or
-    maximizing disk space assigned to the home area, taking constraints of
-    the file system, disk usage inside the home area and on the backing
-    storage into account.
-    <p class="Pp">Added in version 245.</p>
-- name: lock
-  args:
-    - USER
-  description: |
-    Temporarily suspend access to the user's home directory and remove
-    any associated cryptographic keys from memory. Any attempts to
-    access the user's home directory will stall until the home directory
-    is unlocked again (i.e. re-authenticated). This functionality is
-    primarily intended to be used during system suspend to make sure the
-    user's data cannot be accessed until the user re-authenticates on
-    resume. This operation is only defined for home directories that use
-    the LUKS2 storage mechanism.
-    <p class="Pp">Added in version 245.</p>
-- name: unlock
-  args:
-    - USER
-  description: |
-    Resume access to the user's home directory again, undoing the
-    effect of <b>lock</b> above. This requires authentication of the
-    user, as the cryptographic keys required for access to the home
-    directory need to be reacquired.
-    <p class="Pp">Added in version 245.</p>
-- name: lock-all
-  description: |
-    Execute the <b>lock</b> command on all suitable home directories at
-    once. This operation is generally executed on system suspend (i.e.
-    by <b>systemctl suspend</b> and related commands), to ensure all
-    active user's cryptographic keys for accessing their home directories
-    are removed from memory.
-    <p class="Pp">Added in version 245.</p>
-- name: deactivate-all
-  description: |
-    Execute the <b>deactivate</b> command on all active home directories
-    at once. This operation is generally executed on system shut down
-    (i.e. by <b>systemctl poweroff</b> and related commands), to ensure
-    all active user's home directories are fully deactivated before /home/
-    and related file systems are unmounted.
-    <p class="Pp">Added in version 247.</p>
-- name: with
-  args:
-    - USER
-    - COMMAND
-  description: |
-    Activate the specified user's home directory, run the specified command
-    (under the caller's identity, not the specified user's) and deactivate
-    the home directory afterwards again (unless the user is logged in
-    otherwise). This command is useful for running privileged backup scripts
-    and such, but requires authentication with the user's credentials in
-    order to be able to unlock the user's home directory.
-    <p class="Pp">Added in version 245.</p>
-- name: rebalance
-  description: |
-    Rebalance free disk space between active home areas and the backing
-    storage. See <b>--rebalance-weight=</b> above. This executes no
-    operation unless there's at least one active LUKS2 home area that has
-    disk space rebalancing enabled. This operation is synchronous: it will
-    only complete once disk space is rebalanced according to the rebalancing
-    weights. Note that rebalancing also takes place automatically in the
-    background in regular intervals. Use this command to synchronously
-    ensure disk space is properly redistributed before initiating an operation
-    requiring large amounts of disk space.
-    <p class="Pp">Added in version 250.</p>
-- name: firstboot
-  description: |
-    This command is supposed to be invoked during the initial boot of the
-    system. It checks whether any regular home area exists so far, and if
-    not queries the user interactively on the console for user name and
-    password and creates one (only if <b>--prompt-new-user</b> is specified).
-    Alternatively, if one or more service credentials whose name starts
-    with &quot;home.create.&quot; are passed to the command (containing a user
-    record in JSON format) these users are automatically created at boot.
-    <p class="Pp">This command is invoked by the systemd-homed-firstboot.service
-      service unit.</p>
-    <p class="Pp">Added in version 256.</p>
-- name: list-signing-keys
-  description: |
-    Show a list of public keys that home directories can be signed with
-    to be allowed for local login. One such key (local.public) will be
-    generated automatically for signing locally created home directories,
-    but additional public keys may be registered to accept home directories
-    from other origins too (see <b>add-signing-key</b> below).
-    <p class="Pp">Added in version 258.</p>
-- name: get-signing-key
-  args:
-    - NAME
-  description: |
-    Write the public key identified by the specified name to standard
-    output (in PEM format). If no name is specified defaults to
-    local.public, i.e. the automatically generated key for locally
-    created home directories.
-    <p class="Pp">Added in version 258.</p>
-- name: add-signing-key
-  args:
-    - FILE
-  description: |
-    Add public key(s) from the specified PEM key file(s) to the list
-    of keys that home areas have to be signed by to be permitted for
-    local login. If a path of &quot;-&quot; is specified, or if no file is
-    specified at all, the key will be read from standard input. The key
-    file name(s) must carry the .public suffix, and the file name(s)
-    will be used to name the key(s) once added, too. If a key is added
-    from standard input the key name must be specified explicitly via
-    <b>--key-name=</b>, see above.
-    <p class="Pp">This command is useful for permitting local home directories to
-      be used on a remote system. Example:</p>
-    <div class="Bd-indent">
-      <pre>homectl get-signing-key | ssh myotherhost homectl add-signing-key --key-name=&quot;$HOSTNAME&quot;.publ</pre>
-    </div>
-<div class="manual-content">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>systemd-homed-firstboot.service(1) — صفحة دليل لينكس بالعربية</title>
+    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 1: systemd-homed-firstboot.service(1). حزمة systemd.">
+        
+        
+        
+        
+        
+    
+    
 
-<section class="Sh">
-<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
-<p class="Pp">homectl - Manage home directory specifications</p>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
-<p class="Pp"><code class="Nm">homectl</code> [OPTIONS...] {COMMAND}</p>
-<p class="Pp"><code class="Nm">homectl</code> [OPTIONS...] {COMMAND} [ARGUMENTS...]</p>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
-<p class="Pp">The <code class="Nm">homectl</code> utility manages the set of home
-    directory specifications which are used to determine which origins are
-    allowed to provide home directories for login.</p>
-<p class="Pp">It allows querying and modifying this list.</p>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='COMMANDS'><a class='permalink' href='#COMMANDS'>COMMANDS</a></h1>
-<p class="Pp">The following commands are understood:</p>
-<dl class="Bl-tag">
-<dt><b>add</b></dt>
-<dd>Add a home directory specification.</dd>
-<dt><b>remove</b></dt>
-<dd>Remove a home directory specification.</dd>
-<dt><b>list</b></dt>
-<dd>List home directory specifications.</dd>
-<dt><b>firstboot</b></dt>
-<dd>Set up home directory specifications during the first boot.</dd>
-<dt><b>remove-signing-key</b></dt>
-<dd>Remove a public key used for signing home directory origins.</dd>
-</dl>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>OPTIONS</a></h1>
-<p class="Pp">The following options are understood:</p>
-<dl class="Bl-tag">
-<dt><b>--no-pager</b></dt>
-<dd>Do not pipe output into a pager.</dd>
-<dt><b>--json=</b><i>MODE</i></dt>
-<dd>Produce output in JSON format. If <i>MODE</i> is &quot;short&quot;,
-      all strings are output in shortest possible form. If <i>MODE</i> is
-      &quot;pretty&quot;, JSON data is pretty-printed.</dd>
-<dt><b>-h</b>, <b>--help</b></dt>
-<dd>Print a short help text and exit.</dd>
-<dt><b>-V</b>, <b>--version</b></dt>
-<dd>Print a short version string and exit.</dd>
-</dl>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='COMMANDS_1'><a class='permalink' href='#COMMANDS_1'>COMMANDS</a></h1>
-<p class="Pp"><b>add</b> <i>ORIGIN</i> [<i>USERNAME</i>]</p>
-<div class="Bd-indent">Adds a new home directory specification. <i>ORIGIN</i>
-  is the origin of the home directory, usually a DNS name (e.g.
-  &quot;files.example.com&quot;). If <i>USERNAME</i> is specified, it must be a
-  valid UNIX username. It is used to find the user's home directory on the
-  specified origin. If <i>USERNAME</i> is not specified, it is assumed that the
-  username is the same as the name used for login.
-<p class="Pp">Added in version 255.</p>
-</div>
-<p class="Pp"><b>remove</b> <i>ORIGIN</i> [<i>USERNAME</i>]</p>
-<div class="Bd-indent">Removes a home directory specification. The arguments
-  are the same as for <b>add</b>.
-<p class="Pp">Added in version 255.</p>
-</div>
-<p class="Pp"><b>list</b> [<i>ORIGIN</i>] [<i>USERNAME</i>]</p>
-<div class="Bd-indent">Lists the current home directory specifications. If
-  <i>ORIGIN</i> and/or <i>USERNAME</i> are specified, only matching entries are
-  listed.
-<p class="Pp">Added in version 255.</p>
-</div>
-<p class="Pp"><b>firstboot</b></p>
-<div class="Bd-indent">Initializes the home directory specifications during
-  the first boot of the system. This command is intended to be run by
-  <a href="systemd-firstboot.1.html">systemd-firstboot(1)</a>. It checks for the
-  existence of a default home directory origin, and prompts the user to
-  configure it if it does not exist.
-<p class="Pp">Added in version 256.</p>
-</div>
-<p class="Pp"><b>remove-signing-key</b> <i>NAME...</i></p>
-<div class="Bd-indent">Remove the public key identified by the specified name
-  from the list of keys that control from which origins to permit home
-  directories for login.
-<p class="Pp">Added in version 258.</p>
-</div>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='CREDENTIALS'><a class='permalink' href='#CREDENTIALS'>CREDENTIALS</a></h1>
-<p class="Pp">When invoked with the <b>firstboot</b> command, <b>homectl</b>
-    supports the service credentials logic as implemented by
-    <i>ImportCredential=</i>/<i>LoadCredential=</i>/<i>SetCredential=</i> (see
-    <a href="systemd.exec.5.html">systemd.exec(5)</a> for details). The following credentials are used when
-    passed in:</p>
-<p class="Pp"><i>home.create.*</i></p>
-<div class="Bd-indent">If one or more credentials whose names begin with
-  &quot;home.create.&quot;, followed by a valid UNIX username are passed, a new
-  home area is created, one for each specified user record.
-<p class="Pp">Added in version 256.</p>
-</div>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='KERNEL_COMMAND_LINE'><a class='permalink' href='#KERNEL_COMMAND_LINE'>KERNEL COMMAND LINE</a></h1>
-<p class="Pp"><i>systemd.firstboot=</i></p>
-<div class="Bd-indent">This boolean will disable the effect of <b>homectl
-  firstboot</b> command. It's primarily interpreted by
-  <a href="systemd-firstboot.1.html">systemd-firstboot(1)</a>.
-<p class="Pp">Added in version 256.</p>
-</div>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='EXIT_STATUS'><a class='permalink' href='#EXIT_STATUS'>EXIT STATUS</a></h1>
-<p class="Pp">On success, 0 is returned, a non-zero failure code otherwise.</p>
-<p class="Pp">When a command is invoked with <b>with</b>, the exit status of the
-    child is propagated. Effectively, <b>homectl</b> will exit without error if
-    the command is successfully invoked <i>and</i> finishes successfully.</p>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>ENVIRONMENT</a></h1>
-<p class="Pp"><i>$SYSTEMD_LOG_LEVEL</i></p>
-<div class="Bd-indent">The maximum log level of emitted messages (messages with
-  a higher log level, i.e. less important ones, will be suppressed). Takes a
-  comma-separated list of values. A value may be either one of (in order of
-  decreasing importance) <b>emerg</b>, <b>alert</b>, <b>crit</b>, <b>err</b>,
-  <b>warning</b>, <b>notice</b>, <b>info</b>, <b>debug</b>, or an integer in the
-  range 0...7. See <a href="syslog.3.html">syslog(3)</a> for more information. Each value may
-  optionally be prefixed with one of <b>console</b>, <b>syslog</b>, <b>kmsg</b>
-  or <b>journal</b> followed by a colon to set the maximum log level for that
-  specific log target (e.g. <b>SYSTEMD_LOG_LEVEL=debug,console:info</b>
-  specifies to log at debug level except when logging to the console which
-  should be at info level). Note that the global maximum log level takes
-  priority over any per target maximum log levels.</div>
-<p class="Pp"><i>$SYSTEMD_LOG_COLOR</i></p>
-<div class="Bd-indent">A boolean. If true, messages written to the tty will be
-  colored according to priority.
-<p class="Pp">This setting is only useful when messages are written directly to
-    the terminal, because journalctl(1) and other tools that display logs
-    will color messages based on the log level on their own.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LOG_TIME</i></p>
-<div class="Bd-indent">A boolean. If true, console log messages will be prefixed
-  with a timestamp.
-<p class="Pp">This setting is only useful when messages are written directly to
-    the terminal or a file, because journalctl(1) and other tools that
-    display logs will attach timestamps based on the entry metadata on their
-    own.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LOG_LOCATION</i></p>
-<div class="Bd-indent">A boolean. If true, messages will be prefixed with a
-  filename and line number in the source code where the message originates.
-<p class="Pp">Note that the log location is often attached as metadata to
-    journal entries anyway. Including it directly in the message text can
-    nevertheless be convenient when debugging programs.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LOG_TID</i></p>
-<div class="Bd-indent">A boolean. If true, messages will be prefixed with the
-  current numerical thread ID (TID).
-<p class="Pp">Note that the this information is attached as metadata to journal
-    entries anyway. Including it directly in the message text can nevertheless
-    be convenient when debugging programs.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LOG_TARGET</i></p>
-<div class="Bd-indent">The destination for log messages. One of <b>console</b>
-  (log to the attached tty), <b>console-prefixed</b> (log to the attached tty
-  but with prefixes encoding the log level and &quot;facility&quot;, see
-  <a href="syslog.3.html">syslog(3)</a>, <b>kmsg</b> (log to the kernel circular log buffer),
-  <b>journal</b> (log to the journal), <b>journal-or-kmsg</b> (log to the
-  journal if available, and to kmsg otherwise), <b>auto</b> (determine the
-  appropriate log target automatically, the default), <b>null</b> (disable log
-  output).</div>
-<p class="Pp"><i>$SYSTEMD_LOG_RATELIMIT_KMSG</i></p>
-<div class="Bd-indent">Whether to ratelimit kmsg or not. Takes a boolean.
-  Defaults to &quot;true&quot;. If disabled, systemd will not ratelimit messages
-  written to kmsg.</div>
-<p class="Pp"><i>$SYSTEMD_PAGER</i>, <i>$PAGER</i></p>
-<div class="Bd-indent">Pager to use when <b>--no-pager</b> is not given.
-  <i>$SYSTEMD_PAGER</i> is used if set; otherwise <i>$PAGER</i> is used. If
-  neither <i>$SYSTEMD_PAGER</i> nor <i>$PAGER</i> are set, a set of well-known
-  pager implementations is tried in turn, including <a href="../../l/e/less.1.html">less(1)</a> and
-  more(1), until one is found. If no pager implementation is discovered,
-  no pager is invoked. Setting those environment variables to an empty string or
-  the value &quot;cat&quot; is equivalent to passing <b>--no-pager</b>.
-<p class="Pp">Note: if <i>$SYSTEMD_PAGERSECURE</i> is not set,
-    <i>$SYSTEMD_PAGER</i> and <i>$PAGER</i> can only be used to disable the
-    pager (with &quot;cat&quot; or &quot;&quot;), and are otherwise ignored.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LESS</i></p>
-<div class="Bd-indent">Override the options passed to <b>less</b> (by default
-  &quot;FRSXMK&quot;).
-<p class="Pp">Users might want to change two options in particular:</p>
-<p class="Pp"><b>K</b></p>
-<div class="Bd-indent">This option instructs the pager to exit immediately when
-  Ctrl+C is pressed. To allow <b>less</b> to handle Ctrl+C itself to switch back
-  to the pager command prompt, unset this option.
-<p class="Pp">If the value of <i>$SYSTEMD_LESS</i> does not include
-    &quot;K&quot;, and the pager that is invoked is <b>less</b>, Ctrl+C will be
-    ignored by the executable, and needs to be handled by the pager.</p>
-</div>
-<p class="Pp"><b>X</b></p>
-<div class="Bd-indent">This option instructs the pager to not send termcap
-  initialization and deinitialization strings to the terminal. It is set by
-  default to allow command output to remain visible in the terminal even after
-  the pager exits. Nevertheless, this prevents some pager functionality from
-  working, in particular paged output cannot be scrolled with the mouse.</div>
-<p class="Pp">Note that setting the regular <i>$LESS</i> environment variable
-    has no effect for <b>less</b> invocations by systemd tools.</p>
-<p class="Pp">See <a href="../../l/e/less.1.html">less(1)</a> for more discussion.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_LESSCHARSET</i></p>
-<div class="Bd-indent">Override the charset passed to <b>less</b> (by default
-  &quot;utf-8&quot;, if the invoking terminal is determined to be UTF-8
-  compatible).
-<p class="Pp">Note that setting the regular <i>$LESSCHARSET</i> environment
-    variable has no effect for <b>less</b> invocations by systemd tools.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_PAGERSECURE</i></p>
-<div class="Bd-indent">Common pager commands like <a href="../../l/e/less.1.html">less(1)</a>, in addition to
-  &quot;paging&quot;, i.e. scrolling through the output, support opening of or
-  writing to other files and running arbitrary shell commands. When commands are
-  invoked with elevated privileges, for example under <a href="../u/sudo.8.html">sudo(8)</a> or
-  <a href="../../p/k/pkexec.1.html">pkexec(1)</a>, the pager becomes a security boundary. Care must be taken
-  that only programs with strictly limited functionality are used as pagers, and
-  unintended interactive features like opening or creation of new files or
-  starting of subprocesses are not allowed. &quot;Secure mode&quot; for the
-  pager may be enabled as described below, <i>if the pager supports that</i>
-  (most pagers are not written in a way that takes this into consideration). It
-  is recommended to either explicitly enable &quot;secure mode&quot; or to
-  completely disable the pager using <b>--no-pager</b> or <i>PAGER=cat</i> when
-  allowing untrusted users to execute commands with elevated privileges.
-<p class="Pp">This option takes a boolean argument. When set to true, the
-    &quot;secure mode&quot; of the pager is enabled. In &quot;secure mode&quot;,
-    <b>LESSSECURE=1</b> will be set when invoking the pager, which instructs the
-    pager to disable commands that open or create new files or start new
-    subprocesses. Currently only <a href="../../l/e/less.1.html">less(1)</a> is known to understand this
-    variable and implement &quot;secure mode&quot;.</p>
-<p class="Pp">When set to false, no limitation is placed on the pager. Setting
-    <i>SYSTEMD_PAGERSECURE=0</i> or not removing it from the inherited
-    environment may allow the user to invoke arbitrary commands.</p>
-<p class="Pp">When <i>$SYSTEMD_PAGERSECURE</i> is not set, systemd tools attempt
-    to automatically figure out if &quot;secure mode&quot; should be enabled and
-    whether the pager supports it. &quot;Secure mode&quot; is enabled if the
-    effective UID is not the same as the owner of the login session, see
-    <a href="../../g/e/geteuid.2.html">geteuid(2)</a> and <a href="../d/sd_pid_get_owner_uid.3.html">sd_pid_get_owner_uid(3)</a>, or when running under
-    <a href="../u/sudo.8.html">sudo(8)</a> or similar tools (<i>$SUDO_UID</i> is set [5]). In those
-    cases, <i>SYSTEMD_PAGERSECURE=1</i> will be set and pagers which are not
-    known to implement &quot;secure mode&quot; will not be used at all. Note
-    that this autodetection only covers the most common mechanisms to elevate
-    privileges and is intended as convenience. It is recommended to explicitly
-    set <i>$SYSTEMD_PAGERSECURE</i> or disable the pager.</p>
-<p class="Pp">Note that if the <i>$SYSTEMD_PAGER</i> or <i>$PAGER</i> variables
-    are to be honoured, other than to disable the pager,
-    <i>$SYSTEMD_PAGERSECURE</i> must be set too.</p>
-</div>
-<p class="Pp"><i>$SYSTEMD_COLORS</i></p>
-<div class="Bd-indent">Takes a boolean argument. When true, <b>systemd</b> and
-  related utilities will use colors in their output, otherwise the output will
-  be monochrome. Additionally, the variable can take one of the following
-  special values: &quot;16&quot;, &quot;256&quot; to restrict the use of colors
-  to the base 16 or 256 ANSI colors, respectively. This can be specified to
-  override the automatic decision based on <i>$TERM</i> and what the console is
-  connected to.</div>
-<p class="Pp"><i>$SYSTEMD_URLIFY</i></p>
-<div class="Bd-indent">The value must be a boolean. Controls whether clickable
-  links should be generated in the output for terminal emulators supporting
-  this. This can be specified to override the decision that <b>systemd</b> makes
-  based on <i>$TERM</i> and other conditions.</div>
-</section>
-<section class="Sh">
-<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>
-<p class="Pp"><b>Example&#x00A0;1.&#x00A0;Create a user &quot;wald</b>
-</p></div>
-{
-  "file_structure": [
-    {
-      "type": "html",
-      "name": "index.html",
-      "content": "<html lang="ar" dir="rtl">\n<head>\n<title>systemd-homed-firstboot.service(1) — صفحة دليل لينكس بالعربية</title>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"stylesheet\" type=\"text/css\" href=\"/css/man.css\">\n<link rel="stylesheet" href="../../basic.css">
-    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 1: systemd-homed-firstboot.service. حزمة systemd.">
-</head>\n<body>
+    <link rel="stylesheet" href="../../basic.css">
+</head>
+    <body>
 <p class="back"><a href="/archman-ar/">← الفهرس</a> · صفحة دليل لينكس بالعربية</p>
 <h1 class="page-title">systemd-homed-firstboot.service(1)</h1>
 <p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/x86_64/systemd/">systemd</a></p>
 <p class="lic">التراخيص: LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</p>
-\n<article>\n\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>\n<p class=\"Pp\"><code class=\"Nm\">systemd-homed.service</code> &#x2014; systemd home directory manager</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>\n<p class=\"Pp\"><code class=\"Nm\">homectl</code> [OPTIONS...] <code class=\"Nd\">COMMAND</code> [ARGUMENTS...]</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>\n<p class=\"Pp\"><code>homectl</code> is a tool to control and query the <code class=\"Nm\">systemd-homed.service</code>(8) daemon, which manages user home directories.</p>\n<p class=\"Pp\">It may be used to create, list, update, and remove user home directories, and to query information about them.</p>\n<p class=\"Pp\">User home directories managed by <code class=\"Nm\">systemd-homed</code> are stored in a specific directory structure, see <a href='https://systemd.io/USER_RECORD_BLOB_DIRS'>userdbctl(1)</a>.</p>\n<p class=\"Pp\">The configuration of <code class=\"Nm\">systemd-homed.service</code> itself is controlled via <a href="../../h/homed.conf.5.html">homed.conf(5)</a>.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='OPTIONS'><a class='permalink' href='#OPTIONS'>OPTIONS</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#OPTIONS\">-h, --help</a></dt>\n<dd>Show help text and exit.</dd>\n<dt><a class=\"permalink\" href=\"#OPTIONS\">-H, --host</a></dt>\n<dd>Operate on a remote host identified by a connection address, followed by the <code class=\"Nm\">-H</code> or <code class=\"Nm\">--host=</code> command line option. See <a href="systemd.1.html">systemd(1)</a> for more.</dd>\n<dt><a class=\"permalink\" href=\"#OPTIONS\">-M, --machine</a></dt>\n<dd>Operate on a local machine identified by a connection address, followed by the <code class=\"Nm\">-M</code> or <code class=\"Nm\">--machine=</code> command line option. See <a href="systemd.1.html">systemd(1)</a> for more.</dd>\n<dt><a class=\"permalink\" href=\"#OPTIONS\">--user</a></dt>\n<dd>Operate on the user system.</dd>\n<dt><a class=\"permalink\" href=\"#OPTIONS\">--no-pager</a></dt>\n<dd>Do not pipe output into a pager.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='GENERAL_USER_RECORD_PROPERTIES'><a class='permalink' href='#GENERAL_USER_RECORD_PROPERTIES'>GENERAL USER RECORD PROPERTIES</a></h1>\n<p class=\"Pp\">The following properties may be set or queried for any user:</p>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--real-name=NAME</a></dt>\n<dd>Set the user's real name.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--icon-name=NAME</a></dt>\n<dd>Set the user's icon name. See the <a href='https://standards.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html'>Icon Naming Specification</a> for details.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--locale=LANG</a></dt>\n<dd>Set the user's locale.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--timezone=ZONE</a></dt>\n<dd>Set the user's timezone. See locale.conf(5) for the list of timezones.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--shell=SHELL</a></dt>\n<dd>Set the user's login shell.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--editor=EDITOR</a></dt>\n<dd>Set the user's preferred editor.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--debugger=DEBUGGER</a></dt>\n<dd>Set the user's preferred debugger.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--notes=NOTES</a></dt>\n<dd>Set arbitrary UTF-8 text notes for the user.</dd>\n<dt><a class=\"permalink\" href=\"#GENERAL_USER_RECORD_PROPERTIES\">--url=URL</a></dt>\n<dd>Set arbitrary URL for the user.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='AUTHENTICATION_USER_RECORD_PROPERTIES'><a class='permalink' href='#AUTHENTICATION_USER_RECORD_PROPERTIES'>AUTHENTICATION USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--password-file=FILE</a></dt>\n<dd>Set the user's password from a file containing the password digest.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--pbkdf=ALGORITHM</a></dt>\n<dd>Set the PBKDF algorithm to use for hashing the password. Takes a string like &quot;sha256&quot;, &quot;sha512&quot;, etc. Defaults to &quot;sha512&quot;.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--ssh-authorized-key=FILE</a></dt>\n<dd>Add an SSH public key from the specified file to the user's authorized keys.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--ssh-authorized-key-fd=FD</a></dt>\n<dd>Add an SSH public key from the specified file descriptor to the user's authorized keys.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--ssh-authorized-key-string=STRING</a></dt>\n<dd>Add the SSH public key specified by the string to the user's authorized keys.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--ssh-import-id=ID</a></dt>\n<dd>Import an SSH public key from an identity service like <code class=\"Nm\">GitHub</code> or <code class=\"Nm\">Launchpad</code>. See <a href="../../u/userdbctl.1.html">userdbctl(1)</a> for the syntax of ID.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--fido2-device=PATH</a></dt>\n<dd>Register a FIDO2 security token for authentication. If <code class=\"Nm\">auto</code> is specified, a token will be discovered and registered automatically. Otherwise, a path to a device node (e.g. <code class=\"Nm\">/dev/hidraw0</code>) must be provided.</dd>\n<dt><a class=\"permalink\" href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">--pkcs11-token-uri=URI</a></dt>\n<dd>Register a PKCS#11 security token for authentication. If <code class=\"Nm\">auto</code> is specified, a token will be discovered and registered automatically. Otherwise, a PKCS#11 URI must be provided.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='BLOB_DIRECTORY_USER_RECORD_PROPERTIES'><a class='permalink' href='#BLOB_DIRECTORY_USER_RECORD_PROPERTIES'>BLOB DIRECTORY USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#BLOB_DIRECTORY_USER_RECORD_PROPERTIES\">--blob-directory=PATH</a></dt>\n<dd>Set the user's private blob directory. See <a href='https://systemd.io/USER_RECORD_BLOB_DIRS'>userdbctl(1)</a> for details.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES'><a class='permalink' href='#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES'>ACCOUNT MANAGEMENT USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">--uid-map=MIN-MAX</a></dt>\n<dd>Set the user's UID range for unprivileged user namespaces. Defaults to <code class=\"Nm\">4294967295:4294967295</code>.</dd>\n<dt><a class=\"permalink\" href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">--gid-map=MIN-MAX</a></dt>\n<dd>Set the user's GID range for unprivileged user namespaces. Defaults to <code class=\"Nm\">4294967295:4294967295</code>.</dd>\n<dt><a class=\"permalink\" href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">--groups=GROUP,...</a></dt>\n<dd>Set the user's supplementary group memberships.</dd>\n<dt><a class=\"permalink\" href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">--extra-groups=GROUP,...</a></dt>\n<dd>Add supplementary group memberships to the user's existing groups.</dd>\n<dt><a class=\"permalink\" href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">--remove-groups=GROUP,...</a></dt>\n<dd>Remove supplementary group memberships from the user's existing groups.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES'><a class='permalink' href='#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES'>RESOURCE MANAGEMENT USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES\">--cpu-quota=CPU</a></dt>\n<dd>Set the CPU quota for the user. Takes a value between 0 and 100, representing a percentage of one CPU core.</dd>\n<dt><a class=\"permalink\" href=\"#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES\">--memory-max=BYTES</a></dt>\n<dd>Set the maximum amount of memory the user can consume. Takes a value in bytes, or using standard suffixes like M, G, T.</dd>\n<dt><a class=\"permalink\" href=\"#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES\">--tasks-max=NUM</a></dt>\n<dd>Set the maximum number of tasks (processes and threads) the user can create.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='STORAGE_USER_RECORD_PROPERTIES'><a class='permalink' href='#STORAGE_USER_RECORD_PROPERTIES'>STORAGE USER RECORD PROPERTIES</a></h1>\n<p class=\"Pp\">The following properties control the storage of the user's home directory:</p>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#STORAGE_USER_RECORD_PROPERTIES\">--disk-size=BYTES</a></dt>\n<dd>Set the maximum size of the user's home directory. Takes a value in bytes, or using standard suffixes like M, G, T.</dd>\n<dt><a class=\"permalink\" href=\"#STORAGE_USER_RECORD_PROPERTIES\">--image-path=PATH</a></dt>\n<dd>Set the path to the user's home directory image file or device. If not specified, the user's home directory will be created in <code class=\"Nm\">/home/$USER</code>.</dd>\n<dt><a class=\"permalink\" href=\"#STORAGE_USER_RECORD_PROPERTIES\">--image-volume-id=ID</a></dt>\n<dd>Set the volume ID of the home directory image. This is used to identify the image when mounting.</dd>\n<dt><a class=\"permalink\" href=\"#STORAGE_USER_RECORD_PROPERTIES\">--image-content-hash=HASH</a></dt>\n<dd>Set the content hash of the home directory image. This is used for integrity checking.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='LUKS_STORAGE_USER_RECORD_PROPERTIES'><a class='permalink' href='#LUKS_STORAGE_USER_RECORD_PROPERTIES'>LUKS STORAGE USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#LUKS_STORAGE_USER_RECORD_PROPERTIES\">--luks-key=FILE</a></dt>\n<dd>Set the LUKS key for the home directory. Takes a path to a file containing the key.</dd>\n<dt><a class=\"permalink\" href=\"#LUKS_STORAGE_USER_RECORD_PROPERTIES\">--luks-key-file=FILE</a></dt>\n<dd>Set the LUKS key file for the home directory. Takes a path to a file containing the key.</dd>\n<dt><a class=\"permalink\" href=\"#LUKS_STORAGE_USER_RECORD_PROPERTIES\">--luks-cipher=CIPHER</a></dt>\n<dd>Set the LUKS cipher to use. Defaults to <code class=\"Nm\">aes-xts-plain64</code>.</dd>\n<dt><a class=\"permalink\" href=\"#LUKS_STORAGE_USER_RECORD_PROPERTIES\">--luks-hash=HASH</a></dt>\n<dd>Set the LUKS hash algorithm to use. Defaults to <code class=\"Nm\">sha1</code>.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='MOUNTING_USER_RECORD_PROPERTIES'><a class='permalink' href='#MOUNTING_USER_RECORD_PROPERTIES'>MOUNTING USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#MOUNTING_USER_RECORD_PROPERTIES\">--mount-dir=DIR</a></dt>\n<dd>Set the mount directory for the home directory. Defaults to <code class=\"Nm\">/home/$USER</code>.</dd>\n<dt><a class=\"permalink\" href=\"#MOUNTING_USER_RECORD_PROPERTIES\">--mount-options=OPTIONS</a></dt>\n<dd>Set the mount options for the home directory. See <a href="../../m/o/mount.8.html">mount(8)</a> for details.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='CIFS_USER_RECORD_PROPERTIES'><a class='permalink' href='#CIFS_USER_RECORD_PROPERTIES'>CIFS USER RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#CIFS_USER_RECORD_PROPERTIES\">--cifs-username=NAME</a></dt>\n<dd>Set the CIFS username for the home directory.</dd>\n<dt><a class=\"permalink\" href=\"#CIFS_USER_RECORD_PROPERTIES\">--cifs-password=PASSWORD</a></dt>\n<dd>Set the CIFS password for the home directory.</dd>\n<dt><a class=\"permalink\" href=\"#CIFS_USER_RECORD_PROPERTIES\">--cifs-domain=DOMAIN</a></dt>\n<dd>Set the CIFS domain for the home directory.</dd>\n<dt><a class=\"permalink\" href=\"#CIFS_USER_RECORD_PROPERTIES\">--cifs-credentials=FILE</a></dt>\n<dd>Set the CIFS credentials file for the home directory.</dd>\n<dt><a class=\"permalink\" href=\"#CIFS_USER_RECORD_PROPERTIES\">--cifs-options=OPTIONS</a></dt>\n<dd>Set the CIFS mount options for the home directory.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='LOGIN_BEHAVIOUR_RECORD_PROPERTIES'><a class='permalink' href='#LOGIN_BEHAVIOUR_RECORD_PROPERTIES'>LOGIN BEHAVIOUR RECORD PROPERTIES</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">--nice=VALUE</a></dt>\n<dd>Set the nice value for processes started by the user. Takes a value between -20 and 19.</dd>\n<dt><a class=\"permalink\" href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">--setenv=VAR=VALUE</a></dt>\n<dd>Set an environment variable for the user upon login.</dd>\n<dt><a class=\"permalink\" href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">--un</strong>setenv=VAR</a></dt>\n<dd>Unset an environment variable for the user upon login.</dd>\n<dt><a class=\"permalink\" href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">--allow-subuids=RANGE</a></dt>\n<dd>Set the range of sub-UIDs allowed for the user. See <a href="../u/subuid.5.html">subuid(5)</a> for details.</dd>\n<dt><a class=\"permalink\" href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">--allow-subgids=RANGE</a></dt>\n<dd>Set the range of sub-GIDs allowed for the user. See subgid(5) for details.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh\" id='COMMANDS'><a class='permalink' href='#COMMANDS'>COMMANDS</a></h1>\n<dl class=\"Bl-tag\">\n<dt><a class=\"permalink\" href=\"#COMMANDS\">create USER</a></dt>\n<dd>Create a new user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">update USER</a></dt>\n<dd>Update an existing user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">remove USER</a></dt>\n<dd>Remove an existing user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">list [USER]</a></dt>\n<dd>List users. If USER is specified, show details for that user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">show USER</a></dt>\n<dd>Show details for a user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">login USER</a></dt>\n<dd>Log in as the specified user. This command will only succeed if the user exists and is configured for login.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">switch-to USER</a></dt>\n<dd>Switch to the specified user's home directory. This command will only succeed if the user exists and their home directory is mounted.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">check-password USER</a></dt>\n<dd>Check the password for the specified user. Prompts for the password interactively.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">check-ssh-key USER</a></dt>\n<dd>Check the SSH public key for the specified user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">check-fido2 USER</a></dt>\n<dd>Check the FIDO2 security token for the specified user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">check-pkcs11 USER</a></dt>\n<dd>Check the PKCS#11 token for the specified user.</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">identity USER</a></dt>\n<dd>Print the user's identity (UID, GID, groups).</dd>\n<dt><a class=\"permalink\" href=\"#COMMANDS\">enter USER</a></dt>\n<dd>Enter the user's home directory. This is equivalent to <code class=\"Nm\">homectl switch-to USER</code> followed by <code class=\"Nm\">cd -</code>.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='CREDENTIALS'><a class='permalink' href='#CREDENTIALS'>CREDENTIALS</a></h1>\n<p class=\"Pp\">When operating on a user, <code class="Nm">homectl</code> may need root privileges. If invoked without root privileges, it will attempt to acquire them using Polkit.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='KERNEL_COMMAND_LINE'><a class='permalink' href='#KERNEL_COMMAND_LINE'>KERNEL COMMAND LINE</a></h1>\n<p class=\"Pp\"><code class="Nm">homectl</code> can be used to configure kernel command line parameters related to user management. See <a href="systemd.1.html">systemd(1)</a> for details.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='EXIT_STATUS'><a class='permalink' href='#EXIT_STATUS'>EXIT STATUS</a></h1>\n<p class=\"Pp\">Returns 0 if the command was successful, and a non-zero value otherwise.</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>ENVIRONMENT</a></h1>\n<p class=\"Pp\">The behaviour of <code class="Nm">homectl</code> is affected by the following environment variables:</p>\n<dl class=\"Bl-tag\">\n<dt><span class=\"Lbl\"><code>SYSTEMD_LOG_LEVEL</code></span>, <span class=\"Lbl\"><code>SYSTEMD_LOG_COLOR</code></span>, <span class=\"Lbl\"><code>SYSTEMD_LOG_BACKTRACE</code></span>, <span class=\"Lbl\"><code>SYSTEMD_LOG_LOCATION</code></span></dt>\n<dd>See <a href="systemd.1.html">systemd(1)</a>.</dd>\n<dt><span class=\"Lbl\"><code>HOME</code></span></dt>\n<dd>Determines the default home directory if <code class=\"Nm\">--image-path</code> is not specified.</dd>\n</dl>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>EXAMPLES</a></h1>\n<p class=\"Pp\"><b>Example&#x00A0;1.&#x00A0;Create a user &quot;waldo&quot;, add them to the administrator group &quot;wheel&quot;, and assign 500 MiB disk space to them.</b></p>\n<div class=\"Bd-indent\">\n<pre>homectl create waldo --real-name=&quot;Waldo McWaldo&quot; -G wheel --disk-size=500M</pre>\n</div>\n<p class=\"Pp\"><b>Example&#x00A0;2.&#x00A0;Create a user &quot;wally&quot; on a USB stick, and assign a maximum of 500 concurrent tasks to them.</b></p>\n<div class=\"Bd-indent\">\n<pre>homectl create wally --real-name=&quot;Wally McWally&quot; --image-path=/dev/disk/by-id/usb-SanDisk_Ultra_Fit_476fff954b2b5c44-0:0 --tasks-max=500</pre>\n</div>\n<p class=\"Pp\"><b>Example&#x00A0;3.&#x00A0;Change nice level of user &quot;odlaw&quot; to +5 and make sure the environment variable </b><i>$SOME</i><b> is set to the string &quot;THING&quot; for them on login.</b></p>\n<div class=\"Bd-indent\">\n<pre>homectl update odlaw --nice=5 --setenv=SOME=THING</pre>\n</div>\n<p class=\"Pp\"><b>Example&#x00A0;4.&#x00A0;Set up authentication with a YubiKey security token using PKCS#11/PIV:</b></p>\n<div class=\"Bd-indent\">\n<pre># Clear the Yubikey from any old keys (careful!)\nykman piv reset\n# Generate a new private/public key pair on the device, store the public key in 'pubkey.pem'.\nykman piv generate-key -a RSA2048 9d pubkey.pem\n# Create a self-signed certificate from this public key, and store it on the device.\nykman piv generate-certificate --subject &quot;Knobelei&quot; 9d pubkey.pem\n# We do not need the public key on disk anymore\nrm pubkey.pem\n# Allow the security token to unlock the account of user 'lafcadio'.\nhomectl update lafcadio --pkcs11-token-uri=auto</pre>\n</div>\n<p class=\"Pp\"><b>Example&#x00A0;5.&#x00A0;Set up authentication with a FIDO2 security token:</b></p>\n<div class=\"Bd-indent\">\n<pre># Allow a FIDO2 security token to unlock the account of user 'nihilbaxter'.\nhomectl update nihilbaxter --fido2-device=auto</pre>\n</div>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>\n<p class=\"Pp\"><a href="systemd.1.html">systemd(1)</a>, systemd-homed.service(8), <a href="../../h/homed.conf.5.html">homed.conf(5)</a>, <a href="../../u/userdbctl.1.html">userdbctl(1)</a>, <a href="../../u/useradd.8.html">useradd(8)</a>, cryptsetup(8)</p>\n</section>\n<section class=\"Sh\">\n<h1 class=\"Sh" id='NOTES'><a class='permalink' href='#NOTES'>NOTES</a></h1>\n<dl class=\"Bl-tag\">\n<dt> 1.</dt>\n<dd>JSON User Records</dd>\n</dl>\n<div class=\"Bd-indent\"><a href='https://systemd.io/USER_RECORD'>https://systemd.io/USER_RECORD</a></div>\n<dl class=\"Bl-tag\">\n<dt> 2.</dt>\n<dd>Icon Naming Specification</dd>\n</dl>\n<div class=\"Bd-indent\"><a href='https://standards.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html'>https://standards.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html</a></div>\n<dl class=\"Bl-tag\">\n<dt> 3.</dt>\n<dd>User Record Blob Directories</dd>\n</dl>\n<div class=\"Bd-indent\"><a href='https://systemd.io/USER_RECORD_BLOB_DIRS'>https://systemd.io/USER_RECORD_BLOB_DIRS</a></div>\n<dl class=\"Bl-tag\">\n<dt> 4.</dt>\n<dd>User/Group Name Syntax</dd>\n</dl>\n<div class=\"Bd-indent\"><a href='https://systemd.io/USER_NAMES'>https://systemd.io/USER_NAMES</a></div>\n<dl class=\"Bl-tag\">\n<dt> 5.</dt>\n<dd>It is recommended for other tools to set and check <i>$SUDO_UID</i> as appropriate, treating it is a common interface.</dd>\n</dl>\n</section>\n</div>\n<table class=\"foot\">\n<tr>\n<td class=\"foot-date\"></td>\n<td class=\"foot-os\">systemd 258.2</td>\n</tr>\n</table>\n\n</section>\n\n            </article>\n            <aside id=\"sidebar\">\n                \n<section class=\"search\">\n    <form action=\"/search\" class=\"search direct-search\" role=\"search\">\n    <input type=\"search\" placeholder=\"Search manual page\" name=\"q\" value=\"\"\n         />\n    <input type=\"submit\" name=\"go\" value=\"Go\" />\n</form>\n\n</section>\n\n<section class=\"package-info\">\n    <p>Package information:</p>\n    <dl>\n        <dt>Package name:</dt>\n        <dd><a href=\"https://www.archlinux.org/packages/core/x86_64/systemd/\">core/systemd</a></dd>\n        <dt>Version:</dt>\n        <dd>258.2-2</dd>\n        <dt>Upstream:</dt>\n        <dd><a href=\"https://www.github.com/systemd/systemd\">https://www.github.com/systemd/systemd</a></dd>\n        <dt>Licenses:</dt>\n        <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</dd>\n        <dt>Manuals:</dt>\n        <dd><a href=\"/listing/core/systemd/\">/listing/core/systemd/</a></dd>\n    </dl>\n</section>\n\n<details>\n    <summary>Table of contents</summary>\n    <nav class=\"toc\">\n        <ul>\n        \n            <li><a href=\"#NAME\">NAME</a></li>\n        \n            <li><a href=\"#SYNOPSIS\">SYNOPSIS</a></li>\n        \n            <li><a href=\"#DESCRIPTION\">DESCRIPTION</a></li>\n        \n            <li><a href=\"#OPTIONS\">OPTIONS</a></li>\n        \n            <li><a href=\"#GENERAL_USER_RECORD_PROPERTIES\">GENERAL USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#AUTHENTICATION_USER_RECORD_PROPERTIES\">AUTHENTICATION USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#BLOB_DIRECTORY_USER_RECORD_PROPERTIES\">BLOB DIRECTORY USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES\">ACCOUNT MANAGEMENT USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES\">RESOURCE MANAGEMENT USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#STORAGE_USER_RECORD_PROPERTIES\">STORAGE USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#LUKS_STORAGE_USER_RECORD_PROPERTIES\">LUKS STORAGE USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#MOUNTING_USER_RECORD_PROPERTIES\">MOUNTING USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#CIFS_USER_RECORD_PROPERTIES\">CIFS USER RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#LOGIN_BEHAVIOUR_RECORD_PROPERTIES\">LOGIN BEHAVIOUR RECORD PROPERTIES</a></li>\n        \n            <li><a href=\"#COMMANDS\">COMMANDS</a></li>\n        \n            <li><a href=\"#CREDENTIALS\">CREDENTIALS</a></li>\n        \n            <li><a href=\"#KERNEL_COMMAND_LINE\">KERNEL COMMAND LINE</a></li>\n        \n            <li><a href=\"#EXIT_STATUS\">EXIT STATUS</a></li>\n        \n            <li><a href=\"#ENVIRONMENT\">ENVIRONMENT</a></li>\n        \n            <li><a href=\"#EXAMPLES\">EXAMPLES</a></li>\n        \n            <li><a href=\"#SEE_ALSO\">SEE ALSO</a></li>\n        \n            <li><a href=\"#NOTES\">NOTES</a></li>\n        \n        </ul>\n    </nav>\n</details>\n\n\n\n\n\n\n<nav class=\"other-formats\">\n    <p>Other formats:\n        \n            <a href=\"/man/systemd-homed-firstboot.service.1.en.txt\">txt</a>, \n        \n            <a href=\"/man/systemd-homed-firstboot.service.1.en.raw\">raw</a>\n        \n    </p>\n</nav>\n\n            </aside>\n            \n        </main>\n        <footer>\n            \n            <p>The website is available under the terms of the <a href=\"https://www.gnu.org/licenses/gpl-3.0.en.html\">GPL-3.0</a>\n               license, except for the contents of the manual pages, which have their own license\n               specified in the corresponding Arch Linux package.\n            </p>\n        </footer>\n    <footer class="site-disclaimer">
+
+        
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">HOMECTL(1)</td>
+    <td class="head-vol">homectl</td>
+    <td class="head-rtitle">HOMECTL(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">homectl, systemd-homed-firstboot.service - إنشاء أو إزالة أو تغيير أو فحص أدلة المنزل</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<p class="Pp HP"><b>homectl</b> [الخيارات...] {الأمر} [الاسم...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">يمكن استخدام <b>homectl</b> لإنشاء أو إزالة أو تغيير أو فحص دليل منزل المستخدم. وهو في الأساس أمر يتفاعل مع systemd-homed.service(8) الذي يدير أدلة منزل المستخدمين.</p>
+<p class="Pp">أدلة المنزل التي يديرها systemd-homed.service مكتفية ذاتيًا، وبالتالي تتضمن سجل البيانات الوصفية الكامل للمستخدم داخل تخزين بيانات المنزل نفسه، مما يجعلها سهلة الترحيل بين الأجهزة. على وجه الخصوص، يصف دليل المنزل سجل مستخدم مطابقًا، وكل سجل مستخدم يديره systemd-homed.service يعني أيضًا وجود دليل منزل وتغليفه. يصبح حساب المستخدم ودليل المنزل نفس المفهوم.</p>
+<p class="Pp">آليات التخزين الداعمة التالية مدعومة:</p>
+<div class="Bd-indent">&#x2022;ملف loopback فردي مشفر بـ LUKS2 للمستخدم، مخزّن في /home/*.home. عند تسجيل الدخول يتم تركيب نظام الملفات الموجود في هذا الملف، بعد إرفاق وحدة تخزين LUKS2 المشفرة. كلمة مرور المستخدم مطابقة لعبارة تشفير وحدة تخزين LUKS2. وبالتالي فإن الوصول إلى البيانات دون مصادقة المستخدم المسبقة غير ممكن، حتى لمسؤول النظام. توفر آلية التخزين هذه أقوى أمان للبيانات وبالتالي يُوصى بها.</div>
+<div class="Bd-indent">&#x2022;مشابه، لكن نظام الملفات المشفر بـ LUKS2 يقع على جهاز كتلة عادي، مثل عصا تخزين USB. في هذا الوضع، تكون أدلة المنزل وجميع البيانات التي تتضمنها قابلة للترحيل بسهولة بين الأجهزة، ببساطة عن طريق توصيل عصا USB بأنظمة مختلفة في أوقات مختلفة.</div>
+<div class="Bd-indent">&#x2022;دليل مشفر باستخدام &quot;fscrypt&quot; على أنظمة الملفات التي تدعمه (في الوقت الحالي هذا هو &quot;ext4&quot; بشكل أساسي)، موجود في /home/*.homedir. توفر هذه الآلية أيضًا التشفير، لكنه أضعف بكثير من LUKS2، لأن معظم البيانات الوصفية لنظام الملفات غير محمية. علاوة على ذلك، لا تدعم حاليًا تغيير كلمات مرور المستخدم بمجرد إنشاء دليل المنزل.</div>
+<div class="Bd-indent">&#x2022;وحدة تخزين فرعية &quot;btrfs&quot; لكل مستخدم، موجودة أيضًا في /home/*.homedir. لا يوفر هذا أي تشفير، لكنه يوفر دعمًا جيدًا للحصص.</div>
+<div class="Bd-indent">&#x2022;دليل عادي لكل مستخدم، موجود أيضًا في /home/*.homedir. لا يوفر هذا أي تشفير، لكنه بديل مناسب متاح على جميع الأجهزة، حتى حيث لا يتوفر دعم LUKS2 أو &quot;fscrypt&quot; أو &quot;btrfs&quot;.</div>
+<div class="Bd-indent">&#x2022;مشاركة ملفات Windows فردية (CIFS) لكل مستخدم.</div>
+<p class="Pp">لاحظ أن systemd-homed.service و<b>homectl</b> لن يديرا حسابات مستخدمي UNIX &quot;الكلاسيكية&quot; كما يتم إنشاؤها باستخدام <a href="../../u/useradd.8.html">useradd(8)</a> أو أدوات مشابهة. على وجه الخصوص، هذه الوظيفة غير مناسبة لإدارة مستخدمي النظام (أي المستخدمين ذوي UID أقل من 1000) ولكنها حصرية للمستخدمين العاديين (&quot;البشريين&quot;).</p>
+<p class="Pp">لاحظ أن المستخدمين/أدلة المنزل التي تُدار عبر <b>systemd-homed.service</b> لا تظهر في /etc/passwd والملفات المشابهة، بل يتم تركيبها عبر glibc NSS أثناء التشغيل. وبالتالي فهي قابلة للحل ويمكن تعدادها عبر أداة getent(1).</p>
+<p class="Pp">تتفاعل هذه الأداة مباشرة مع systemd-homed.service، ويمكنها تنفيذ أوامر محددة على أدلة المنزل التي تديرها. نظرًا لأن كل دليل منزل يُدار بهذه الطريقة يحدد أيضًا سجل مستخدم ومجموعة JSON، فإن أدلة المنزل هذه يمكن أيضًا فحصها وتعدادها عبر <a href="../../u/userdbctl.1.html">userdbctl(1)</a>.</p>
+<p class="Pp">أدلة المنزل التي يديرها systemd-homed.service تكون عادةً في إحدى حالتين، أو في حالة انتقالية بينهما: عندما تكون &quot;نشطة&quot; تكون غير مقفلة ومركّبة، وبالتالي يمكن الوصول إليها من قبل النظام وبرامجه؛ وعندما تكون &quot;غير نشطة&quot; تكون غير مركّبة وبالتالي غير قابلة للوصول. يحدث التنشيط تلقائيًا عند تسجيل دخول المستخدم وعادةً لا يمكن أن يكتمل إلا بعد تقديم كلمة مرور (أو رمز مصادقة آخر). يحدث إلغاء التنشيط بعد تسجيل خروج المستخدم بالكامل. يبقى دليل المنزل نشطًا طالما أن المستخدم مسجل الدخول مرة واحدة على الأقل، أي لديه جلسة تسجيل دخول واحدة على الأقل. عندما يسجل المستخدم الدخول مرة ثانية في نفس الوقت يبقى دليل المنزل نشطًا. يتم إلغاء تنشيطه فقط بعد انتهاء آخر جلسات المستخدم.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='OPTIONS'><a class='permalink' href='#OPTIONS'>الخيارات</a></h1>
+<p class="Pp">الخيارات العامة التالية مفهومة (يتم توثيق المزيد من الخيارات التي تتحكم في الخصائص المختلفة لسجلات المستخدم التي يديرها systemd-homed.service لاحقًا):</p>
+<p class="Pp"><b>--identity=</b><b></b><i>FILE</i></p>
+<div class="Bd-indent">قراءة سجل JSON للمستخدم من الملف المحدد. إذا تم تمريره كـ &quot;-&quot; فاقرأ سجل المستخدم من الإدخال القياسي. يجب أن يتبع كائن JSON المقدم البنية الموثقة في <b>سجلات مستخدم JSON</b>[1]. يمكن استخدام هذا الخيار بالاقتران مع الأمرين <b>create</b> و<b>update</b> (انظر أدناه)، حيث يسمح بتكوين سجل المستخدم بصيغة JSON كما هو، بدلاً من تعيين خصائص سجل المستخدم الفردية (انظر أدناه).
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--json=</b><b></b><i>FORMAT</i>, <b>-j</b></p>
+<div class="Bd-indent">يتحكم فيما إذا كان سيتم إخراج سجل المستخدم بصيغة JSON، إذا تم استخدام أمر <b>inspect</b> (انظر أدناه). يأخذ أحد القيم &quot;pretty&quot; أو &quot;short&quot; أو &quot;off&quot;. إذا كانت &quot;pretty&quot; يتم إدراج مسافات بيضاء وأسطر جديدة صديقة للإنسان في الإخراج لجعل بيانات JSON أكثر قابلية للقراءة. إذا كانت &quot;short&quot; يتم قمع جميع المسافات البيضاء الزائدة. إذا كانت &quot;off&quot; (الافتراضي) لا يتم عرض معلومات المستخدم بصيغة JSON بل بتنسيق صديق للقراءة البشرية بدلاً من ذلك. يختار الخيار <b>-j</b> القيمة &quot;pretty&quot; عند التشغيل التفاعلي و&quot;short&quot; بخلاف ذلك.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--export-format=</b><b></b><i>FORMAT</i>, <b>-E</b>, <b>-EE</b></p>
+<div class="Bd-indent">عند استخدامه مع فعل <b>inspect</b> في وضع JSON (انظر أعلاه) يمكن استخدامه لقمع جوانب معينة من سجل مستخدم JSON في الإخراج. على وجه التحديد، إذا تم استخدام تنسيق &quot;stripped&quot; تتم إزالة حقول الربط ووقت التشغيل من السجل. إذا تم استخدام تنسيق &quot;minimal&quot; تتم إزالة التوقيع التشفيري أيضًا. إذا تم استخدام تنسيق &quot;full&quot; يتم عرض سجل JSON الكامل (وهذا هو الافتراضي). هذا الخيار مفيد لنسخ سجل مستخدم موجود إلى نظام مختلف من أجل إنشاء مستخدم مشابه هناك بنفس الإعدادات. على وجه التحديد: <b>homectl inspect -EE | ssh root@othersystem homectl create -i-</b> يمكن استخدامه كأمر سطر أوامر بسيط لتكرار مستخدم على مضيف آخر. <b>-E</b> مكافئ لـ <b>-j --export-format=stripped</b>، و<b>-EE</b> مكافئ لـ <b>-j --export-format=minimal</b>. لاحظ أنه عند تكرار حسابات المستخدمين، فإن سجلات المستخدم التي تم الحصول عليها في وضع &quot;stripped&quot; ستحتفظ بالتوقيعات التشفيرية الأصلية وبالتالي لا يمكن تعديلها إلا عندما يكون المفتاح الخاص لتحديثها متاحًا على الجهاز الوجهة. عند تكرار المستخدمين في وضع &quot;minimal&quot;، تتم إزالة التوقيع أثناء التكرار وبالتالي سيتم توقيع السجل ضمنيًا بمفتاح الجهاز الوجهة ويمكن تحديثه هناك دون أي تكرار للمفتاح الخاص.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--offline</b></p>
+<div class="Bd-indent">لا تحاول تحديث نسخة سجل المستخدم ودليل blob المضمّنين داخل منطقة المنزل. هذا يسمح بالعمل على مناطق المنزل الغائبة، أو دون الحاجة إلى المصادقة كمستخدم يتم تعديله.
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+<p class="Pp"><b>--key-name=</b></p>
+<div class="Bd-indent">عند استخدامه مع أمر <b>add-signing-key</b>، حدد أو تجاوز الاسم الذي سيتم تخزين المفتاح العام الذي تتم إضافته تحته. يمكن اختيار الاسم المحدد بحرية، لكن يجب أن ينتهي بـ &quot;.public&quot;. إذا لم يتم استخدام هذا الخيار يتم اشتقاق الاسم من اسم الملف المحدد. إذا تمت قراءة مفتاح من الإدخال القياسي فإن هذا الخيار إلزامي من أجل توفير اسم مناسب للمفتاح الذي تتم إضافته.
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>--seize=</b></p>
+<div class="Bd-indent">يأخذ وسيطة منطقية. عند استخدامه مع <b>create</b> أو <b>register</b>، يتحكم فيما إذا كان سيتم تجريد التوقيعات التشفيرية من سجلات مستخدم JSON المقدمة، مما يؤدي إلى توقيعها بالمفتاح المحلي (local.public) بدلاً من ذلك. إذا تم تعيين هذا المفتاح إلى true، فإن سجلات المستخدم المضافة تصبح مُدارة محليًا (وبالتالي يمكن تعديلها محليًا)، بينما إذا تم تعيينه إلى false تبقى سجلات المستخدم مُدارة ومملوكة من قبل مصدرها (وبالتالي لا يمكن تعديلها محليًا). هذا المفتاح افتراضيًا true لـ <b>create</b> وfalse لـ <b>register</b>.
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>--prompt-new-user</b></p>
+<div class="Bd-indent">إذا تم استخدامه بالاقتران مع <b>firstboot</b> ولا يوجد
+  حساب مستخدم عادي على النظام حتى الآن، فستستعلم الأداة تفاعليًا
+  عن معلومات المستخدم وتنشئ حسابًا.
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+<p class="Pp"><b>--match=</b>، <b>-A</b>، <b>-N</b>، <b>-T</b></p>
+<div class="Bd-indent">يأخذ أحد القيم &quot;this&quot; أو &quot;other&quot; أو
+  &quot;any&quot; أو &quot;auto&quot;. يمكن تعريف بعض إعدادات سجل المستخدم
+  لتطابق أجهزة محددة فقط، أو جميع الأجهزة عدا واحد، أو جميع الأجهزة.
+  باستخدام هذا المفتاح يمكن التحكم في الأجهزة التي تُطبَّق عليها
+  الإعدادات الظاهرة في سطر الأوامر بعده. إذا حُدد &quot;this&quot;
+  فسيُطبَّق الإعداد على النظام المحلي فقط (مطابقة موجبة)، وإذا حُدد
+  &quot;other&quot; فسيُطبَّق على جميع الأجهزة عدا النظام المحلي (مطابقة سالبة)،
+  وإذا حُدد &quot;any&quot; فسيُطبَّق على جميع الأنظمة (ما لم توجد مطابقة
+  موجبة أو سالبة لكل جهاز على حدة). إذا أُعيد &quot;auto&quot; إلى
+  المنطق الافتراضي: فإن ما إذا كان الإعداد يُطبَّق افتراضيًا على النظام المحلي أو جميع
+  الأنظمة يعتمد على الخيار المعني.
+<p class="Pp">لاحظ أن بعض إعدادات سجل المستخدم فقط يمكن تقييدها بهذه
+    الطريقة. لا يكون لهذا الخيار تأثير على الإعدادات الأخرى ويُتجاهل فيها. قد يظهر هذا
+    الخيار عدة مرات في سطر أوامر واحد لتطبيق إعدادات
+    مقيَّدة بمطابقات مختلفة على سجل المستخدم نفسه. راجع <b>JSON User
+    Records</b>[1] للتفاصيل حول الإعدادات التي يمكن استخدامها مع هذه
+    المطابقة لكل جهاز وأيها لا يمكن.</p>
+<p class="Pp"><b>-A</b> اختصار لـ <b>--match=any</b>، و<b>-T</b> اختصار
+    لـ <b>--match=this</b> و<b>-N</b> اختصار لـ <b>--match=other</b>.</p>
+<p class="Pp">إليك مثال على استدعاء يضبط حقل التخزين على
+    &quot;luks&quot; على النظام المحلي، ولكن على &quot;cifs&quot; على جميع
+  الأنظمة الأخرى:</p>
+<div class="Bd-indent">
+<pre># homectl update lennart -T --storage=luks -N --storage=cifs</pre>
+</div>
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>-H</b>، <b>--host=</b></p>
+<div class="Bd-indent">نفّذ العملية عن بُعد. حدد اسم مضيف، أو
+  اسم مستخدم واسم مضيف مفصولين بـ &quot;@&quot;، للاتصال به. يمكن
+  اختياريًا إضافة لاحقة إلى اسم المضيف هي المنفذ الذي يستمع عليه ssh، مفصولة بـ
+  &quot;:&quot;، ثم اسم حاوية، مفصولًا بـ &quot;/&quot;، يتصل
+  مباشرة بحاوية محددة على المضيف المحدد. سيستخدم هذا
+  SSH للتحدث إلى نسخة مدير الجهاز البعيد. يمكن
+  تعداد أسماء الحاويات باستخدام <b>machinectl -H </b><b></b><i>HOST</i>. ضع عناوين IPv6 بين
+  أقواس معقوفة.</div>
+<p class="Pp"><b>-M</b>، <b>--machine=</b></p>
+<div class="Bd-indent">نفّذ العملية على حاوية محلية. حدد
+  اسم حاوية للاتصال بها، مع إمكانية إضافة اسم مستخدم للاتصال به
+  مسبوقًا وفاصل &quot;@&quot;. إذا استُخدمت السلسلة الخاصة
+  &quot;.host&quot; بدلًا من اسم الحاوية، فسيتم الاتصال بـ
+  النظام المحلي (وهو مفيد للاتصال بناقل مستخدم مستخدم معين:
+  &quot;--user --machine=lennart@.host&quot;). إذا لم تُستخدم صيغة &quot;@&quot;
+  فسيتم الاتصال كمستخدم الجذر. إذا استُخدمت صيغة &quot;@&quot;
+  فيمكن حذف الجانب الأيسر أو الجانب الأيمن (وليس كليهما) وفي هذه الحالة
+  يُفترض اسم المستخدم المحلي و&quot;.host&quot;.</div>
+<p class="Pp"><b>--no-pager</b></p>
+<div class="Bd-indent">لا تمرر المخرجات إلى أداة ترقيم الصفحات.</div>
+<p class="Pp"><b>--no-legend</b></p>
+<div class="Bd-indent">لا تطبع المفتاح، أي رؤوس الأعمدة و
+  التذييل الذي يحتوي على تلميحات.</div>
+<p class="Pp"><b>--no-ask-password</b></p>
+<div class="Bd-indent">لا تستعلم من المستخدم عن المصادقة للعمليات
+  ذات الامتيازات.</div>
+<p class="Pp"><b>-h</b>، <b>--help</b></p>
+<div class="Bd-indent">اطبع نص مساعدة قصير واخرج.</div>
+<p class="Pp"><b>--version</b></p>
+<div class="Bd-indent">اطبع سلسلة إصدار قصيرة واخرج.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='GENERAL_USER_RECORD_PROPERTIES'><a class='permalink' href='#GENERAL_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم العامة</a></h1>
+<p class="Pp">تتحكم الخيارات التالية في خصائص متنوعة لسجلات المستخدمين/
+    الأدلة الرئيسية التي تديرها systemd-homed.service. يمكن استخدام هذه المفاتيح
+    بالاقتران مع الأمرين <b>create</b> و<b>update</b>
+    لتكوين جوانب متنوعة من الدليل الرئيسي وحساب
+  المستخدم:</p>
+<p class="Pp"><b>--real-name=</b><b></b><i>NAME</i>، <b>-c</b> <i>NAME</i></p>
+<div class="Bd-indent">الاسم الحقيقي للمستخدم. يتوافق هذا مع
+  حقل GECOS في سجلات NSS الكلاسيكية في UNIX.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--realm=</b><b></b><i>REALM</i></p>
+<div class="Bd-indent">النطاق للمستخدم. يربط النطاق المستخدم بـ
+  منظمة أو تثبيت محدد، ويسمح بتمييز المستخدمين الذين يحملون الاسم نفسه
+  والمُعرَّفين في سياقات مختلفة. يمكن أن يكون النطاق أي سلسلة
+  تصلح أيضًا كاسم نطاق DNS صالح، ويُوصى باستخدام
+  اسم نطاق المنظمة أو التثبيت لهذا الغرض، لكن هذا غير
+  مفروض ولا مطلوب. على كل نظام يجوز أن يوجد مستخدم واحد فقط بالاسم نفسه،
+  وإذا ظهر مستخدم بالاسم نفسه والنطاق نفسه فسيُفترض أنه
+  يشير إلى المستخدم نفسه، بينما يُعد المستخدم بالاسم نفسه ولكن بنطاق مختلف
+  مستخدمًا مختلفًا. لاحظ أن هذا يعني أن مستخدمين يشتركان في
+  الاسم نفسه ولكن بنطاقين مختلفين غير مسموح بهما على النظام نفسه.
+  تعيين نطاق لمستخدم أمر اختياري.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--alias=</b><b></b><i>NAME</i><b>[،</b><i>NAME...</i>]</p>
+<div class="Bd-indent">أسماء إضافية للمستخدم. يأخذ اسمًا أو أكثر من أسماء
+  مستخدمي UNIX الصالحة، مفصولة بفواصل. يمكن استخدامه عدة مرات لتعريف
+  أسماء مستعارة متعددة. يمكن تحديد اسم مستخدم مستعار في أي مكان
+  يمكن فيه تحديد اسم المستخدم الأساسي، ويُحل إلى سجل المستخدم نفسه.
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>--email-address=</b><b></b><i>EMAIL</i></p>
+<div class="Bd-indent">يأخذ عنوان بريد إلكتروني لربطه
+  بالمستخدم. عند تسجيل الدخول يُهيَّأ متغير البيئة <i>$EMAIL</i> من
+  هذه القيمة.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--location=</b><b></b><i>TEXT</i></p>
+<div class="Bd-indent">يأخذ مواصفات الموقع لهذا المستخدم. هذا
+  نص حر، قد يكون أو لا يكون قابلًا للاستخدام بواسطة تطبيقات
+  تحديد الموقع الجغرافي. مثال: <b>--location=&quot;Berlin, Germany&quot;</b> أو
+  <b>--location=&quot;Basement, Room 3a&quot;</b>
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--icon-name=</b><b></b><i>ICON</i></p>
+<div class="Bd-indent">يأخذ اسم أيقونة لربطها بالمستخدم، وفقًا
+  للمخطط المحدد في <b>Icon Naming Specification</b>[2].
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--home-dir=</b><b></b><i>PATH</i>،
+  <b>-d</b><b></b><i>PATH</i></p>
+<div class="Bd-indent">يأخذ مسارًا لاستخدامه كدليل رئيسي للمستخدم. لاحظ
+  أن هذا هو الدليل الذي يُثبَّت عليه الدليل الرئيسي للمستخدم بينما
+  يكون المستخدم مسجلًا للدخول. هذا ليس المكان الذي تُخزَّن فيه بيانات المستخدم فعليًا، راجع
+  <b>--image-path=</b> لذلك. إذا لم يُحدد، فالقيمة الافتراضية هي /home/$USER.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--uid=</b><b></b><i>UID</i></p>
+<div class="Bd-indent">يأخذ UID رقميًا مفضلًا في UNIX لتعيينه لهذا المستخدم.
+  إذا كان سيُنشأ مستخدم بـ UID المحدد وكان مأخوذًا بالفعل بواسطة
+  مستخدم مختلف على النظام المحلي فسيُرفض إنشاء الدليل الرئيسي. لاحظ مع ذلك، أنه إذا استُخدم الدليل الرئيسي بعد إنشائه على
+  نظام مختلف وكان UID المكوَّن مأخوذًا بواسطة مستخدم آخر هناك، فإن
+  <b>systemd-homed</b> قد يعيّن للمستخدم UID مختلفًا على ذلك النظام. يجب أن يكون
+  UID المحدد خارج نطاق مستخدمي النظام. يُوصى
+  باستخدام نطاق UID 60001...60513 لهذا الغرض. إذا لم يُحدد، فسيُختار UID
+  تلقائيًا. إذا وُجد أن الدليل الرئيسي مملوك لـ
+  UID مختلف عند تسجيل الدخول، فسيُغيَّر ملكية الدليل الرئيسي وكل ما تحته
+  تلقائيًا قبل اكتمال تسجيل الدخول.
+<p class="Pp">لاحظ أن تغيير هذا الخيار للأدلة الرئيسية الموجودة
+    عمومًا ليس له تأثير على الأدلة الرئيسية التي سُجلت محليًا بالفعل (لديها
+    <i>ربط</i> محلي)، لأن UID المستخدم لحساب على النظام المحلي يُحدَّد عند
+    تنشيط الدليل الرئيسي عليه لأول مرة، ثم يبقى ساريًا حتى
+    إزالة الدليل الرئيسي.</p>
+<p class="Pp">لاحظ أن المستخدمين الذين تديرهم <b>systemd-homed</b> لديهم دائمًا
+    مجموعة مطابقة مرتبطة بالاسم نفسه بالإضافة إلى GID مطابق
+    لـ UID المستخدم. وبالتالي، لا يُسمح بتكوين GID بشكل منفصل.</p>
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--member-of=</b><b></b><i>GROUP</i>، <b>-G</b> <i>GROUP</i></p>
+<div class="Bd-indent">يأخذ قائمة مفصولة بفواصل من مجموعات UNIX المساعدة
+  التي ينبغي أن ينتمي إليها هذا المستخدم. مثال: <b>--member-of=wheel</b> لتزويد
+  المستخدم بامتيازات المسؤول. لاحظ أن <b>systemd-homed</b> لا
+  يدير أي مجموعات بخلاف مجموعة مطابقة للمستخدم في الاسم و
+  UID/GID الرقمي. وبالتالي يجب تسجيل أي مجموعات مدرجة هنا بشكل مستقل،
+  على سبيل المثال باستخدام groupadd(8). تُتجاهل أي مجموعات غير موجودة. يمكن
+  استخدام هذا الخيار أكثر من مرة، وفي هذه الحالة تُدمج جميع قوائم المجموعات المحددة.
+  إذا كان المستخدم حاليًا عضوًا في مجموعة غير مدرجة،
+  فسيُزال المستخدم من المجموعة.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--capability-bounding-set=</b><b></b><i>CAPABILITIES</i>،
+    <b>--capability-ambient-set=</b><b></b><i>CAPABILITIES</i></p>
+<div class="Bd-indent">تأخذ هذه الخيارات قائمة مفصولة بمسافات من قدرات
+  العمليات (مثل <b>CAP_WAKE_ALARM</b>، <b>CAP_BLOCK_SUSPEND</b>، ...) التي
+  ينبغي تعيينها في مجموعتي القدرات المحدِّدة والمحيطة لجميع جلسات
+  المستخدم. راجع capabilities(7) للتفاصيل حول مفهوم القدرات.
+  يمكن استخدام هذه الخيارات أكثر من مرة، وفي هذه الحالة تُدمج القوائم المحددة.
+  إذا بدأت المعلمة بحرف &quot;~&quot; فسيُعكس
+  التأثير: تُسقط القدرة المحددة من المجموعة المحددة.
+<p class="Pp">أُضيف في الإصدار 254.</p>
+</div>
+<p class="Pp"><b>--access-mode=</b><b></b><i>MODE</i></p>
+<div class="Bd-indent">يأخذ وضع وصول ملفات UNIX مكتوبًا بالنظام الثماني.
+  يكوّن وضع الوصول للدليل الرئيسي نفسه. لاحظ أن هذا
+  يُستخدم فقط عند إنشاء الدليل لأول مرة، ويمكن للمستخدم تغييره
+  في أي وقت بعد ذلك. مثال: <b>--access-mode=0700</b>
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--umask=</b><b></b><i>MASK</i></p>
+<div class="Bd-indent">يأخذ قناع وضع الوصول (بصيغة ثمانية) لتطبيقه على
+  الملفات والأدلة المنشأة حديثًا للمستخدم (&quot;umask&quot;). إذا حُدد، فإنه يتحكم
+  في umask الأولي المعيَّن لجميع جلسات تسجيل الدخول للمستخدم،
+  وقد يتجاوز الإعدادات الافتراضية للنظام.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--skel=</b><b></b><i>PATH</i></p>
+<div class="Bd-indent">يأخذ مسار نظام ملفات إلى دليل. يحدد
+  الدليل الهيكلي لتهيئة الدليل الرئيسي به. تُنسخ جميع الملفات و
+  الأدلة في المسار المحدد إلى أي دليل رئيسي منشأ حديثًا. إذا لم يُحدد،
+  فالقيمة الافتراضية هي /etc/skel/.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--shell=</b><b></b><i>SHELL</i></p>
+<div class="Bd-indent">يأخذ مسار نظام ملفات. يحدد الصدفة الثنائية
+  لتنفيذها عند تسجيل الدخول من الطرفية. إذا لم يُحدد، فالقيمة الافتراضية هي /bin/bash.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--setenv=</b><b></b><i>VARIABLE</i><b>[=</b><b></b><i>VALUE</i><b>]</b></p>
+<div class="Bd-indent">يأخذ متغير بيئةتعيين متغير بيئة لجميع عمليات المستخدم. يمكن استخدامه عدة مرات لتعيين متغيرات بيئة متعددة. عند حذف "=" و<i>VALUE</i>، سيتم استخدام قيمة المتغير الذي يحمل الاسم نفسه في بيئة البرنامج.
+<p class="Pp">لاحظ أن عددًا من الإعدادات الأخرى تؤدي أيضًا إلى تعيين متغيرات بيئة للمستخدم، بما في ذلك <b>--email=</b> و<b>--timezone=</b> و<b>--language=</b>.</p>
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--timezone=</b><b></b><i>TIMEZONE</i></p>
+<div class="Bd-indent">يأخذ اسم موقع منطقة زمنية يعيّن المنطقة الزمنية للمستخدم المحدد. عند تسجيل دخول المستخدم، تتم تهيئة متغير البيئة <i>$TZ</i> من هذا الإعداد. مثال: <b>--timezone=Europe/Amsterdam</b> سيؤدي إلى متغير البيئة "TZ=:Europe/Amsterdam". (تُستخدم ":" عمدًا كجزء من مواصفة المنطقة الزمنية، انظر <a href="../../t/z/tzset.3.html">tzset(3)</a>.)
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--language=</b><b></b><i>LANG</i></p>
+<div class="Bd-indent">يأخذ قائمة لغات مفصولة بفواصل أو نقطتين رأسيتين يفضّلها المستخدم، مرتبة حسب الأولوية التنازلية. تتم تهيئة متغيري البيئة <i>$LANG</i> و<i>$LANGUAGE</i> من هذه القيمة عند تسجيل الدخول، وبالتالي تُقبل هنا القيم المناسبة لمتغيرات البيئة هذه، على سبيل المثال <b>--language=de_DE.UTF-8</b>. يمكن استخدام هذا الخيار أكثر من مرة، وفي هذه الحالة يتم دمج قوائم اللغات.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--default-area=</b><b></b><i>AREA</i></p>
+<div class="Bd-indent">يأخذ سلسلة تحدد "منطقة" دليل منزلي لاستخدامها كافتراضي. المناطق هي أدلة منزلية ثانوية داخل الدليل المنزلي الأساسي للمستخدم. عند تسجيل الدخول يمكن للمستخدم تحديد المنطقة التي يرغب في تسجيل الدخول إليها، مما يضمن تعيين متغير البيئة <i>$HOME</i> إلى ~/Areas/ متبوعًا باسم المنطقة.
+<p class="Pp">للحصول على تفاصيل حول مفهوم المنطقة انظر <a href="../../p/a/pam_systemd_home.8.html">pam_systemd_home(8)</a>. لاحظ أن هذا الخيار يحدد الافتراضي فقط، والذي يمكن تجاوزه وقت تسجيل الدخول.</p>
+<p class="Pp">عند تحديد هذا الخيار بقيمة سلسلة فارغة، تتم إزالة أي منطقة افتراضية معلنة سابقًا من سجل المستخدم.</p>
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='AUTHENTICATION_USER_RECORD_PROPERTIES'><a class='permalink' href='#AUTHENTICATION_USER_RECORD_PROPERTIES'>خصائص سجل مستخدم المصادقة</a></h1>
+<p class="Pp"><b>--ssh-authorized-keys=</b><b></b><i>KEYS</i></p>
+<div class="Bd-indent">يأخذ إما سطر مفتاح SSH مصرّح به لربطه بسجل المستخدم أو حرف "@" متبوعًا بمسار إلى ملف لقراءة سطر واحد أو أكثر من هذا القبيل منه. تُتاح مفاتيح SSH المهيأة بهذه الطريقة لـ SSH للسماح بالوصول إلى هذا الدليل المنزلي وسجل المستخدم. يمكن استخدام هذا الخيار أكثر من مرة لتهيئة مفاتيح SSH متعددة.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--pkcs11-token-uri=</b><b></b><i>URI</i></p>
+<div class="Bd-indent">يأخذ URI PKCS#11 وفق RFC 7512 يشير إلى رمز أمان (مثل YubiKey أو بطاقة PIV الذكية) يجب أن يكون قادرًا على فتح حساب المستخدم. يجب أن يشير URI رمز الأمان إلى رمز أمان يحتوي على زوج واحد بالضبط من شهادة X.509 والمفتاح الخاص. يتم بعد ذلك إنشاء مفتاح سري عشوائي، وتشفيره بالمفتاح العام لشهادة X.509، وتخزينه كجزء من سجل المستخدم. وقت تسجيل الدخول يتم فك تشفيره بوحدة PKCS#11 ثم يُستخدم لفتح الحساب والموارد المرتبطة به. انظر أدناه للحصول على مثال حول كيفية إعداد المصادقة باستخدام رمز أمان.
+<p class="Pp">بدلاً من URI PKCS#11 صالح، يمكن تحديد السلاسل الخاصة "list" و"auto". إذا تم تمرير "list"، يتم عرض جدول موجز لرموز أمان PKCS#11 المناسبة الموصولة حاليًا، مع URIs الخاصة بها. إذا تم تمرير "auto"، يتم اختيار رمز أمان PKCS#11 مناسب تلقائيًا (ستفشل هذه العملية إذا لم يتم اكتشاف رمز مناسب واحد بالضبط). الأخير هو اختصار مفيد للحالة الأكثر شيوعًا حيث يكون رمز أمان PKCS#11 واحد موصولًا.</p>
+<p class="Pp">لاحظ أن العديد من رموز الأمان تنفذ كلاً من PKCS#11/PIV وFIDO2 مع امتداد "hmac-secret" (على سبيل المثال: سلسلة YubiKey 5)، كما هو مدعوم مع خيار <b>--fido2-device=</b> أدناه. كلا الآليتين قويتان بالمثل، على الرغم من أن FIDO2 هي التقنية الأكثر حداثة. تتمتع رموز PKCS#11/PIV بميزة كونها قابلة للتعرف عليها قبل المصادقة وبالتالي يمكن استخدامها لاستنتاج هوية المستخدم المستخدمة لتسجيل الدخول، وهو ما لا يسمح به FIDO2. تتطلب أجهزة PKCS#11/PIV عمومًا التهيئة (أي تخزين زوج مفتاح خاص/عام عليها، انظر المثال أدناه) قبل استخدامها؛ رموز أمان FIDO2 عمومًا لا تتطلب ذلك، وتعمل مباشرة.</p>
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--fido2-credential-algorithm=</b><b></b><i>STRING</i></p>
+<div class="Bd-indent">حدد خوارزمية COSE المستخدمة في إنشاء بيانات الاعتماد. القيمة الافتراضية هي "es256". القيم المدعومة هي "es256" و"rs256" و"eddsa".
+<p class="Pp">"es256" تشير إلى ECDSA على NIST P-256 مع SHA-256. "rs256" تشير إلى RSA 2048 بت مع حشو PKCS#1.5 وSHA-256. "eddsa" تشير إلى EDDSA على Curve25519 مع SHA-512.</p>
+<p class="Pp">لاحظ أن أداة المصادقة الخاصة بك قد تختار عدم دعم بعض الخوارزميات.</p>
+<p class="Pp">أُضيف في الإصدار 251.</p>
+</div>
+<p class="Pp"><b>--fido2-device=</b><b></b><i>PATH</i></p>
+<div class="Bd-indent">يأخذ مسارًا إلى جهاز Linux "hidraw" (مثل /dev/hidraw1)، يشير إلى رمز أمان FIDO2 ينفذ امتداد "hmac-secret" الذي يجب أن يكون قادرًا على فتح حساب المستخدم. يتم إنشاء قيمة ملح عشوائية على المضيف وتمريرها إلى جهاز FIDO2، الذي يحسب تجزئة HMAC للملح باستخدام مفتاح سري داخلي. تُستخدم النتيجة بعد ذلك كمفتاح لفتح حساب المستخدم. يتم تضمين الملح العشوائي في سجل المستخدم، بحيث كلما دعت الحاجة إلى المصادقة يمكن تمريره إلى رمز FIDO2 مرة أخرى.
+<p class="Pp">بدلاً من مسار صالح لجهاز FIDO2 "hidraw"، يمكن تحديد السلاسل الخاصة "list" و"auto". إذا تم تمرير "list"، يتم عرض جدول موجز لأجهزة FIDO2 المناسبة المكتشفة. إذا تم تمرير "auto"، يتم اختيار رمز FIDO2 مناسب تلقائيًا، إذا تم اكتشاف واحد بالضبط. الأخير هو اختصار مفيد للحالة الأكثر شيوعًا حيث يكون رمز أمان FIDO2 واحد موصولًا.</p>
+<p class="Pp">لاحظ أن أجهزة FIDO2 المناسبة لهذا الخيار يجب أن تنفذ امتداد "hmac-secret". معظم الأجهزة الحالية (مثل سلسلة YubiKey 5) تفعل ذلك. إذا لم يتم تنفيذ الامتداد، فلا يمكن استخدام الجهاز لفتح الأدلة المنزلية.</p>
+<p class="Pp">يمكن إزالة جهاز FIDO2 لاحقًا عن طريق تعيين مسار الجهاز إلى سلسلة فارغة (مثل <b>homectl update $USER --fido2-device=""</b>).</p>
+<p class="Pp">لاحظ أن العديد من رموز الأمان تنفذ كلاً من FIDO2 وPKCS#11/PIV (وبالتالي يمكن استخدامها مع إما <b>--fido2-device=</b> أو <b>--pkcs11-token-uri=</b>)، للنقاش انظر أعلاه.</p>
+<p class="Pp">أُضيف في الإصدار 246.</p>
+</div>
+<p class="Pp"><b>--fido2-with-client-pin=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">عند تسجيل رمز أمان FIDO2، يتحكم في ما إذا كان سيُطلب من المستخدم إدخال رقم PIN عند فتح الحساب (ميزة FIDO2 "clientPin"). الافتراضي هو "yes". (ملاحظة: هذا الإعداد ليس له تأثير إذا كان رمز الأمان لا يدعم ميزة "clientPin" على الإطلاق، أو لا يسمح بتمكينها أو تعطيلها.)
+<p class="Pp">أُضيف في الإصدار 249.</p>
+</div>
+<p class="Pp"><b>--fido2-with-user-presence=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">عند تسجيل رمز أمان FIDO2، يتحكم في ما إذا كان سيُطلب من المستخدم التحقق من الوجود (النقر على الرمز، ميزة FIDO2 "up") عند فتح الحساب. الافتراضي هو "yes". (ملاحظة: هذا الإعداد ليس له تأثير إذا كان رمز الأمان لا يدعم ميزة "up" على الإطلاق، أو لا يسمح بتمكينها أو تعطيلها.)
+<p class="Pp">أُضيف في الإصدار 249.</p>
+</div>
+<p class="Pp"><b>--fido2-with-user-verification=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">عند تسجيل رمز أمان FIDO2، يتحكم في ما إذا كان سيُطلب التحقق من المستخدم عند فتح الحساب (ميزة FIDO2 "uv"). الافتراضي هو "no". (ملاحظة: هذا الإعداد ليس له تأثير إذا كان رمز الأمان لا يدعم ميزة "uv" على الإطلاق، أو لا يسمح بتمكينها أو تعطيلها.)
+<p class="Pp">أُضيف في الإصدار 249.</p>
+</div>
+<p class="Pp"><b>--recovery-key=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">يقبل وسيطة منطقية. إذا تم تمكينه، يتم تهيئة مفتاح استرداد للحساب. مفتاح الاسترداد هو مفتاح وصول مُنشأ بواسطة الحاسوب يمكن استخدامه لاستعادة الوصول إلى حساب إذا تم نسيان كلمة المرور أو فقدان رمز المصادقة. يتم إنشاء المفتاح وعرضه على الشاشة، ويجب طباعته أو نقله بطريقة أخرى إلى موقع آمن. يمكن إدخال مفتاح الاسترداد بدلاً من كلمة مرور عادية لفتح الحساب.
+<p class="Pp">أُضيف في الإصدار 247.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BLOB_DIRECTORY_USER_RECORD_PROPERTIES'><a class='permalink' href='#BLOB_DIRECTORY_USER_RECORD_PROPERTIES'>خصائص سجل مستخدم دليل BLOB</a></h1>
+<p class="Pp"><b>--blob=</b><b></b><i>PATH</i>، <b>-b</b> <i>PATH</i>، <b>--blob=</b><b></b><i>FILENAME</i><b>=</b><b></b><i>PATH</i>، <b>-b</b> <i>FILENAME</i>=<i>PATH</i></p>
+<div class="Bd-indent">يقبل إما مسار دليل، أو اسم ملف متبوعًا بمسار ملف. إذا تم تحديد مسار دليل فقط، فسيتم استبدال دليل blob بالكامل للمستخدم بالمسار المحدد. لاحظ أن هذا الاستبدال يتم قبل تطبيق التلاعبات لكل ملف، مما يعني أن هذه التلاعبات لكل ملف ستُطبق فوق الدليل المحدد. إذا تم تحديد اسم ملف ومسار ملف، فسيتم استبدال ملف blob المحدد الواحد بالمسار المحدد. إذا كان فارغًا تمامًا، يتم إفراغ دليل blob بالكامل (مما يعيد أيضًا تعيين جميع علامات blob السابقة حتى هذه النقطة). إذا تم تحديد اسم ملف ولكن المسار المقابل فارغ، فسيتم حذف هذا الملف الواحد من دليل blob. يتم تنفيذ جميع التغييرات في نسخ مؤقتة من الملفات المحددة في الأدلة، مما يعني أن الملفات الأصلية المحددة في سطر الأوامر لا يتم تعديلها. انظر <b>أدلة Blob لسجل المستخدم</b>[3] للحصول على مزيد من المعلومات حول أدلة blob.
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+<p class="Pp"><b>--avatar=</b><b></b><i>PATH</i>، <b>--login-background=</b><b></b><i>PATH</i></p>
+<div class="Bd-indent">يقبل مسار ملف. إذا تم تعيينه، يُستخدم الملف المحدد لاستبدال الملف المقابل في دليل blob للمستخدم. إذا كان فارغًا، يتم حذف الملف المقابل من دليل blob. في الأساس، هذه الخيارات هي اختصارات لـ <b>--blob=</b><b></b><i>FILENAME</i><b>=</b><b></b><i>PATH</i> لأسماء الملفات المعروفة المحددة في <b>أدلة Blob لسجل المستخدم</b>[3].
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES'><a class='permalink' href='#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES'>خصائص سجل مستخدم إدارة الحساب</a></h1>
+<p class="Pp"><b>--locked=</b><b></b><i>BOOLEAN</i></p>
+<div class="Bd-indent">يأخذ وسيطًا منطقيًا. يحدد ما إذا كان يجب قفل حساب المستخدم هذا. إذا كانت القيمة صحيحة، يُحظر تسجيل الدخول إلى هذا الحساب، وإذا كانت خاطئة (القيمة الافتراضية)، يُسمح به (بالطبع، فقط إذا نجحت المصادقة بخلاف ذلك).
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--not-before=</b><b></b><i>TIMESTAMP</i>,
+    <b>--not-after=</b><b></b><i>TIMESTAMP</i></p>
+<div class="Bd-indent">تأخذ هذه الخيارات سلسلة طابع زمني، بالتنسيق الموثق في <a href="systemd.time.7.html">systemd.time(7)</a>، وتُهيئ نقاطًا زمنية لا يُسمح قبلها وبعدها بتسجيل الدخول إلى هذا الحساب.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--rate-limit-interval=</b><b></b><i>SECS</i>,
+    <b>--rate-limit-burst=</b><b></b><i>NUMBER</i></p>
+<div class="Bd-indent">تُهيئ حدًا لمعدل محاولات المصادقة لهذا المستخدم. إذا حاول المستخدم المصادقة أكثر من العدد المحدد، على نظام معين، خلال الفترة الزمنية المحددة، تُرفض المصادقة حتى تنقضي الفترة الزمنية. القيمة الافتراضية هي 10 مرات لكل دقيقة واحدة.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--password-hint=</b><b></b><i>TEXT</i></p>
+<div class="Bd-indent">يأخذ تلميحًا لكلمة المرور لتخزينه إلى جانب سجل المستخدم. تُخزَّن هذه السلسلة بحيث لا يمكن الوصول إليها إلا للمستخدمين ذوي الامتيازات والمستخدم نفسه، ولا يجوز للمستخدمين الآخرين الاستعلام عنها. مثال: <b>--password-hint=&quot;اسم أول حيوان أليف لدي&quot;</b>.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--enforce-password-policy=</b><b></b><i>BOOL</i>, <b>-P</b></p>
+<div class="Bd-indent">يأخذ وسيطًا منطقيًا. يهيئ ما إذا كان يجب فرض سياسة كلمات المرور الخاصة بالنظام على هذا المستخدم، فيما يتعلق بجودة وقوة كلمات المرور المختارة. القيمة الافتراضية هي مفعّل. <b>-P</b> اختصار لـ <b>--enforce-password-policy=no</b>.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--password-change-now=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">يأخذ وسيطًا منطقيًا. إذا كانت القيمة صحيحة، يُطلب من المستخدم تغيير كلمة المرور عند تسجيل الدخول التالي.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--password-change-min=</b><b></b><i>TIME</i>,
+    <b>--password-change-max=</b><b></b><i>TIME</i>,
+    <b>--password-change-warn=</b><b></b><i>TIME</i>,
+    <b>--password-change-inactive=</b><b></b><i>TIME</i></p>
+<div class="Bd-indent">يأخذ كل من هذه الخيارات مواصفة فترة زمنية كوسيط (بالتركيب الموثق في <a href="systemd.time.7.html">systemd.time(7)</a>) ويهيئ جوانب مختلفة من سياسة انتهاء صلاحية كلمة مرور المستخدم. على وجه التحديد، يهيئ <b>--password-change-min=</b> مقدار الوقت الذي يجب أن يمر بعد تغيير كلمة مرور المستخدم حتى يمكن تغيير كلمة المرور مرة أخرى. إذا حاول المستخدم تغيير كلمة المرور قبل انقضاء هذا الوقت، تُرفض المحاولة. يهيئ <b>--password-change-max=</b> المدة التي تنتهي بعدها صلاحية كلمة المرور بعد تغييرها وتحتاج إلى التغيير مرة أخرى. بعد انقضاء هذا الوقت، لا يمكن متابعة تسجيل الدخول إلا بعد تغيير كلمة المرور. يحدد <b>--password-change-warn=</b> مقدار الوقت الأسبق من ذلك الذي يهيئه <b>--password-change-max=</b> الذي يُحذَّر فيه المستخدم عند تسجيل الدخول لتغيير كلمة المرور لأنها ستنتهي صلاحيتها قريبًا. أخيرًا، يهيئ <b>--password-change-inactive=</b> الوقت الذي يجب أن يمر بعد انتهاء صلاحية كلمة المرور حتى لا يُسمح للمستخدم بتسجيل الدخول أو تغيير كلمة المرور بعد الآن. لاحظ أن هذه الخيارات تنطبق فقط على مصادقة كلمة المرور، ولا تنطبق على أشكال المصادقة الأخرى، على سبيل المثال مصادقة رمز الأمان القائمة على PKCS#11.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES'><a class='permalink' href='#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم لإدارة الموارد</a></h1>
+<p class="Pp"><b>--disk-size=</b><b></b><i>BYTES</i></p>
+<div class="Bd-indent">يأخذ إما حجمًا بالبايت كوسيط (ربما باستخدام اللواحق المعتادة K، M، G، ... لقيم الأساس 1024)، أو قيمة نسبة مئوية، أو السلاسل الخاصة &quot;min&quot; أو &quot;max&quot;، ويهيئ مساحة القرص المخصصة للمستخدم. إذا تم تحديد قيمة نسبة مئوية (أي الوسيط الملحق بـ &quot;%&quot;) فتُؤخذ نسبةً إلى مساحة القرص المتاحة لنظام الملفات الداعم. إذا تم تحديدها كـ &quot;min&quot; فتُخصص الحد الأدنى من مساحة القرص المسموح بها وفقًا لقيود نظام الملفات الداعم والحدود الأخرى، وعند تحديدها كـ &quot;max&quot; فتُخصص الحد الأقصى من مساحة القرص المتاحة. إذا تم استخدام الواجهة الخلفية LUKS2، يهيئ هذا حجم ملف الحلقة ونظام الملفات الموجود فيه. بالنسبة للواجهات الخلفية الأخرى للتخزين، يهيئ حصة القرص باستخدام منطق الحصص الأصلي لنظام الملفات، إن كان متاحًا. إذا لم يُحدد، فالقيمة الافتراضية هي 85% من مساحة القرص المتاحة للواجهة الخلفية LUKS2 ولا حصة للواجهات الأخرى.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--nice=</b><b></b><i>NICE</i></p>
+<div class="Bd-indent">يأخذ أولوية الجدولة الرقمية (&quot;مستوى nice&quot;) لتطبيقها على عمليات المستخدم عند تسجيل الدخول. يأخذ قيمة رقمية في النطاق من -20 (أعلى أولوية) إلى 19 (أدنى أولوية).
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--rlimit=</b><b></b><i>LIMIT</i><b>=</b><b></b><i>VALUE</i><b>[:</b><i>VALUE</i>]</p>
+<div class="Bd-indent">يسمح بتهيئة حدود الموارد لعمليات هذا المستخدم، راجع getrlimit(2) للتفاصيل. يأخذ اسم حد مورد (مثل &quot;LIMIT_NOFILE&quot;) متبوعًا بعلامة يساوي، متبوعة بحد رقمي. اختياريًا، مفصولًا بنقطتين رأسيتين، يمكن تحديد حد رقمي ثانٍ. إذا تم تحديد حدين، فهذا يشير إلى الحدين اللين والصلب على التوالي. إذا تم تحديد حد واحد فقط، فإن الإعداد يضبط كلا الحدين معًا.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--tasks-max=</b><b></b><i>TASKS</i></p>
+<div class="Bd-indent">يأخذ عددًا صحيحًا غير سالب غير صفري كوسيط. يهيئ الحد الأقصى لعدد المهام (أي الخيوط، حيث كل عملية هي خيط واحد على الأقل) التي قد يمتلكها المستخدم في أي وقت. ينطبق هذا الحد على جميع المهام المتفرعة من جلسات المستخدم، حتى لو غيّرت هوية المستخدم عبر <a href="../u/su.1.html">su(1)</a> أو أداة مشابهة. استخدم <b>--rlimit=LIMIT_NPROC=</b> لوضع حد على المهام التي تعمل فعليًا تحت UID الخاص بالمستخدم، وبالتالي استبعاد أي عمليات فرعية ربما غيّرت هوية المستخدم. يتحكم هذا في إعداد <i>TasksMax=</i> لوحدة الشريحة systemd الخاصة بكل مستخدم user-$UID.slice. راجع <a href="systemd.resource-control.5.html">systemd.resource-control(5)</a> لمزيد من التفاصيل.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--memory-high=</b><b></b><i>BYTES</i>,
+    <b>--memory-max=</b><b></b><i>BYTES</i></p>
+<div class="Bd-indent">يضع حدًا على الذاكرة التي قد يستهلكها المستخدم على نظام في أي وقت بالبايت (اللواحق المعتادة K، M، G، ... مدعومة، للأساس 1024). يشمل هذا كل الذاكرة المستخدمة من قبل المستخدم نفسه وكل العمليات التي فرّعها والتي غيّرت بيانات اعتماد المستخدم. يتحكم هذا في إعدادي <i>MemoryHigh=</i> و<i>MemoryMax=</i> لوحدة الشريحة systemd الخاصة بكل مستخدم user-$UID.slice. راجع <a href="systemd.resource-control.5.html">systemd.resource-control(5)</a> لمزيد من التفاصيل.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--cpu-weight=</b><b></b><i>WEIGHT</i>,
+    <b>--io-weight=</b><b></b><i>WEIGHT</i></p>
+<div class="Bd-indent">يضبط أوزان جدولة CPU وIO لعمليات المستخدم، بما في ذلك عمليات العمليات التي فرّعها المستخدم والتي غيّرت بيانات اعتماد المستخدم. يأخذ قيمة رقمية في النطاق 1...10000. يتحكم هذا في إعدادي <i>CPUWeight=</i> و<i>IOWeight=</i> لوحدة الشريحة systemd الخاصة بكل مستخدم user-$UID.slice. راجع <a href="systemd.resource-control.5.html">systemd.resource-control(5)</a> لمزيد من التفاصيل.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STORAGE_USER_RECORD_PROPERTIES'><a class='permalink' href='#STORAGE_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم للتخزين</a></h1>
+<p class="Pp"><b>--tmp-limit=</b><b></b><i>BYTES</i>,
+    <b>--tmp-limit=</b><b></b><i>PERCENT</i>,
+    <b>--dev-shm-limit=</b><b></b><i>BYTES</i>,
+    <b>--dev-shm-limit=</b><b></b><i>PERCENT</i></p>
+<div class="Bd-indent">يتحكم في الحصة الخاصة بكل مستخدم على /tmp/ و/dev/shm/ التي تُطبق عند تسجيل دخول المستخدم. يأخذ إما قيمة مطلقة بالبايت (مع اللواحق المعتادة K، M، G، T للأساس 1024)، أو نسبة مئوية. في الحالة الأخيرة، يُطبق الحد نسبةً إلى حجم نظام الملفات المعني. يُطبق هذا الحد فقط إذا كان نظام الملفات المعني هو &quot;tmpfs&quot; ولا يكون له تأثير بخلاف ذلك. لاحظ أنه إذا لم تُستخدم هذه الخيارات، فقد تظل حصة افتراضية مفروضة (عادةً 80%.)
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>--storage=</b><b></b><i>STORAGE</i></p>
+<div class="Bd-indent">يختار آلية التخزين لاستخدامها لدليل المنزل هذا. يأخذ واحدًا من &quot;luks&quot;، &quot;fscrypt&quot;، &quot;directory&quot;، &quot;subvolume&quot;، &quot;cifs&quot;. للتفاصيل حول هذه الآليات، راجع أعلاه. إذا تم إنشاء دليل منزل جديد ولم يُحدد نوع التخزين بشكل خاص، فإن <a href="../../h/homed.conf.5.html">homed.conf(5)</a> يحدد التخزين الافتراضي لاستخدامه.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--image-path=</b><b></b><i>PATH</i></p>
+<div class="Bd-indent">يأخذ مسار نظام ملفات. يهيئ مكان وضع دليل منزل المستخدم. عند استخدام تخزين LUKS2، يشير إلى المسار إلى ملف الحلقة، وإلا إلى المسار إلى دليل المنزل (الذي قد يكون في /home/ أو أي نظام ملفات آخر يمكن الوصول إليه). عند عدم التحديد، القيمة الافتراضية هي /home/$USER.home عند استخدام تخزين LUKS و/home/$USER.homedir لآليات التخزين الأخرى. غير محدد لآلية التخزين &quot;cifs&quot;. لاستخدام تخزين LUKS2 على جهاز كتلة عادي (على سبيل المثال عصا USB)، مرر المسار إلى جهاز الكتلة هنا. تحديد المسار إلى دليل هنا عند استخدام تخزين LUKS2 غير مسموح به. وبالمثل، تحديد المسار إلى ملف عادي أو عقدة جهاز غير مسموح به إذا تم استخدام أي من الواجهات الخلفية الأخرى للتخزين.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--drop-caches=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">تفريغ ذاكرات التخزين المؤقت لنظام ملفات نظام التشغيل تلقائيًا عند تسجيل الخروج. هذا مفيد بالاقتران مع الواجهة الخلفية للتخزين fscrypt لضمان عدم احتفاظ نظام التشغيل بنسخ مفككة التشفير من الملفات والأدلة في الذاكرة (ويمكن الوصول إليها) بعد تسجيل الخروج. هذا الخيار مدعوم أيضًا على الواجهات الخلفية الأخرى، لكن لا ينبغي أن يجلب أي فائدة هناك. القيمة الافتراضية هي معطّل، إلا إذا كانت الواجهة الخلفية للتخزين المختارة هي fscrypt، حيث تكون القيمة الافتراضية مفعّلة. لاحظ أن تفريغ ذاكرات التخزين المؤقت لنظام التشغيل سيؤثر سلبًا على أداء نظام التشغيل بعد فترة وجيزة من تسجيل الخروج.
+<p class="Pp">أُضيف في الإصدار 250.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LUKS_STORAGE_USER_RECORD_PROPERTIES'><a class='permalink' href='#LUKS_STORAGE_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم لتخزين LUKS</a></h1>
+<p class="Pp"><b>--fs-type=</b><b></b><i>TYPE</i></p>
+<div class="Bd-indent">عند استخدام تخزين LUKS2، يهيئ نوع نظام الملفات لاستخدامه داخل حاوية LUKS2 لدليل المنزل. واحد من &quot;btrfs&quot;، &quot;ext4&quot;، &quot;xfs&quot;. إذا لم يُحدد، فإن <a href="../../h/homed.conf.5.html">homed.conf(5)</a> يحدد نوع نظام الملفات الافتراضي لاستخدامه. لاحظ أن &quot;xfs&quot; غير موصى به لأن دعمه لتغيير حجم نظام الملفات محدود جدًا.
+<p class="Pp">أُضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--luks-discard=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">عند استخدام تخزين LUKS2، يهيئ ما إذا كان يجب تمكين &q"ميزة "التجاهل" لنظام الملفات. إذا تم تمكينها، سيقوم نظام الملفات فوق وحدة LUKS2 بالإبلاغ عن معلومات الكتلة الفارغة إلى LUKS2 والملف ذي الحلقة أدناه، مما يضمن إعادة المساحة الفارغة في الدليل الرئيسي إلى نظام الملفات الداعم أسفل وحدة LUKS2، مما يؤدي إلى ملف ذي حلقة "متفرقة". هذا الخيار معطل في الغالب افتراضيًا، حيث يسمح بالإفراط في تخصيص أدلة المستخدمين الرئيسية، مما يؤدي إلى أخطاء في الإدخال/الإخراج إذا امتلأ نظام الملفات الأساسي أثناء رغبة نظام الملفات العلوي في تخصيص كتلة. لا يتم التعامل مع أخطاء الإدخال/الإخراج هذه بشكل جيد بشكل عام من قبل أنظمة الملفات ولا التطبيقات. عند استخدام تخزين LUKS2 فوق أجهزة الكتل العادية (بدلاً من ملف ذي حلقة)، يكون منطق التجاهل ممكّنًا افتراضيًا.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--luks-offline-discard=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">مشابه لـ <b>--luks-discard=</b>، يتحكم في تقليم نظام الملفات. ومع ذلك، بينما يتحكم <b>--luks-discard=</b> فيما يحدث عند تنشيط الدليل الرئيسي، فإن <b>--luks-offline-discard=</b> يتحكم فيما يحدث عند عدم نشاطه، أي ما إذا كان سيتم تقليم/تخصيص مساحة التخزين عند إلغاء تنشيط الدليل الرئيسي. هذا الخيار ممكّن افتراضيًا، لضمان تقليل مساحة القرص إلى الحد الأدنى أثناء عدم تسجيل دخول المستخدم.
+<p class="Pp">تمت الإضافة في الإصدار 246.</p>
+</div>
+<p class="Pp"><b>--luks-extra-mount-options=</b><b></b><i>OPTIONS</i></p>
+<div class="Bd-indent">يأخذ سلسلة تحتوي على خيارات تحميل إضافية لاستخدامها عند تحميل وحدة LUKS. إذا تم تحديده، فسيتم إلحاق هذه السلسلة بخيارات التحميل الافتراضية المضمنة. الافتراضي هو "&quot;compress=zstd:1,noacl,user_subvol_rm_allowed&quot;".
+<p class="Pp">تمت الإضافة في الإصدار 250.</p>
+</div>
+<p class="Pp"><b>--luks-cipher=</b><b></b><i>CIPHER</i>،
+    <b>--luks-cipher-mode=</b><b></b><i>MODE</i>،
+    <b>--luks-volume-key-size=</b><b></b><i>BYTES</i>،
+    <b>--luks-pbkdf-type=</b><b></b><i>TYPE</i>،
+    <b>--luks-pbkdf-hash-algorithm=</b><b></b><i>ALGORITHM</i>،
+    <b>--luks-pbkdf-force-iterations=</b><b></b><i>ITERATIONS</i>،
+    <b>--luks-pbkdf-time-cost=</b><b></b><i>SECONDS</i>،
+    <b>--luks-pbkdf-memory-cost=</b><b></b><i>BYTES</i>،
+    <b>--luks-pbkdf-parallel-threads=</b><b></b><i>THREADS</i>،
+    <b>--luks-sector-size=</b><b></b><i>BYTES</i></p>
+<div class="Bd-indent">يقوم بتكوين معلمات تشفير مختلفة لآلية تخزين LUKS2. انظر cryptsetup(8) للحصول على تفاصيل حول السمات المحددة.
+<p class="Pp">لاحظ أن <b>homectl</b> يستخدم البايتات لحجم المفتاح، مثل /proc/crypto، ولكن cryptsetup(8) يستخدم البتات.</p>
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--auto-resize-mode=</b></p>
+<div class="Bd-indent">يقوم بتكوين ما إذا كان سيتم تلقائيًا زيادة و/أو تقليص نظام الملفات الداعم عند تسجيل الدخول والخروج. يأخذ أحد السلاسل "&quot;off&quot;"، "&quot;grow&quot;"، "&quot;shrink-and-grow&quot;". ينطبق فقط على الواجهة الخلفية LUKS2 حاليًا، وإذا تم استخدام نظام ملفات btrfs بداخله (حيث إن زيادة/تقليص نظام الملفات عبر الإنترنت مدعوم فقط). الافتراضي هو "&quot;shrink-and-grow&quot;"، إذا تم استخدام LUKS2/btrfs، وإلا فإنه معطل. إذا تم ضبطه على "&quot;off&quot;"، فلن يتم إجراء أي تقليص/زيادة تلقائية أثناء تسجيل الدخول أو الخروج. إذا تم ضبطه على "&quot;grow&quot;"، فسيتم زيادة مساحة الدليل الرئيسي إلى الحجم المحدد عبر <b>--disk-size=</b> إذا كان حاليًا أصغر. إذا كان يتطابق بالفعل مع الحجم المحدد أو أكبر، فلن يتم تنفيذ أي عملية. إذا تم ضبطه على "&quot;shrink-and-grow&quot;"، فسيتم أيضًا تغيير حجم الدليل الرئيسي أثناء تسجيل الخروج إلى الحد الأدنى للحجم الذي تسمح به مساحة القرص المستخدمة وقيود نظام الملفات. وبالتالي يضمن هذا الوضع أنه أثناء تنشيط مساحة الدليل الرئيسي، يتم تحديد حجمها بالحجم المحدد، ولكن أثناء عدم نشاطها، يتم ضغطها وتستهلك الحد الأدنى من المساحة الممكنة فقط. لاحظ أنه إذا تم إيقاف تشغيل النظام بشكل غير طبيعي أو إذا لم يقم المستخدم بتسجيل الخروج بشكل نظيف، فلن تتم عملية التقليص، ويجب على المستخدم إعادة تسجيل الدخول/الخروج مرة أخرى قبل تنفيذها مرة أخرى.
+<p class="Pp">تمت الإضافة في الإصدار 250.</p>
+</div>
+<p class="Pp"><b>--rebalance-weight=</b></p>
+<div class="Bd-indent">يقوم بتكوين معلمة الوزن لمنطق إعادة توزيع مساحة القرص الفارغة. ينطبق فقط على الواجهة الخلفية LUKS2 (حيث يتم تخصيص مساحة القرص للواجهة الخلفية LUKS2 من نظام ملفات ذي حلقة لكل مستخدم بدلاً من تخصيصها فورًا من مجمع مشترك كما تفعل الواجهات الخلفية الأخرى). على فترات منتظمة، تتم إعادة توزيع مساحة القرص الفارغة في أدلة المستخدمين النشطة وتخزينها الداعم فيما بينها، مع مراعاة قيمة الوزن المحددة هنا. يتوقع عددًا صحيحًا في النطاق 1...10000، أو السلسلة الخاصة "&quot;off&quot;". إذا لم يتم تحديده، فالافتراضي هو 100. يتم استخدام الوزن لقياس المساحة الفارغة المتاحة لأدلة المستخدمين: سيحصل دليل المستخدم ذو الوزن 200 على ضعف المساحة الفارغة مقارنة بدليل المستخدم ذي الوزن 100؛ سيحصل دليل المستخدم ذو الوزن 50 على نصف ذلك. سيتم تخصيص مساحة لنظام الملفات الداعم بوزن 20. إذا تم ضبطه على "&quot;off&quot;"، فلن يتم إجراء أي توزيع تلقائي للمساحة الفارغة لدليل المستخدم هذا. لاحظ أن تغيير حجم دليل المستخدم صراحةً (باستخدام <b>homectl resize</b> انظر أدناه) سيؤدي ضمنيًا إلى تعطيل إعادة التوزيع التلقائي. لإعادة تمكين إعادة التوزيع التلقائي، استخدم <b>--rebalance-weight=</b> مع معلمة فارغة.
+<p class="Pp">تمت الإضافة في الإصدار 250.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='MOUNTING_USER_RECORD_PROPERTIES'><a class='permalink' href='#MOUNTING_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم للتحميل</a></h1>
+<p class="Pp"><b>--nosuid=</b><b></b><i>BOOL</i>،
+    <b>--nodev=</b><b></b><i>BOOL</i>، <b>--noexec=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">يقوم بتكوين خيارات التحميل "nosuid"، "nodev"، و "noexec" لأدلة المستخدمين الرئيسية. افتراضيًا، تكون "nodev" و "nosuid" ممكّنة، بينما تكون "noexec" معطلة. للحصول على تفاصيل حول خيارات التحميل هذه، انظر <a href="../../m/o/mount.8.html">mount(8)</a>.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CIFS_USER_RECORD_PROPERTIES'><a class='permalink' href='#CIFS_USER_RECORD_PROPERTIES'>خصائص سجل المستخدم CIFS</a></h1>
+<p class="Pp"><b>--cifs-domain=</b><b></b><i>DOMAIN</i>،
+    <b>--cifs-user-name=</b><b></b><i>USER</i>،
+    <b>--cifs-service=</b><b></b><i>SERVICE</i>،
+    <b>--cifs-extra-mount-options=</b><b></b><i>OPTIONS</i></p>
+<div class="Bd-indent">يقوم بتكوين نطاق ومستخدم مشاركة ملفات Windows (CIFS) لربطه بالدليل الرئيسي/حساب المستخدم، بالإضافة إلى مشاركة الملف (&quot;service&quot;) للتحميل كدليل. يتم استخدام الأخير عند تحديد تخزين "cifs". يجب تحديد مشاركة الملف بالتنسيق "&quot;//<i>host</i>/<i>share</i>/<i>directory/...</i>&quot;". جزء الدليل اختياري - إذا لم يتم تحديده، فسيتم وضع الدليل الرئيسي في الدليل الجذري للمشاركة. يسمح إعداد <b>--cifs-extra-mount-options=</b> بتحديد خيارات تحميل إضافية عند تحميل المشاركة، انظر <a href="../../m/o/mount.cifs.8.html">mount.cifs(8)</a> للحصول على التفاصيل.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LOGIN_BEHAVIOUR_RECORD_PROPERTIES'><a class='permalink' href='#LOGIN_BEHAVIOUR_RECORD_PROPERTIES'>خصائص سلوك تسجيل الدخول</a></h1>
+<p class="Pp"><b>--stop-delay=</b><b></b><i>SECS</i></p>
+<div class="Bd-indent">يقوم بتكوين الوقت الذي سيستمر فيه مدير الخدمات لكل مستخدم في التشغيل بعد انتهاء جميع جلسات المستخدم. الافتراضي هو تكوينه في <a href="../../l/o/logind.conf.5.html">logind.conf(5)</a> (بالنسبة لأدلة المستخدمين الرئيسية لتخزين LUKS2 الموجودة على وسائط قابلة للإزالة، يكون الافتراضي 0 رغم ذلك). يجعل الوقت الأطول من المستحيل أن تكون عمليات تسجيل الدخول السريعة والمتكررة أكثر كفاءة حيث لا يلزم بدء تشغيل مدير خدمات المستخدم في كل مرة.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--kill-processes=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">يقوم بتكوين ما إذا كان سيتم إنهاء جميع عمليات المستخدم عند تسجيل الخروج. الافتراضي هو تكوينه في <a href="../../l/o/logind.conf.5.html">logind.conf(5)</a>.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--auto-login=</b><b></b><i>BOOL</i></p>
+<div class="Bd-indent">يأخذ وسيطة منطقية. يقوم بتكوين ما إذا كان يجب على واجهة المستخدم الرسومية للنظام تسجيل دخول هذا المستخدم تلقائيًا إن أمكن. الافتراضي هو تعطيل. إذا تم تمييز مستخدم واحد أو أكثر بهذه الطريقة، فسيتم تعطيل تسجيل الدخول التلقائي.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>--session-launcher=</b><b></b><i>LAUNCHER</i></p>
+<div class="Bd-indent">يأخذ وسيطة سلسلة. يقوم بتكوين ملف إدخال سطح المكتب المفضل لمشغل الجلسة للمستخدم (أي &quot;gnome&quot;، &quot;plasma&quot;، أو أسماء أخرى تظهر في /usr/share/xesssions/ أو /usr/share/wayland-sessions). يقرأ مدير العرض هذا لاختيار الجلسة الافتراضية التي يتم تشغيلها عند تسجيل دخول المستخدم.
+<p class="Pp">تمت الإضافة في الإصدار 256.</p>
+</div>
+<p class="Pp"><b>--session-type=</b><b></b><i>TYPE</i></p>
+<div class="Bd-indent">يأخذ وسيطة سلسلة. يقوم بتكوين نوع الجلسة المفضل للمستخدم (أي &quot;x11&quot;، &quot;wayland&quot;، وقيم أخرى مقبولة بواسطة <i>$XDG_SESSION_TYPE</i>). يقرأ مدير العرض هذا لاختيار نوع الجلسة الافتراضي الذي يسجل دخول المستخدم إليه.
+<p class="Pp">تمت الإضافة في الإصدار 256.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='COMMANDS'><a class='permalink' href='#COMMANDS'>الأوامر</a></h1>
+<p class="Pp">يتم فهم الأوامر التالية:</p>
+<p class="Pp"><b>list</b></p>
+<div class="Bd-indent">يسرد جميع أدلة المستخدمين الرئيسية (جنبًا إلى جنب مع التفاصيل الموجزة) التي تديرها حاليًا خدمة systemd-homed. يتم تنفيذ هذا الأمر أيضًا إذا لم يتم تحديد أي أمر على سطر الأوامر. (لاحظ أن قائمة المستخدمين التي تعرضها هذه الأوامر لا تشمل المستخدمين الذين تديرهم أنظمة فرعية أخرى، مثل المستخدمين النظاميين أو أي مستخدمين تقليديين مدرجين في /etc/passwd).
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>activate</b> <i>USER</i> [<i>USER...</i>]</p>
+<div class="Bd-indent">تنشيط دليل مستخدم رئيسي واحد أو أكثر. سيتم تنشيط أدلة المستخدمين الرئيسية لكل مستخدم مدرج وجعلها متاحة ضمن نقاط تحميلها (عادةً في /home/$USER). لاحظ أن أي دليل رئيسي يتم تنشيطه بهذه الطريقة يظل نشطًا إلى أجل غير مسمى، حتى يتم إلغاء تنشيطه صراحةً مرة أخرى (باستخدام <b>deactivate</b>، انظر أدناه)، أو يقوم المستخدم بتسجيل الدخول والخروج مرة أخرى وبالتالي يتم إلغاء تنشيطه بسبب منطق إلغاء التنشيط التلقائي عند تسجيل الخروج.
+<p class="Pp">يتضمن تنشيط دليل رئيسي عمليات مختلفة تعتمد على آلية التخزين المحددة. إذا تم استخدام آلية LUKS2، فإن هذا يتضمن بشكل عام: الاستفسار عن كلمة مرور المستخدم، إعداد جهاز ذي حلقة، التحقق من صحة وتنشيط وحدة LUKS2، التحقق من نظام الملفات، تحميل نظام الملفات، وربما تغيير ملكية جميع الملفات المضمنة إلى UID/GID الصحيح.</p>
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>deactivate</b> <i>USER</i> [<i>USER...</i>]</p>
+<div class="Bd-indent">إلغاء تنشيط دليل مستخدم رئيسي واحد أو أكثر. هذا يعكس تأثير <b>activate</b>.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>inspect</b> <i>USER</i> [<i>USER...</i>]</p>
+<div class="Bd-indent">عرض تفاصيل مختلفة حول أدلة المستخدمين الرئيسية المحددة. يعرض هذا معلومات مختلفة حول الدليل الرئيسي وحساب المستخدم الخاص به، بما في ذلك بيانات وقت التشغيل مثل الحالة الحالية، استخدام القرص وما شابه. استخدم مع <b>--json=</b> لعرض سجل المستخدم المفصل بتنسيق JSON بدلاً من ذلك، ربما بالاشتراك مع <b>--export-format=</b> لقمع جوانب معينة من الإخراج.
+<p class="Pp">تمت الإضافة في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>authenticate</b> <i>USER</i> [<i>USER...</i>]</p>
+<div class="Bd-indent">التحقق من بيانات اعتماد المصادقة الخاصة بـ</div>دليل منزلي.
+  هذا يستعلم المتصل عن كلمة مرور (أو ما شابه) ويتحقق من أنها
+  تفتح الدليل المنزلي بشكل صحيح. هذا يترك الدليل المنزلي في
+  الحالة التي كان عليها، أي يترك الدليل المنزلي في حالة غير نشطة إذا كان
+  غير نشط من قبل، وفي حالة نشطة إذا كان نشطًا من قبل.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>create</b> <i>USER</i>، <b>create</b>
+    <b>--identity=</b><b></b><i>PATH</i> [<i>USER</i>]</p>
+<div class="Bd-indent">إنشاء دليل منزلي/حساب مستخدم جديد بالاسم المحدد.
+  استخدم خيارات خصائص سجل المستخدم المتنوعة (كما هو موثق أعلاه) للتحكم
+  في جوانب مختلفة من الدليل المنزلي وحسابات المستخدمين الخاصة به.
+<p class="Pp">يجب أن يتبع اسم المستخدم المحدد الصيغة الصارمة الموضحة
+    في <b>User/Group Name Syntax</b>[4].</p>
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>adopt</b> <i>PATH</i> [<i>PATH</i>...]</p>
+<div class="Bd-indent">يتبنى واحدًا أو أكثر من الأدلة المنزلية الموجودة على النظام
+  المحلي. يأخذ مسارًا واحدًا أو أكثر إلى أدلة منزلية LUKS بصيغة *.home أو أدلة منزلية مستقلة
+  بصيغة *.homedir/ أو وحدات تخزين فرعية تم إنشاؤها مسبقًا بواسطة systemd-homed
+  ويجعلها متاحة محليًا لتسجيل الدخول. لا يتم نقل الملفات المشار إليها.
+  هذا بديل لنقل مثل هذه الأدلة المنزلية إلى /home/
+  (حيث سيتم التقاطها تلقائيًا).
+<p class="Pp">أضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>register</b> <i>FILE</i> [<i>FILE</i>...]</p>
+<div class="Bd-indent">يسجل واحدًا أو أكثر من المستخدمين، دون إنشاء أدلتهم المنزلية.
+  يأخذ مسارًا واحدًا أو أكثر إلى ملفات سجل المستخدم بصيغة JSON. إذا تم
+  تحديد المسار كـ &quot;-&quot; يقرأ سجل المستخدم بصيغة JSON من الإدخال القياسي.
+<p class="Pp">تسجيل مستخدم يجعله متاحًا على النظام المحلي دون
+    إنشاء دليل منزلي جديد. هذا مفيد بشكل خاص لجعل مستخدم
+    متاحًا على نظام لم يتم إنشاؤه عليه في الأصل.</p>
+<p class="Pp">إليك مثال لكيفية جعل حساب مستخدم محلي مع دليله المنزلي
+    متاحًا على نظام بعيد، باستخدام مشاركة ملفات SMB/CIFS. مع
+    تثبيت Samba في تكوينه الافتراضي استدعِ كـ &quot;root&quot;:</p>
+<div class="Bd-indent">
+<pre># smbpasswd -a lennart</pre>
+</div>
+<p class="Pp">تابع كمستخدم عادي &quot;lennart&quot;:</p>
+<div class="Bd-indent">
+<pre>$ homectl update lennart --ssh-authorized-keys=... -N --storage=cifs --cifs-service=&quot;//$HOSTNAME/lennart&quot;
+$ homectl get-signing-key | ssh targetsystem homectl add-signing-key --key-name=&quot;$HOSTNAME&quot;.public
+$ homectl inspect -E lennart | ssh targetsystem homectl register -
+$ ssh lennart@targetsystem</pre>
+</div>
+<p class="Pp">هذا أولاً يضمن أن حساب المستخدم &quot;lennart&quot; معروف
+    لدى Samba ويمكن الوصول إليه من خلالها. ثم يسجل وصول SSH محليًا الذي سيتم
+    استخدامه للوصول إلى هذا المستخدم، ويكون CIFS كتخزين افتراضي
+    للأنظمة غير المحلية على الحساب. ثم يضيف مفتاح توقيع حساب النظام المحلي
+    إلى النظام الهدف. ثم يسجل حساب المستخدم المحلي
+    مع النظام الهدف. أخيرًا يسجل الدخول إلى الحساب على النظام
+    الهدف. سيتصل النظام الهدف بعد ذلك عبر SMB/CIFS للوصول إلى
+    الدليل المنزلي.</p>
+<p class="Pp">أضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>unregister</b> <i>USER</i>...</p>
+<div class="Bd-indent">يلغي تسجيل واحد أو أكثر من حسابات المستخدمين. هذا يزيل فقط
+  سجل المستخدم من النظام المحلي، ولا يحذف الدليل المنزلي.
+  يمكن إعادة إضافة الدليل المنزلي عبر الأمر <b>register</b> أو <b>adopt</b>
+  لاحقًا، على هذا النظام أو نظام آخر. لاحظ أن إلغاء تسجيل مستخدم
+  يوجد دليله المنزلي في /home/ لن يجعل المستخدم يختفي من
+  قاعدة بيانات المستخدمين المحلية، حيث أن جميع الأدلة المنزلية المدعومة الموضوعة هناك ستظهر
+  في قاعدة بيانات المستخدمين. ومع ذلك، سيصبح سجل المستخدم
+  &quot;غير مثبت&quot;، أي يفقد ارتباطه بالنظام المحلي. عند تسجيل
+  الدخول إليه سيستعيد الارتباط تلقائيًا، ويكتسب زوج UID/GID محلي.
+<p class="Pp">أضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>remove</b> <i>USER</i></p>
+<div class="Bd-indent">إزالة دليل منزلي/حساب مستخدم. هذا سيزيل
+  كلاً من سجل المستخدم الخاص بالدليل المنزلي والدليل المنزلي نفسه، وبالتالي
+  يحذف جميع الملفات والأدلة المملوكة للمستخدم.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>update</b> <i>USER</i>، <b>update</b>
+    <b>--identity=</b><b></b><i>PATH</i> [<i>USER</i>]</p>
+<div class="Bd-indent">تحديث دليل منزلي/حساب مستخدم. استخدم خيارات
+  خصائص سجل المستخدم المتنوعة (كما هو موثق أعلاه) لإجراء تغييرات على
+  الحساب، أو بدلاً من ذلك قدم سجل مستخدم JSON كامل ومحدث عبر
+  خيار <b>--identity=</b>.
+<p class="Pp">لاحظ أن التغييرات على سجلات المستخدمين غير الموقعة بمفتاح خاص
+    تشفيري متاح محليًا غير مسموح بها، ما لم يتم استخدام <b>--identity=</b>
+    مع سجل مستخدم موقع بالفعل بشكل صحيح بواسطة مفتاح خاص
+    معترف به.</p>
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>passwd</b> <i>USER</i></p>
+<div class="Bd-indent">تغيير كلمة مرور الدليل المنزلي/حساب المستخدم المحدد.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>resize</b> <i>USER</i> <i>BYTES</i></p>
+<div class="Bd-indent">تغيير مساحة القرص المخصصة للدليل المنزلي المحدد.
+  إذا تم استخدام آلية تخزين LUKS2 فسيؤدي هذا تلقائيًا
+  إلى تغيير حجم ملف الاسترجاع ونظام الملفات الموجود بداخله. لاحظ أنه إذا
+  تم استخدام &quot;ext4&quot; داخل وحدة تخزين LUKS2، فمن الضروري
+  إلغاء تنشيط الدليل المنزلي قبل تقليصه (أي يجب على المستخدم تسجيل
+  الخروج). يمكن التوسيع أثناء نشاط الدليل المنزلي. إذا
+  تم استخدام &quot;xfs&quot; داخل وحدة تخزين LUKS2 فقد لا يتم
+  تقليص الدليل المنزلي على الإطلاق. في الثلاثة جميعًا &quot;ext4&quot; و&quot;xfs&quot; و
+  &quot;btrfs&quot; يمكن توسيع الدليل المنزلي أثناء تسجيل دخول المستخدم،
+  وفي الأخير أيضًا تقليصه أثناء تسجيل دخول المستخدم. إذا تم
+  استخدام آليات التخزين &quot;subvolume&quot; و&quot;directory&quot; و&quot;fscrypt&quot;
+  فسيؤدي تغيير الحجم إلى تغيير حصة نظام الملفات. قد تستخدم
+  معلمة الحجم اللواحق المعتادة B، K، M، G، T (إلى الأساس
+  1024). يمكن تحديد السلاسل الخاصة &quot;min&quot; و&quot;max&quot;
+  بدلاً من قيمة حجم رقمية، لتصغير أو تكبير مساحة القرص
+  المخصصة للمنطقة المنزلية، مع مراعاة قيود نظام الملفات واستخدام القرص
+  داخل المنطقة المنزلية وعلى التخزين الداعم.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>lock</b> <i>USER</i></p>
+<div class="Bd-indent">تعليق الوصول إلى الدليل المنزلي للمستخدم مؤقتًا
+  وإزالة أي مفاتيح تشفير مرتبطة من الذاكرة. أي محاولات
+  للوصول إلى الدليل المنزلي للمستخدم ستتوقف حتى يتم فتح الدليل المنزلي
+  مرة أخرى (أي إعادة المصادقة). هذه الوظيفة مخصصة بشكل أساسي
+  للاستخدام أثناء تعليق النظام للتأكد من عدم إمكانية الوصول إلى بيانات المستخدم
+  حتى يعيد المستخدم المصادقة عند الاستئناف. هذه العملية محددة فقط
+  للأدلة المنزلية التي تستخدم آلية تخزين LUKS2.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>unlock</b> <i>USER</i></p>
+<div class="Bd-indent">استئناف الوصول إلى الدليل المنزلي للمستخدم مرة أخرى، وإلغاء
+  تأثير <b>lock</b> أعلاه. هذا يتطلب مصادقة المستخدم، حيث
+  يجب إعادة الحصول على مفاتيح التشفير المطلوبة للوصول إلى الدليل المنزلي.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>lock-all</b></p>
+<div class="Bd-indent">تنفيذ أمر <b>lock</b> على جميع الأدلة المنزلية المناسبة
+  دفعة واحدة. تُنفذ هذه العملية عمومًا عند تعليق النظام
+  (أي بواسطة <b>systemctl suspend</b> والأوامر ذات الصلة)، للتأكد من إزالة جميع
+  مفاتيح التشفير للمستخدمين النشطين للوصول إلى أدلتهم المنزلية
+  من الذاكرة.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>deactivate-all</b></p>
+<div class="Bd-indent">تنفيذ أمر <b>deactivate</b> على جميع الأدلة المنزلية النشطة
+  دفعة واحدة. تُنفذ هذه العملية عمومًا عند إيقاف تشغيل النظام
+  (أي بواسطة <b>systemctl poweroff</b> والأوامر ذات الصلة)، للتأكد من إلغاء تنشيط جميع
+  الأدلة المنزلية للمستخدمين النشطين بالكامل قبل إلغاء تحميل /home/ وأنظمة الملفات
+  ذات الصلة.
+<p class="Pp">أضيف في الإصدار 247.</p>
+</div>
+<p class="Pp"><b>with</b> <i>USER</i> <i>COMMAND...</i></p>
+<div class="Bd-indent">تنشيط الدليل المنزلي للمستخدم المحدد، وتشغيل
+  الأمر المحدد (تحت هوية المتصل، وليس المستخدم المحدد) و
+  إلغاء تنشيط الدليل المنزلي بعد ذلك مرة أخرى (ما لم يكن المستخدم مسجلاً للدخول
+  بطريقة أخرى). هذا الأمر مفيد لتشغيل نصوص النسخ الاحتياطي ذات الامتيازات
+  وما شابه، لكنه يتطلب المصادقة ببيانات اعتماد المستخدم لتكون
+  قادرًا على فتح الدليل المنزلي للمستخدم.
+<p class="Pp">أضيف في الإصدار 245.</p>
+</div>
+<p class="Pp"><b>rebalance</b></p>
+<div class="Bd-indent">إعادة موازنة مساحة القرص الحرة بين المناطق المنزلية النشطة
+  والتخزين الداعم. انظر <b>--rebalance-weight=</b> أعلاه. هذا لا ينفذ أي
+  عملية ما لم تكن هناك منطقة منزلية LUKS2 نشطة واحدة على الأقل
+  لديها إعادة موازنة مساحة القرص ممكّنة. هذه العملية متزامنة: ستكتمل فقط
+  بمجرد إعادة موازنة مساحة القرص وفقًا لأوزان إعادة الموازنة.
+  لاحظ أن إعادة الموازنة تحدث أيضًا تلقائيًا في الخلفية في
+  فترات منتظمة. استخدم هذا الأمر للتأكد بشكل متزامن من إعادة توزيع مساحة القرص
+  بشكل صحيح قبل بدء عملية تتطلب كميات كبيرة
+  من مساحة القرص.
+<p class="Pp">أضيف في الإصدار 250.</p>
+</div>
+<p class="Pp"><b>firstboot</b></p>
+<div class="Bd-indent">من المفترض استدعاء هذا الأمر أثناء التمهيد الأولي
+  للنظام. يتحقق مما إذا كانت هناك أي منطقة منزلية عادية موجودة حتى الآن، و
+  إذا لم تكن كذلك يستعلم من المستخدم تفاعليًا على وحدة التحكم عن اسم المستخدم و
+  كلمة المرور وينشئ واحدة (فقط إذا تم تحديد <b>--prompt-new-user</b>).
+  بدلاً من ذلك، إذا تم تمرير بيانات اعتماد خدمة واحدة أو أكثر يبدأ اسمها بـ
+  &quot;home.create.&quot; إلى الأمر (تحتوي على سجل مستخدم
+  بصيغة JSON) يتم إنشاء هؤلاء المستخدمين تلقائيًا عند التمهيد.
+<p class="Pp">يتم استدعاء هذا الأمر بواسطة وحدة خدمة
+    systemd-homed-firstboot.service.</p>
+<p class="Pp">أضيف في الإصدار 256.</p>
+</div>
+<p class="Pp"><b>list-signing-keys</b></p>
+<div class="Bd-indent">إظهار قائمة بالمفاتيح العامة التي يمكن توقيع الأدلة المنزلية
+  بها لتكون مسموحًا بها لتسجيل الدخول المحلي. سيتم إنشاء أحد هذه المفاتيح (local.public)
+  تلقائيًا لتوقيع الأدلة المنزلية المنشأة محليًا، ولكن
+  قد يتم تسجيل مفاتيح عامة إضافية لقبول الأدلة المنزلية من أصول أخرى
+  أيضًا (انظر <b>add-signing-key</b> أدناه).
+<p class="Pp">أضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>get-signing-key</b> [<i>NAME...</i>]</p>
+<div class="Bd-indent">كتابة المفتاح العام المحدد بالاسم المحدد إلى
+  الإخراج القياسي (بصيغة PEM). إذا لم يتم تحديد اسم فسيكون الافتراضي
+  local.public، أي المفتاح المنشأ تلقائيًا للأدلة المنزلية المنشأة محليًا.
+<p class="Pp">أضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>add-signing-key</b> [<i>FILE...</i>]</p>
+<div class="Bd-indent">إضافة مفتاح/مفاتيح عامة من ملف/ملفات مفتاح PEM المحددة إلى
+  قائمة المفاتيح التي يجب أن تُوقع بها المناطق المنزلية لتُسمح
+  لتسجيل الدخول المحلي. إذا تم تحديد مسار &quot;-&quot;، أو إذا لم يتم
+  تحديد ملف على الإطلاق، فسيتم قراءة المفتاح من الإدخال القياسي. يجب أن تحمل
+  أسماء ملفات المفاتيح اللاحقة .public، وسيتم استخدام أسماء الملفات
+  لتسمية المفتاح/المفاتيح بمجرد إضافتها أيضًا. إذا تمت إضافة مفتاح من الإدخال القياسي
+  فيجب تحديد اسم المفتاح صراحةً عبر <b>--key-name=</b>، انظر أعلاه.
+<p class="Pp">هذا الأمر مفيد للسماح باستخدام الأدلة المنزلية المحلية
+    على نظام بعيد. مثال:</p>
+<div class="Bd-indent">
+<pre>homectl get-signing-key | ssh myotherhost homectl add-signing-key --key-name=&quot;$HOSTNAME&quot;.publ<pre>ic</pre>
+</div>
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+<p class="Pp"><b>remove-signing-key</b> <i>NAME...</i></p>
+<div class="Bd-indent">إزالة المفتاح العام المحدد بالاسم المذكور
+  من قائمة المفاتيح التي تتحكم في الأصول التي يُسمح لها بتوفير أدلة المنزل لتسجيل الدخول.
+<p class="Pp">أُضيف في الإصدار 258.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='CREDENTIALS'><a class='permalink' href='#CREDENTIALS'>بيانات الاعتماد</a></h1>
+<p class="Pp">عند الاستدعاء بالأمر <b>firstboot</b>، يدعم <b>homectl</b>
+    منطق بيانات اعتماد الخدمة كما هو مُنفَّذ بواسطة
+    <i>ImportCredential=</i>/<i>LoadCredential=</i>/<i>SetCredential=</i> (انظر
+    <a href="systemd.exec.5.html">systemd.exec(5)</a> للتفاصيل). تُستخدم بيانات الاعتماد التالية عند
+    تمريرها:</p>
+<p class="Pp"><i>home.create.*</i></p>
+<div class="Bd-indent">إذا تم تمرير بيانات اعتماد واحدة أو أكثر تبدأ أسماؤها بـ
+  &quot;home.create.&quot;، متبوعة باسم مستخدم UNIX صالح، يتم إنشاء
+  منطقة منزل جديدة، واحدة لكل سجل مستخدم محدد.
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='KERNEL_COMMAND_LINE'><a class='permalink' href='#KERNEL_COMMAND_LINE'>سطر أوامر   النواة</a></h1>
+<p class="Pp"><i>systemd.firstboot=</i></p>
+<div class="Bd-indent">ستعطّل هذه القيمة المنطقية تأثير الأمر <b>homectl
+  firstboot</b>. يتم تفسيرها بشكل أساسي بواسطة
+  <a href="systemd-firstboot.1.html">systemd-firstboot(1)</a>.
+<p class="Pp">أُضيف في الإصدار 256.</p>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXIT_STATUS'><a class='permalink' href='#EXIT_STATUS'>حالة   الخروج</a></h1>
+<p class="Pp">عند النجاح، يُعاد 0، وإلا يُعاد رمز فشل غير صفري.</p>
+<p class="Pp">عند استدعاء أمر باستخدام <b>with</b>، تُنقل حالة خروج
+    العملية الفرعية. فعليًا، سيخرج <b>homectl</b> دون خطأ إذا
+    تم استدعاء الأمر بنجاح <i>و</i> انتهى بنجاح.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ENVIRONMENT'><a class='permalink' href='#ENVIRONMENT'>البيئة</a></h1>
+<p class="Pp"><i>$SYSTEMD_LOG_LEVEL</i></p>
+<div class="Bd-indent">الحد الأقصى لمستوى سجل الرسائل المُصدَرة (الرسائل ذات
+  مستوى سجل أعلى، أي الأقل أهمية، سيتم كتمها). تأخذ قائمة قيم مفصولة بفواصل.
+  يمكن أن تكون القيمة إحدى (بترتيب تناقص الأهمية) <b>emerg</b>، <b>alert</b>، <b>crit</b>، <b>err</b>،
+  <b>warning</b>، <b>notice</b>، <b>info</b>، <b>debug</b>، أو عددًا صحيحًا في
+  النطاق 0...7. انظر <a href="syslog.3.html">syslog(3)</a> لمزيد من المعلومات. يمكن أن تُسبق كل قيمة
+  اختياريًا بإحدى <b>console</b>، <b>syslog</b>، <b>kmsg</b>
+  أو <b>journal</b> متبوعة بنقطتين لتعيين الحد الأقصى لمستوى السجل لهدف السجل
+  المحدد (مثل <b>SYSTEMD_LOG_LEVEL=debug,console:info</b>
+  يحدد التسجيل بمستوى debug باستثناء التسجيل إلى وحدة التحكم الذي
+  يجب أن يكون بمستوى info). لاحظ أن الحد الأقصى العالمي لمستوى السجل له
+  الأولوية على أي حدود قصوى لمستوى السجل لكل هدف.</div>
+<p class="Pp"><i>$SYSTEMD_LOG_COLOR</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، ستُلوَّن الرسائل المكتوبة إلى tty
+  وفقًا للأولوية.
+<p class="Pp">هذا الإعداد مفيد فقط عندما تُكتب الرسائل مباشرة إلى
+    الطرفية، لأن journalctl(1) والأدوات الأخرى التي تعرض السجلات
+    ستُلوِّن الرسائل بناءً على مستوى السجل من تلقاء نفسها.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TIME</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، ستُسبق رسائل سجل وحدة التحكم
+  بطابع زمني.
+<p class="Pp">هذا الإعداد مفيد فقط عندما تُكتب الرسائل مباشرة إلى
+    الطرفية أو ملف، لأن journalctl(1) والأدوات الأخرى التي
+    تعرض السجلات ستُرفق طوابع زمنية بناءً على بيانات تعريف الإدخال من تلقاء
+    نفسها.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_LOCATION</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، ستُسبق الرسائل باسم
+  ملف ورقم سطر في الشيفرة المصدرية حيث تنشأ الرسالة.
+<p class="Pp">لاحظ أن موقع السجل غالبًا ما يُرفق كبيانات تعريف لإدخالات
+    السجل على أي حال. ومع ذلك، يمكن أن يكون تضمينه مباشرة في نص الرسالة
+    ملائمًا عند تصحيح الأخطاء في البرامج.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TID</i></p>
+<div class="Bd-indent">قيمة منطقية. إذا كانت صحيحة، ستُسبق الرسائل بمعرّف
+  الخيط الرقمي الحالي (TID).
+<p class="Pp">لاحظ أن هذه المعلومات تُرفق كبيانات تعريف لإدخالات السجل
+    على أي حال. ومع ذلك، يمكن أن يكون تضمينها مباشرة في نص الرسالة
+    ملائمًا عند تصحيح الأخطاء في البرامج.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LOG_TARGET</i></p>
+<div class="Bd-indent">وجهة رسائل السجل. إحدى <b>console</b>
+  (التسجيل إلى tty المرفق)، <b>console-prefixed</b> (التسجيل إلى tty المرفق
+  ولكن مع بادئات تُشفّر مستوى السجل و&quot;المنشأة&quot;، انظر
+  <a href="syslog.3.html">syslog(3)</a>، <b>kmsg</b> (التسجيل إلى مخزن السجل الدائري للنواة)،
+  <b>journal</b> (التسجيل إلى السجل)، <b>journal-or-kmsg</b> (التسجيل إلى
+  السجل إذا كان متاحًا، وإلى kmsg بخلاف ذلك)، <b>auto</b> (تحديد هدف السجل
+  المناسب تلقائيًا، الافتراضي)، <b>null</b> (تعطيل إخراج
+  السجل).</div>
+<p class="Pp"><i>$SYSTEMD_LOG_RATELIMIT_KMSG</i></p>
+<div class="Bd-indent">ما إذا كان سيتم تحديد معدل kmsg أم لا. تأخذ قيمة منطقية.
+  الافتراضي هو &quot;true&quot;. إذا تم تعطيلها، فلن يحدد systemd معدل الرسائل
+  المكتوبة إلى kmsg.</div>
+<p class="Pp"><i>$SYSTEMD_PAGER</i>، <i>$PAGER</i></p>
+<div class="Bd-indent">برنامج التصفح لاستخدامه عندما لا يُعطى <b>--no-pager</b>.
+  يُستخدم <i>$SYSTEMD_PAGER</i> إذا تم تعيينه؛ وإلا يُستخدم <i>$PAGER</i>. إذا
+  لم يتم تعيين <i>$SYSTEMD_PAGER</i> ولا <i>$PAGER</i>، تُجرَّب مجموعة من
+  تطبيقات برامج التصفح المعروفة بالتناوب، بما في ذلك <a href="../../l/e/less.1.html">less(1)</a> و
+  more(1)، حتى يُعثر على واحد. إذا لم يُكتشف أي تطبيق لبرنامج التصفح،
+  فلن يُستدعى أي برنامج تصفح. تعيين متغيرات البيئة هذه إلى سلسلة فارغة أو
+  القيمة &quot;cat&quot; يعادل تمرير <b>--no-pager</b>.
+<p class="Pp">ملاحظة: إذا لم يتم تعيين <i>$SYSTEMD_PAGERSECURE</i>،
+    فلا يمكن استخدام <i>$SYSTEMD_PAGER</i> و<i>$PAGER</i> إلا لتعطيل
+    برنامج التصفح (بـ &quot;cat&quot; أو &quot;&quot;)، ويتم تجاهلهما بخلاف ذلك.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LESS</i></p>
+<div class="Bd-indent">تجاوز الخيارات الممررة إلى <b>less</b> (افتراضيًا
+  &quot;FRSXMK&quot;).
+<p class="Pp">قد يرغب المستخدمون في تغيير خيارين على وجه الخصوص:</p>
+<p class="Pp"><b>K</b></p>
+<div class="Bd-indent">يوجّه هذا الخيار برنامج التصفح للخروج فورًا عند
+  الضغط على Ctrl+C. للسماح لـ <b>less</b> بمعالجة Ctrl+C بنفسه للعودة
+  إلى موجه أوامر برنامج التصفح، ألغِ تعيين هذا الخيار.
+<p class="Pp">إذا لم تتضمن قيمة <i>$SYSTEMD_LESS</i> &quot;K&quot;، وكان
+    برنامج التصفح المستدعى هو <b>less</b>، فسيتم تجاهل Ctrl+C
+    بواسطة الملف التنفيذي، ويحتاج إلى معالجة بواسطة برنامج التصفح.</p>
+</div>
+<p class="Pp"><b>X</b></p>
+<div class="Bd-indent">يوجّه هذا الخيار برنامج التصفح لعدم إرسال سلاسل
+  تهيئة وإلغاء تهيئة termcap إلى الطرفية. يتم تعيينه
+  افتراضيًا للسماح بإبقاء إخراج الأمر مرئيًا في الطرفية حتى بعد
+  خروج برنامج التصفح. ومع ذلك، فإن هذا يمنع بعض وظائف برنامج التصفح من
+  العمل، لا سيما أنه لا يمكن تمرير الإخراج المُصفَّح بالصفحات باستخدام الفأرة.</div>
+<p class="Pp">لاحظ أن تعيين متغير البيئة العادي <i>$LESS</i>
+    ليس له تأثير على استدعاءات <b>less</b> بواسطة أدوات systemd.</p>
+<p class="Pp">انظر <a href="../../l/e/less.1.html">less(1)</a> لمزيد من النقاش.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_LESSCHARSET</i></p>
+<div class="Bd-indent">تجاوز مجموعة المحارف الممررة إلى <b>less</b> (افتراضيًا
+  &quot;utf-8&quot;، إذا تم تحديد أن الطرفية المستدعية متوافقة مع
+  UTF-8).
+<p class="Pp">لاحظ أن تعيين متغير البيئة العادي <i>$LESSCHARSET</i>
+    ليس له تأثير على استدعاءات <b>less</b> بواسطة أدوات systemd.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_PAGERSECURE</i></p>
+<div class="Bd-indent">أوامر برامج التصفح الشائعة مثل <a href="../../l/e/less.1.html">less(1)</a>، بالإضافة إلى
+  &quot;التصفح&quot;، أي التمرير عبر الإخراج، تدعم فتح أو
+  الكتابة إلى ملفات أخرى وتشغيل أوامر shell عشوائية. عندما تُستدعى الأوامر
+  بامتيازات مرتفعة، على سبيل المثال تحت <a href="../u/sudo.8.html">sudo(8)</a> أو
+  <a href="../../p/k/pkexec.1.html">pkexec(1)</a>، يصبح برنامج التصفح حدودًا أمنية. يجب توخي الحذر
+  بحيث تُستخدم فقط البرامج ذات الوظائف المحدودة بصرامة كبرامج تصفح، ولا
+  يُسمح بالميزات التفاعلية غير المقصودة مثل فتح أو إنشاء ملفات جديدة أو
+  بدء عمليات فرعية. يمكن تمكين &quot;الوضع الآمن&quot; لبرنامج التصفح
+  كما هو موضح أدناه، <i>إذا كان برنامج التصفح يدعم ذلك</i>
+  (معظم برامج التصفح ليست مكتوبة بطريقة تأخذ ذلك في الاعتبار). يُوصى
+  إما بتمكين &quot;الوضع الآمن&quot; صراحةً أو بتعطيل برنامج التصفح
+  تمامًا باستخدام <b>--no-pager</b> أو <i>PAGER=cat</i> عند
+  السماح للمستخدمين غير الموثوقين بتنفيذ أوامر بامتيازات مرتفعة.
+<p class="Pp">يأخذ هذا الخيار وسيطة منطقية. عند التعيين إلى true، يتم تمكين
+    &quot;الوضع الآمن&quot; لبرنامج التصفح. في &quot;الوضع الآمن&quot;،
+    سيتم تعيين <b>LESSSECURE=1</b> عند استدعاء برنامج التصفح، مما يوجّه
+    برنامج التصفح لتعطيل الأوامر التي تفتح أو تنشئ ملفات جديدة أو تبدأ عمليات
+    فرعية جديدة. حاليًا، يُعرف فقط <a href="../../l/e/less.1.html">less(1)</a> بفهم هذا
+    المتغير وتنفيذ &quot;الوضع الآمن&quot;.</p>
+<p class="Pp">عند التعيين إلى false، لا يُفرض أي قيد على برنامج التصفح. تعيين
+    <i>SYSTEMD_PAGERSECURE=0</i> أو عدم إزالته من البيئة
+    الموروثة قد يسمح للمستخدم باستدعاء أوامر عشوائية.</p>
+<p class="Pp">عندما لا يتم تعيين <i>$SYSTEMD_PAGERSECURE</i>، تحاول أدوات systemd
+    معرفة ما إذا كان يجب تمكين &quot;الوضع الآمن&quot; تلقائيًا وما إذا كان
+    برنامج التصفح يدعمه. يتم تمكين &quot;الوضع الآمن&quot; إذا لم يكن
+    UID الفعلي هو نفسه مالك جلسة تسجيل الدخول، انظر
+    <a href="../../g/e/geteuid.2.html">geteuid(2)</a> و<a href="../d/sd_pid_get_owner_uid.3.html">sd_pid_get_owner_uid(3)</a>، أو عند التشغيل تحت
+    <a href="../u/sudo.8.html">sudo(8)</a> أو أدوات مشابهة (<i>$SUDO_UID</i> معيّن [5]). في تلك
+    الحالات، سيتم تعيين <i>SYSTEMD_PAGERSECURE=1</i> ولن تُستخدم برامج التصفح
+    غير المعروفة بتنفيذ &quot;الوضع الآمن&quot; على الإطلاق. لاحظ
+    أن هذا الاكتشاف التلقائي يغطي فقط الآليات الأكثر شيوعًا لرفع
+    الامتيازات وهو مقصود كتسهيل. يُوصى بتعيين <i>$SYSTEMD_PAGERSECURE</i>
+    صراحةً أو تعطيل برنامج التصفح.</p>
+<p class="Pp">لاحظ أنه إذا كان سيتم احترام متغيري <i>$SYSTEMD_PAGER</i> أو <i>$PAGER</i>،
+    بخلاف تعطيل برنامج التصفح،
+    فيجب تعيين <i>$SYSTEMD_PAGERSECURE</i> أيضًا.</p>
+</div>
+<p class="Pp"><i>$SYSTEMD_COLORS</i></p>
+<div class="Bd-indent">تأخذ وسيطة منطقية. عندما تكون صحيحة، سيستخدم <b>systemd</b> والأدوات
+  ذات الصلة الألوان في إخراجها، وإلا سيكون الإخراج
+  أحادي اللون. بالإضافة إلى ذلك، يمكن للمتغير أن يأخذ إحدى القيم
+  الخاصة التالية: &quot;16&quot;، &quot;256&quot; لتقييد استخدام الألوان
+  على ألوان ANSI الأساسية 16 أو 256، على التوالي. يمكن تحديد ذلك
+  لتجاوز القرار التلقائي بناءً على <i>$TERM</i> وما تتصل به وحدة التحكم.</div>
+<p class="Pp"><i>$SYSTEMD_URLIFY</i></p>
+<div class="Bd-indent">يجب أن تكون القيمة منطقية. تتحكم في ما إذا كان يجب إنشاء روابط
+  قابلة للنقر في الإخراج لمحاكيات الطرفية التي تدعم
+  ذلك. يمكن تحديد ذلك لتجاوز القرار الذي يتخذه <b>systemd</b>
+  بناءً على <i>$TERM</i> وشروط أخرى.</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp"><b>مثال&#x00A0;1.&#x00A0;إنشاء مستخدم &quot;waldo&quot; في
+    مجموعة المسؤولين &quot;wheel&quot;، وتخصيص 500 MiB من مساحة القرص
+    لهم.</b></p>
+<div class="Bd-indent">
+<pre>homectl create waldo --real-name=&quot;Waldo McWaldo&quot; -G wheel --disk-size=500M</pre>
+</div>
+<p class="Pp"><b>مثال&#x00A0;2.&#x00A0;إنشاء مستخدم &quot;wally&quot; على
+    ذاكرة USB، وتخصيص حد أقصى قدره 500 مهمة متزامنة له.</b></p>
+<div class="Bd-indent">
+<pre>homectl create wally --real-name=&quot;Wally McWally&quot; --image-path=/dev/disk/by-id/usb-SanDisk_Ultra_Fit_476fff954b2b5c44-0:0 --tasks-max=500</pre>
+</div>
+<p class="Pp"><b>مثال&#x00A0;3.&#x00A0;تغيير مستوى nice للمستخدم
+    &quot;odlaw&quot; إلى +5 والتأكد من تعيين متغير البيئة
+    </b><i>$SOME</i> إلى السلسلة &quot;THING&quot; له عند
+  تسجيل الدخول.</p>
+<div class="Bd-indent">
+<pre>homectl update odlaw --nice=5 --setenv=SOME=THING</pre>
+</div>
+<p class="Pp"><b>مثال&#x00A0;4.&#x00A0;إعداد المصادقة باستخدام رمز أمان YubiKey
+    باستخدام PKCS#11/PIV:</b></p>
+<div class="Bd-indent">
+<pre># Clear the Yubikey from any old keys (careful!)
+ykman piv reset
+# Generate a new private/public key pair on the device, store the public key in 'pubkey.pem'.
+ykman piv generate-key -a RSA2048 9d pubkey.pem
+# Create a self-signed certificate from this public key, and store it on the device.
+ykman piv generate-certificate --subject &quot;Knobelei&quot; 9d pubkey.pem
+# We do not need the public key on disk anymore
+rm pubkey.pem
+# Allow the security token to unlock the account of user 'lafcadio'.
+homectl update lafcadio --pkcs11-token-uri=auto</pre>
+</div>
+<p class="Pp"><b>مثال&#x00A0;5.&#x00A0;إعداد المصادقة باستخدام رمز أمان FIDO2
+    :</b></p>
+<div class="Bd-indent">
+<pre># Allow a FIDO2 security token to unlock the account of user 'nihilbaxter'.
+homectl update nihilbaxter --fido2-device=auto</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر   أيضًا</a></h1>
+<p class="Pp"><a href="systemd.1.html">systemd(1)</a>, systemd-homed.service(8),
+    <a href="../../h/homed.conf.5.html">homed.conf(5)</a>, <a href="../../u/userdbctl.1.html">userdbctl(1)</a>, <a href="../../u/useradd.8.html">useradd(8)</a>,
+    cryptsetup(8)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>سجلات مستخدم JSON</dd>
+</dl>
+<div class="Bd-indent"><a href='https://systemd.io/USER_RECORD'>https://systemd.io/USER_RECORD</a></div>
+<dl class="Bl-tag">
+  <dt> 2.</dt>
+  <dd>مواصفات تسمية الأيقونات</dd>
+</dl>
+<div class="Bd-indent"><a href='https://standards.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html'>https://standards.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html</a></div>
+<dl class="Bl-tag">
+  <dt> 3.</dt>
+  <dd>أدلة كتل سجلات المستخدم</dd>
+</dl>
+<div class="Bd-indent"><a href='https://systemd.io/USER_RECORD_BLOB_DIRS'>https://systemd.io/USER_RECORD_BLOB_DIRS</a></div>
+<dl class="Bl-tag">
+  <dt> 4.</dt>
+  <dd>صيغة أسماء المستخدمين/المجموعات</dd>
+</dl>
+<div class="Bd-indent"><a href='https://systemd.io/USER_NAMES'>https://systemd.io/USER_NAMES</a></div>
+<dl class="Bl-tag">
+  <dt> 5.</dt>
+  <dd>يُوصى للأدوات الأخرى بتعيين والتحقق من <i>$SUDO_UID</i> حسب
+      الاقتضاء، مع اعتباره واجهة شائعة.
+      </dd>
+</dl>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os">systemd 258.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/systemd/">core/systemd</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>258.2-2</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://www.github.com/systemd/systemd">https://www.github.com/systemd/systemd</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later, MIT-0</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="https://archlinux.org/packages/?q=systemd">/listing/core/systemd/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#OPTIONS">الخيارات</a></li>
+        
+            <li><a href="#GENERAL_USER_RECORD_PROPERTIES">خصائص سجل المستخدم العامة</a></li>
+        
+            <li><a href="#AUTHENTICATION_USER_RECORD_PROPERTIES">خصائص سجل مستخدم المصادقة</a></li>
+        
+            <li><a href="#BLOB_DIRECTORY_USER_RECORD_PROPERTIES">خصائص سجل مستخدم دليل الكتل</a></li>
+        
+            <li><a href="#ACCOUNT_MANAGEMENT_USER_RECORD_PROPERTIES">خصائص سجل مستخدم إدارة الحساب</a></li>
+        
+            <li><a href="#RESOURCE_MANAGEMENT_USER_RECORD_PROPERTIES">خصائص سجل مستخدم إدارة الموارد</a></li>
+        
+            <li><a href="#STORAGE_USER_RECORD_PROPERTIES">خصائص سجل مستخدم التخزين</a></li>
+        
+            <li><a href="#LUKS_STORAGE_USER_RECORD_PROPERTIES">خصائص سجل مستخدم تخزين LUKS</a></li>
+        
+            <li><a href="#MOUNTING_USER_RECORD_PROPERTIES">خصائص سجل مستخدم التحميل</a></li>
+        
+            <li><a href="#CIFS_USER_RECORD_PROPERTIES">خصائص سجل مستخدم CIFS</a></li>
+        
+            <li><a href="#LOGIN_BEHAVIOUR_RECORD_PROPERTIES">خصائص سجل سلوك تسجيل الدخول</a></li>
+        
+            <li><a href="#COMMANDS">الأوامر</a></li>
+        
+            <li><a href="#CREDENTIALS">بيانات الاعتماد</a></li>
+        
+            <li><a href="#KERNEL_COMMAND_LINE">سطر أوامر النواة</a></li>
+        
+            <li><a href="#EXIT_STATUS">حالة الخروج</a></li>
+        
+            <li><a href="#ENVIRONMENT">البيئة</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+</aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    <footer class="site-disclaimer">
 <p>هذا الموقع غير مرتبط بـ Arch Linux ولا تابع له بأي شكل من الأشكال. المحتوى هو ترجمة فقط لصفحات دليل Arch المنشورة على man.archlinux.org.</p>
 </footer>
-</body>\n</html>\n"
-}
+</body>
+</html>

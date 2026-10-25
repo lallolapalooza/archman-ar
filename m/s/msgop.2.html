@@ -1,268 +1,496 @@
-{
-  "title": "msgsnd, msgrcv - System V message queue operations",
-  "sections": [
-    {
-      "heading": "NAME",
-      "content": "msgsnd, msgrcv - System V message queue operations"
-    },
-    {
-      "heading": "SYNOPSIS",
-      "content": "int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);\nint msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp, int msgflg);"
-    },
-    {
-      "heading": "DESCRIPTION",
-      "content": "The msgsnd() function appends a copy of the message pointed to by msgp to the message queue indicated by msqid.\n\nThe structure pointed to by msgp must consist of a long integer message type, followed by the message text. The structure is defined as:\n\nstruct msgbuf {\n    long mtype;\n    char mtext[1];\n};\n\nThe value of mtype must be greater than 0. msgsz specifies the length of the message text in bytes (i.e., the length of the mtext array). The argument msgp points to a buffer containing the message to be sent. The argument msgsz is the length of the message text in bytes; this must be less than or equal to the system limit MSGMAX and less than or equal to the remaining capacity of the queue, unless the calling process has the CAP_IPC_OWNER capability. The argument msgflg specifies the action to take if the message cannot be sent immediately:\n\n   If bit 0 of msgflg is set (IPC_NOWAIT), then msgsnd() will return immediately if the message cannot be sent. The system limit on the total number of bytes in all messages on the queue (MSGMNB) or the system limit on the number of messages in a queue (MSGTQL) would be exceeded.\n\n   If bit 0 of msgflg is clear (IPC_NOWAIT is not set), then msgsnd() will block until the message can be sent. The calling process ignores SIGINT and SIGQUIT signals during the blocking period. If the signal is caught, msgsnd() returns -1 and sets errno to EINTR.\n\n   If bit 6 of msgflg is set (IPC_NOWAIT), the message will be sent if possible. If not, the message queue will not be filled, and the function will return -1 with errno set to EAGAIN.\n\n   If bit 6 of msgflg is clear, the calling process will sleep until the message queue has enough space, unless interrupted by a signal.\n\n   The return value is the number of bytes actually copied into the mtext array. On failure, both functions return -1, and set errno to indicate the error."
-    },
-    {
-      "heading": "ERRORS",
-      "content": "msgsnd() can fail with the following errors:\n\nEACCES The calling process does not have write permission on the message queue, and does not have the CAP_IPC_OWNER capability in the user namespace that governs its IPC namespace.\nEAGAIN The message can't be sent due to the msg_qbytes limit for the queue and IPC_NOWAIT was specified in msgflg.\nEFAULT The address pointed to by msgp isn't accessible.\nEIDRM The message queue was removed.\nEINTR Sleeping on a full message queue condition, the process caught a signal.\nEINVAL Invalid msqid value, or nonpositive mtype value, or invalid msgsz value (less than 0 or greater than the system value MSGMAX).\nENOMEM The system does not have enough memory to make a copy of the message pointed to by msgp.\nmsgrcv() can fail with the following errors:\n\nE2BIG The message text length is greater than msgsz and MSG_NOERROR isn't specified in msgflg.\nEACCES~2 The calling process does not have read permission on the message queue, and does not have the CAP_IPC_OWNER capability in the user namespace that governs its IPC namespace.\nEFAULT~2 The address pointed to by msgp isn't accessible.\nEIDRM~2 While the process was sleeping to receive a message, the message queue was removed.\nEINTR~2 While the process was sleeping to receive a message, the process caught a signal; see signal(7).\nEINVAL~2 msqid was invalid, or msgsz was less than 0.\nEINVAL~3 (since Linux 3.14) msgflg specified MSG_COPY, but not IPC_NOWAIT.\nEINVAL~4 (since Linux 3.14) msgflg specified both MSG_COPY and MSG_EXCEPT.\nENOMSG IPC_NOWAIT was specified in msgflg and no message of the requested type existed on the message queue.\nENOMSG~2 IPC_NOWAIT and MSG_COPY were specified in msgflg and the queue contains fewer than msgtyp messages.\nENOSYS (since Linux 3.8) Both MSG_COPY and IPC_NOWAIT were specified in msgflg, and this kernel was configured without CONFIG_CHECKPOINT_RESTORE."
-    },
-    {
-      "heading": "STANDARDS",
-      "content": "POSIX.1-2024.\n\nThe MSG_EXCEPT and MSG_COPY flags are Linux-specific; their definitions can be obtained by defining the _GNU_SOURCE feature test macro."
-    },
-    {
-      "heading": "HISTORY",
-      "content": "POSIX.1-2001, SVr4.\n\nThe msgp argument is declared as struct msgbuf * in glibc 2.0 and 2.1. It is declared as void * in glibc 2.2 and later, as required by SUSv2 and SUSv3."
-    },
-    {
-      "heading": "NOTES",
-      "content": "The following limits on message queue resources affect the msgsnd() call:\n\nMSGMAX Maximum size of a message text, in bytes (default value: 8192 bytes). On Linux, this limit can be read and modified via /proc/sys/kernel/msgmax.\nMSGMNB Maximum number of bytes that can be held in a message queue (default value: 16384 bytes). On Linux, this limit can be read and modified via /proc/sys/kernel/msgmnb. A privileged process (Linux: a process with the CAP_SYS_RESOURCE capability) can increase the size of a message queue beyond MSGMNB using the msgctl(2) IPC_SET operation.\n\nThe implementation has no intrinsic system-wide limits on the number of message headers (MSGTQL) and the number of bytes in the message pool (MSGPOOL)."
-    },
-    {
-      "heading": "BUGS",
-      "content": "In Linux 3.13 and earlier, if msgrcv() was called with the MSG_COPY flag, but without IPC_NOWAIT, and the message queue contained less than msgtyp messages, then the call would block until the next message is written to the queue. At that point, the call would return a copy of the message, regardless of whether that message was at the ordinal position msgtyp. This bug is fixed in Linux 3.14.\n\nSpecifying both MSG_COPY and MSC_EXCEPT in msgflg is a logical error (since these flags impose different interpretations on msgtyp). In Linux 3.13 and earlier, this error was not diagnosed by msgrcv(). This bug is fixed in Linux 3.14."
-    },
-    {
-      "heading": "EXAMPLES",
-      "content": "The program below demonstrates the use of msgsnd() and msgrcv().\n\nThe example program is first run with the -s option to send a message and then run again with the -r option to receive a message.\n\nThe following shell session shows a sample run of the program:\n\n$ ./a.out -s\nsent: a message at Wed Mar  4 16:25:45 2015\n$ ./a.out -r\nmessage received: a message at Wed Mar  4 16:25:45 2015\n\nProgram source\n\n#include <errno.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/ipc.h>\n#include <sys/msg.h>\n#include <time.h>\n#include <unistd.h>\nstruct msgbuf {\n    long mtype;\n    char mtext[80];\n};\nstatic void\nusage(char *prog_name, char *msg)\n{\n    if (msg != NULL)\n        fputs(msg, stderr);\n    fprintf(stderr, \"Usage: %s [options]\\n\", prog_name);\n    fprintf(stderr, \"Options are:\\n\");\n    fprintf(stderr, \"-s        send message using msgsnd()\\n\");\n    fprintf(stderr, \"-r        read message using msgrcv()\\n\");\n    fprintf(stderr, \"-t        message type (default is 1)\\n\");\n    fprintf(stderr, \"-k        message queue key (default is 1234)\\n\");\n    exit(EXIT_FAILURE);\n}\nstatic void\nsend_msg(int qid, int msgtype)\n{\n    time_t         t;\n    struct msgbuf  msg;\n    msg.mtype = msgtype;\n    time(&t);\n    snprintf(msg.mtext, sizeof(msg.mtext), \"a message at %s\",\n             ctime(&t));\n    if (msgsnd(qid, &msg, sizeof(msg.mtext),\n               IPC_NOWAIT) == -1)\n    {\n        perror(\"msgsnd error\");\n        exit(EXIT_FAILURE);\n    }\n    printf(\"sent: %s\\n\", msg.mtext);\n}\nstatic void\nget_msg(int qid, int msgtype)\n{\n    struct msgbuf msg;\n    if (msgrcv(qid, &msg, sizeof(msg.mtext), msgtype,\n               MSG_NOERROR | IPC_NOWAIT) == -1) {\n        if (errno != ENOMSG) {\n            perror(\"msgrcv\");\n            exit(EXIT_FAILURE);\n        }\n        printf(\"No message available for msgrcv()\\n\");\n    } else {\n        printf(\"message received: %s\\n\", msg.mtext);\n    }\n}\nint\nmain(int argc, char *argv[])\n{\n    int  qid, opt;\n    int  mode = 0;               /* 1 = send, 2 = receive */\n    int  msgtype = 1;\n    int  msgkey = 1234;\n    while ((opt = getopt(argc, argv, \"srt:k:\")) != -1) {\n        switch (opt) {\n        case 's':\n            mode = 1;\n            break;\n        case 'r':\n            mode = 2;\n            break;\n        case 't':\n            msgtype = atoi(optarg);\n            if (msgtype <= 0)\n                usage(argv[0], \"-t option must be greater than 0\\n\");\n            break;\n        case 'k':\n            msgkey = atoi(optarg);\n            break;\n        default:\n            usage(argv[0], \"Unrecognized option\\n\");\n        }\n    }\n    if (mode == 0)\n        usage(argv[0], \"must use either -s or -r option\\n\");\n    qid = msgget(msgkey, IPC_CREAT | 0666);\n    if (qid == -1) {\n        perror(\"msgget\");\n        exit(EXIT_FAILURE);\n    }\n    if (mode == 2)\n        get_msg(qid, msgtype);\n    else\n        send_msg(qid, msgtype);\n    exit(EXIT_SUCCESS);\n}"
-    },
-    {
-      "heading": "SEE ALSO",
-      "content": "msgctl(2), msgget(2), capabilities(7), mq_overview(7), sysvipc(7)"
-    }
-  ],
-  "footer": {
-    "date": "2025-10-29",
-    "version": "Linux man-pages 6.16"
-  }
-}
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
     <head>
-        <meta charset="utf-8">
-        <title>msgop(2) — صفحة دليل لينكس بالعربية</title>
+        <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>msgop(2) — صفحة دليل لينكس بالعربية</title>
+    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 2: msgop(2). حزمة man-pages.">
         
+        
+        
+        
+        
+    
+    
+        
+    
+        
+    
+        
+    
+
     <link rel="stylesheet" href="../../basic.css">
-    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 2: msgop. حزمة man-pages.">
 </head>
     <body>
 <p class="back"><a href="/archman-ar/">← الفهرس</a> · صفحة دليل لينكس بالعربية</p>
 <h1 class="page-title">msgop(2)</h1>
 <p class="pkg">الحزمة: <a href="https://archlinux.org/packages/core/any/man-pages/">man-pages</a></p>
-<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var, MIT, Spencer-94</p>
+<p class="lic">التراخيص: BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var، MIT، Spencer-94</p>
 
-        <main>
-            <section>
-                <h2>msgop(2)</h2>
-                <dl>
-                    <dt>NAME</dt>
-                    <dd>msgop - operate on message queues</dd>
-                </dl>
-            </section>
+        
+        <main id="content">
             
-            <section>
-                <dl>
-                    <dt>LIBRARY</dt>
-                    <dd>Realtime extensions (libc, -lrt)</dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>SYNOPSIS</dt>
-                    <dd>
-                    <pre><code>#include &lt;mqueue.h&gt;
-
-ssize_t msgop(int msgid, struct msgbuf *msgp, size_t maxlen, int msgflg);
-ssize_t msgsnd(int msqid, const void *msg_ptr, size_t msglen, int msgflg);
-ssize_t msgrcv(int msqid, void *msg_ptr, size_t msglen, long type, int msgflg);
-int msgctl(int msqid, int cmd, struct msqid_ds *buf);
-int msgget(key_t key, int msgflg);
-int msgremove(int msqid);
-int msgrmid(int msqid);</code></pre>
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>DESCRIPTION</dt>
-                    <dd>
-                    The functions described in this page are used to access System V message queues.
-                    These functions are part of the POSIX real-time extensions and are provided
-                    by glibc. They are functionally equivalent to the System V IPC
-                    message queue functions described in <strong>mq_overview(7)</strong>.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>RETURN VALUE</dt>
-                    <dd>
-                    On success, <strong><code>msgop</code></strong> returns the number of bytes copied into the
-                    message buffer. <strong><code>msgsnd</code></strong> returns 0 on success. <strong><code>msgrcv</code></strong>
-                    returns the number of bytes in the received message on success.
-                    <strong><code>msgget</code></strong> returns the message queue identifier on success.
-                    <strong><code>msgctl</code></strong>, <strong><code>msgremove</code></strong>, and <strong><code>msgrmid</code></strong>
-                    return 0 on success.
-                    
-                    On error, all functions return -1, and <strong><code>errno</code></strong> is set to indicate
-                    the error.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>ERRORS</dt>
-                    <dd>
-                    These functions can fail for the following reasons:
-                    <ul>
-                    <li><strong>EACCES</strong>: Permission denied for the requested operation.</li>
-                    <li><strong>EEXIST</strong>: The queue already exists, and <strong><code>IPC_CREAT</code></strong> was specified.</li>
-                    <li><strong>EINTR</strong>: The operation was interrupted by a signal.</li>
-                    <li><strong>EINVAL</strong>: Invalid argument provided.</li>
-                    <li><strong>ENOMSG</strong>: No message of the requested type found.</li>
-                    <li><strong>ENOSPC</strong>: The system limit for the number of messages or message size has been reached.</li>
-                    <li><strong>ENOENT</strong>: The queue does not exist.</li>
-                    <li><strong>EPERM</strong>: Operation not permitted.</li>
-                    </ul>
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>STANDARDS</dt>
-                    <dd>
-                    POSIX.1-2001, POSIX.1-2008.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>HISTORY</dt>
-                    <dd>
-                    These functions were introduced in POSIX.1-2001.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>NOTES</dt>
-                    <dd>
-                    The System V IPC message queue functions are older and have some differences
-                    from the POSIX message queue functions. It is generally recommended to use
-                    the POSIX functions (<strong>mq_open(3)</strong>, <strong>mq_send(3)</strong>, etc.)
-                    when possible, as they offer better control and portability.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>BUGS</dt>
-                    <dd>
-                    None known.
-                    </dd>
-                </dl>
-            </section>
-            
-            <section>
-                <dl>
-                    <dt>EXAMPLES</dt>
-                    <dd>
-                    The following example demonstrates the usage of <strong><code>msgget</code></strong>,
-                    <strong><code>msgsnd</code></strong>, and <strong><code>msgrcv</code></strong>.
-                    
-                    <pre><code>#include &lt;stdio.h&gt;
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">MSGOP(2)</td>
+    <td class="head-vol">دليل استدعاءات النظام</td>
+    <td class="head-rtitle">MSGOP(2)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">msgrcv, msgsnd - عمليات قائمة رسائل System V</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='LIBRARY'><a class='permalink' href='#LIBRARY'>المكتبة</a></h1>
+<p class="Pp">مكتبة C القياسية (<i>libc</i>،&#x00A0;<i>-lc</i>)</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>التركيب</a></h1>
+<pre><b>#include &lt;sys/msg.h&gt;</b></pre>
+<pre><b>ssize_t msgrcv(</b>size_t msgsz;
+<b>               int </b><i>msqid</i><b>, void </b><i>msgp</i><b>[</b><i>msgsz</i><b>], size_t </b><i>msgsz</i><b>, long </b><i>msgtyp</i><b>,</b>
+<b>               int </b><i>msgflg</i><b>);</b></pre>
+<pre><b>int msgsnd(</b>size_t msgsz;
+<b>               int </b><i>msqid</i><b>, const void </b><i>msgp</i><b>[</b><i>msgsz</i><b>], size_t </b><i>msgsz</i><b>,</b>
+<b>               int </b><i>msgflg</i><b>);</b></pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp">تُستخدم استدعاءات النظام <b>msgsnd</b>() و<b>msgrcv</b>() لإرسال الرسائل إلى قائمة رسائل System&#x00A0;V واستقبال الرسائل منها. يجب أن يمتلك العملية المستدعية إذن الكتابة على قائمة الرسائل من أجل إرسال رسالة، وإذن القراءة لاستقبال رسالة.</p>
+<p class="Pp">الوسيط <i>msgp</i> هو مؤشر إلى بنية يحددها المستدعي بالشكل العام التالي:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>struct msgbuf {
+    long mtype;       /* نوع الرسالة، يجب أن يكون &gt; 0 */
+    char mtext[1];    /* بيانات الرسالة */
+};</pre>
+<p class="Pp">حقل <i>mtext</i> هو مصفوفة (أو بنية أخرى) يُحدد حجمها بواسطة <i>msgsz</i>، وهي قيمة عددية صحيحة غير سالبة. يُسمح بالرسائل ذات الطول الصفري (أي بدون حقل <i>mtext</i>). يجب أن يكون لحقل <i>mtype</i> قيمة عددية صحيحة موجبة تمامًا. يمكن استخدام هذه القيمة من قبل العملية المستقبلة لاختيار الرسالة (انظر وصف <b>msgrcv</b>() أدناه).</p>
+<section class="Ss">
+<h2 class="Ss" id='msgsnd()'><a class='permalink' href='#msgsnd()'>msgsnd()</a></h2>
+<p class="Pp">يُضيف استدعاء النظام <b>msgsnd</b>() نسخة من الرسالة التي يشير إليها <i>msgp</i> إلى قائمة الرسائل التي يُحدد معرفها بواسطة <i>msqid</i>.</p>
+<p class="Pp">إذا كانت هناك مساحة كافية متاحة في القائمة، فإن <b>msgsnd</b>() ينجح فورًا. تُحكم سعة القائمة بواسطة حقل <i>msg_qbytes</i> في البنية البيانات المرتبطة بقائمة الرسائل. أثناء إنشاء القائمة، تتم تهيئة هذا الحقل إلى <b>MSGMNB</b> بايت، ولكن يمكن تعديل هذا الحد باستخدام msgctl(2). تُعتبر قائمة الرسائل ممتلئة إذا تحقق أي من الشرطين التاليين:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>إضافة رسالة جديدة إلى القائمة ستؤدي إلى تجاوز إجمالي عدد البايتات في القائمة الحد الأقصى لحجم القائمة (حقل <i>msg_qbytes</i>).</dd>
+  <dt>&#x2022;</dt>
+  <dd>إضافة رسالة أخرى إلى القائمة ستؤدي إلى تجاوز إجمالي عدد الرسائل في القائمة الحد الأقصى لحجم القائمة (حقل <i>msg_qbytes</i>). هذا الفحص ضروري لمنع وضع عدد غير محدود من الرسائل ذات الطول الصفري في القائمة. على الرغم من أن هذه الرسائل لا تحتوي على بيانات، إلا أنها مع ذلك تستهلك ذاكرة النواة (المقفلة).</dd>
+</dl>
+<p class="Pp">إذا لم تكن هناك مساحة كافية متاحة في القائمة، فإن السلوك الافتراضي لـ <b>msgsnd</b>() هو الحجب حتى تصبح المساحة متاحة. إذا تم تحديد <b>IPC_NOWAIT</b> في <i>msgflg</i>، فإن الاستدعاء يفشل بدلاً من ذلك بالخطأ <b>EAGAIN</b>.</p>
+<p class="Pp">قد يفشل استدعاء <b>msgsnd</b>() المحجوب أيضًا إذا:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تمت إزالة القائمة، وفي هذه الحالة يفشل استدعاء النظام مع تعيين <i>errno</i> إلى <b>EIDRM</b>؛ أو</dd>
+  <dt>&#x2022;</dt>
+  <dd>تم التقاط إشارة، وفي هذه الحالة يفشل استدعاء النظام مع تعيين <i>errno</i> إلى <b>EINTR</b>؛ انظر <a href="../../s/i/signal.7.html">signal(7)</a>. (<b>msgsnd</b>() لا يُعاد تشغيله تلقائيًا أبدًا بعد مقاطعته بواسطة معالج إشارة، بغض النظر عن إعداد علم <b>SA_RESTART</b> عند إنشاء معالج إشارة.)</dd>
+</dl>
+<p class="Pp">عند الإكمال الناجح، يتم تحديث بنية بيانات قائمة الرسائل كما يلي:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>يُعيَّن <i>msg_lspid</i> إلى معرف العملية للعملية المستدعية.</dd>
+  <dt>&#x2022;</dt>
+  <dd>يُزاد <i>msg_qnum</i> بمقدار 1.</dd>
+  <dt>&#x2022;</dt>
+  <dd>يُعيَّن <i>msg_stime</i> إلى الوقت الحالي.</dd>
+</dl>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='msgrcv()'><a class='permalink' href='#msgrcv()'>msgrcv()</a></h2>
+<p class="Pp">يزيل استدعاء النظام <b>msgrcv</b>() رسالة من القائمة المحددة بواسطة <i>msqid</i> ويضعها في المخزن المؤقت الذي يشير إليه <i>msgp</i>.</p>
+<p class="Pp">يُحدد الوسيط <i>msgsz</i> الحد الأقصى للحجم بالبايت للعضو <i>mtext</i> في البنية التي يشير إليها الوسيط <i>msgp</i>. إذا كان طول نص الرسالة أكبر من <i>msgsz</i>، فإن السلوك يعتمد على ما إذا كان <b>MSG_NOERROR</b> محددًا في <i>msgflg</i>. إذا تم تحديد <b>MSG_NOERROR</b>، فسيتم اقتطاع نص الرسالة (وسيُفقد الجزء المقتطع)؛ إذا لم يتم تحديد <b>MSG_NOERROR</b>، فلن تُزال الرسالة من القائمة ويفشل استدعاء النظام بإرجاع -1 مع تعيين <i>errno</i> إلى <b>E2BIG</b>.</p>
+<p class="Pp">ما لم يتم تحديد <b>MSG_COPY</b> في <i>msgflg</i> (انظر أدناه)، يُحدد الوسيط <i>msgtyp</i> نوع الرسالة المطلوبة، كما يلي:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>msgtyp</i> يساوي 0، فستُقرأ أول رسالة في القائمة.</dd>
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>msgtyp</i> أكبر من 0، فستُقرأ أول رسالة في القائمة من النوع <i>msgtyp</i>، ما لم يتم تحديد <b>MSG_EXCEPT</b> في <i>msgflg</i>، وفي هذه الحالة ستُقرأ أول رسالة في القائمة من نوع لا يساوي <i>msgtyp</i>.</dd>
+  <dt>&#x2022;</dt>
+  <dd>إذا كان <i>msgtyp</i> أقل من 0، فستُقرأ أول رسالة في القائمة بأدنى نوع أقل من أو يساوي القيمة المطلقة لـ <i>msgtyp</i>.</dd>
+</dl>
+<p class="Pp">الوسيط <i>msgflg</i> هو قناع بتات يُبنى بعملية OR لصفر أو أكثر من الأعلام التالية:</p>
+<dl class="Bl-tag">
+  <dt id="IPC_NOWAIT"><a class="permalink" href="#IPC_NOWAIT"><b>IPC_NOWAIT</b></a></dt>
+  <dd>العودة فورًا إذا لم تكن هناك رسالة من النوع المطلوب في القائمة. يفشل استدعاء النظام مع تعيين <i>errno</i> إلى <b>ENOMSG</b>.</dd>
+  <dt id="MSG_COPY"><a class="permalink" href="#MSG_COPY"><b>MSG_COPY</b> (منذ
+    لينكس 3.8)</a></dt>
+  <dd>جلب نسخة من الرسالة بشكل غير إتلافي عند الموضع الترتيبي في القائمة المحدد بواسطة <i>msgtyp</i> (تُعتبر الرسائل مرقمة بدءًا من 0).</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>يجب تحديد هذا العلم بالاقتران مع <b>IPC_NOWAIT</b>، مما يؤدي إلى أنه إذا لم تكن هناك رسالة متاحة في الموضع المحدد، يفشل الاستدعاء فورًا بالخطأ <b>ENOMSG</b>. نظرًا لأنهما يغيران معنى <i>msgtyp</i> بطرق متعامدة، فلا يجوز تحديد كل من <b>MSG_COPY</b> و<b>MSG_EXCEPT</b> معًا في <i>msgflg</i>.</dd>
+  <dt></dt>
+  <dd>أُضيف علم <b>MSG_COPY</b> لتنفيذ مرفق نقطة تفتيش واستعادة النواة وهو متاح فقط إذا تم بناء النواة مع خيار <b>CONFIG_CHECKPOINT_RESTORE</b>.</dd>
+</dl>
+<dl class="Bl-tag">
+  <dt id="MSG_EXCEPT"><a class="permalink" href="#MSG_EXCEPT"><b>MSG_EXCEPT</b></a></dt>
+  <dd>يُستخدم مع <i>msgtyp</i> أكبر من 0 لقراءة أول رسالة في القائمة بنوع رسالة يختلف عن <i>msgtyp</i>.</dd>
+  <dt id="MSG_NOERROR"><a class="permalink" href="#MSG_NOERROR"><b>MSG_NOERROR</b></a></dt>
+  <dd>لاقتطاع نص الرسالة إذا كان أطول من <i>msgsz</i> بايت.</dd>
+</dl>
+<p class="Pp">إذا لم تكن هناك رسالة من النوع المطلوب متاحة ولم يتم تحديد <b>IPC_NOWAIT</b> في <i>msgflg</i>، فسيتم حجب العملية المستدعية حتى يحدث أحد الشروط التالية:</p>
+<dl class="Bl-tag">
+  <dt>&#x2022;</dt>
+  <dd>تُوضع رسالة من النوع المطلوب في القائمة.</dd>
+  <dt>&#x2022;</dt>
+  <dd>تُزال قائمة الرسائل من النظام. في هذه الحالة، يفشل استدعاء النظام مع تعيين <i>errno</i> إلى <b>EIDRM</b>.</dd>
+  <dt>&#x2022;</dt>
+  <dd>تلتقط العملية المستدعية إشارة. في هذه الحالة، يفشل استدعاء النظام مع تعيين <i>errno</i> إلى <b>EINTR</b>. (<b>msgrcv</b>() لا يُعاد تشغيله تلقائيًا أبدًا بعد مقاطعته بواسطة معالج إشارة، بغض النظر عن إعداد علم <b>SA_RESTART</b> عند إنشاء معالج إشارة.)</dd>
+</dl>
+<p class="Pp">عند الإكمال الناجح، يتم تحديث بنية بيانات قائمة الرسائل كما يلي:</p>
+<dl class="Bl-tag">
+  <dt></dt>
+  <dd>يُعيَّن <i>msg_lrpid</i> إلى معرف العملية للعملية المستدعية.</dd>
+  <dt></dt>
+  <dd>يُنقص <i>msg_qnum</i> بمقدار 1.</dd>
+  <dt></dt>
+  <dd>يُعيَّن <i>msg_rtime</i> إلى الوقت الحالي.</dd>
+</dl>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>القيمة   المُرجعة</a></h1>
+<p class="Pp">عند النجاح، يُرجع <b>msgsnd</b>() القيمة 0 ويُرجع <b>msgrcv</b>() القيمة</p>عدد البايتات المنسوخة فعليًا إلى مصفوفة <i>mtext</i>. عند الفشل،
+    تُرجع كلتا الدالتين -1، وتضبطان <i>errno</i> للإشارة إلى الخطأ.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='ERRORS'><a class='permalink' href='#ERRORS'>الأخطاء</a></h1>
+<p class="Pp">يمكن أن تفشل <b>msgsnd</b>() بالأخطاء التالية:</p>
+<dl class="Bl-tag">
+  <dt id="EACCES"><a class="permalink" href="#EACCES"><b>EACCES</b></a></dt>
+  <dd>لا تمتلك العملية المستدعية إذن الكتابة على طابور الرسائل،
+      ولا تمتلك قدرة <b>CAP_IPC_OWNER</b> في فضاء المستخدم
+      الذي يحكم فضاء IPC الخاص بها.</dd>
+  <dt id="EAGAIN"><a class="permalink" href="#EAGAIN"><b>EAGAIN</b></a></dt>
+  <dd>لا يمكن إرسال الرسالة بسبب حد <i>msg_qbytes</i> للطابور
+      وتم تحديد <b>IPC_NOWAIT</b> في <i>msgflg</i>.</dd>
+  <dt id="EFAULT"><a class="permalink" href="#EFAULT"><b>EFAULT</b></a></dt>
+  <dd>العنوان الذي تشير إليه <i>msgp</i> غير قابل للوصول.</dd>
+  <dt id="EIDRM"><a class="permalink" href="#EIDRM"><b>EIDRM</b></a></dt>
+  <dd>تمت إزالة طابور الرسائل.</dd>
+  <dt id="EINTR"><a class="permalink" href="#EINTR"><b>EINTR</b></a></dt>
+  <dd>أثناء النوم على حالة طابور رسائل ممتلئ، التقطت العملية
+    إشارة.</dd>
+  <dt id="EINVAL"><a class="permalink" href="#EINVAL"><b>EINVAL</b></a></dt>
+  <dd>قيمة <i>msqid</i> غير صالحة، أو قيمة <i>mtype</i> غير موجبة، أو قيمة
+      <i>msgsz</i> غير صالحة (أقل من 0 أو أكبر من قيمة النظام
+      <b>MSGMAX</b>).</dd>
+  <dt id="ENOMEM"><a class="permalink" href="#ENOMEM"><b>ENOMEM</b></a></dt>
+  <dd>لا يمتلك النظام ذاكرة كافية لعمل نسخة من الرسالة
+      التي تشير إليها <i>msgp</i>.</dd>
+</dl>
+<p class="Pp">يمكن أن تفشل <b>msgrcv</b>() بالأخطاء التالية:</p>
+<dl class="Bl-tag">
+  <dt id="E2BIG"><a class="permalink" href="#E2BIG"><b>E2BIG</b></a></dt>
+  <dd>طول نص الرسالة أكبر من <i>msgsz</i> ولم يتم تحديد
+      <b>MSG_NOERROR</b> في <i>msgflg</i>.</dd>
+  <dt id="EACCES~2"><a class="permalink" href="#EACCES~2"><b>EACCES</b></a></dt>
+  <dd>لا تمتلك العملية المستدعية إذن القراءة على طابور الرسائل،
+      ولا تمتلك قدرة <b>CAP_IPC_OWNER</b> في فضاء المستخدم
+      الذي يحكم فضاء IPC الخاص بها.</dd>
+  <dt id="EFAULT~2"><a class="permalink" href="#EFAULT~2"><b>EFAULT</b></a></dt>
+  <dd>العنوان الذي تشير إليه <i>msgp</i> غير قابل للوصول.</dd>
+  <dt id="EIDRM~2"><a class="permalink" href="#EIDRM~2"><b>EIDRM</b></a></dt>
+  <dd>بينما كانت العملية نائمة لتلقي رسالة، تمت إزالة طابور
+      الرسائل.</dd>
+  <dt id="EINTR~2"><a class="permalink" href="#EINTR~2"><b>EINTR</b></a></dt>
+  <dd>بينما كانت العملية نائمة لتلقي رسالة، التقطت العملية
+      إشارة؛ انظر <a href="../../s/i/signal.7.html">signal(7)</a>.</dd>
+  <dt id="EINVAL~2"><a class="permalink" href="#EINVAL~2"><b>EINVAL</b></a></dt>
+  <dd>كانت <i>msqid</i> غير صالحة، أو كانت <i>msgsz</i> أقل من 0.</dd>
+  <dt id="EINVAL~3"><a class="permalink" href="#EINVAL~3"><b>EINVAL</b> (منذ
+    Linux 3.14)</a></dt>
+  <dd>حددت <i>msgflg</i> <b>MSG_COPY</b>، ولكن ليس <b>IPC_NOWAIT</b>.</dd>
+  <dt id="EINVAL~4"><a class="permalink" href="#EINVAL~4"><b>EINVAL</b> (منذ
+    Linux 3.14)</a></dt>
+  <dd>حددت <i>msgflg</i> كلاً من <b>MSG_COPY</b> و<b>MSG_EXCEPT</b>.</dd>
+  <dt id="ENOMSG"><a class="permalink" href="#ENOMSG"><b>ENOMSG</b></a></dt>
+  <dd>تم تحديد <b>IPC_NOWAIT</b> في <i>msgflg</i> ولم توجد رسالة من
+      النوع المطلوب على طابور الرسائل.</dd>
+  <dt id="ENOMSG~2"><a class="permalink" href="#ENOMSG~2"><b>ENOMSG</b></a></dt>
+  <dd>تم تحديد <b>IPC_NOWAIT</b> و<b>MSG_COPY</b> في <i>msgflg</i> و
+      يحتوي الطابور على أقل من <i>msgtyp</i> رسالة.</dd>
+  <dt id="ENOSYS"><a class="permalink" href="#ENOSYS"><b>ENOSYS</b> (منذ Linux
+    3.8)</a></dt>
+  <dd>تم تحديد كلاً من <b>MSG_COPY</b> و<b>IPC_NOWAIT</b> في
+      <i>msgflg</i>، وتم تكوين هذه النواة بدون
+      <b>CONFIG_CHECKPOINT_RESTORE</b>.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='STANDARDS'><a class='permalink' href='#STANDARDS'>المعايير</a></h1>
+<p class="Pp">POSIX.1-2024.</p>
+<p class="Pp">رايتا <b>MSG_EXCEPT</b> و<b>MSG_COPY</b> خاصتان بـ
+    Linux؛ يمكن الحصول على تعريفاتهما بتعريف
+    ماكرو اختبار الميزة <b>_GNU_SOURCE</b>.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp">POSIX.1-2001، SVr4.</p>
+<p class="Pp">تم الإعلان عن الوسيطة <i>msgp</i> كـ
+    <i>struct&#x00A0;msgbuf&#x00A0;*</i> في glibc 2.0 و2.1. تم الإعلان عنها كـ
+    <i>void&#x00A0;*</i> في glibc 2.2 وما بعدها، كما هو مطلوب بواسطة SUSv2 و
+  SUSv3.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">تؤثر الحدود التالية على موارد طابور الرسائل في
+    استدعاء <b>msgsnd</b>():</p>
+<dl class="Bl-tag">
+  <dt id="MSGMAX"><a class="permalink" href="#MSGMAX"><b>MSGMAX</b></a></dt>
+  <dd>الحد الأقصى لحجم نص الرسالة، بالبايت (القيمة الافتراضية: 8192 بايت). على
+      Linux، يمكن قراءة هذا الحد وتعديله عبر
+      <i>/proc/sys/kernel/msgmax</i>.</dd>
+  <dt id="MSGMNB"><a class="permalink" href="#MSGMNB"><b>MSGMNB</b></a></dt>
+  <dd>الحد الأقصى لعدد البايتات التي يمكن احتواؤها في طابور رسائل (القيمة
+      الافتراضية: 16384 بايت). على Linux، يمكن قراءة هذا الحد وتعديله عبر
+      <i>/proc/sys/kernel/msgmnb</i>. يمكن لعملية مميزة (Linux: عملية
+      تمتلك قدرة <b>CAP_SYS_RESOURCE</b>) زيادة حجم
+      طابور رسائل بما يتجاوز <b>MSGMNB</b> باستخدام عملية msgctl(2)
+      <b>IPC_SET</b>.</dd>
+</dl>
+<p class="Pp">لا يمتلك التنفيذ حدودًا جوهرية على مستوى النظام لعدد
+    رؤوس الرسائل (<b>MSGTQL</b>) وعدد البايتات في
+    مجمع الرسائل (<b>MSGPOOL</b>).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='BUGS'><a class='permalink' href='#BUGS'>الأخطاء البرمجية</a></h1>
+<p class="Pp">في Linux 3.13 وما قبله، إذا تم استدعاء <b>msgrcv</b>() مع
+    راية <b>MSG_COPY</b>، ولكن بدون <b>IPC_NOWAIT</b>، وكان طابور الرسائل
+    يحتوي على أقل من <i>msgtyp</i> رسالة، فإن الاستدعاء كان سيحجب حتى
+    كتابة الرسالة التالية إلى الطابور. عند تلك النقطة، كان الاستدعاء
+    يُرجع نسخة من الرسالة، <i>بغض النظر</i> عما إذا كانت تلك الرسالة
+    في الموضع الترتيبي <i>msgtyp</i>. تم إصلاح هذا الخطأ في Linux 3.14.</p>
+<p class="Pp">تحديد كلاً من <b>MSG_COPY</b> و<b>MSC_EXCEPT</b> في
+    <i>msgflg</i> هو خطأ منطقي (لأن هذه الرايات تفرض تفسيرات مختلفة
+    على <i>msgtyp</i>). في Linux 3.13 وما قبله، لم يتم تشخيص هذا الخطأ
+    بواسطة <b>msgrcv</b>(). تم إصلاح هذا الخطأ في Linux 3.14.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp">يوضح البرنامج أدناه استخدام <b>msgsnd</b>() و
+    <b>msgrcv</b>().</p>
+<p class="Pp">يتم تشغيل البرنامج المثال أولاً مع الخيار <b>-s</b> لإرسال
+    رسالة ثم تشغيله مرة أخرى مع الخيار <b>-r</b> لتلقي
+  رسالة.</p>
+<p class="Pp">تُظهر جلسة الصدفة التالية تشغيلاً نموذجيًا للبرنامج:</p>
+<p class="Pp">
+  <br/>
+</p>
+<pre>$<b> ./a.out -s</b>
+sent: a message at Wed Mar  4 16:25:45 2015</pre>
+<pre>$<b> ./a.out -r</b>
+message received: a message at Wed Mar  4 16:25:45 2015</pre>
+<section class="Ss">
+<h2 class="Ss" id='Program_source'><a class='permalink' href='#Program_source'>مصدر   البرنامج</a></h2>
+<pre>#include &lt;errno.h&gt;
+#include &lt;stdio.h&gt;
 #include &lt;stdlib.h&gt;
-#include &lt;string.h&gt;
 #include &lt;sys/ipc.h&gt;
 #include &lt;sys/msg.h&gt;
-
+#include &lt;time.h&gt;
+#include &lt;unistd.h&gt;
 struct msgbuf {
     long mtype;
-    char mtext[256];
+    char mtext[80];
 };
-
-int main() {
-    int msgid;
+static void
+usage(char *prog_name, char *msg)
+{
+    if (msg != NULL)
+        fputs(msg, stderr);
+    fprintf(stderr, &quot;Usage: %s [options]\n&quot;, prog_name);
+    fprintf(stderr, &quot;Options are:\n&quot;);
+    fprintf(stderr, &quot;-s        send message using msgsnd()\n&quot;);
+    fprintf(stderr, &quot;-r        read message using msgrcv()\n&quot;);
+    fprintf(stderr, &quot;-t        message type (default is 1)\n&quot;);
+    fprintf(stderr, &quot;-k        message queue key (default is 1234)\n&quot;);
+    exit(EXIT_FAILURE);
+}
+static void
+send_msg(int qid, int msgtype)
+{
+    time_t         t;
+    struct msgbuf  msg;
+    msg.mtype = msgtype;
+    time(&amp;t);
+    snprintf(msg.mtext, sizeof(msg.mtext), &quot;a message at %s&quot;,
+             ctime(&amp;t));
+    if (msgsnd(qid, &amp;msg, sizeof(msg.mtext),
+               IPC_NOWAIT) == -1)
+    {
+        perror(&quot;msgsnd error&quot;);
+        exit(EXIT_FAILURE);
+    }
+    printf(&quot;sent: %s\n&quot;, msg.mtext);
+}
+static void
+get_msg(int qid, int msgtype)
+{
     struct msgbuf msg;
-    key_t key = 1234;
-
-    // Create or open a message queue
-    msgid = msgget(key, IPC_CREAT | 0666);
-    if (msgid == -1) {
-        perror("msgget");
-        exit(1);
+    if (msgrcv(qid, &amp;msg, sizeof(msg.mtext), msgtype,
+               MSG_NOERROR | IPC_NOWAIT) == -1) {
+        if (errno != ENOMSG) {
+            perror(&quot;msgrcv&quot;);
+            exit(EXIT_FAILURE);
+        }
+        printf(&quot;No message available for msgrcv()\n&quot;);
+    } else {
+        printf(&quot;message received: %s\n&quot;, msg.mtext);
     }
-
-    // Send a message
-    msg.mtype = 1;
-    strcpy(msg.mtext, "Hello, message queue!");
-    if (msgsnd(msgid, &msg, sizeof(msg.mtext), 0) == -1) {
-        perror("msgsnd");
-        exit(1);
+}
+int
+main(int argc, char *argv[])
+{
+    int  qid, opt;
+    int  mode = 0;               /* 1 = send, 2 = receive */
+    int  msgtype = 1;
+    int  msgkey = 1234;
+    while ((opt = getopt(argc, argv, &quot;srt:k:&quot;)) != -1) {
+        switch (opt) {
+        case 's':
+            mode = 1;
+            break;
+        case 'r':
+            mode = 2;
+            break;
+        case 't':
+            msgtype = atoi(optarg);
+            if (msgtype &lt;= 0)
+                usage(argv[0], &quot;-t option must be greater than 0\n&quot;);
+            break;
+        case 'k':
+            msgkey = atoi(optarg);
+            break;
+        default:
+            usage(argv[0], &quot;Unrecognized option\n&quot;);
+        }
     }
-
-    printf("Message sent.\n");
-
-    // Receive a message
-    if (msgrcv(msgid, &msg, sizeof(msg.mtext), 1, 0) == -1) {
-        perror("msgrcv");
-        exit(1);
+    if (mode == 0)
+        usage(argv[0], &quot;must use either -s or -r option\n&quot;);
+    qid = msgget(msgkey, IPC_CREAT | 0666);
+    if (qid == -1) {
+        perror(&quot;msgget&quot;);
+        exit(EXIT_FAILURE);
     }
+    if (mode == 2)
+        get_msg(qid, msgtype);
+    else
+        send_msg(qid, msgtype);
+    exit(EXIT_SUCCESS);
+}</pre>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر   أيضًا</a></h1>
+<p class="Pp">msgctl(2)، <a href="msgget.2.html">msgget(2)</a>، capabilities(7)،
+    mq_overview(7)، sysvipc(7)</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">2025-10-29</td>
+    <td class="foot-os">Linux man-pages 6.16</td>
+  </tr>
+</table>
 
-    printf("Received message: %s\n", msg.mtext);
+</section>
 
-    // Remove the message queue
-    if (msgctl(msgid, IPC_RMID, NULL) == -1) {
-        perror("msgctl");
-        exit(1);
-    }
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="Search manual page" name="q" value=""
+         />
+    <input type="submit" name="go" value="Go" />
+</form>
 
-    printf("Message queue removed.\n");
+</section>
 
-    return 0;
-}</code></pre>
-                    </dd>
-                </dl>
-            </section>
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/any/man-pages/">core/man-pages</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>6.16-1</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://www.kernel.org/doc/man-pages/">https://www.kernel.org/doc/man-pages/</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>BSD-2-Clause, BSD-3-Clause, BSD-4.3TAHOE, BSD-4-Clause-UC, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, LGPL-3.0-or-later, LGPL-3.0-linking-exception, LicenseRef-Public-Domain, LicenseRef-UltraPermissive, Linux-man-pages-1-para, Linux-man-pages-copyleft, Linux-man-pages-copyleft-2-para, Linux-man-pages-copyleft-var، MIT، Spencer-94</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="https://archlinux.org/packages/?q=man-pages">/listing/core/man-pages/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#LIBRARY">المكتبة</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#RETURN_VALUE">القيمة المُرجعة</a></li>
+        
+            <li><a href="#ERRORS">الأخطاء</a></li>
+        
+            <li><a href="#STANDARDS">المعايير</a></li>
+        
+            <li><a href="#HISTORY">التاريخ</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+            <li><a href="#BUGS">الأخطاء البرمجية</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضًا</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+<nav class="other-languages">
+    <p>بلغات أخرى:</p>
+    <ul>
+    
+        <li><a href="msgop.2.html">fr</a></li>
+    
+        <li><a href="msgop.2.html">pl</a></li>
+    
+        <li><a href="msgop.2.html">ru</a></li>
+    
+    </ul>
+</nav>
+
+
+
+
+</aside>
             
-            <section>
-                <dl>
-                    <dt>SEE ALSO</dt>
-                    <dd>
-                    <strong>mq_overview(7)</strong>,
-                    <strong>mq_open(3)</strong>,
-                    <strong>mq_send(3)</strong>,
-                    <strong>mq_receive(3)</strong>,
-                    <strong>mq_close(3)</strong>,
-                    <strong>mq_unlink(3)</strong>.
-                    </dd>
-                </dl>
-            </section>
+        </main>
+        <footer>
             
-            <section>
-                <dl>
-                    <dt>Source Code:</dt>
-                    <dd><a href="https://gitlab.archlinux.org/archlinux/packaging/packages/glibc/-/blob/main/<footer class="site-disclaimer">
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>،
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    <footer class="site-disclaimer">
 <p>هذا الموقع غير مرتبط بـ Arch Linux ولا تابع له بأي شكل من الأشكال. المحتوى هو ترجمة فقط لصفحات دليل Arch المنشورة على man.archlinux.org.</p>
 </footer>
 </body>

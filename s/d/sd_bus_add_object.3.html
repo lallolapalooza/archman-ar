@@ -1,638 +1,18 @@
-{
-  "content": [
-    {
-      "type": "paragraph",
-      "text": "is sent back to the caller indicating no matching object for the request was found."
-    },
-    {
-      "type": "paragraph",
-      "text": "Note that you can return a positive integer from a <i>method</i> callback without immediately sending a reply. This informs sd-bus this callback will take responsibility for replying to the request without forcing the callback to produce a reply immediately. This allows a callback to perform any number of asynchronous operations required to construct a reply. However, if producing a reply takes too long, the method call will time out at the caller. This is only available to methods and not properties."
-    },
-    {
-      "type": "paragraph",
-      "text": "If a callback was invoked to handle a request that expects a reply and the callback returns a negative value, the value is interpreted as a negative errno-style error code and sent back to the caller as a D-Bus error as if sd_bus_reply_method_errno(3) was called. Additionally, all callbacks take a sd_bus_error output parameter that can be used to provide more detailed error information. If <i>ret_error</i> is set when the callback finishes, the corresponding D-Bus error is sent back to the caller as if sd_bus_reply_method_error(3) was called. Any error stored in <i>ret_error</i> takes priority over any negative values returned by the same callback when determining which error to send back to the caller. Use sd_bus_error_set(3) or one of its variants to set <i>ret_error</i> and return a negative integer from a callback with a single function call. To send an error reply after a callback has already finished, use sd_bus_reply_method_errno(3) or one of its variants."
-    },
-    {
-      "type": "paragraph",
-      "text": "For all functions, a match slot is created internally. If the output parameter <i>slot</i> is <b>NULL</b>, a \"floating\" slot object is created, see sd_bus_slot_set_floating(3). Otherwise, a pointer to the slot object is returned. In that case, the reference to the slot object should be dropped when the vtable is not needed anymore, see sd_bus_slot_unref(3)."
-    },
-    {
-      "type": "section",
-      "title": "The sd_bus_vtable array",
-      "id": "The_sd_bus_vtable_array",
-      "content": [
-        {
-          "type": "paragraph",
-          "text": "The array consists of the structures of type sd_bus_vtable, but it should never be filled in manually, but through one of the following macros:"
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_START(</b><b></b><i>flags</i><b>)</b>, <b>SD_BUS_VTABLE_END</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Those must always be the first and last element. The <i>flags</i> parameter can be used to set attributes that apply to the whole array; see the \"Flags\" section below."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b>, <b>SD_BUS_METHOD_WITH_ARGS()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Declare a D-Bus method with the name <i>member</i>, arguments <i>args</i> and result <i>result</i>. <i>args</i> expects a sequence of argument type/name pairs wrapped in the <b>SD_BUS_ARGS()</b> macro. The elements at even indices in this list describe the types of the method's arguments. The method's parameter signature is the concatenation of all the string literals at even indices in <i>args</i>. If a method has no parameters, pass <b>SD_BUS_NO_ARGS</b> to <i>args</i>. The elements at uneven indices describe the names of the method's arguments. <i>result</i> expects a sequence of type/name pairs wrapped in the <b>SD_BUS_RESULT()</b> macro in the same format as <b>SD_BUS_ARGS()</b>. The method's result signature is the concatenation of all the string literals at even indices in <i>result</i>. If a method has no result, pass <b>SD_BUS_NO_RESULT</b> to <i>result</i>. Note that argument types are expected to be quoted string literals and argument names are expected to be unquoted string literals. See below for a complete example.\nThe handler function <i>handler</i> must be of type <b>sd_bus_message_handler_t</b>. It will be called to handle the incoming messages that call this method. It receives a pointer that is the <i>userdata</i> parameter passed to the registration function offset by <i>offset</i> bytes. This may be used to pass pointers to different fields in the same data structure to different methods in the same vtable. To send a reply from <i>handler</i>, call sd_bus_reply_method_return(3) with the message the callback was invoked with. Parameter <i>flags</i> is a combination of flags, see below.\n<b>SD_BUS_METHOD_WITH_ARGS()</b> is a shorthand for calling <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b> with an offset of zero."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_METHOD_WITH_NAMES_OFFSET()</b>, <b>SD_BUS_METHOD_WITH_NAMES()</b>, <b>SD_BUS_METHOD_WITH_OFFSET()</b>, <b>SD_BUS_METHOD()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Declare a D-Bus method with the name <i>member</i>, parameter signature <i>signature</i>, result signature <i>result</i>. Parameters <i>in_names</i> and <i>out_names</i> specify the argument names of the input and output arguments in the function signature. <i>in_names</i> and <i>out_names</i> should be created using the <b>SD_BUS_PARAM()</b> macro, see below. In all other regards, this macro behaves exactly the same as <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b>.\n<b>SD_BUS_METHOD_WITH_NAMES()</b>, <b>SD_BUS_METHOD_WITH_OFFSET()</b>, and <b>SD_BUS_METHOD()</b> are variants which specify zero offset (<i>userdata</i> parameter is passed with no change), leave the names unset (i.e. no parameter names), or both.\nPrefer using <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b> and <b>SD_BUS_METHOD_WITH_ARGS()</b> over these macros as they allow specifying argument types and names next to each other which is less error-prone than first specifying all argument types followed by specifying all argument names."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_SIGNAL_WITH_ARGS()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Declare a D-Bus signal with the name <i>member</i> and arguments <i>args</i>. <i>args</i> expects a sequence of argument type/name pairs wrapped in the <b>SD_BUS_ARGS()</b> macro. The elements at even indices in this list describe the types of the signal's arguments. The signal's parameter signature is the concatenation of all the string literals at even indices in <i>args</i>. If a signal has no parameters, pass <b>SD_BUS_NO_ARGS</b> to <i>args</i>. The elements at uneven indices describe the names of the signal's arguments. Parameter <i>flags</i> is a combination of flags. See below for a complete example."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_SIGNAL_WITH_NAMES()</b>, <b>SD_BUS_SIGNAL()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Declare a D-Bus signal with the name <i>member</i>, parameter signature <i>signature</i>, and argument names <i>names</i>. <i>names</i> should be created using the <b>SD_BUS_PARAM()</b> macro, see below. Parameter <i>flags</i> is a combination of flags, see below.\n<b>SD_BUS_SIGNAL()</b> is equivalent to <b>SD_BUS_SIGNAL_WITH_NAMES()</b> with the <i>names</i> parameter unset (i.e. no parameter names).\nPrefer using <b>SD_BUS_SIGNAL_WITH_ARGS()</b> over these macros as it allows specifying argument types and names next to each other which is less error-prone than first specifying all argument types followed by specifying all argument names."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_WRITABLE_PROPERTY()</b>, <b>SD_BUS_PROPERTY()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Declare a D-Bus property with the name <i>member</i> and value signature <i>signature</i>. Parameters <i>get</i> and <i>set</i> are the getter and setter methods. They are called with a pointer that is the <i>userdata</i> parameter passed to the registration function offset by <i>offset</i> bytes. This may be used pass pointers to different fields in the same data structure to different setters and getters in the same vtable. Parameter <i>flags</i> is a combination of flags, see below.\nThe setter and getter methods may be omitted (specified as <b>NULL</b>), if the property is one of the basic types or \"as\" in case of read-only properties. In those cases, the <i>userdata</i> and <i>offset</i> parameters must together point to a valid variable of the corresponding type. A default setter and getter will be provided, which simply copy the argument between this variable and the message.\n<b>SD_BUS_PROPERTY()</b> is used to define a read-only property."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_PARAM()</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Parameter names should be wrapped in this macro, see the example below."
-        }
-      ]
-    },
-    {
-      "type": "section",
-      "title": "Flags",
-      "id": "Flags",
-      "content": [
-        {
-          "type": "paragraph",
-          "text": "The <i>flags</i> parameter is used to specify a combination of D-Bus annotations[1]."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_DEPRECATED</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Mark this vtable entry as deprecated using the <b>org.freedesktop.DBus.Deprecated</b> annotation in introspection data. If specified for <b>SD_BUS_VTABLE_START()</b>, the annotation is applied to the enclosing interface."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_HIDDEN</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Make this vtable entry hidden. It will not be shown in introspection data. If specified for <b>SD_BUS_VTABLE_START()</b>, all entries in the array are hidden."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_METHOD_NO_REPLY</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Mark this vtable entry as a method that will not return a reply using the <b>org.freedesktop.DBus.Method.NoReply</b> annotation in introspection data."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_PROPERTY_CONST</b>, <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b>, <b>SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Those three flags correspond to different values of the <b>org.freedesktop.DBus.Property.EmitsChangedSignal</b> annotation, which specifies whether the <b>org.freedesktop.DBus.Properties.PropertiesChanged</b> signal is emitted whenever the property changes. <b>SD_BUS_VTABLE_PROPERTY_CONST</b> corresponds to <b>const</b> and means that the property never changes during the lifetime of the object it belongs to, so no signal needs to be emitted. <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b> corresponds to <b>true</b> and means that the signal is emitted. <b>SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION</b> corresponds to <b>invalidates</b> and means that the signal is emitted, but the value is not included in the signal."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_PROPERTY_EXPLICIT</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Mark this vtable property entry as requiring explicit request to for the value to be shown (generally because the value is large or slow to calculate). This entry cannot be combined with <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b>, and will not be shown in property listings by default (e.g. <b>busctl introspect</b>). This corresponds to the <b>org.freedesktop.systemd1.Explicit</b> annotation in introspection data."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_SENSITIVE</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Mark this vtable method entry as processing sensitive data. When set, incoming method call messages and their outgoing reply messages are marked as sensitive using sd_bus_message_sensitive(3), so that they are erased from memory when freed."
-        },
-        {
-          "type": "paragraph",
-          "text": "<b>SD_BUS_VTABLE_ABSOLUTE_OFFSET</b>",
-          "is_code": true
-        },
-        {
-          "type": "block",
-          "text": "Mark this vtable method or property entry so that the user data pointer"
-        }
-      ]
-    }
-  ]
-}
-{
-  "title": "sd_bus_add_object_vtable, sd_bus_add_fallback_vtable, sd_bus_add_node_vtable, sd_bus_add_object_manager_vtable - Add a vtable to an object",
-  "author": "https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html",
-  "manual": "sd_bus_add_object_vtable(3)",
-  "sections": [
-    {
-      "heading": "SYNOPSIS",
-      "content": [
-        {
-          "type": "para",
-          "text": "Include <systemd/sd-bus.h>"
-        },
-        {
-          "type": "code",
-          "text": "int sd_bus_add_object_vtable(sd_bus *bus, uint64_t addition_flags, const char *path, const char *interface, const sd_bus_vtable *vtable, void *userdata);"
-        },
-        {
-          "type": "para",
-          "text": "int sd_bus_add_fallback_vtable(sd_bus *bus, uint64_t addition_flags, const char *path, const char *interface, const sd_bus_vtable *vtable, void *userdata);"
-        },
-        {
-          "type": "para",
-          "text": "int sd_bus_add_node_vtable(sd_bus *bus, const char *path, const char *interface, const sd_bus_vtable *vtable, void *userdata);"
-        },
-        {
-          "type": "para",
-          "text": "int sd_bus_add_object_manager_vtable(sd_bus *bus, uint64_t addition_flags, const char *path, const sd_bus_vtable *vtable, void *userdata);"
-        }
-      ]
-    },
-    {
-      "heading": "DESCRIPTION",
-      "content": [
-        {
-          "type": "para",
-          "text": "These functions may be used to register a collection of D-Bus methods, signals, and properties implementing a specific interface, associated with a specific object path on the bus."
-        },
-        {
-          "type": "para",
-          "text": "Each function takes a reference to a bus object, and registers a vtable (a null-terminated array of `sd_bus_vtable` entries) that defines the D-Bus interface implementation. The `userdata` pointer is passed to the handler functions implemented in the vtable. It can be used to pass context, such as a pointer to a data structure representing the object."
-        },
-        {
-          "type": "para",
-          "text": "The `path` parameter specifies the object path for which the interface is implemented. The `interface` parameter specifies the D-Bus interface name."
-        },
-        {
-          "type": "para",
-          "text": "The `addition_flags` parameter may be used to modify the behaviour of the registration. It is composed of zero or more of the following flags:"
-        },
-        {
-          "type": "list",
-          "items": [
-            {
-              "term": "SD_BUS_ADD_FALLBACK",
-              "definition": "If this flag is set, the vtable is registered as a fallback. Fallback vtables are only invoked if no other implementation for the given object path and interface is found. This is useful for implementing generic interfaces that should only be available when no specific implementation is present."
-            },
-            {
-              "term": "SD_BUS_ADD_LINK",
-              "definition": "If this flag is set, the newly registered object will be linked into the object manager. This means it will be visible to clients that query the object manager interface. This is the default behaviour for `sd_bus_add_object_vtable` and `sd_bus_add_object_manager_vtable`."
-            },
-            {
-              "term": "SD_BUS_ADD_NODE",
-              "definition": "If this flag is set, the newly registered object will be registered as a node in the object tree. This means it will be visible to clients that traverse the object tree using the GetManagedObjects() call. This is the default behaviour for `sd_bus_add_node_vtable` and `sd_bus_add_object_manager_vtable`."
-            },
-            {
-              "term": "SD_BUS_ADD_PROPERTY_EMITS_INVALIDATION",
-              "definition": "If this flag is set, properties registered in the vtable will emit the \"invalidates\" signal when their value changes. This is used to inform clients that the property's value might have changed, and they should re-read it."
-            },
-            {
-              "term": "SD_BUS_ADD_PROPERTY_EMITS_CHANGE",
-              "definition": "If this flag is set, properties registered in the vtable will emit the \"changed\" signal when their value changes. This is used to inform clients about the new value of the property."
-            }
-          ]
-        },
-        {
-          "type": "para",
-          "text": "The `sd_bus_add_object_vtable()` function registers a vtable for a specific object path and interface. The `sd_bus_add_fallback_vtable()` function is similar, but registers the vtable as a fallback, meaning it will only be invoked if no other implementation for the given object path and interface is found. The `sd_bus_add_node_vtable()` function registers a vtable for a specific object path, and makes it visible in the object tree. The `sd_bus_add_object_manager_vtable()` function registers a vtable for an object manager, which is responsible for managing other objects on the bus."
-        },
-        {
-          "type": "para",
-          "text": "The `vtable` parameter is a pointer to an array of `sd_bus_vtable` structures, terminated by an entry with type `SD_BUS_VTABLE_END`."
-        },
-        {
-          "type": "para",
-          "text": "Each `sd_bus_vtable` entry specifies a D-Bus member (method, signal, or property), its signature, and a handler function. The `userdata` pointer is passed to the handler function."
-        },
-        {
-          "type": "para",
-          "text": "The handler functions are invoked when a D-Bus message is received that matches the registered member. The handler function is responsible for processing the message and sending a reply if necessary."
-        },
-        {
-          "type": "para",
-          "text": "The `userdata` parameter is passed to the handler functions. It can be used to pass context, such as a pointer to a data structure representing the object."
-        },
-        {
-          "type": "para",
-          "text": "The following vtable entry types are available:"
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_VTABLE_START(version) \\\n        { .type = SD_BUS_VTABLE_START, .version = (version) }"
-        },
-        {
-          "type": "para",
-          "text": "Marks the beginning of the vtable. The `version` parameter must be set to 0."
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_METHOD(name, signature, reply_signature, handler, ...)"
-        },
-        {
-          "type": "para",
-          "text": "Defines a D-Bus method. `name` is the method name, `signature` is the argument signature, `reply_signature` is the reply signature, and `handler` is the handler function. Additional arguments may be passed to the handler via the `userdata` pointer."
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_SIGNAL(name, signature, ...)"
-        },
-        {
-          "type": "para",
-          "text": "Defines a D-Bus signal. `name` is the signal name, and `signature` is the argument signature. Additional arguments may be passed to the handler via the `userdata` pointer."
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_WRITABLE_PROPERTY(name, signature, get_handler, set_handler, offset, ...)"
-        },
-        {
-          "type": "para",
-          "text": "Defines a writable D-Bus property. `name` is the property name, `signature` is the property signature, `get_handler` is the handler function for getting the property value, `set_handler` is the handler function for setting the property value, and `offset` is the offset of the property value within the `userdata` structure. Additional arguments may be passed to the handler via the `userdata` pointer."
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_READONLY_PROPERTY(name, signature, get_handler, offset, ...)"
-        },
-        {
-          "type": "para",
-          "text": "Defines a read-only D-Bus property. `name` is the property name, `signature` is the property signature, `get_handler` is the handler function for getting the property value, and `offset` is the offset of the property value within the `userdata` structure. Additional arguments may be passed to the handler via the `userdata` pointer."
-        },
-        {
-          "type": "code",
-          "text": "#define SD_BUS_VTABLE_END"
-        },
-        {
-          "type": "para",
-          "text": "Marks the end of the vtable."
-        },
-        {
-          "type": "para",
-          "text": "The `userdata` pointer is passed to the handler functions. It can be used to pass context, such as a pointer to a data structure representing the object."
-        },
-        {
-          "type": "para",
-          "text": "The offset parameter for methods and signals is handled slightly differently: instead of adding the offset parameter of the entry to the user data pointer specified during vtable registration, the offset is passed directly, converted to a pointer, without taking the user data pointer specified during vtable registration into account."
-        },
-        {
-          "type": "para",
-          "text": "<b>SD_BUS_VTABLE_CAPABILITY(</b><b></b><i>capability</i><b>)</b>"
-        },
-        {
-          "type": "para",
-          "text": "Access to this vtable entry will be allowed if the calling process has the capability <i>capability</i>, as described in sd_bus_query_sender_privilege(3). If used for <b>SD_BUS_VTABLE_START()</b>, provides a default for all entries in the array. If not specified, either for an individual entry or the whole array, <b>CAP_SYS_ADMIN</b> is checked by default. See capabilities(7) for information about capabilities."
-        },
-        {
-          "type": "para",
-          "text": "Note that vtable entries may be marked as unprivileged and the whole bus may be marked as trusted, see the discussion of <b>SD_BUS_VTABLE_UNPRIVILEGED</b> below."
-        },
-        {
-          "type": "para",
-          "text": "<b>SD_BUS_VTABLE_UNPRIVILEGED</b>"
-        },
-        {
-          "type": "para",
-          "text": "Mark this vtable entry as unprivileged. Access to privileged entries is limited to users with appropriate capabilities as described above. In practice many vtable entries are marked as unprivileged, and either are open to everyone, or the decision whether to allow access is taken later, e.g. by delegating to polkit[2]."
-        },
-        {
-          "type": "para",
-          "text": "The whole bus may be marked as trusted, in which case annotations at the entry level are ignored, see sd_bus_set_trusted(3)."
-        },
-        {
-          "type": "para",
-          "text": "When <i>not</i> specified, the <b>org.freedesktop.systemd1.Privileged</b> annotation with value \"true\" will be shown in introspection data."
-        },
-        {
-          "type": "para",
-          "text": "<b>SD_BUS_VTABLE_UNPRIVILEGED</b> may not be applied to read-only properties, but read access (to both read-only and writable properties) is always unrestricted."
-        },
-        {
-          "type": "para",
-          "text": "Note that this page describes checks implemented in the D-Bus client. The D-Bus server has an additional policy that may permit or deny connections, see \"CONFIGURATION FILE\" in dbus-daemon(1)."
-        }
-      ]
-    },
-    {
-      "heading": "EXAMPLES",
-      "content": [
-        {
-          "type": "para",
-          "text": "Example 1. Create a simple listener on the bus"
-        },
-        {
-          "type": "code",
-          "text": "/* SPDX-License-Identifier: MIT-0 */\n#define _GNU_SOURCE 1\n#include <errno.h>\n#include <stdbool.h>\n#include <stddef.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <systemd/sd-bus.h>\n#define _cleanup_(f) __attribute__((cleanup(f)))\ntypedef struct object {\n  char *name;\n  uint32_t number;\n} object;\nstatic int method(sd_bus_message *m, void *userdata, sd_bus_error *error) {\n  int r;\n  printf(\"Got called with userdata=%p\\n\", userdata);\n  if (sd_bus_message_is_method_call(m,\n                                    \"org.freedesktop.systemd.VtableExample\",\n                                    \"Method4\"))\n    return 1;\n  const char *string;\n  r = sd_bus_message_read(m, \"s\", &string);\n  if (r < 0) {\n    fprintf(stderr, \"sd_bus_message_read() failed: %s\\n\", strerror(-r));\n    return 0;\n  }\n  r = sd_bus_reply_method_return(m, \"s\", string);\n  if (r < 0) {\n    fprintf(stderr, \"sd_bus_reply_method_return() failed: %s\\n\", strerror(-r));\n    return 0;\n  }\n  return 1;\n}\nstatic const sd_bus_vtable vtable[] = {\n        SD_BUS_VTABLE_START(0),\n        SD_BUS_METHOD(\n            \"Method1\", \"s\", \"s\", method, 0),\n        SD_BUS_METHOD_WITH_NAMES_OFFSET(\n            \"Method2\",\n            \"so\", SD_BUS_PARAM(string) SD_BUS_PARAM(path),\n            \"s\", SD_BUS_PARAM(returnstring),\n            method, offsetof(object, number),\n            SD_BUS_VTABLE_DEPRECATED),\n        SD_BUS_METHOD_WITH_ARGS_OFFSET(\n            \"Method3\",\n            SD_BUS_ARGS(\"s\", string, \"o\", path),\n            SD_BUS_RESULT(\"s\", returnstring),\n            method, offsetof(object, number),\n            SD_BUS_VTABLE_UNPRIVILEGED),\n        SD_BUS_METHOD_WITH_ARGS(\n            \"Method4\",\n            SD_BUS_NO_ARGS,\n            SD_BUS_NO_RESULT,\n            method,\n            SD_BUS_VTABLE_UNPRIVILEGED),\n        SD_BUS_SIGNAL(\n            \"Signal1\",\n            \"so\",\n            0),\n        SD_BUS_SIGNAL_WITH_NAMES(\n            \"Signal2\",\n            \"so\", SD_BUS_PARAM(string) SD_BUS_PARAM(path),\n            0),\n        SD_BUS_SIGNAL_WITH_ARGS(\n            \"Signal3\",\n            SD_BUS_ARGS(\"s\", string, \"o\", path),\n            0),\n        SD_BUS_WRITABLE_PROPERTY(\n            \"AutomaticStringProperty\", \"s\", NULL, NULL,\n            offsetof(object, name),\n            SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),\n        SD_BUS_WRITABLE_PROPERTY(\n            \"AutomaticIntegerProperty\", \"u\", NULL, NULL,\n            offsetof(object, number),\n            SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION),\n        SD_BUS_VTABLE_END\n};\nint main(int argc, char **argv) {\n  _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;\n  int r;\n  sd_bus_default(&bus);\n  object object = { .number = 666 };\n  object.name = strdup(\"name\");\n  if (!object.name) {\n    fprintf(stderr, \"OOM\\n\");\n    return EXIT_FAILURE;\n  }\n  r = sd_bus_add_object_vtable(bus, NULL, \n                               \"/org/freedesktop/systemd/VtableExample\",\n                               \"org.freedesktop.systemd.VtableExample\",\n                               vtable,\n                               &object);\n  if (r < 0) {\n    fprintf(stderr, \"sd_bus_add_object_vtable() failed: %s\\n\", strerror(-r));\n    return EXIT_FAILURE;\n  }\n  r = sd_bus_request_name(bus,\n                          \"org.freedesktop.systemd.VtableExample\",\n                          0);\n  if (r < 0) {\n    fprintf(stderr, \"sd_bus_request_name() failed: %s\\n\", strerror(-r));\n    return EXIT_FAILURE;\n  }\n  for (;;) {\n    r = sd_bus_wait(bus, UINT64_MAX);\n    if (r < 0) {\n      fprintf(stderr, \"sd_bus_wait() failed: %s\\n\", strerror(-r));\n      return EXIT_FAILURE;\n    }\n    r = sd_bus_process(bus, NULL);\n    if (r < 0) {\n      fprintf(stderr, \"sd_bus_process() failed: %s\\n\", strerror(-r));\n      return EXIT_FAILURE;\n    }\n  }\n  r = sd_bus_release_name(bus, \"org.freedesktop.systemd.VtableExample\");\n  if (r < 0) {\n    fprintf(stderr, \"sd_bus_release_name() failed: %s\\n\", strerror(-r));\n    return EXIT_FAILURE;\n  }\n  free(object.name);\n  return 0;"
-        }
-      ]
-    },
-    {
-      "heading": "RETURN VALUE",
-      "content": [
-        {
-          "type": "para",
-          "text": "On success, sd_bus_add_object_vtable(), sd_bus_add_fallback_vtable(), sd_bus_add_node_vtable(), and sd_bus_add_object_manager_vtable() return a non-negative integer. On failure, they return a negative errno-style error code."
-        },
-        {
-          "heading": "Errors",
-          "content": [
-            {
-              "type": "para",
-              "text": "Returned errors may indicate the following problems:"
-            },
-            {
-              "type": "para",
-              "text": "-EINVAL\nOne of the required parameters is NULL or invalid. A reserved D-Bus interface was passed as the <i>interface</i> parameter."
-            },
-            {
-              "type": "para",
-              "text": "-ENOPKG\nThe bus cannot be resolved."
-            },
-            {
-              "type": "para",
-              "text": "-ECHILD\nThe bus was created in a different process, library or module instance."
-            },
-            {
-              "type": "para",
-              "text": "-ENOMEM\nMemory allocation failed."
-            },
-            {
-              "type": "para",
-              "text": "-EPROTOTYPE\nsd_bus_add_object_vtable() and sd_bus_add_fallback_vtable() have been both called for the same bus object path, which is not allowed."
-            },
-            {
-              "type": "para",
-              "text": "-EEXIST\nThis vtable has already been registered for this <i>interface</i> and <i>path</i>."
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "heading": "NOTES",
-      "content": [
-        {
-          "type": "para",
-          "text": "Functions described here are available on D-Bus implementations that support the systemd extensions."
-        }
-      ]
-    },
-    {
-      "heading": "SEE ALSO",
-      "content": [
-        {
-          "type": "para",
-          "text": "sd-bus(3), sd_bus_add_method(3), sd_bus_add_signal(3), sd_bus_add_property(3), sd_bus_add_skeleton(3), sd_bus_request_name(3), sd_bus_call(3), sd_bus_process(3), sd_bus_wait(3)"
-        }
-      ]
-    }
-  ]
-}
-{
-  "html_file_structure": [
-    {
-      "type": "section",
-      "id": "DESCRIPTION",
-      "heading": "DESCRIPTION",
-      "content": [
-        {
-          "type": "paragraph",
-          "text": "The functions described here are part of the <a href="sd-bus.3.html">sd-bus(3)</a> low-level API to manage objects and implement bus logic."
-        },
-        {
-          "type": "paragraph",
-          "text": "They are implemented as a shared library, which can be compiled against and linked to with the <b>libsystemd</b> pkg-config(1) file."
-        },
-        {
-          "type": "paragraph",
-          "text": "The code described here uses getenv(3), which is declared to be not multi-thread-safe. This means that the code calling the functions described here must not call setenv(3) from a parallel thread. It is recommended to only do calls to <b>setenv()</b> from an early phase of the program when no other threads have been started."
-        }
-      ]
-    },
-    {
-      "type": "section",
-      "id": "HISTORY",
-      "heading": "HISTORY",
-      "content": [
-        {
-          "type": "paragraph",
-          "text": "sd_bus_property_get_t(), sd_bus_property_set_t(), sd_bus_object_find_t(), sd_bus_add_object(), sd_bus_add_fallback(), sd_bus_add_object_vtable(), sd_bus_add_fallback_vtable(), and sd_bus_add_filter() were added in version 221."
-        }
-      ]
-    },
-    {
-      "type": "section",
-      "id": "SEE_ALSO",
-      "heading": "SEE ALSO",
-      "content": [
-        {
-          "type": "paragraph",
-          "text": "sd-bus(3), busctl(1), sd_bus_emit_properties_changed(3), sd_bus_emit_object_added(3)"
-        }
-      ]
-    },
-    {
-      "type": "section",
-      "id": "NOTES_2",
-      "heading": "NOTES",
-      "content": [
-        {
-          "type": "definition_list",
-          "list_items": [
-            {
-              "term": "1.",
-              "description": "D-Bus annotations",
-              "nested_content": [
-                {
-                  "type": "inline_link",
-                  "text": "https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format",
-                  "url": "https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format"
-                }
-              ]
-            },
-            {
-              "term": "2.",
-              "description": "polkit",
-              "nested_content": [
-                {
-                  "type": "inline_link",
-                  "text": "https://www.freedesktop.org/software/polkit/docs/latest/",
-                  "url": "https://www.freedesktop.org/software/polkit/docs/latest/"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "footer": {
-    "date": "",
-    "os": "systemd 258.2"
-  },
-  "sidebar": {
-    "search": {
-      "placeholder": "Search manual page",
-      "form_action": "/search",
-      "search_input_name": "q",
-      "submit_name": "go"
-    },
-    "package_info": {
-      "title": "Package information:",
-      "details": [
-        {
-          "term": "Package name:",
-          "description": "core/systemd-libs",
-          "url": "https://www.archlinux.org/packages/core/x86_64/systemd-libs/"
-        },
-        {
-          "term": "Version:",
-          "description": "258.2-2"
-        },
-        {
-          "term": "Upstream:",
-          "description": "https://www.github.com/systemd/systemd",
-          "url": "https://www.github.com/systemd/systemd"
-        },
-        {
-          "term": "Licenses:",
-          "description": "LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later WITH Linux-syscall-note"
-        },
-        {
-          "term": "Manuals:",
-          "description": "/listing/core/systemd-libs/",
-          "url": "/listing/core/systemd-libs/"
-        }
-      ]
-    },
-    "table_of_contents": {
-      "summary": "Table of contents",
-      "nav": [
-        {
-          "href": "#NAME",
-          "text": "NAME"
-        },
-        {
-          "href": "#SYNOPSIS",
-          "text": "SYNOPSIS"
-        },
-        {
-          "href": "#DESCRIPTION",
-          "text": "DESCRIPTION"
-        },
-        {
-          "href": "#EXAMPLES",
-          "text": "EXAMPLES"
-        },
-        {
-          "href": "#RETURN_VALUE",
-          "text": "RETURN VALUE"
-        },
-        {
-          "href": "#NOTES",
-          "text": "NOTES"
-        },
-        {
-          "href": "#HISTORY",
-          "text": "HISTORY"
-        },
-        {
-          "href": "#SEE_ALSO",
-          "text": "SEE ALSO"
-        },
-        {
-          "href": "#NOTES_2",
-          "text": "NOTES"
-        }
-      ]
-    },
-    "other_formats": {
-      "text": "Other formats:",
-      "links": [
-        {
-          "href": "/man/sd_bus_add_object.3.en.txt",
-          "text": "txt"
-        },
-        {
-          "href": "/man/sd_bus_add_object.3.en.raw",
-          "text": "raw"
-        }
-      ]
-    }
-  },
-  "footer_html": {
-    "links": [
-      {
-        "text": "archmanweb",
-        "url": "https://gitlab.archlinux.org/archlinux/archmanweb"
-      },
-      {
-        "text": "mandoc",
-        "url": "https://mandoc.bsd.lv/"
-      }
-    ],
-    "license_link": {
-      "text": "GPL-3.0",
-      "url": "https://www.gnu.org/licenses/gpl-3.0.en.html"
-    }
-  }
-}
-```
-```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
     <head>
-        <meta charset="utf-8"/>
-        <title>sd-bus.h - sd_bus_add_object(3) — صفحة دليل لينكس بالعربية</title>
-        <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 3: sd-bus.h - sd_bus_add_object. حزمة systemd-libs.">
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>sd_bus_add_object(3) — صفحة دليل لينكس بالعربية</title>
+    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 3: sd_bus_add_object(3). حزمة systemd-libs.">
         
         
+        
+        
+        
+    
+    
+
     <link rel="stylesheet" href="../../basic.css">
 </head>
     <body>
@@ -642,105 +22,736 @@
 <p class="lic">التراخيص: LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later WITH Linux-syscall-note</p>
 
         
-        <main>
-            <article>
-                <section class="Sh">
-                    <h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>NAME</a></h1>
-                    <p class="Pp"><code class="Nm">sd_bus_add_object</code>, <code class="Nm">sd_bus_add_object_vtable</code>, <code class="Nm">sd_bus_add_fallback</code>, <code class="Nm">sd_bus_add_fallback_vtable</code>, <code class="Nm">sd_bus_add_filter</code>, <code class="Nm">sd_bus_object_find_t</code>, <code class="Nm">sd_bus_property_get_t</code>, <code class="Nm">sd_bus_property_set_t</code> &#x2014; Add a new object to the bus</p>
-                </section>
-                <section class="Sh">
-                    <h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>SYNOPSIS</a></h1>
-                    <pre>
-#include &lt;<a href="https://github.com/systemd/systemd/blob/v258.2/src/libsystemd/sd-bus.h">systemd/sd-bus.h</a>&gt;
-
-<a href="sd-bus.3.html">sd_bus_add_object</a>(3);
-<a href="sd-bus.3.html">sd_bus_add_object_vtable</a>(3);
-<a href="sd-bus.3.html">sd_bus_add_fallback</a>(3);
-<a href="sd-bus.3.html">sd_bus_add_fallback_vtable</a>(3);
-<a href="sd-bus.3.html">sd_bus_add_filter</a>(3);
-<a href="sd-bus.3.html">sd_bus_object_find_t</a>(3);
-<a href="sd-bus.3.html">sd_bus_property_get_t</a>(3);
-<a href="sd-bus.3.html">sd_bus_property_set_t</a>(3);
-                    </pre>
-                </section>
-                <section class="Sh">
-                    <h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>DESCRIPTION</a></h1>
-                    <p class="Pp">The functions described here are part of the <a href="sd-bus.3.html">sd-bus(3)</a> low-level API to manage objects and implement bus logic.</p>
-                    <p class="Pp">They are implemented as a shared library, which can be compiled against and linked to with the <b>libsystemd</b>&#x00A0;pkg-config(1) file.</p>
-                    <p class="Pp">The code described here uses getenv(3), which is declared to be not multi-thread-safe. This means that the code calling the functions described here must not call setenv(3) from a parallel thread. It is recommended to only do calls to <b>setenv()</b> from an early phase of the program when no other threads have been started.</p>
-                </section>
-                <section class="Sh">
-                    <h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>HISTORY</a></h1>
-                    <p class="Pp"><b>sd_bus_property_get_t()</b>, <b>sd_bus_property_set_t()</b>, <b>sd_bus_object_find_t()</b>, <b>sd_bus_add_object()</b>, <b>sd_bus_add_fallback()</b>, <b>sd_bus_add_object_vtable()</b>, <b>sd_bus_add_fallback_vtable()</b>, and <b>sd_bus_add_filter()</b> were added in version 221.</p>
-                </section>
-                <section class="Sh">
-                    <h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE ALSO</a></h1>
-                    <p class="Pp"><a href="sd-bus.3.html">sd-bus(3)</a>, busctl(1), <a href="sd_bus_emit_properties_changed.3.html">sd_bus_emit_properties_changed(3)</a>, <a href="sd_bus_emit_object_added.3.html">sd_bus_emit_object_added(3)</a></p>
-                </section>
-                <section class="Sh">
-                    <h1 class="Sh" id='NOTES_2'><a class='permalink' href='#NOTES_2'>NOTES</a></h1>
-                    <dl class="Bl-tag">
-                        <dt>1.</dt>
-                        <dd>D-Bus annotations</dd>
-                    </dl>
-                    <div class="Bd-indent"><a href='https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format'>https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format</a></div>
-                    <dl class="Bl-tag">
-                        <dt>2.</dt>
-                        <dd>polkit</dd>
-                    </dl>
-                    <div class="Bd-indent"><a href='https://www.freedesktop.org/software/polkit/docs/latest/'>https://www.freedesktop.org/software/polkit/docs/latest/</a></div>
-                </section>
+        <main id="content">
+            
+            <article id="content-left">
+                
+<section class="man-page-content">
+    <table class="head">
+  <tr>
+    <td class="head-ltitle">SD_BUS_ADD_OBJECT(3)</td>
+    <td class="head-vol">sd_bus_add_object</td>
+    <td class="head-rtitle">SD_BUS_ADD_OBJECT(3)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">sd_bus_add_object, sd_bus_add_fallback, sd_bus_add_object_vtable,
+    sd_bus_add_fallback_vtable, sd_bus_add_filter, SD_BUS_VTABLE_CAPABILITY,
+    SD_BUS_VTABLE_START, SD_BUS_VTABLE_END, SD_BUS_METHOD_WITH_NAMES_OFFSET,
+    SD_BUS_METHOD_WITH_NAMES, SD_BUS_METHOD_WITH_OFFSET, SD_BUS_METHOD,
+    SD_BUS_SIGNAL_WITH_NAMES, SD_BUS_SIGNAL, SD_BUS_WRITABLE_PROPERTY,
+    SD_BUS_PROPERTY, SD_BUS_PARAM, SD_BUS_ARGS, SD_BUS_RESULT, SD_BUS_NO_ARGS,
+    SD_BUS_NO_RESULT - تعريف الخصائص والطرق لمسار D-Bus</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SYNOPSIS'><a class='permalink' href='#SYNOPSIS'>الملخص</a></h1>
+<pre>#include &lt;systemd/sd-bus-vtable.h&gt;</pre>
+<p class="Pp HP"><b>typedef int
+    (*sd_bus_message_handler_t)(sd_bus_message&#x00A0;*</b><i>m</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>,
+    sd_bus_error&#x00A0;*</b><i>ret_error</i><b>);</b></p>
+<p class="Pp HP"><b>typedef int
+    (*sd_bus_property_get_t)(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>interface</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>property</i><b>,
+    sd_bus_message&#x00A0;*</b><i>reply</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>,
+    sd_bus_error&#x00A0;*</b><i>ret_error</i><b>);</b></p>
+<p class="Pp HP"><b>typedef int
+    (*sd_bus_property_set_t)(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>interface</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>property</i><b>,
+    sd_bus_message&#x00A0;*</b><i>value</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>,
+    sd_bus_error&#x00A0;*</b><i>ret_error</i><b>);</b></p>
+<p class="Pp HP"><b>typedef int
+    (*sd_bus_object_find_t)(const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>interface</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>, void&#x00A0;**</b><i>ret_found</i><b>,
+    sd_bus_error&#x00A0;*</b><i>ret_error</i><b>);</b></p>
+<p class="Pp HP"><b>int sd_bus_add_object(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    sd_bus_slot&#x00A0;**</b><i>slot</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    sd_bus_message_handler_t&#x00A0;</b><i>callback</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>);</b></p>
+<p class="Pp HP"><b>int sd_bus_add_fallback(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    sd_bus_slot&#x00A0;**</b><i>slot</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    sd_bus_message_handler_t&#x00A0;</b><i>callback</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>);</b></p>
+<p class="Pp HP"><b>int
+    sd_bus_add_object_vtable(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    sd_bus_slot&#x00A0;**</b><i>slot</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>path</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>interface</i><b>,
+    const&#x00A0;sd_bus_vtable&#x00A0;*</b><i>vtable</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>);</b></p>
+<p class="Pp HP"><b>int
+    sd_bus_add_fallback_vtable(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    sd_bus_slot&#x00A0;**</b><i>slot</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>prefix</i><b>,
+    const&#x00A0;char&#x00A0;*</b><i>interface</i><b>,
+    const&#x00A0;sd_bus_vtable&#x00A0;*</b><i>vtable</i><b>,
+    sd_bus_object_find_t&#x00A0;</b><i>find</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>);</b></p>
+<p class="Pp HP"><b>int sd_bus_add_filter(sd_bus&#x00A0;*</b><i>bus</i><b>,
+    sd_bus_slot&#x00A0;**</b><i>slot</i><b>,
+    sd_bus_message_handler_t&#x00A0;</b><i>callback</i><b>,
+    void&#x00A0;*</b><i>userdata</i><b>);</b></p>
+<p class="Pp"><b>SD_BUS_VTABLE_CAPABILITY(</b><b></b><i>capability</i><b>)</b></p>
+<p class="Pp"><b>SD_BUS_VTABLE_START(</b><b></b><i>flags</i><b>)</b></p>
+<p class="Pp"><b>SD_BUS_VTABLE_END</b></p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_ARGS_OFFSET(</b><b></b><i>member</i><b>,
+    </b><b></b><i>args</i><b>, </b><b></b><i>result</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>offset</i><b>,
+    </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_ARGS(</b><b></b><i>member</i><b>,
+    </b><b></b><i>args</i><b>, </b><b></b><i>result</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_NAMES_OFFSET(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>in_names</i><b>,
+    </b><b></b><i>result</i><b>, </b><b></b><i>out_names</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>offset</i><b>,
+    </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_NAMES(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>in_names</i><b>,
+    </b><b></b><i>result</i><b>, </b><b></b><i>out_names</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_OFFSET(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>result</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>offset</i><b>,
+    </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_METHOD(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>result</i><b>,
+    </b><b></b><i>handler</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_SIGNAL_WITH_ARGS(</b><b></b><i>member</i><b>,
+    </b><b></b><i>args</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_SIGNAL_WITH_NAMES(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>names</i><b>,
+    </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_SIGNAL(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_WRITABLE_PROPERTY(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>get</i><b>,
+    </b><b></b><i>set</i><b>, </b><b></b><i>offset</i><b>,
+    </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_PROPERTY(</b><b></b><i>member</i><b>,
+    </b><b></b><i>signature</i><b>, </b><b></b><i>get</i><b>,
+    </b><b></b><i>offset</i><b>, </b><b></b><i>flags</i><b>) </b></p>
+<p class="Pp"><b>SD_BUS_PARAM(</b><b></b><i>name</i><b>)</b></p>
+<p class="Pp"><b>SD_BUS_ARGS(</b><b></b><i>...</i><b>)</b></p>
+<p class="Pp"><b>SD_BUS_RESULT(</b><b></b><i>...</i><b>)</b></p>
+<p class="Pp"><b>SD_BUS_NO_ARGS</b></p>
+<p class="Pp"><b>SD_BUS_NO_RESULT</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='DESCRIPTION'><a class='permalink' href='#DESCRIPTION'>الوصف</a></h1>
+<p class="Pp"><b>sd_bus_add_object_vtable()</b> تُستخدم لتعريف سمات لمسار الكائن
+    <i>path</i> المتصل باتصال الناقل <i>bus</i> تحت الواجهة
+    <i>interface</i>. يمكن أن يحتوي الجدول <i>vtable</i> على تعريفات للخصائص باستخدام
+    <b>SD_BUS_PROPERTY()</b> أو <b>SD_BUS_WRITABLE_PROPERTY()</b>، تعريفات
+    للطرق باستخدام <b>SD_BUS_METHOD()</b>، <b>SD_BUS_METHOD_WITH_NAMES()</b>،
+    <b>SD_BUS_METHOD_WITH_OFFSET()</b>، أو
+    <b>SD_BUS_METHOD_WITH_NAMES_OFFSET()</b>، وتعريفات للإشارات باستخدام
+    <b>SD_BUS_SIGNAL_WITH_NAMES()</b> أو <b>SD_BUS_SIGNAL()</b>، انظر أدناه.
+    المعامل <i>userdata</i> يحتوي على مؤشر سيتم تمريره إلى وظائف رد الاتصال
+    المختلفة. يمكن تحديده كـ <b>NULL</b> إذا لم تكن هناك قيمة ضرورية. يمكن أن يكون
+    للوجهة أي عدد من جداول vtable المرفقة بها.</p>
+<p class="Pp"><b>sd_bus_add_fallback_vtable()</b> مشابهة لـ
+    <b>sd_bus_add_object_vtable()</b>، ولكنها تُستخدم لتسجيل سمات "احتياطية".
+    عند البحث عن تعريف سمة، يتم فحص مسارات كائنات الناقل المسجلة باستخدام
+    <b>sd_bus_add_object_vtable()</b> أولاً. إذا لم يتم العثور على تطابق، يتم فحص
+    جداول vtable الاحتياطية لكل بادئة لمسار الكائن، أي مع إزالة مكونات مفصولة
+    بشرطة مائلة بنجاح. هذا يسمح باستخدام vtable لعدد تعسفي من الكائنات المنشأة
+    ديناميكيًا.</p>
+<p class="Pp">المعامل <i>find</i> هو وظيفة تُستخدم لتحديد موقع الكائن المستهدف بناءً
+    على مسار الكائن <i>path</i>. يجب أن يُرجع <b>1</b> ويضبط المعامل الناتج
+    <i>ret_found</i> إذا تم العثور على الكائن، ويُرجع <b>0</b> إذا لم يتم العثور على
+    الكائن، ويُرجع رمز خطأ سلبي بأسلوب errno أو يقوم بتهيئة هيكل الخطأ
+    <i>ret_error</i> عند حدوث خطأ. سيتم استخدام المؤشر الممرر في
+    <i>ret_found</i> كمعامل <i>userdata</i> لوظائف رد الاتصال (مُزاحًا بإزاحات
+    <i>offset</i> كما هو محدد في إدخالات vtable).</p>
+<p class="Pp"><b>sd_bus_add_object()</b> تُلحق رد اتصال مباشرة بمسار الكائن
+    <i>path</i>. يمكن أن يكون لمسار الكائن أي عدد من ردود الاتصال الملحقة به. يتم
+    إلحاق كل رد اتصال بقائمة ردود الاتصال التي يتم استدعاؤها دائمًا بالترتيب.
+    <b>sd_bus_add_fallback()</b> مشابهة لـ <b>sd_bus_add_object()</b> ولكنها تنطبق
+    على المسارات الاحتياطية بدلاً من ذلك.</p>
+<p class="Pp"><b>sd_bus_add_filter()</b> تقوم بتثبيت رد اتصال يتم استدعاؤه لكل رسالة
+    D-Bus واردة. يمكن استخدام المرشحات لمعالجة المنطق المشترك لجميع الرسائل التي
+    يستقبلها خدمة (على سبيل المثال، المصادقة أو التفويض).</p>
+<p class="Pp">عندما يتم تلقي طلب، يتم استدعاء أي ردود اتصال مرتبطة بشكل متسلسل حتى
+    يُرجع رد اتصال عددًا صحيحًا غير صفري. أرجع صفرًا من رد اتصال لإعطاء ردود اتصال
+    أخرى فرصة لمعالجة الطلب. يتم استدعاء ردود الاتصال بالترتيب التالي: أولاً، يتم
+    استدعاء ردود الاتصال العامة المثبتة باستخدام <b>sd_bus_add_filter()</b>.
+    ثانياً، يتم استدعاء ردود الاتصال الملحقة مباشرة بمسار الكائن الخاص بالطلب،
+    يليه أي ردود اتصال لطرق D-Bus ملحقة بمسار الكائن الخاص بالطلب والواجهة والعضو.
+    أخيراً، يتم استدعاء ردود اتصال الخصائص الملحقة بمسار الكائن الخاص بالطلب
+    والواجهة والعضو. إذا أعاد رد الاتصال النهائي صفرًا، فسيتم إرجاع رد خطأ</p>
+</section>
+</div>
+</section>
+                
             </article>
-            <footer>
-                <table class="foot">
-                    <tr>
-                        <td class="foot-date"></td>
-                        <td class="foot-os">systemd 258.2</td>
-                    </tr>
-                </table>
-            </footer>
         </main>
-        <aside id="sidebar">
-            <section class="search">
-                <form action="/search" class="search direct-search" role="search">
-                    <input type="search" placeholder="Search manual page" name="q" value=""/>
-                    <input type="submit" name="go" value="Go"/>
-                </form>
-            </section>
-            <section class="package-info">
-                <p>Package information:</p>
-                <dl>
-                    <dt>Package name:</dt>
-                    <dd><a href="https://www.archlinux.org/packages/core/x86_64/systemd-libs/">core/systemd-libs</a></dd>
-                    <dt>Version:</dt>
-                    <dd>258.2-2</dd>
-                    <dt>Upstream:</dt>
-                    <dd><a href="https://www.github.com/systemd/systemd">https://www.github.com/systemd/systemd</a></dd>
-                    <dt>Licenses:</dt>
-                    <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later WITH Linux-syscall-note</dd>
-                    <dt>Manuals:</dt>
-                    <dd><a href="https://archlinux.org/packages/?q=systemd-libs">/listing/core/systemd-libs/</a></dd>
-                </dl>
-            </section>
-            <details>
-                <summary>Table of contents</summary>
-                <nav class="toc">
-                    <ul>
-                        <li><a href="#NAME">NAME</a></li>
-                        <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
-                        <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
-                        <li><a href="#EXAMPLES">EXAMPLES</a></li>
-                        <li><a href="#RETURN_VALUE">RETURN VALUE</a></li>
-                        <li><a href="#NOTES">NOTES</a></li>
-                        <li><a href="#HISTORY">HISTORY</a></li>
-                        <li><a href="#SEE_ALSO">SEE ALSO</a></li>
-                        <li><a href="#NOTES_2">NOTES</a></li>
-                    </ul>
-                </nav>
-            </details>
-            </aside>
     <footer class="site-disclaimer">
 <p>هذا الموقع غير مرتبط بـ Arch Linux ولا تابع له بأي شكل من الأشكال. المحتوى هو ترجمة فقط لصفحات دليل Arch المنشورة على man.archlinux.org.</p>
 </footer>
 </body>
+</html>
+```يُعاد إرساله إلى المستدعي للإشارة إلى عدم العثور على كائن مطابق
+    للطلب.</p>
+<p class="Pp">لاحظ أنه يمكنك إرجاع عدد صحيح موجب من رد نداء <i>method</i>
+    دون إرسال رد فورًا. هذا يُعلم sd-bus بأن رد النداء هذا
+    سيتولى مسؤولية الرد على الطلب دون
+    إجبار رد النداء على إنتاج رد فورًا. هذا يسمح لرد النداء
+    بتنفيذ أي عدد من العمليات غير المتزامنة المطلوبة لبناء
+    رد. ومع ذلك، إذا استغرق إنتاج الرد وقتًا طويلاً جدًا، فستنتهي مهلة استدعاء الطريقة
+    عند المستدعي. هذا متاح فقط للطرق وليس
+    للخصائص.</p>
+<p class="Pp">إذا تم استدعاء رد نداء لمعالجة طلب يتوقع ردًا
+    وأعاد رد النداء قيمة سالبة، فسيتم تفسير القيمة كـ
+    رمز خطأ سالب بنمط errno ويُعاد إرسالها إلى المستدعي كخطأ D-Bus
+    كما لو تم استدعاء <a href="sd_bus_reply_method_errno.3.html">sd_bus_reply_method_errno(3)</a>. بالإضافة إلى ذلك، تأخذ جميع
+    ردود النداء معامل إخراج sd_bus_error يمكن استخدامه لتوفير
+    معلومات خطأ أكثر تفصيلاً. إذا تم تعيين <i>ret_error</i> عند
+    انتهاء رد النداء، فسيُعاد إرسال خطأ D-Bus المقابل إلى المستدعي
+    كما لو تم استدعاء <a href="sd_bus_reply_method_error.3.html">sd_bus_reply_method_error(3)</a>. أي خطأ مخزّن في
+    <i>ret_error</i> له أولوية على أي قيم سالبة أعادها
+    رد النداء نفسه عند تحديد الخطأ الذي سيُعاد إرساله إلى المستدعي. استخدم
+    <a href="sd_bus_error_set.3.html">sd_bus_error_set(3)</a> أو أحد متغيراته لتعيين <i>ret_error</i>
+    وإرجاع عدد صحيح سالب من رد نداء باستدعاء دالة واحد.
+    لإرسال رد خطأ بعد انتهاء رد النداء بالفعل، استخدم
+    <a href="sd_bus_reply_method_errno.3.html">sd_bus_reply_method_errno(3)</a> أو أحد متغيراته.</p>
+<p class="Pp">بالنسبة لجميع الدوال، يتم إنشاء فتحة مطابقة داخليًا. إذا كان
+    معامل الإخراج <i>slot</i> هو <b>NULL</b>، فسيتم إنشاء كائن فتحة
+    &quot;عائم&quot;، انظر sd_bus_slot_set_floating(3). وإلا، فسيتم
+    إرجاع مؤشر إلى كائن الفتحة. في هذه الحالة، يجب إسقاط المرجع إلى
+    كائن الفتحة عندما لا تكون vtable مطلوبة بعد الآن، انظر
+    sd_bus_slot_unref(3).</p>
+<section class="Ss">
+<h2 class="Ss" id='The_sd_bus_vtable_array'><a class='permalink' href='#The_sd_bus_vtable_array'>مصفوفة sd_bus_vtable</a></h2>
+<p class="Pp">تتكون المصفوفة من بنى من النوع sd_bus_vtable، ولكن
+    لا ينبغي ملؤها يدويًا أبدًا، بل من خلال أحد
+    وحدات الماكرو التالية:</p>
+<p class="Pp"><b>SD_BUS_VTABLE_START(</b><b></b><i>flags</i><b>)</b>,
+    <b>SD_BUS_VTABLE_END</b></p>
+<div class="Bd-indent">يجب أن يكون هذان دائمًا العنصرين الأول والأخير. يمكن استخدام
+  معامل <i>flags</i> لتعيين السمات التي تنطبق على المصفوفة
+  بأكملها؛ انظر قسم &quot;Flags&quot; أدناه.</div>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b>,
+    <b>SD_BUS_METHOD_WITH_ARGS()</b></p>
+<div class="Bd-indent">عرّف طريقة D-Bus بالاسم <i>member</i>،
+  والمعاملات <i>args</i> والنتيجة <i>result</i>. تتوقع <i>args</i> تسلسلاً
+  من أزواج نوع/اسم المعامل ملفوفة في ماكرو <b>SD_BUS_ARGS()</b>. تصف
+  العناصر ذات الفهارس الزوجية في هذه القائمة أنواع معاملات الطريقة.
+  توقيع معاملات الطريقة هو تسلسل جميع
+  السلاسل النصية الحرفية ذات الفهارس الزوجية في <i>args</i>. إذا لم يكن للطريقة
+  معاملات، فمرر <b>SD_BUS_NO_ARGS</b> إلى <i>args</i>. تصف العناصر ذات الفهارس الفردية
+  أسماء معاملات الطريقة. تتوقع <i>result</i> تسلسلاً
+  من أزواج نوع/اسم ملفوفة في ماكرو <b>SD_BUS_RESULT()</b> بنفس
+  التنسيق مثل <b>SD_BUS_ARGS()</b>. توقيع نتيجة الطريقة هو
+  تسلسل جميع السلاسل النصية الحرفية ذات الفهارس الزوجية في <i>result</i>. إذا
+  لم يكن للطريقة نتيجة، فمرر <b>SD_BUS_NO_RESULT</b> إلى <i>result</i>. لاحظ
+  أن أنواع المعاملات يُتوقع أن تكون سلاسل نصية حرفية مقتبسة وأسماء المعاملات
+  يُتوقع أن تكون سلاسل نصية حرفية غير مقتبسة. انظر أدناه للحصول على مثال
+  كامل.
+<p class="Pp">يجب أن تكون دالة المعالج <i>handler</i> من النوع
+    <b>sd_bus_message_handler_t</b>. سيتم استدعاؤها لمعالجة الرسائل الواردة
+    التي تستدعي هذه الطريقة. تستقبل مؤشرًا هو
+    معامل <i>userdata</i> الممرر إلى دالة التسجيل مُزاحًا بمقدار
+    <i>offset</i> بايت. يمكن استخدام هذا لتمرير مؤشرات إلى حقول مختلفة
+    في نفس بنية البيانات إلى طرق مختلفة في نفس vtable. لإرسال
+    رد من <i>handler</i>، استدعِ sd_bus_reply_method_return(3) مع
+    الرسالة التي تم استدعاء رد النداء بها. المعامل <i>flags</i> هو
+    مزيج من الأعلام، انظر أدناه.</p>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_ARGS()</b> هو اختصار لاستدعاء
+    <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b> بإزاحة صفرية.</p>
+</div>
+<p class="Pp"><b>SD_BUS_METHOD_WITH_NAMES_OFFSET()</b>,
+    <b>SD_BUS_METHOD_WITH_NAMES()</b>, <b>SD_BUS_METHOD_WITH_OFFSET()</b>,
+    <b>SD_BUS_METHOD()</b></p>
+<div class="Bd-indent">عرّف طريقة D-Bus بالاسم <i>member</i>،
+  وتوقيع المعاملات <i>signature</i>، وتوقيع النتيجة <i>result</i>.
+  يحدد المعاملان <i>in_names</i> و<i>out_names</i> أسماء معاملات
+  الإدخال والإخراج في توقيع الدالة. يجب إنشاء <i>in_names</i> و
+  <i>out_names</i> باستخدام ماكرو <b>SD_BUS_PARAM()</b>، انظر
+  أدناه. في جميع النواحي الأخرى، يتصرف هذا الماكرو تمامًا بنفس طريقة
+  <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b>.
+<p class="Pp"><b>SD_BUS_METHOD_WITH_NAMES()</b>،
+    <b>SD_BUS_METHOD_WITH_OFFSET()</b>، و<b>SD_BUS_METHOD()</b> هي متغيرات
+    تحدد إزاحة صفرية (يُمرر معامل <i>userdata</i> دون
+    تغيير)، أو تترك الأسماء غير معيّنة (أي بدون أسماء معاملات)، أو كليهما.</p>
+<p class="Pp">فضّل استخدام <b>SD_BUS_METHOD_WITH_ARGS_OFFSET()</b> و
+    <b>SD_BUS_METHOD_WITH_ARGS()</b> على وحدات الماكرو هذه لأنها تسمح بتحديد
+    أنواع المعاملات وأسمائها جنبًا إلى جنب مما يقلل من احتمالية الخطأ
+    مقارنة بتحديد جميع أنواع المعاملات أولاً ثم تحديد جميع أسماء
+    المعاملات.</p>
+</div>
+<p class="Pp"><b>SD_BUS_SIGNAL_WITH_ARGS()</b></p>
+<div class="Bd-indent">عرّف إشارة D-Bus بالاسم <i>member</i> و
+  المعاملات <i>args</i>. تتوقع <i>args</i> تسلسلاً من أزواج نوع/اسم المعامل
+  ملفوفة في ماكرو <b>SD_BUS_ARGS()</b>. تصف العناصر ذات الفهارس الزوجية
+  في هذه القائمة أنواع معاملات الإشارة. توقيع معاملات الإشارة
+  هو تسلسل جميع السلاسل النصية الحرفية ذات الفهارس الزوجية
+  في <i>args</i>. إذا لم يكن للإشارة معاملات، فمرر
+  <b>SD_BUS_NO_ARGS</b> إلى <i>args</i>. تصف العناصر ذات الفهارس الفردية
+  أسماء معاملات الإشارة. المعامل <i>flags</i> هو مزيج
+  من الأعلام. انظر أدناه للحصول على مثال كامل.</div>
+<p class="Pp"><b>SD_BUS_SIGNAL_WITH_NAMES()</b>، <b>SD_BUS_SIGNAL()</b></p>
+<div class="Bd-indent">عرّف إشارة D-Bus بالاسم <i>member</i>،
+  وتوقيع المعاملات <i>signature</i>، وأسماء المعاملات <i>names</i>.
+  يجب إنشاء <i>names</i> باستخدام ماكرو <b>SD_BUS_PARAM()</b>، انظر
+  أدناه. المعامل <i>flags</i> هو مزيج من الأعلام، انظر أدناه.
+<p class="Pp"><b>SD_BUS_SIGNAL()</b> مكافئ لـ
+    <b>SD_BUS_SIGNAL_WITH_NAMES()</b> مع ترك معامل <i>names</i> غير معيّن
+    (أي بدون أسماء معاملات).</p>
+<p class="Pp">فضّل استخدام <b>SD_BUS_SIGNAL_WITH_ARGS()</b> على وحدات الماكرو هذه
+    لأنها تسمح بتحديد أنواع المعاملات وأسمائها جنبًا إلى جنب مما يقلل
+    من احتمالية الخطأ مقارنة بتحديد جميع أنواع المعاملات أولاً ثم
+    تحديد جميع أسماء المعاملات.</p>
+</div>
+<p class="Pp"><b>SD_BUS_WRITABLE_PROPERTY()</b>، <b>SD_BUS_PROPERTY()</b></p>
+<div class="Bd-indent">عرّف خاصية D-Bus بالاسم <i>member</i> و
+  توقيع القيمة <i>signature</i>. المعاملان <i>get</i> و<i>set</i> هما
+  دالتا الجلب والتعيين. يتم استدعاؤهما بمؤشر هو
+  معامل <i>userdata</i> الممرر إلى دالة التسجيل مُزاحًا بمقدار
+  <i>offset</i> بايت. يمكن استخدام هذا لتمرير مؤشرات إلى حقول مختلفة في
+  نفس بنية البيانات إلى دوال تعيين وجلب مختلفة في نفس vtable.
+  المعامل <i>flags</i> هو مزيج من الأعلام، انظر أدناه.
+<p class="Pp">يمكن حذف دالتي التعيين والجلب (تحديدهما كـ
+    <b>NULL</b>)، إذا كانت الخاصية من الأنواع الأساسية أو &quot;as&quot; في
+    حالة الخصائص للقراءة فقط. في تلك الحالات، يجب أن يشير المعاملان <i>userdata</i> و
+    <i>offset</i> معًا إلى متغير صالح من النوع
+    المقابل. سيتم توفير دالة تعيين وجلب افتراضية،
+    تقوم ببساطة بنسخ المعامل بين هذا المتغير والرسالة.</p>
+<p class="Pp">يُستخدم <b>SD_BUS_PROPERTY()</b> لتعريف خاصية
+  للقراءة فقط.</p>
+</div>
+<p class="Pp"><b>SD_BUS_PARAM()</b></p>
+<div class="Bd-indent">يجب لف أسماء المعاملات في هذا الماكرو، انظر
+  المثال أدناه.</div>
+</section>
+<section class="Ss">
+<h2 class="Ss" id='Flags'><a class='permalink' href='#Flags'>الأعلام</a></h2>
+<p class="Pp">يُستخدم المعامل <i>flags</i> لتحديد مزيج من
+    <b>تعليقات D-Bus</b>[1].</p>
+<p class="Pp"><b>SD_BUS_VTABLE_DEPRECATED</b></p>
+<div class="Bd-indent">ضع علامة على إدخال vtable هذا كمهمل باستخدام
+  تعليق <b>org.freedesktop.DBus.Deprecated</b> في بيانات الاستبطان. إذا
+  تم تحديده لـ <b>SD_BUS_VTABLE_START()</b>، فسيتم تطبيق التعليق على
+  الواجهة المحيطة.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_HIDDEN</b></p>
+<div class="Bd-indent">اجعل إدخال vtable هذا مخفيًا. لن يظهر في
+  بيانات الاستبطان. إذا تم تحديده لـ <b>SD_BUS_VTABLE_START()</b>، فسيتم إخفاء جميع الإدخالات
+  في المصفوفة.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_METHOD_NO_REPLY</b></p>
+<div class="Bd-indent">ضع علامة على إدخال vtable هذا كطريقة لن تُرجع
+  ردًا باستخدام تعليق <b>org.freedesktop.DBus.Method.NoReply</b> في
+  بيانات الاستبطان.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_PROPERTY_CONST</b>,
+    <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b>,
+    <b>SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION</b></p>
+<div class="Bd-indent">تتوافق هذه الأعلام الثلاثة مع قيم مختلفة لـ
+  تعليق <b>org.freedesktop.DBus.Property.EmitsChangedSignal</b>، الذي
+  يحدد ما إذا كانت إشارة <b>org.freedesktop.DBus.Properties.PropertiesChanged</b>
+  تُبث كلما تغيرت الخاصية.
+  يتوافق <b>SD_BUS_VTABLE_PROPERTY_CONST</b> مع <b>const</b> ويعني أن
+  الخاصية لا تتغير أبدًا خلال عمر الكائن الذي تنتمي إليه، لذا
+  لا حاجة لبث أي إشارة. يتوافق <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b>
+  مع <b>true</b> ويعني أن الإشارة تُبث.
+  يتوافق <b>SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION</b> مع
+  <b>invalidates</b> ويعني أن الإشارة تُبث، لكن القيمة لا
+  تُضمّن في الإشارة.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_PROPERTY_EXPLICIT</b></p>
+<div class="Bd-indent">ضع علامة على إدخال خاصية vtable هذا على أنه يتطلب طلبًا صريحًا
+  لإظهار القيمة (عمومًا لأن القيمة كبيرة أو
+  بطيئة الحساب). لا يمكن دمج هذا الإدخال مع
+  <b>SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE</b>، ولن يظهر في قوائم
+  الخصائص افتراضيًا (مثل <b>busctl introspect</b>). هذا يتوافق مع
+  تعليق <b>org.freedesktop.systemd1.Explicit</b> في بيانات
+  الاستبطان.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_SENSITIVE</b></p>
+<div class="Bd-indent">ضع علامة على إدخال طريقة vtable هذا على أنه يعالج بيانات
+  حساسة. عند التعيين، يتم وضع علامة على رسائل استدعاء الطريقة الواردة ورسائل
+  الرد الصادرة الخاصة بها كحساسة باستخدام <a href="sd_bus_message_sensitive.3.html">sd_bus_message_sensitive(3)</a>، بحيث
+  يتم محوها من الذاكرة عند تحريرها.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_ABSOLUTE_OFFSET</b></p>
+<div class="Bd-indent">ضع علامة على إدخال طريقة أو خاصية vtable هذا بحيث يكون
+  مؤشر بيانات المستخدميتم تمريرها إلى دوال المعالج المرتبطة بها بشكل
+  مختلف قليلاً: بدلاً من إضافة معامل الإزاحة الخاص بالمدخل إلى
+  مؤشر بيانات المستخدم المحدد أثناء تسجيل vtable، يتم تمرير الإزاحة
+  مباشرةً، محوّلةً إلى مؤشر، دون أخذ مؤشر بيانات المستخدم
+  المحدد أثناء تسجيل vtable في الاعتبار.</div>
+<p class="Pp"><b>SD_BUS_VTABLE_CAPABILITY(</b><b></b><i>capability</i><b>)</b></p>
+<div class="Bd-indent">سيُسمح بالوصول إلى مدخل vtable هذا إذا كانت
+  العملية المستدعية تمتلك القدرة <i>capability</i>، كما هو موضح في
+  sd_bus_query_sender_privilege(3). إذا استُخدمت مع
+  <b>SD_BUS_VTABLE_START()</b>، فإنها توفر قيمة افتراضية لجميع المدخلات في المصفوفة.
+  إذا لم تُحدد، سواء لمدخل فردي أو للمصفوفة بأكملها،
+  يتم التحقق من <b>CAP_SYS_ADMIN</b> افتراضيًا. راجع capabilities(7) للحصول على
+  معلومات حول القدرات.
+<p class="Pp">لاحظ أنه قد يتم تمييز مدخلات vtable كغير مميزة و
+    قد يتم تمييز الناقل بأكمله كموثوق، راجع مناقشة
+    <b>SD_BUS_VTABLE_UNPRIVILEGED</b> أدناه.</p>
+</div>
+<p class="Pp"><b>SD_BUS_VTABLE_UNPRIVILEGED</b></p>
+<div class="Bd-indent">تمييز مدخل vtable هذا كغير مميز. الوصول إلى
+  المدخلات المميزة محدود للمستخدمين ذوي القدرات المناسبة كما
+  هو موضح أعلاه. في الممارسة العملية، يتم تمييز العديد من مدخلات vtable كغير مميزة،
+  وإما أن تكون مفتوحة للجميع، أو يتم اتخاذ قرار السماح بالوصول
+  لاحقًا، على سبيل المثال بالتفويض إلى <b>polkit</b>[2].
+<p class="Pp">قد يتم تمييز الناقل بأكمله كموثوق، وفي هذه الحالة يتم تجاهل التعليقات التوضيحية
+    على مستوى المدخل، راجع <a href="sd_bus_set_trusted.3.html">sd_bus_set_trusted(3)</a>.</p>
+<p class="Pp">عندما <i>لا</i> يتم تحديدها، سيتم عرض
+    التعليق التوضيحي <b>org.freedesktop.systemd1.Privileged</b> بالقيمة
+    &quot;true&quot; في بيانات الاستبطان.</p>
+<p class="Pp">لا يجوز تطبيق <b>SD_BUS_VTABLE_UNPRIVILEGED</b> على الخصائص
+    للقراءة فقط، لكن الوصول للقراءة (لكل من الخصائص للقراءة فقط والقابلة للكتابة) يكون
+    دائمًا غير مقيد.</p>
+<p class="Pp">لاحظ أن هذه الصفحة تصف الفحوصات المنفذة في عميل
+    D-Bus. يمتلك خادم D-Bus سياسة إضافية قد تسمح أو تمنع
+    الاتصالات، راجع &quot;CONFIGURATION FILE&quot; في
+  dbus-daemon(1).</p>
+</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='EXAMPLES'><a class='permalink' href='#EXAMPLES'>أمثلة</a></h1>
+<p class="Pp"><b>مثال&#x00A0;1.&#x00A0;إنشاء مستمع بسيط على
+    الناقل</b></p>
+<div class="Bd-indent">
+<pre>/* SPDX-License-Identifier: MIT-0 */
+#define _GNU_SOURCE 1
+#include &lt;errno.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;systemd/sd-bus.h&gt;
+#define _cleanup_(f) __attribute__((cleanup(f)))
+typedef struct object {
+  char *name;
+  uint32_t number;
+} object;
+static int method(sd_bus_message *m, void *userdata, sd_bus_error *error) {
+  int r;
+  printf(&quot;Got called with userdata=%p\n&quot;, userdata);
+  if (sd_bus_message_is_method_call(m,
+                                    &quot;org.freedesktop.systemd.VtableExample&quot;,
+                                    &quot;Method4&quot;))
+    return 1;
+  const char *string;
+  r = sd_bus_message_read(m, &quot;s&quot;, &amp;string);
+  if (r &lt; 0) {
+    fprintf(stderr, &quot;sd_bus_message_read() failed: %s\n&quot;, strerror(-r));
+    return 0;
+  }
+  r = sd_bus_reply_method_return(m, &quot;s&quot;, string);
+  if (r &lt; 0) {
+    fprintf(stderr, &quot;sd_bus_reply_method_return() failed: %s\n&quot;, strerror(-r));
+    return 0;
+  }
+  return 1;
+}
+static const sd_bus_vtable vtable[] = {
+        SD_BUS_VTABLE_START(0),
+        SD_BUS_METHOD(
+            &quot;Method1&quot;, &quot;s&quot;, &quot;s&quot;, method, 0),
+        SD_BUS_METHOD_WITH_NAMES_OFFSET(
+            &quot;Method2&quot;,
+            &quot;so&quot;, SD_BUS_PARAM(string) SD_BUS_PARAM(path),
+            &quot;s&quot;, SD_BUS_PARAM(returnstring),
+            method, offsetof(object, number),
+            SD_BUS_VTABLE_DEPRECATED),
+        SD_BUS_METHOD_WITH_ARGS_OFFSET(
+            &quot;Method3&quot;,
+            SD_BUS_ARGS(&quot;s&quot;, string, &quot;o&quot;, path),
+            SD_BUS_RESULT(&quot;s&quot;, returnstring),
+            method, offsetof(object, number),
+            SD_BUS_VTABLE_UNPRIVILEGED),
+        SD_BUS_METHOD_WITH_ARGS(
+            &quot;Method4&quot;,
+            SD_BUS_NO_ARGS,
+            SD_BUS_NO_RESULT,
+            method,
+            SD_BUS_VTABLE_UNPRIVILEGED),
+        SD_BUS_SIGNAL(
+            &quot;Signal1&quot;,
+            &quot;so&quot;,
+            0),
+        SD_BUS_SIGNAL_WITH_NAMES(
+            &quot;Signal2&quot;,
+            &quot;so&quot;, SD_BUS_PARAM(string) SD_BUS_PARAM(path),
+            0),
+        SD_BUS_SIGNAL_WITH_ARGS(
+            &quot;Signal3&quot;,
+            SD_BUS_ARGS(&quot;s&quot;, string, &quot;o&quot;, path),
+            0),
+        SD_BUS_WRITABLE_PROPERTY(
+            &quot;AutomaticStringProperty&quot;, &quot;s&quot;, NULL, NULL,
+            offsetof(object, name),
+            SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+        SD_BUS_WRITABLE_PROPERTY(
+            &quot;AutomaticIntegerProperty&quot;, &quot;u&quot;, NULL, NULL,
+            offsetof(object, number),
+            SD_BUS_VTABLE_PROPERTY_EMITS_INVALIDATION),
+        SD_BUS_VTABLE_END
+};
+int main(int argc, char **argv) {
+  _cleanup_(sd_bus_flush_close_unrefp) sd_bus *bus = NULL;
+  int r;
+  sd_bus_default(&amp;bus);
+  object object = { .number = 666 };
+  object.name = strdup(&quot;name&quot;);
+  if (!object.name) {
+    fprintf(stderr, &quot;OOM\n&quot;);
+    return EXIT_FAILURE;
+  }
+  r = sd_bus_add_object_vtable(bus, NULL,
+                               &quot;/org/freedesktop/systemd/VtableExample&quot;,
+                               &quot;org.freedesktop.systemd.VtableExample&quot;,
+                               vtable,
+                               &amp;object);
+  if (r &lt; 0) {
+    fprintf(stderr, &quot;sd_bus_add_object_vtable() failed: %s\n&quot;, strerror(-r));
+    return EXIT_FAILURE;
+  }
+  r = sd_bus_request_name(bus,
+                          &quot;org.freedesktop.systemd.VtableExample&quot;,
+                          0);
+  if (r &lt; 0) {
+    fprintf(stderr, &quot;sd_bus_request_name() failed: %s\n&quot;, strerror(-r));
+    return EXIT_FAILURE;
+  }
+  for (;;) {
+    r = sd_bus_wait(bus, UINT64_MAX);
+    if (r &lt; 0) {
+      fprintf(stderr, &quot;sd_bus_wait() failed: %s\n&quot;, strerror(-r));
+      return EXIT_FAILURE;
+    }
+    r = sd_bus_process(bus, NULL);
+    if (r &lt; 0) {
+      fprintf(stderr, &quot;sd_bus_process() failed: %s\n&quot;, strerror(-r));
+      return EXIT_FAILURE;
+    }
+  }
+  r = sd_bus_release_name(bus, &quot;org.freedesktop.systemd.VtableExample&quot;);
+  if (r &lt; 0) {
+    fprintf(stderr, &quot;sd_bus_release_name() failed: %s\n&quot;, strerror(-r));
+    return EXIT_FAILURE;
+  }
+  free(object.name);
+  return 0;
+}</pre>
+</div>
+<p class="Pp">هذا ينشئ عميلاً بسيطًا على الناقل (ناقل المستخدم، عند التشغيل
+    كمستخدم عادي). يمكننا استخدام استدعاء D-Bus
+    <b>org.freedesktop.DBus.Introspectable.Introspect</b> للحصول على
+    وصف XML للواجهة:</p>
+<div class="Bd-indent">
+<pre>&lt;!DOCTYPE node PUBLIC &quot;-//freedesktop//DTD D-BUS Object Introspection 1.0//EN&quot;
+&quot;https://www.freedesktop.org/standards/dbus/1.0/introspect.dtd&quot;&gt;
+&lt;!-- SPDX-License-Identifier: LGPL-2.1-or-later --&gt;
+&lt;node&gt;
+ &lt;interface name=&quot;org.freedesktop.DBus.Peer&quot;&gt;
+  &lt;method name=&quot;Ping&quot;/&gt;
+  &lt;method name=&quot;GetMachineId&quot;&gt;
+   &lt;arg type=&quot;s&quot; name=&quot;machine_uuid&quot; direction=&quot;out&quot;/&gt;
+  &lt;/method&gt;
+ &lt;/interface&gt;
+ &lt;interface name=&quot;org.freedesktop.DBus.Introspectable&quot;&gt;
+  &lt;method name=&quot;Introspect&quot;&gt;
+   &lt;arg name=&quot;xml_data&quot; type=&quot;s&quot; direction=&quot;out&quot;/&gt;
+  &lt;/method&gt;
+ &lt;/interface&gt;
+ &lt;interface name=&quot;org.freedesktop.DBus.Properties&quot;&gt;
+  &lt;method name=&quot;Get&quot;&gt;
+   &lt;arg name=&quot;interface_name&quot; direction=&quot;in&quot; type=&quot;s&quot;/&gt;
+   &lt;arg name=&quot;property_name&quot; direction=&quot;in&quot; type=&quot;s&quot;/&gt;
+   &lt;arg name=&quot;value&quot; direction=&quot;out&quot; type=&quot;v&quot;/&gt;
+  &lt;/method&gt;
+  &lt;method name=&quot;GetAll&quot;&gt;
+   &lt;arg name=&quot;interface_name&quot; direction=&quot;in&quot; type=&quot;s&quot;/&gt;
+   &lt;arg name=&quot;props&quot; direction=&quot;out&quot; type=&quot;a{sv}&quot;/&gt;
+  &lt;/method&gt;
+  &lt;method name=&quot;Set&quot;&gt;
+   &lt;arg name=&quot;interface_name&quot; direction=&quot;in&quot; type=&quot;s&quot;/&gt;
+   &lt;arg name=&quot;property_name&quot; direction=&quot;in&quot; type=&quot;s&quot;/&gt;
+   &lt;arg name=&quot;value&quot; direction=&quot;in&quot; type=&quot;v&quot;/&gt;
+  &lt;/method&gt;
+  &lt;signal name=&quot;PropertiesChanged&quot;&gt;
+   &lt;arg type=&quot;s&quot; name=&quot;interface_name&quot;/&gt;
+   &lt;arg type=&quot;a{sv}&quot; name=&quot;changed_properties&quot;/&gt;
+   &lt;arg type=&quot;as&quot; name=&quot;invalidated_properties&quot;/&gt;
+  &lt;/signal&gt;
+ &lt;/interface&gt;
+ &lt;interface name=&quot;org.freedesktop.systemd.VtableExample&quot;&gt;
+  &lt;method name=&quot;Method1&quot;&gt;
+   &lt;arg type=&quot;s&quot; direction=&quot;in&quot;/&gt;
+   &lt;arg type=&quot;s&quot; direction=&quot;out&quot;/&gt;
+  &lt;/method&gt;
+  &lt;method name=&quot;Method2&quot;&gt;
+   &lt;arg type=&quot;s&quot; name=&quot;string&quot; direction=&quot;in&quot;/&gt;
+   &lt;arg type=&quot;o&quot; name=&quot;path&quot; direction=&quot;in&quot;/&gt;
+   &lt;arg type=&quot;s&quot; name=&quot;returnstring&quot; direction=&quot;out&quot;/&gt;
+   &lt;annotation name=&quot;org.freedesktop.DBus.Deprecated&quot; value=&quot;true&quot;/&gt;
+  &lt;/method&gt;
+  &lt;property name=&quot;AutomaticStringProperty&quot; type=&quot;s&quot; access=&quot;readwrite&quot;&gt;
+  &lt;/property&gt;
+  &lt;property name=&quot;AutomaticIntegerProperty&quot; type=&quot;u&quot; access=&quot;readwrite&quot;&gt;
+   &lt;annotation name=&quot;org.freedesktop.DBus.Property.EmitsChangedSignal&quot; value=&quot;invalidates&quot;/&gt;
+  &lt;/property&gt;
+ &lt;/interface&gt;
+&lt;/node&gt;</pre>
+</div>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='RETURN_VALUE'><a class='permalink' href='#RETURN_VALUE'>قيمة   الإرجاع</a></h1>
+<p class="Pp">عند النجاح، تُرجع <b>sd_bus_add_object_vtable()</b> و
+    <b>sd_bus_add_fallback_vtable()</b> عددًا صحيحًا غير سالب. عند
+    الفشل، تُرجعان رمز خطأ بأسلوب errno سالبًا.</p>
+<section class="Ss">
+<h2 class="Ss" id='Errors'><a class='permalink' href='#Errors'>الأخطاء</a></h2>
+<p class="Pp">قد تشير الأخطاء المُرجعة إلى المشكلات التالية:</p>
+<p class="Pp"><b>-EINVAL</b></p>
+<div class="Bd-indent">أحد المعاملات المطلوبة هو <b>NULL</b> أو غير صالح.
+  تم تمرير واجهة D-Bus محجوزة كمعامل <i>interface</i>.</div>
+<p class="Pp"><b>-ENOPKG</b></p>
+<div class="Bd-indent">لا يمكن حل الناقل.</div>
+<p class="Pp"><b>-ECHILD</b></p>
+<div class="Bd-indent">تم إنشاء الناقل في عملية أو مكتبة أو
+  نسخة وحدة مختلفة.</div>
+<p class="Pp"><b>-ENOMEM</b></p>
+<div class="Bd-indent">فشل تخصيص الذاكرة.</div>
+<p class="Pp"><b>-EPROTOTYPE</b></p>
+<div class="Bd-indent">تم استدعاء كل من <b>sd_bus_add_object_vtable()</b> و
+  <b>sd_bus_add_fallback_vtable()</b> لنفس مسار كائن الناقل، وهو أمر غير مسموح به.</div>
+<p class="Pp"><b>-EEXIST</b></p>
+<div class="Bd-indent">تم تسجيل vtable هذا بالفعل لهذه
+  <i>interface</i> و<i>path</i>.</div>
+</section>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES'><a class='permalink' href='#NOTES'>ملاحظات</a></h1>
+<p class="Pp">الدوال الموصوفة هنا متاحةكمكتبة مشتركة، والتي
+    يمكن تجميعها مقابلها وربطها باستخدام
+    ملف <b>libsystemd</b>&#x00A0;pkg-config(1).</p>
+<p class="Pp">الكود الموصوف هنا يستخدم getenv(3)، والذي يُعلن
+    أنه غير آمن متعدد الخيوط. هذا يعني أن الكود الذي يستدعي الدوال
+    الموصوفة هنا يجب ألا يستدعي setenv(3) من خيط متوازٍ. يُنصح
+    بإجراء الاستدعاءات إلى <b>setenv()</b> فقط من مرحلة مبكرة من
+    البرنامج عندما لم تكن قد بدأت أي خيوط أخرى.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='HISTORY'><a class='permalink' href='#HISTORY'>التاريخ</a></h1>
+<p class="Pp">تمت إضافة <b>sd_bus_property_get_t()</b>، و<b>sd_bus_property_set_t()</b>،
+    و<b>sd_bus_object_find_t()</b>، و<b>sd_bus_add_object()</b>،
+    و<b>sd_bus_add_fallback()</b>، و<b>sd_bus_add_object_vtable()</b>،
+    و<b>sd_bus_add_fallback_vtable()</b>، و<b>sd_bus_add_filter()</b> في الإصدار 221.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>انظر   أيضاً</a></h1>
+<p class="Pp"><a href="sd-bus.3.html">sd-bus(3)</a>، busctl(1)،
+    <a href="sd_bus_emit_properties_changed.3.html">sd_bus_emit_properties_changed(3)</a>،
+  <a href="sd_bus_emit_object_added.3.html">sd_bus_emit_object_added(3)</a></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id='NOTES_2'><a class='permalink' href='#NOTES_2'>ملاحظات</a></h1>
+<dl class="Bl-tag">
+  <dt> 1.</dt>
+  <dd>تعليقات D-Bus التوضيحية</dd>
+</dl>
+<div class="Bd-indent"><a href='https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format'>https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format</a></div>
+<dl class="Bl-tag">
+  <dt> 2.</dt>
+  <dd>polkit</dd>
+</dl>
+<div class="Bd-indent"><a href='https://www.freedesktop.org/software/polkit/docs/latest/'>https://www.freedesktop.org/software/polkit/docs/latest/</a></div>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date"></td>
+    <td class="foot-os">systemd 258.2</td>
+  </tr>
+</table>
+
+</section>
+
+            </article>
+            <aside id="sidebar">
+                
+<section class="search">
+    <form action="/search" class="search direct-search" role="search">
+    <input type="search" placeholder="ابحث في صفحة الدليل" name="q" value=""
+         />
+    <input type="submit" name="go" value="اذهب" />
+</form>
+
+</section>
+
+<section class="package-info">
+    <p>معلومات الحزمة:</p>
+    <dl>
+        <dt>اسم الحزمة:</dt>
+        <dd><a href="https://www.archlinux.org/packages/core/x86_64/systemd-libs/">core/systemd-libs</a></dd>
+        <dt>الإصدار:</dt>
+        <dd>258.2-2</dd>
+        <dt>المنبع:</dt>
+        <dd><a href="https://www.github.com/systemd/systemd">https://www.github.com/systemd/systemd</a></dd>
+        <dt>التراخيص:</dt>
+        <dd>LGPL-2.1-or-later, CC0-1.0, GPL-2.0-or-later WITH Linux-syscall-note</dd>
+        <dt>الأدلة:</dt>
+        <dd><a href="https://archlinux.org/packages/?q=systemd-libs">/listing/core/systemd-libs/</a></dd>
+    </dl>
+</section>
+
+<details>
+    <summary>جدول المحتويات</summary>
+    <nav class="toc">
+        <ul>
+        
+            <li><a href="#NAME">الاسم</a></li>
+        
+            <li><a href="#SYNOPSIS">الملخص</a></li>
+        
+            <li><a href="#DESCRIPTION">الوصف</a></li>
+        
+            <li><a href="#EXAMPLES">أمثلة</a></li>
+        
+            <li><a href="#RETURN_VALUE">قيمة الإرجاع</a></li>
+        
+            <li><a href="#NOTES">ملاحظات</a></li>
+        
+            <li><a href="#HISTORY">التاريخ</a></li>
+        
+            <li><a href="#SEE_ALSO">انظر أيضاً</a></li>
+        
+            <li><a href="#NOTES_2">ملاحظات</a></li>
+        
+        </ul>
+    </nav>
+</details>
+
+
+
+
+
+
+
+</aside>
+            
+        </main>
+        <footer>
+            
+            <p>الموقع متاح بموجب شروط ترخيص <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL-3.0</a>
+               باستثناء محتويات صفحات الدليل، التي لها ترخيصها الخاص
+               المحدد في حزمة Arch Linux المقابلة.
+            </p>
+        </footer>
+    </body>
 </html>

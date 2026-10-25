@@ -4,6 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>tc-hfsc(7) — صفحة دليل لينكس بالعربية</title>
+    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 7: tc-hfsc(7). حزمة iproute2.">
         
         
         
@@ -13,7 +14,6 @@
     
 
     <link rel="stylesheet" href="../../basic.css">
-    <meta name="description" content="صفحة دليل لينكس بالعربية، القسم 7: tc-hfsc. حزمة iproute2.">
 </head>
     <body>
 <p class="back"><a href="/archman-ar/">← الفهرس</a> · صفحة دليل لينكس بالعربية</p>
@@ -36,436 +36,305 @@
 </table>
 <div class="manual-text">
 <section class="Sh">
-<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
-<p class="Pp">tc-hfsc - Hierarchical Fair Service Curve</p>
+<h1 class="Sh" id='NAME'><a class='permalink' href='#NAME'>الاسم</a></h1>
+<p class="Pp">tc-hfcs - منحنى الخدمة العادلة الهرمي</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id="HISTORY_&amp;amp;_INTRODUCTION"><a class="permalink" href="#HISTORY_&amp;amp;_INTRODUCTION">HISTORY   &amp; INTRODUCTION</a></h1>
-<p class="Pp">HFSC (Hierarchical Fair Service Curve) is a network packet
-    scheduling algorithm that was first presented at SIGCOMM'97. Developed as a
-    part of ALTQ (ALTernative Queuing) on NetBSD, found its way quickly to other
-    BSD systems, and then a few years ago became part of the linux kernel.
-    Still, it's not the most popular scheduling algorithm - especially if
-    compared to HTB - and it's not well documented for the enduser. This
-    introduction aims to explain how HFSC works without using too much math
-    (although some math it will be inevitable).</p>
-<p class="Pp">In short HFSC aims to:</p>
+<h1 class="Sh" id='HISTORY_&amp;amp;_INTRODUCTION'><a class='permalink' href='#HISTORY_&amp;amp;_INTRODUCTION'>التاريخ والمقدمة</a></h1>
+<p class="Pp">HFSC (منحنى الخدمة العادلة الهرمي) هو خوارزمية جدولة حزم الشبكة تم تقديمها لأول مرة في SIGCOMM'97. طُوِّرت كجزء من ALTQ (الاصطفاف البديل) على NetBSD، ووجدت طريقها بسرعة إلى أنظمة BSD الأخرى، ثم أصبحت قبل بضع سنوات جزءًا من نواة لينكس. ومع ذلك، فهي ليست خوارزمية الجدولة الأكثر شيوعًا - خاصةً عند مقارنتها بـ HTB - وليست موثقة جيدًا للمستخدم النهائي. تهدف هذه المقدمة إلى شرح كيفية عمل HFSC دون استخدام الكثير من الرياضيات (على الرغم من أن بعض الرياضيات ستكون حتمية).</p>
+<p class="Pp">باختصار، تهدف HFSC إلى:</p>
 <div class="Bd-indent">
 <dl class="Bl-tag">
   <dt><b>1)</b></dt>
-  <dd>guarantee precise bandwidth and delay allocation for all leaf classes
-      (realtime criterion)</dd>
+  <dd>ضمان تخصيص دقيق لعرض النطاق الترددي والتأخير لجميع الفئات الورقية (معيار الوقت الحقيقي)</dd>
   <dt><b>2)</b></dt>
-  <dd>allocate excess bandwidth fairly as specified by class hierarchy
-      (linkshare &amp; upperlimit criterion)</dd>
+  <dd>تخصيص عرض النطاق الترددي الزائد بشكل عادل كما هو محدد بواسطة التسلسل الهرمي للفئات (معيار مشاركة الارتباط والحد الأعلى)</dd>
   <dt><b>3)</b></dt>
-  <dd>minimize any discrepancy between the service curve and the actual amount
-      of service provided during linksharing</dd>
+  <dd>تقليل أي تباين بين منحنى الخدمة والكمية الفعلية للخدمة المقدمة أثناء مشاركة الارتباط</dd>
 </dl>
 </div>
-<p class="Pp">The main &quot;selling&quot; point of HFSC is feature <b>(1)</b>,
-    which is achieved by using nonlinear service curves (more about what it
-    actually is later). This is particularly useful in VoIP or games, where not
-    only a guarantee of consistent bandwidth is important, but also limiting the
-    initial delay of a data stream. Note that it matters only for leaf classes
-    (where the actual queues are) - thus class hierarchy is ignored in the
-    realtime case.</p>
-<p class="Pp">Feature <b>(2)</b> is well, obvious - any algorithm featuring
-    class hierarchy (such as HTB) strives to achieve that. HFSC does that well,
-    although you might end with unusual situations, if you define service curves
-    carelessly - see section CORNER CASES for examples.</p>
-<p class="Pp">Feature <b>(3)</b> is mentioned due to the nature of the problem.
-    There may be situations where it's either not possible to guarantee service
-    of all curves at the same time, and/or it's impossible to do so fairly. Both
-    will be explained later. Note that this is mainly related to interior (aka
-    aggregate) classes, as the leafs are already handled by <b>(1)</b>. Still,
-    it's perfectly possible to create a leaf class without realtime service, and
-    in such a case the caveats will naturally extend to leaf classes as
-  well.</p>
+<p class="Pp">نقطة البيع الرئيسية لـ HFSC هي الميزة <b>(1)</b>، والتي تتحقق باستخدام منحنيات خدمة غير خطية (المزيد حول ما هي فعليًا لاحقًا). هذا مفيد بشكل خاص في VoIP أو الألعاب، حيث لا يكون ضمان عرض نطاق ترددي متسق مهمًا فحسب، بل أيضًا الحد من التأخير الأولي لتدفق البيانات. لاحظ أن هذا يهم فقط للفئات الورقية (حيث توجد قوائم الانتظار الفعلية) - وبالتالي يتم تجاهل التسلسل الهرمي للفئات في حالة الوقت الحقيقي.</p>
+<p class="Pp">الميزة <b>(2)</b> واضحة - أي خوارزمية تتميز بتسلسل هرمي للفئات (مثل HTB) تسعى لتحقيق ذلك. تفعل HFSC ذلك بشكل جيد، على الرغم من أنك قد تنتهي بمواقف غير عادية، إذا قمت بتعريف منحنيات الخدمة بإهمال - انظر قسم الحالات الحرجة للأمثلة.</p>
+<p class="Pp">تم ذكر الميزة <b>(3)</b> بسبب طبيعة المشكلة. قد تكون هناك حالات يكون فيها إما من غير الممكن ضمان خدمة جميع المنحنيات في نفس الوقت، و/أو من المستحيل القيام بذلك بشكل عادل. سيتم شرح كلاهما لاحقًا. لاحظ أن هذا يتعلق بشكل أساسي بالفئات الداخلية (المعروفة أيضًا باسم التجميعية)، حيث يتم التعامل مع الفئات الورقية بالفعل بواسطة <b>(1)</b>. ومع ذلك، من الممكن تمامًا إنشاء فئة ورقية بدون خدمة في الوقت الحقيقي، وفي هذه الحالة ستمتد التحذيرات بشكل طبيعي إلى الفئات الورقية أيضًا.</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id="ABBREVIATIONS"><a class="permalink" href="#ABBREVIATIONS">ABBREVIATIONS</a></h1>
-<p class="Pp">For the remaining part of the document, we'll use following
-    shortcuts:</p>
+<h1 class="Sh" id='ABBREVIATIONS'><a class='permalink' href='#ABBREVIATIONS'>الاختصارات</a></h1>
+<p class="Pp">للجزء المتبقي من المستند، سنستخدم الاختصارات التالية:</p>
 <div class="Bd-indent">
-<pre>RT - realtime
-LS - linkshare
-UL - upperlimit
-SC - service curve</pre>
+<pre>RT - الوقت الحقيقي
+LS - مشاركة الارتباط
+UL - الحد الأعلى
+SC - منحنى الخدمة</pre>
 </div>
 </section>
 <section class="Sh">
-<h1 class="Sh" id="BASICS_OF_HFSC"><a class="permalink" href="#BASICS_OF_HFSC">BASICS   OF HFSC</a></h1>
-<p class="Pp">To understand how HFSC works, we must first introduce a service
-    curve. Overall, it's a nondecreasing function of some time unit, returning
-    the amount of service (an allowed or allocated amount of bandwidth) at some
-    specific point in time. The purpose of it should be subconsciously obvious:
-    if a class was allowed to transfer not less than the amount specified by its
-    service curve, then the service curve is not violated.</p>
-<p class="Pp">Still, we need more elaborate criterion than just the above
-    (although in the most generic case it can be reduced to it). The criterion
-    has to take two things into account:</p>
+<h1 class="Sh" id='BASICS_OF_HFSC'><a class='permalink' href='#BASICS_OF_HFSC'>أساسيات HFSC</a></h1>
+<p class="Pp">لفهم كيفية عمل HFSC، يجب علينا أولاً تقديم منحنى الخدمة. بشكل عام، هو دالة غير متناقصة لوحدة زمنية ما، تُرجع كمية الخدمة (كمية عرض النطاق الترددي المسموح بها أو المخصصة) في نقطة زمنية محددة. يجب أن يكون الغرض منه واضحًا دون وعي: إذا سُمح لفئة بنقل ما لا يقل عن الكمية المحددة بواسطة منحنى الخدمة الخاص بها، فإن منحنى الخدمة لا يُنتهك.</p>
+<p class="Pp">ومع ذلك، نحتاج إلى معيار أكثر تفصيلاً من ما سبق (على الرغم من أنه في الحالة الأكثر عمومية يمكن اختزاله إليه). يجب أن يأخذ المعيار في الاعتبار أمرين:</p>
 <div class="Bd-indent">
 <ul class="Bl-bullet">
-  <li>idling periods</li>
-  <li>the ability to &quot;look back&quot;, so if during current active period
-      the service curve is violated, maybe it isn't if we count excess bandwidth
-      received during earlier active period(s)</li>
+  <li>فترات الخمول</li>
+  <li>القدرة على "النظر إلى الوراء"، فإذا تم انتهاك منحنى الخدمة خلال الفترة النشطة الحالية، فربما لا يكون كذلك إذا حسبنا عرض النطاق الترددي الزائد المستلم خلال الفترة (الفترات) النشطة السابقة</li>
 </ul>
 </div>
-<p class="Pp">Let's define the criterion as follows:</p>
+<p class="Pp">لنعرّف المعيار على النحو التالي:</p>
 <div class="Bd-indent">
 <dl class="Bl-tag">
   <dt><b>(1)</b></dt>
   <dd>
-    <pre>For each t1, there must exist t0 in set B, so S(t1-t0)&#x00A0;&lt;=&#x00A0;w(t0,t1)</pre>
+    <pre>لكل t1، يجب أن يوجد t0 في المجموعة B، بحيث S(t1-t0)&#x00A0;&lt;=&#x00A0;w(t0,t1)</pre>
   </dd>
 </dl>
 </div>
-<p class="Pp">Here 'w' denotes the amount of service received during some time
-    period between t0 and t1. B is a set of all times, where a session becomes
-    active after idling period (further denoted as 'becoming backlogged'). For a
-    clearer picture, imagine two situations:</p>
+<p class="Pp">هنا تشير 'w' إلى كمية الخدمة المستلمة خلال فترة زمنية ما بين t0 و t1. B هي مجموعة جميع الأوقات، حيث تصبح الجلسة نشطة بعد فترة خمول (يُشار إليها لاحقًا باسم 'أصبحت متراكمة'). لصورة أوضح، تخيل حالتين:</p>
 <div class="Bd-indent">
 <dl class="Bl-tag">
-  <dt id="a)"><a class="permalink" href="#a)"><b>a)</b></a></dt>
-  <dd>our session was active during two periods, with a small time gap between
-      them</dd>
-  <dt id="b)"><a class="permalink" href="#b)"><b>b)</b></a></dt>
-  <dd>as in (a), but with a larger gap</dd>
+  <dt id="a)"><a class="permalink" href="#a)"><b>أ)</b></a></dt>
+  <dd>كانت جلستنا نشطة خلال فترتين، مع فجوة زمنية صغيرة بينهما</dd>
+  <dt id="b)"><a class="permalink" href="#b)"><b>ب)</b></a></dt>
+  <dd>كما في (أ)، ولكن بفجوة أكبر</dd>
 </dl>
 </div>
-<p class="Pp">Consider <b>(a)</b>: if the service received during both periods
-    meets <b>(1)</b>, then all is well. But what if it doesn't do so during the
-    2nd period? If the amount of service received during the 1st period is
-    larger than the service curve, then it might compensate for smaller service
-    during the 2nd period <i>and</i> the gap - if the gap is small enough.</p>
-<p class="Pp">If the gap is larger <b>(b)</b> - then it's less likely to happen
-    (unless the excess bandwidth allocated during the 1st part was really
-    large). Still, the larger the gap - the less interesting is what happened in
-    the past (e.g. 10 minutes ago) - what matters is the current traffic that
-    just started.</p>
-<p class="Pp">From HFSC's perspective, more interesting is answering the
-    following question: when should we start transferring packets, so a service
-    curve of a class is not violated. Or rephrasing it: How much X() amount of
-    service should a session receive by time t, so the service curve is not
-    violated. Function X() defined as below is the basic building block of HFSC,
-    used in: eligible, deadline, virtual-time and fit-time curves. Of course,
-    X() is based on equation <b>(1)</b> and is defined recursively:</p>
+<p class="Pp">خذ بعين الاعتبار <b>(أ)</b>: إذا كانت الخدمة المستلمة خلال كلتا الفترتين تلبي <b>(1)</b>، فكل شيء على ما يرام. ولكن ماذا لو لم تفعل ذلك خلال الفترة الثانية؟ إذا كانت كمية الخدمة المستلمة خلال الفترة الأولى أكبر من منحنى الخدمة، فقد تعوض الخدمة الأصغر خلال الفترة الثانية <i>و</i> الفجوة - إذا كانت الفجوة صغيرة بما فيه الكفاية.</p>
+<p class="Pp">إذا كانت الفجوة أكبر <b>(ب)</b> - فمن غير المرجح أن يحدث ذلك (ما لم يكن عرض النطاق الترددي الزائد المخصص خلال الجزء الأول كبيرًا حقًا). ومع ذلك، كلما كانت الفجوة أكبر - كلما كان ما حدث في الماضي أقل أهمية (مثل 10 دقائق مضت) - ما يهم هو حركة المرور الحالية التي بدأت للتو.</p>
+<p class="Pp">من منظور HFSC، الأكثر إثارة للاهتمام هو الإجابة على السؤال التالي: متى يجب أن نبدأ في نقل الحزم، حتى لا يتم انتهاك منحنى الخدمة لفئة ما. أو إعادة صياغته: كم كمية X() من الخدمة التي يجب أن تتلقاها الجلسة بحلول الوقت t، حتى لا يتم انتهاك منحنى الخدمة. الدالة X() المعرفة أدناه هي اللبنة الأساسية لـ HFSC، المستخدمة في: منحنيات الأهلية والموعد النهائي والوقت الافتراضي ووقت الملاءمة. بالطبع، تعتمد X() على المعادلة <b>(1)</b> ويتم تعريفها بشكل تكراري:</p>
 <div class="Bd-indent">
 <ul class="Bl-bullet">
-  <li>At the 1st backlogged period beginning function X is initialized to
-      generic service curve assigned to a class</li>
-  <li>At any subsequent backlogged period, X() is:
-    <pre><b>min(X() from previous period ; w(t0)+S(t-t0) for t&gt;=t0),</b></pre>
-    ... where t0 denotes the beginning of the current backlogged period.</li>
+  <li>في بداية فترة التراكم الأولى، يتم تهيئة الدالة X إلى منحنى الخدمة العام المخصص لفئة ما</li>
+  <li>في أي فترة تراكم لاحقة، تكون X():
+    <pre><b>min(X() من الفترة السابقة ; w(t0)+S(t-t0) لـ t&gt;=t0)،</b></pre>
+    ... حيث يشير t0 إلى بداية فترة التراكم الحالية.</li>
 </ul>
 </div>
-<p class="Pp">HFSC uses either linear, or two-piece linear service curves. In
-    case of linear or two-piece linear convex functions (first slope &lt; second
-    slope), min() in X's definition reduces to the 2nd argument. But in case of
-    two-piece concave functions, the 1st argument might quickly become lesser
-    for some t&gt;=t0. Note, that for some backlogged period, X() is defined
-    only from that period's beginning. We also define X^(-1)(w) as smallest
-    t&gt;=t0, for which X(t)&#x00A0;=&#x00A0;w. We have to define it this way,
-    as X() is usually not an injection.</p>
-<p class="Pp">The above generic X() can be one of the following:</p>
+<p class="Pp">تستخدم HFSC إما منحنيات خدمة خطية أو خطية من قطعتين. في حالة الدوال الخطية أو الخطية من قطعتين المحدبة (الميل الأول &lt; الميل الثاني)، يتم اختزال min() في تعريف X إلى الوسيطة الثانية. ولكن في حالة الدوال المقعرة من قطعتين، قد تصبح الوسيطة الأولى أصغر بسرعة لبعض t&gt;=t0. لاحظ أنه بالنسبة لبعض فترة التراكم، يتم تعريف X() فقط من بداية تلك الفترة. نعرّف أيضًا X^(-1)(w) على أنها أصغر t&gt;=t0، حيث X(t)&#x00A0;=&#x00A0;w. يجب علينا تعريفها بهذه الطريقة، لأن X() عادةً ليست دالة تباينية.</p>
+<p class="Pp">يمكن أن تكون X() العامة أعلاه واحدة مما يلي:</p>
 <div class="Bd-indent">
 <dl class="Bl-tag">
   <dt id="E()"><a class="permalink" href="#E()">E()</a></dt>
-  <dd>In realtime criterion, selects packets eligible for sending. If none are
-      eligible, HFSC will use linkshare criterion. Eligible time 'et' is
-      calculated with reference to packets' heads ( et&#x00A0;=&#x00A0;E^(-1)(w)
-      ). It's based on RT service curve, <i>but in case of a convex curve, uses
-      its 2nd slope only.</i></dd>
+  <dd>في معيار الوقت الحقيقي، تختار الحزم المؤهلة للإرسال. إذا لم تكن هناك حزم مؤهلة، ستستخدم HFSC معيار مشاركة الارتباط. يتم حساب وقت الأهلية 'et' بالإشارة إلى رؤوس الحزم ( et&#x00A0;=&#x00A0;E^(-1)(w) ). يعتمد على منحنى خدمة RT، <i>ولكن في حالة منحنى محدب، يستخدم ميله الثاني فقط.</i></dd>
   <dt id="D()"><a class="permalink" href="#D()">D()</a></dt>
-  <dd>In realtime criterion, selects the most suitable packet from the ones
-      chosen by E(). Deadline time 'dt' corresponds to packets' tails
-      (dt&#x00A0;=&#x00A0;D^(-1)(w+l), where 'l' is packet's length). Based on
-      RT service curve.</dd>
+  <dd>في معيار الوقت الحقيقي، تختار الحزمة الأنسب من تلك التي اختارتها E(). وقت الموعد النهائي 'dt' يتوافق مع ذيول الحزم (dt&#x00A0;=&#x00A0;D^(-1)(w+l)، حيث 'l' هو طول الحزمة). يعتمد على منحنى خدمة RT.</dd>
   <dt id="V()"><a class="permalink" href="#V()">V()</a></dt>
-  <dd>In linkshare criterion, arbitrates which packet to send next. Note that
-      V() is function of a virtual time - see <b>LINKSHARE CRITERION</b> section
-      for details. Virtual time 'vt' corresponds to packets' heads
-      (vt&#x00A0;=&#x00A0;V^(-1)(w)). Based on LS service curve.</dd>
+  <dd>في معيار مشاركة الارتباط، تحكم أي حزمة يتم إرسالها بعد ذلك. لاحظ أن V() هي دالة لوقت افتراضي - انظر قسم <b>معيار مشاركة الارتباط</b> للتفاصيل. الوقت الافتراضي 'vt' يتوافق مع رؤوس الحزم (vt&#x00A0;=&#x00A0;V^(-1)(w)). يعتمد على منحنى خدمة LS.</dd>
   <dt id="F()"><a class="permalink" href="#F()">F()</a></dt>
-  <dd>An extension to linkshare criterion, used to limit at which speed
-      linkshare criterion is allowed to dequeue. Fit-time 'ft' corresponds to
-      packets' heads as well (ft&#x00A0;=&#x00A0;F^(-1)(w)). Based on UL service
-      curve.</dd>
+  <dd>امتداد لمعيار مشاركة الارتباط، يُستخدم للحد من السرعة التي يُسمح بها لمعيار مشاركة الارتباط بإخراج الحزم. وقت الملاءمة 'ft' يتوافق مع رؤوس الحزم أيضًا (ft&#x00A0;=&#x00A0;F^(-1)(w)). يعتمد على منحنى خدمة UL.</dd>
 </dl>
 </div>
-<p class="Pp">Be sure to make clean distinction between session's RT, LS and UL
-    service curves and the above &quot;utility&quot; functions.</p>
+<p class="Pp">تأكد من إجراء تمييز واضح بين منحنيات خدمة RT و LS و UL للجلسة والدوال "المساعدة" المذكورة أعلاه.</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id="REALTIME_CRITERION"><a class="permalink" href="#REALTIME_CRITERION">REALTIME   CRITERION</a></h1>
-<p class="Pp">RT criterion <i>ignores class hierarchy</i> and guarantees precise
-    bandwidth and delay allocation. We say that a packet is eligible for
-    sending, when the current real time is later than the eligible time of the
-    packet. From all eligible packets, the one most suited for sending is the
-    one with the shortest deadline time. This sounds simple, but consider the
-    following example:</p>
-<p class="Pp">Interface 10Mbit, two classes, both with two-piece linear service
-    curves:</p>
+<h1 class="Sh" id='REALTIME_CRITERION'><a class='permalink' href='#REALTIME_CRITERION'>معيار الوقت الحقيقي</a></h1>
+<p class="Pp">معيار RT <i>يتجاهل التسلسل الهرمي للفئات</i> ويضمن تخصيصًا دقيقًا لعرض النطاق الترددي والتأخير. نقول أن الحزمة مؤهلة للإرسال، عندما يكون الوقت الحقيقي الحالي متأخرًا عن وقت الأهلية للحزمة. من جميع الحزم المؤهلة، الحزمة الأنسب للإرسال هي تلك التي لديها أقصر وقت موعد نهائي. يبدو هذا بسيطًا، لكن خذ بعين الاعتبار المثال التالي:</p>
+<p class="Pp">واجهة 10Mbit، فئتان، كلاهما بمنحنيات خدمة خطية من قطعتين:</p>
 <div class="Bd-indent">
 <ul class="Bl-bullet">
-  <li>1st class - 2Mbit for 100ms, then 7Mbit (convex - 1st slope &lt; 2nd
-      slope)</li>
-  <li>2nd class - 7Mbit for 100ms, then 2Mbit (concave - 1st slope &gt; 2nd
-      slope)</li>
+  <li>الفئة الأولى - 2Mbit لمدة 100ms، ثم 7Mbit (محدبة - الميل الأول &lt; الميل الثاني)</li>
+  <li>الفئة الثانية - 7Mbit لمدة 100ms، ثم 2Mbit (مقعرة - الميل الأول &gt; الميل الثاني)</li>
 </ul>
-</div>
-</section>
-</div>
-</section>
-
-            </article>
-            <aside id="content-right">
-                <nav>
-                    <div id="navigation-box">
-                        <span id="navigation-box-title">Arch Linux</span>
-                        <ul id="navigation-box-list">
-                            <li><a href="https://archlinux.org">Home</a></li>
-                            <li><a href="https://archlinux.org/packages/">Packages</a></li>
-                            <li><a href="https://bbs.archlinux.org/">Forums</a></li>
-                            <li><a href="https://wiki.archlinux.org/">Wiki</a></li>
-                            <li><a href="https://gitlab.archlinux.org/archlinux">GitLab</a></li>
-                            <li><a href="https://security.archlinux.org/">Security</a></li>
-                            <li><a href="https://aur.archlinux.org/">AUR</a></li>
-                            <li><a href="https://archlinux.org/download/">Download</a></li>
-                        </ul>
-                    </div>
-                </nav>
-            </aside>
-        </main>
-        <footer>
-            
-        </footer>
-    <footer class="site-disclaimer">
-<p>هذا الموقع غير مرتبط بـ Arch Linux ولا تابع له بأي شكل من الأشكال. المحتوى هو ترجمة فقط لصفحات دليل Arch المنشورة على man.archlinux.org.</p>
-</footer>
-</body>
-</html>
-/div>
-<p class="Pp">لنفترض للحظة أننا نستخدم D() فقط لإيجاد الحزم المؤهلة، واختيار الأنسب منها، وبالتالي يتم حساب وقت التأهيل كـ D^(-1)(w) ووقت الاستحقاق كـ D^(-1)(w+l). إذا بدأت الفئة الثانية في إرسال الحزم بعد ثانية واحدة من الفئة الأولى، فمن المستحيل بالطبع ضمان 14 ميجابت في الثانية، حيث أن سعة الواجهة هي 10 ميجابت في الثانية فقط. الحل الوحيد في هذا السيناريو هو السماح للفئة الأولى بإرسال الحزم في وقت مبكر عما هو مسموح به عادةً. هذا هو المكان الذي تأتي فيه E() المنفصلة للمساعدة. بوضع كل الرياضيات جانباً (راجع ورقة HFSC لمزيد من التفاصيل)، فإن E() للمنحنى الخدمي المقعر في الوقت الحقيقي (RT) تشبه D()، ولكن بالنسبة للمنحنى الخدمي المحدب في الوقت الحقيقي (RT) - يتم بناؤه باستخدام الميل الثاني لمنحنى الخدمة في الوقت الحقيقي (RT) فقط (في مثالنا
+<</div>
+<p class="Pp">افترض للحظة أننا نستخدم D() فقط لكل من إيجاد الحزم المؤهلة، واختيار الأنسب منها، وبالتالي سيُحسب الوقت المؤهل على أنه D^(-1)(w) وسيُحسب وقت الموعد النهائي على أنه D^(-1)(w+l). إذا بدأت الفئة الثانية بإرسال الحزم بعد ثانية واحدة من الفئة الأولى، فمن المستحيل بالطبع ضمان 14Mbit، لأن سعة الواجهة هي 10Mbit فقط. الحل الوحيد في هذا السيناريو هو السماح للفئة الأولى بإرسال الحزم في وقت أبكر مما يُسمح به عادةً. هنا يأتي دور E() المنفصل للمساعدة. وبغض النظر عن كل الرياضيات (انظر ورقة HFSC للتفاصيل)، فإن E() لمنحنى الخدمة المقعر RT هو تمامًا مثل D()، لكن بالنسبة لمنحنى الخدمة المحدب RT - فإنه يُبنى باستخدام <i>فقط</i> الميل الثاني لمنحنى الخدمة RT (في مثالنا
   <br/>
-   7 ميجابت في الثانية).</p>
-<p class="Pp">تأثير E() هذا - سيتم إرسال الحزم مبكرًا، وفي نفس الوقت سيتم تحديث D() - لذلك سيكون وقت الاستحقاق الحالي المحسوب منه متأخرًا. وبالتالي، عندما تبدأ الفئة الثانية في إرسال الحزم لاحقًا، ستكون كل من الفئة الأولى والثانية مؤهلتين، ولكن وقت استحقاق الجلسة الثانية سيكون أصغر وسيتم إرسال حزمها أولاً. عندما تصبح الفئة الأولى خاملة في وقت لاحق، ستكون الفئة الثانية قادرة على "التخزين المؤقت" مرة أخرى لفترة نشاط لاحقة للفئة الأولى.</p>
-<p class="Pp">ملاحظة سريعة - في موقف يكون فيه إجمالي عرض النطاق الترددي المتاح على الواجهة أكبر من مجموع الأجزاء المخصصة للوقت الحقيقي (تخيل واجهة 10 ميجابت في الثانية، ولكن فئات 1 ميجابت في الثانية/2 ميجابت في الثانية و 2 ميجابت في الثانية/1 ميجابت في الثانية)، فإن سرعة الواجهة وحدها قد تكون كافية لضمان الأوقات.</p>
-<p class="Pp">جزء مهم من معيار الوقت الحقيقي (RT) هو أنه بصرف النظر عن تحديث D() و E() الخاص به، يتم أيضًا تحديث V() المستخدم في معيار مشاركة الارتباط (LS). بشكل عام، يعد معيار الوقت الحقيقي (RT) ثانويًا لمعيار مشاركة الارتباط (LS)، ويستخدم *فقط* إذا كان هناك خطر انتهاك متطلبات الوقت الحقيقي الدقيقة. ومع ذلك، فإن "المشاركة" في عرض النطاق الترددي الذي توزعه معيار مشاركة الارتباط (LS) موجودة، لذا يجب تحديث V() على طول الطريق. يمكن لمعيار مشاركة الارتباط (LS) بعد ذلك تعويض الوضع غير المثالي للمشاركة العادلة بشكل صحيح، والذي ينشأ عن جدولة الوقت الحقيقي. إذا استخدمت منحنى الخدمة العلوي (UL)، فسيتم تحديث F() الخاص به أيضًا (منحنى الخدمة العلوي (UL) هو امتداد لمعيار مشاركة الارتباط (LS) - انظر قسم <b>معيار الحد العلوي</b>).</p>
-<p class="Pp">على أي حال - يمكن أن يؤدي التحديد غير الحذر لمنحنيات الخدمة لمشاركة الارتباط (LS) والوقت الحقيقي (RT) إلى مواقف غير مرغوب فيها (انظر الحالات القصوى للحصول على أمثلة). لم يكن هذا هو الحال في ورقة HFSC الأصلية حيث لم يكن بالإمكان تحديد منحنيات الخدمة لمشاركة الارتباط (LS) والوقت الحقيقي (RT) بشكل منفصل.</p>
+   7Mbit).</p>
+<p class="Pp">تأثير هذا E() - ستُرسل الحزم في وقت أبكر، وفي الوقت نفسه سيتم تحديث D() - لذا سيكون وقت الموعد النهائي الحالي المحسوب منه لاحقًا. وبالتالي، عندما تبدأ الفئة الثانية بإرسال الحزم لاحقًا، ستكون كل من الفئة الأولى والثانية مؤهلة، لكن وقت الموعد النهائي للجلسة الثانية سيكون أصغر وستُرسل حزمها أولاً. عندما تصبح الفئة الأولى خاملة في نقطة لاحقة، ستتمكن الفئة الثانية من &quot;التخزين المؤقت&quot; مرة أخرى لفترة نشاط لاحقة للفئة الأولى.</p>
+<p class="Pp">ملاحظة قصيرة - في حالة تكون فيها الكمية الإجمالية للنطاق الترددي المتاح على الواجهة أكبر من إجمالي الأجزاء المخصصة للوقت الحقيقي (تخيل واجهة 10 Mbit، لكن فئات 1Mbit/2Mbit و2Mbit/1Mbit)، فإن سرعة الواجهة وحدها قد تكفي لضمان الأوقات.</p>
+<p class="Pp">جزء مهم من معيار RT هو أنه بالإضافة إلى تحديث D() وE() الخاصين به، يتم أيضًا تحديث V() المستخدم بواسطة معيار LS. بشكل عام، معيار RT ثانوي بالنسبة لمعيار LS، ويُستخدم <i>فقط</i> إذا كان هناك خطر من انتهاك متطلبات الوقت الحقيقي الدقيقة. ومع ذلك، فإن &quot;المشاركة&quot; في النطاق الترددي الموزع بواسطة معيار LS موجودة، لذا يجب تحديث V() على طول الطريق. يمكن لمعيار LS بعد ذلك التعويض بشكل مناسب عن حالة المشاركة العادلة غير المثالية، الناتجة عن جدولة RT. إذا كنت تستخدم منحنى خدمة UL فسيتم تحديث F() الخاص به أيضًا (منحنى خدمة UL هو امتداد لمنحنى LS - انظر قسم <b>UPPERLIMIT CRITERION</b>).</p>
+<p class="Pp">على أي حال - التحديد المتهور لمنحنيات الخدمة LS وRT يمكن أن يؤدي إلى حالات غير مرغوب فيها محتملة (انظر CORNER CASES للأمثلة). لم يكن هذا هو الحال في ورقة HFSC حيث لم يكن من الممكن تحديد منحنيات الخدمة LS وRT بشكل منفصل.</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id='LINKSHARING_CRITERION'><a class='permalink' href='#LINKSHARING_CRITERION'>معيار مشاركة الارتباط (LS)</a></h1>
-<p class="Pp">مهمة معيار مشاركة الارتباط (LS) هي توزيع عرض النطاق الترددي وفقًا لتسلسل الفئة المحدد. على عكس معيار الوقت الحقيقي (RT)، لا توجد مقارنات بين الوقت الحقيقي الحالي والوقت الافتراضي - يعتمد القرار على مقارنة مباشرة للأوقات الافتراضية لجميع الفئات الفرعية النشطة - الفئة ذات الوقت الافتراضي الأصغر تفوز ويتم جدولتها. نتيجة فورية لهذه الحقيقة هي أن القيم المطلقة لا تهم - فقط النسب بينها (لذلك على سبيل المثال، سيحصل فئتان تابعتان بمنحنيات خدمة خطية بسيطة 1 ميجابت في الثانية على نفس المعاملة من منظور معيار مشاركة الارتباط (LS)، كما لو كانا 5 ميجابت في الثانية). الاستنتاج الآخر هو أنه في نظام سائل تمامًا مع منحنيات خطية، ستكون جميع الأوقات الافتراضية عبر التسلسل الهرمي بأكمله متساوية.</p>
+<h1 class="Sh" id='LINKSHARING_CRITERION'><a class='permalink' href='#LINKSHARING_CRITERION'>LINKSHARING   CRITERION</a></h1>
+<p class="Pp">مهمة معيار LS هي توزيع النطاق الترددي وفقًا للتسلسل الهرمي للفئات المحدد. على عكس معيار RT، لا توجد مقارنات بين الوقت الحقيقي الحالي والوقت الافتراضي - يعتمد القرار فقط على المقارنة المباشرة للأوقات الافتراضية لجميع الفئات الفرعية النشطة - الفئة ذات أصغر vt تفوز ويتم جدولتها. أحد الاستنتاجات المباشرة من هذه الحقيقة هو أن القيم المطلقة لا تهم - فقط النسب بينها (لذا على سبيل المثال، فئتان فرعيتان بمنحنيات خدمة خطية بسيطة 1Mbit ستحصلان على نفس المعاملة من منظور معيار LS، كما لو كانتا 5Mbit). الاستنتاج الآخر هو أنه في نظام سائل مثالي بمنحنيات خطية، ستكون جميع الأوقات الافتراضية عبر التسلسل الهرمي بأكمله متساوية.</p>
 <p class="Pp">لماذا يتم تعريف VC من حيث الوقت الافتراضي (وما هو)؟</p>
-<p class="Pp">تخيل مثالاً: الفئة A مع فئتين تابعتين - A1 و A2، وكلاهما لديه منحنيات خدمة 10 ميجابت في الثانية. إذا كانت A2 خاملة، تحصل A1 على عرض النطاق الترددي الكامل لـ A (وتقوم بتحديث V() الخاص بها في هذه العملية). عندما تصبح A2 نشطة، فإن الوقت الافتراضي لـ A1 يكون بالفعل *أبعد* من الوقت الافتراضي لـ A2. بالنظر إلى نوع القرار الذي يتخذه معيار مشاركة الارتباط (LS)، ستصبح A1 خاملة لفترة طويلة. يمكننا تجاوز هذا الموقف عن طريق ضبط الوقت الافتراضي للفئة التي تصبح نشطة - نقوم بذلك عن طريق "تحديث" هذا الوقت. يستخدم HFSC متوسط ​​أصغر وأكبر وقت افتراضي للفئات التابعة النشطة حاليًا والمناسبة للإرسال. نظرًا لأنه لم يعد وقتًا حقيقيًا (باستثناء الحالة التافهة التي تصبح فيها جميع الفئات نشطة في نفس الوقت، ولا تصبح خاملة أبدًا)، فإنه يسمى الوقت الافتراضي.</p>
-<p class="Pp">هذا النهج له ثمنه. المشكلة مشابهة لما تم تقديمه في القسم السابق وهي ناتجة عن عدم خطية منحنيات الخدمة:</p>
+<p class="Pp">تخيل مثالاً: الفئة A مع طفلين - A1 وA2، كلاهما بمنحنيات خدمة 10Mbit مثلاً. إذا كانت A2 خاملة، فستتلقى A1 كل النطاق الترددي لـ A (وتحدّث V() الخاص بها في هذه العملية). عندما تصبح A2 نشطة، يكون الوقت الافتراضي لـ A1 <i>بعيدًا</i> جدًا عن وقت A2. بالنظر إلى نوع القرار الذي يتخذه معيار LS، ستصبح A1 خاملة لفترة طويلة. يمكننا التحايل على هذا الموقف عن طريق ضبط الوقت الافتراضي للفئة التي تصبح نشطة - نفعل ذلك بجعل هذا الوقت &quot;محدّثًا&quot;. يستخدم HFSC متوسط أصغر وأكبر وقت افتراضي للأطفال النشطين حاليًا المناسبين للإرسال. نظرًا لأنه لم يعد وقتًا حقيقيًا (باستثناء الحالة التافهة حيث تصبح جميع الفئات نشطة في نفس الوقت، ولا تصبح خاملة أبدًا)، فإنه يُسمى الوقت الافتراضي.</p>
+<p class="Pp">لهذا النهج ثمنه رغم ذلك. المشكلة مماثلة لما تم تقديمه في القسم السابق وتنتج عن عدم خطية منحنيات الخدمة:</p>
 <dl class="Bl-tag">
   <dt>1)</dt>
-  <dd>إما أنه من المستحيل ضمان منحنيات الخدمة وتلبية العدالة خلال فترات زمنية معينة:
+  <dd>إما أنه من المستحيل ضمان منحنيات الخدمة وتحقيق العدالة خلال فترات زمنية معينة:
       </dd>
 </dl>
-<div class="Bd-indent">تذكر المثال من قسم الوقت الحقيقي (RT)، مع تعديل طفيف (مع ميل 3 ميجابت في الثانية بدلاً من 2 ميجابت في الثانية):
+<div class="Bd-indent">تذكر المثال من قسم RT، معدلاً قليلاً (بميلين 3Mbit بدلاً من 2Mbit):
 <ul class="Bl-bullet">
-  <li>الفئة الأولى - 3 ميجابت في الثانية لمدة 100 مللي ثانية، ثم 7 ميجابت في الثانية (محدب - الميل الأول &lt; الميل الثاني)</li>
-  <li>الفئة الثانية - 7 ميجابت في الثانية لمدة 100 مللي ثانية، ثم 3 ميجابت في الثانية (مقعر - الميل الأول &gt; الميل الثاني)
+  <li>الفئة الأولى - 3Mbit لمدة 100ms، ثم 7Mbit (محدب - الميل الأول &lt; الميل الثاني)</li>
+  <li>الفئة الثانية - 7Mbit لمدة 100ms، ثم 3Mbit (مقعر - الميل الأول &gt; الميل الثاني)
       </li>
 </ul>
-<p class="Pp">مجموعها يساوي 10 ميجابت في الثانية - سعة الواجهة. ولكن إذا أردنا استخدام معيار مشاركة الارتباط (LS) فقط للضمانات والعدالة - فلن يعمل ذلك ببساطة. في سياق معيار مشاركة الارتباط (LS)، يتم استخدام V() فقط لاتخاذ قرار بشأن الفئة التي سيتم جدولتها. إذا أصبحت الفئة الثانية نشطة عندما تكون الأولى في جزءها الخطي الثاني، فسيتم الحفاظ على العدالة - ستكون النسبة 1:1 (7 ميجابت في الثانية: 7 ميجابت في الثانية)، ولكن معيار مشاركة الارتباط (LS) نفسه غير قادر بالطبع على ضمان القيم المطلقة بحد ذاتها - لأنه سيتعين عليه تجاوز ما تستطيع الواجهة القيام به.</p>
+<p class="Pp">مجموعهما يصل بشكل جيد إلى 10Mbit - سعة الواجهة. لكن إذا أردنا استخدام LS فقط للضمانات والعدالة - فلن يعمل ببساطة. في سياق LS، يُستخدم V() فقط لاتخاذ قرار أي فئة تُجدول. إذا أصبحت الفئة الثانية نشطة عندما تكون الأولى في ميلها الثاني، فسيتم الحفاظ على العدالة - ستكون النسبة 1:1 (7Mbit:7Mbit)، لكن LS نفسه بالطبع غير قادر على ضمان القيم المطلقة نفسها - حيث سيتعين عليه تجاوز ما تستطيعه الواجهة.</p>
 </div>
 <dl class="Bl-tag">
   <dt>2)</dt>
-  <dd>و/أو أنه من المستحيل ضمان منحنيات الخدمة لجميع الفئات في نفس الوقت [بشكل عادل أو غير عادل]:
+  <dd>و/أو أنه من المستحيل ضمان منحنيات الخدمة لجميع الفئات في نفس الوقت [بعدالة أو بدونها]:
       </dd>
 </dl>
 <div class="Bd-indent">
-<p class="Pp">هذا مشابه للحالة أعلاه، ولكنه أكثر دقة قليلاً. سننظر في شجرتين فرعيتين، يتم الفصل بينهما بواسطة الأصل المشترك (الجذر هنا):</p>
-<pre>R (الجذر) - 10 ميجابت في الثانية
-A - 7 ميجابت في الثانية، ثم 3 ميجابت في الثانية
-A1 - 5 ميجابت في الثانية، ثم 2 ميجابت في الثانية
-A2 - 2 ميجابت في الثانية، ثم 1 ميجابت في الثانية
-B - 3 ميجابت في الثانية، ثم 7 ميجابت في الثانية</pre>
-<p class="Pp">R يفصل بين الشجرة الفرعية اليسرى (A) واليمنى (B). افترض أن A2 و B محمّلتان باستمرار، وفي وقت لاحق تصبح A1 محمّلة (عندما تكون جميع الفئات الأخرى في جزءها الخطي الثاني).</p>
-<p class="Pp">ماذا يحدث الآن؟ B (الاختيار الذي اتخذته R) سيحصل *دائمًا* على 7 ميجابت في الثانية لأن R مهتم فقط (بالتأكيد) بنسبة أبنائه المباشرين. وبالتالي تحصل الشجرة الفرعية A على 3 ميجابت في الثانية، ولكن أبنائها سيحتاجون (في الوقت الذي أصبحت فيه A1 محمّلة) 5 ميجابت في الثانية + 1 ميجابت في الثانية. هذا بالطبع مستحيل، حيث يمكنهم الحصول على 3 ميجابت في الثانية فقط بسبب قيود الواجهة.</p>
-<p class="Pp">في الشجرة الفرعية اليسرى - لدينا نفس الوضع كما في السابق (قسمة عادلة بين A1 و A2، ولكن ضمانات منتهكة)، ولكن في الشجرة بأكملها - لا توجد عدالة (حصل B على 7 ميجابت في الثانية، ولكن A1 و A2 يجب أن تتناسبا معًا في 3 ميجابت في الثانية) ولا توجد ضمانات لجميع الفئات (فقط B حصل على ما أراده). حتى لو انتهكنا العدالة في الشجرة الفرعية A وضبطنا منحنى خدمة A2 إلى 0، فلن تحصل A1 على عرض النطاق الترددي المطلوب.</p>
+<p class="Pp">هذا مشابه للحالة أعلاه، لكنه أكثر دقة قليلاً. سننظر في شجرتين فرعيتين، يتم التحكيم بينهما بواسطة الأب المشترك (الجذر هنا):</p>
+<pre>R (root) -&#x00A0;10Mbit
+A  - 7Mbit, then 3Mbit
+A1 - 5Mbit, then 2Mbit
+A2 - 2Mbit, then 1Mbit
+B  - 3Mbit, then 7Mbit</pre>
+<p class="Pp">يتحكم R بين الشجرة الفرعية اليسرى (A) واليمنى (B). افترض أن A2 وB متراكمتان باستمرار، وفي نقطة لاحقة تصبح A1 متراكمة (عندما تكون جميع الفئات الأخرى في الجزء الخطي الثاني).</p>
+<p class="Pp">ماذا يحدث الآن؟ B (الخيار الذي اتخذه R) ستحصل <i>دائمًا</i> على 7 Mbit لأن R يهتم فقط (بوضوح) بالنسبة بين أطفاله المباشرين. وبالتالي تحصل الشجرة الفرعية A على 3Mbit، لكن أطفالها سيريدون (عند النقطة التي أصبحت فيها A1 متراكمة) 5Mbit + 1Mbit. هذا مستحيل بالطبع، حيث يمكنهم الحصول على 3Mbit فقط بسبب قيود الواجهة.</p>
+<p class="Pp">في الشجرة الفرعية اليسرى - لدينا نفس الموقف كما في السابق (تقسيم عادل بين A1 وA2، لكن ضمانات منتهكة)، لكن في الشجرة بأكملها - لا توجد عدالة (حصلت B على 7Mbit، لكن A1 وA2 يجب أن يتناسبا معًا في 3Mbit) ولا توجد ضمانات لجميع الفئات (فقط B حصلت على ما أرادت). حتى لو انتهكنا العدالة في الشجرة الفرعية A وضبطنا منحنى خدمة A2 على 0، فلن تحصل A1 على النطاق الترددي المطلوب.</p>
 </div>
 </section>
 <section class="Sh">
-<h1 class="Sh" id='UPPERLIMIT_CRITERION'><a class='permalink' href='#UPPERLIMIT_CRITERION'>معيار الحد العلوي (UL)</a></h1>
-<p class="Pp">معيار الحد العلوي (UL) هو امتداد لمعيار مشاركة الارتباط (LS) الذي يسمح بإرسال الحزم فقط إذا كان الوقت الحقيقي الحالي متأخرًا عن وقت الملاءمة ('ft'). لذلك يصبح معيار مشاركة الارتباط (LS) المعدل: اختر أصغر وقت افتراضي من جميع الفئات التابعة النشطة، بحيث يكون وقت الملاءمة &lt; الوقت الحقيقي الحالي. يتم حساب وقت الملاءمة من F()، والذي يعتمد على منحنى الخدمة العلوي (UL). كما ترى، فإن دوره مشابه نوعًا ما لـ E() المستخدم في معيار الوقت الحقيقي (RT). أيضًا، لأسباب واضحة - لا يمكنك تحديد منحنى خدمة علوي (UL) بدون منحنى خدمة مشاركة ارتباط (LS).</p>
-<p class="Pp">الغرض الرئيسي من منحنى الخدمة العلوي (UL) هو الحد من HFSC إلى عرض النطاق الترددي المتاح على جهاز التوجيه العلوي (فكر في مودم/جهاز توجيه منزلي ADSL، وخادم Linux كـ NAT/جدار حماية/إلخ. مع اتصال 100 ميجابت في الثانية + بالجهاز المذكور أعلاه). عادةً، يتم استخدامه لإنشاء فئة واحدة مباشرة تحت الجذر، وتعيين منحنى خدمة علوي (UL) خطي لعرض النطاق الترددي المتاح - ثم إنشاء هيكل الفئة الخاص بك من تلك الفئة لأسفل. بالطبع، أنت حر في إضافة منحنى خدمة علوي (UL) (خطي أو غير خطي) إلى أي فئة ذات معيار مشاركة الارتباط (LS).</p>
-<p class="Pp">جزء مهم بشأن منحنى الخدمة العلوي (UL) هو أنه كلما لم تتأهل فئة في وقت معين للمشاركة في الارتباط بسبب وقت الملاءمة الخاص بها، ففي المرة التالية التي تتأهل فيها، ستقوم بتحديث وقتها الافتراضي إلى أصغر وقت افتراضي لجميع الفئات التابعة النشطة المؤهلة للمشاركة في الارتباط. بهذه الطريقة، يتم الحفاظ على إحدى الأشياء الرئيسية التي يحاول معيار مشاركة الارتباط (LS) تحقيقها - المساواة في جميع الأوقات الافتراضية عبر التسلسل الهرمي بأكمله (في نظام سائل تمامًا مع منحنيات خطية فقط، ستكون جميع الأوقات الافتراضية متساوية).</p>
-<p class="Pp">بدون ذلك، سيتأخر 'vt' عن الأوقات الافتراضية الأخرى، ويمكن أن يسبب مشاكل. ضع في اعتبارك واجهة بسعة 10 ميجابت في الثانية، والفئات الطرفية التالية (فقط في حال كنت تتخطى هذا النص بسرعة - يوضح هذا المثال سلوكًا *لا يحدث*):</p>
-<pre>A - ls 5.0 ميجابت في الثانية
-B - ls 2.5 ميجابت في الثانية
-C - ls 2.5 ميجابت في الثانية، ul 2.5 ميجابت في الثانية</pre>
-<p class="Pp">إذا كانت B خاملة، بينما كانت A و C محمّلتين باستمرار، فستقسم A و C عادةً (بالنسبة لمعيار مشاركة الارتباط (LS)) عرض النطاق الترددي بنسبة 2:1. ولكن بسبب وجود منحنى الخدمة العلوي (UL)، ستحصل C على 2.5 ميجابت في الثانية كحد أقصى، وستحصل A على الـ 7.5 ميجابت المتبقية. كلما طالت فترة التحميل، زاد انحراف الأوقات الافتراضية لـ A و C. إذا أصبحت B محمّلة في وقت لاحق، فسيتم تعيين وقتها الافتراضي إلى (vt A + vt C) / 2، وبالتالي منع A من إرسال أي حركة مرور حتى يلتحق وقت B الافتراضي بـ A.</p>
+<h1 class="Sh" id='UPPERLIMIT_CRITERION'><a class='permalink' href='#UPPERLIMIT_CRITERION'>UPPERLIMIT   CRITERION</a></h1>
+<p class="Pp">معيار UL هو امتداد لمعيار LS، يسمح بإرسال الحزم فقط إذا كان الوقت الحقيقي الحالي لاحقًا من وقت الملاءمة ('ft'). لذا يصبح معيار LS المعدل: اختر أصغر وقت افتراضي من جميع الأطفال النشطين، بحيث يتحقق أيضًا شرط وقت الملاءمة &lt; الوقت الحقيقي الحالي. يُحسب وقت الملاءمة من F()، الذي يعتمد على منحنى خدمة UL. كما ترى، دوره مشابه نوعًا ما لـ E() المستخدم في معيار RT. أيضًا، لأسباب واضحة - لا يمكنك تحديد منحنى خدمة UL بدون منحنى LS.</p>
+<p class="Pp">الغرض الرئيسي من منحنى خدمة UL هو تقييد HFSC بالنطاق الترددي المتاح على الموجه العلوي (فكر في مودم/موجه adsl المنزلي، وخادم linux كـ NAT/جدار حماية/إلخ مع اتصال 100Mbit+ بالمودم/الموجه المذكور). عادةً، يُستخدم لإنشاء فئة واحدة مباشرة تحت الجذر، مع تعيين منحنى خدمة UL خطي للنطاق الترددي المتاح - ثم إنشاء هيكل فئتك من تلك الفئة إلى الأسفل. بالطبع، أنت حر في إضافة منحنى خدمة UL (خطي أو غير خطي) إلى أي فئة بمعيار LS.</p>
+<p class="Pp">جزء مهم حول منحنى خدمة UL هو أنه كلما لم تكن فئة مؤهلة في نقطة زمنية معينة لمشاركة الارتباط بسبب وقت الملاءمة الخاص بها، فإن المرة التالية التي تصبح فيها مؤهلة ستحدّث وقتها الافتراضي إلى أصغر وقت افتراضي لجميع الأطفال النشطين المناسبين لمشاركة الارتباط. بهذه الطريقة، يتم الحفاظ على أحد الأشياء الرئيسية التي يحاول معيار LS تحقيقها - مساواة جميع الأوقات الافتراضية عبر التسلسل الهرمي بأكمله (في نظام سائل مثالي بمنحنيات خطية فقط، ستكون جميع الأوقات الافتراضية متساوية).</p>
+<p class="Pp">بدون ذلك، سيتأخر 'vt' عن الأوقات الافتراضية الأخرى، ويمكن أن يسبب مشاكل. فكر في واجهة بسعة 10Mbit، والفئات الورقية التالية (فقط في حال كنت تتخطى هذا النص بسرعة - هذا المثال يظهر سلوكًا <b><i>لا يحدث</i></b>):</p>
+<pre>A - ls 5.0Mbit
+B - ls 2.5Mbit
+C - ls 2.5Mbit, ul 2.5Mbit</pre>
+<p class="Pp">إذا كانت B خاملة، بينما كانت A وC متراكمتين باستمرار، فإن A وC عادةً (بقدر ما يتعلق الأمر بمعيار LS) ستقسمان النطاق الترددي بنسبة 2:1. لكن بسبب منحنى خدمة UL الموجود، ستحصل C على 2.5Mbit كحد أقصى، وستحصل A على 7.5Mbit المتبقية. كلما طالت فترة التراكم، زاد تباعد الأوقات الافتراضية لـ A وC. إذا أصبحت B متراكمة في نقطة لاحقة، فسيتم تعيين وقتها الافتراضي على (A's&#x00A0;vt&#x00A0;+&#x00A0;C's&#x00A0;vt)/2، مما يمنع A من إرسال أي حركة مرور حتى يلحق الوقت الافتراضي لـ B بـ A.</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id='SEPARATE_LS_/_RT_SCs'><a class='permalink' href='#SEPARATE_LS_/_RT_SCs'>منحنيات الخدمة المنفصلة لمشاركة الارتباط (LS) / الوقت الحقيقي (RT)</a></h1>
-<p class="Pp">فرق آخر عن ورقة HFSC الأصلية هو أنه يمكن تحديد منحنيات الخدمة للوقت الحقيقي (RT) ولمشاركة الارتباط (LS) بشكل منفصل. علاوة على ذلك، يُسمح للفئات الطرفية بالحصول على منحنى خدمة إما للوقت الحقيقي (RT) أو لمشاركة الارتباط (LS) فقط. بالنسبة للفئات الداخلية، فإن منحنيات الخدمة لمشاركة الارتباط (LS) فقط هي ذات معنى: سيتم تجاهل أي منحنى خدمة للوقت الحقيقي (RT).</p>
+<h1 class="Sh" id='SEPARATE_LS_/_RT_SCs'><a class='permalink' href='#SEPARATE_LS_/_RT_SCs'>SEPARATE   LS / RT SCs</a></h1>
+<p class="Pp">اختلاف آخر عن ورقة HFSC الأصلية هو أنه يمكن تحديد منحنيات الخدمة RT وLS بشكل منفصل. علاوة على ذلك، يُسمح للفئات الورقية بأن تحتوي فقط على منحنى خدمة RT أو LS. بالنسبة للفئات الداخلية، فقط منحنيات الخدمة LS منطقية: سيتم تجاهل أي منحنى خدمة RT.</p>
 </section>
 <section class="Sh">
-<h1 class="Sh" id='CORNER_CASES'><a class='permalink' href='#CORNER_CASES'>الحالات القصوى</a></h1>
-<p class="Pp">يمكن أن تؤدي منحنيات الخدمة المنفصلة لمعايير مشاركة الارتباط (LS) والوقت الحقيقي (RT) إلى بعض الفخاخ التي تنشأ عن "الصراع" بين مشاركة الارتباط المثالية وضمانات الوقت الحقيقي المفروضة. لم تكن هذه المواقف موجودة في ورقة HFSC الأصلية، حيث لم تتم مناقشة تحديد منحنيات الخدمة المنفصلة لمشاركة الارتباط (LS) / الوقت الحقيقي (RT).</p>
-<p class="Pp">ضع في اعتبارك واجهة بسعة 10 ميجابت في الثانية، مع الفئات الطرفية التالية:</p>
-<pre>A - ls 5.0 ميجابت في الثانية، rt 8 ميجابت في الثانية
-B - ls 2.5 ميجابت في الثانية
-C - ls 2.5 ميجابت في الثانية</pre>
-<p class="Pp">تخيل أن A و C محمّلتان باستمرار. بما أن B خاملة، فإن A و C ستقتسمان عرض النطاق الترددي بنسبة 2:1، مع الأخذ في الاعتبار منحنى خدمة مشاركة الارتباط (LS) (لذا نظريًا - 6.66 و 3.33). ولكن معيار الوقت الحقيقي (RT) له الأولوية، لذا ستحصل A على 8 ميجابت في الثانية وسيكون معيار مشاركة الارتباط (LS) قادرًا على تعويض الفئة C بـ 2 ميجابت فقط - سيؤدي هذا إلى حدوث تباين بين الأوقات الافتراضية لـ A و C.</p>
-<p class="Pp">لنفترض أن هذا الوضع استمر لفترة طويلة بدون فترات خمول، وفجأة أصبحت B نشطة. سيتم تحديث الوقت الافتراضي لـ B إلى (vt A + vt C) / 2، مما يؤدي فعليًا إلى الهبوط في المنتصف بين الوقت الافتراضي لـ A و C. التأثير - B، التي لا تحتوي على ضمانات في الوقت الحقيقي، سيتم معاقبتها ولن يُسمح لها بنقل البيانات حتى يلتحق الوقت الافتراضي لـ C بوقت A.</p>
-<p class="Pp">إذا كانت الواجهة لديها سعة أعلى، على سبيل المثال 100 ميجابت في الثانية، فسيكون هذا المثال يعمل بشكل جيد للغاية.</p>
-<p class="P<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>tc-hfsc(7) — Arch manual pages</title>
-        
-        
-        
-    </head>
-    <body>
-        
-        <main>
-            <article>
-                <section class="Sh">
 <h1 class="Sh" id='CORNER_CASES'><a class='permalink' href='#CORNER_CASES'>CORNER   CASES</a></h1>
-<p class="Pp">Let's look a bit closer at the above example - it
-    &quot;cleverly&quot; invalidates one of the basic things LS criterion tries
-    to achieve - equality of all virtual times across class hierarchy. Leaf
-    classes without RT service curves are literally left to their own fate
-    (governed by messed up virtual times).</p>
-<p class="Pp">Also, it doesn't make much sense. Class A will always be
-    guaranteed up to 8Mbit, and this is more than any absolute bandwidth that
-    could happen from its LS criterion (excluding trivial case of only A being
-    active). If the bandwidth taken by A is smaller than absolute value from LS
-    criterion, the unused part will be automatically assigned to other active
-    classes (as A has idling periods in such case). The only
-    &quot;advantage&quot; is, that even in case of low bandwidth on average,
-    bursts would be handled at the speed defined by RT criterion. Still, if
-    extra speed is needed (e.g. due to latency), non linear service curves
-    should be used in such case.</p>
-<p class="Pp">In the other words: the LS criterion is meaningless in the above
-    example.</p>
-<p class="Pp">You can quickly &quot;workaround&quot; it by making sure each leaf
-    class has RT service curve assigned (thus guaranteeing all of them will get
-    some bandwidth), but it doesn't make it any more valid.</p>
-<p class="Pp">Keep in mind - if you use nonlinear curves and irregularities
-    explained above happen <i>only</i> in the first segment, then there's little
-    wrong with &quot;overusing&quot; RT curve a bit:</p>
+<p class="Pp">منحنيات الخدمة المنفصلة لمعياري LS وRT يمكن أن تؤدي إلى بعض الفخاخ التي تأتي من &quot;الصراع&quot; بين مشاركة الارتباط المثالية وضمانات الوقت الحقيقي المفروضة. تلك الحالات لم تكن موجودة في ورقة HFSC الأصلية، حيث لم تتم مناقشة تحديد منحنيات الخدمة LS / RT المنفصلة.</p>
+<p class="Pp">فكر في واجهة بسعة 10Mbit، مع الفئات الورقية التالية:</p>
+<pre>A - ls 5.0Mbit, rt 8Mbit
+B - ls 2.5Mbit
+C - ls 2.5Mbit</pre>
+<p class="Pp">تخيل أن A وC متراكمتان باستمرار. بما أن B خاملة، فإن A وC ستقسمان النطاق الترددي بنسبة 2:1، بالنظر إلى منحنى خدمة LS (لذا نظريًا - 6.66 و3.33). للأسف، معيار RT له الأولوية، لذا ستحصل A على 8Mbit وسيتمكن LS من تعويض الفئة C بـ 2 Mbit فقط - سيؤدي هذا إلى تباين بين الأوقات الافتراضية لـ A وC.</p>
+<p class="Pp">افترض أن هذا الموقف يستمر لفترة طويلة بدون فترات خمول، وفجأة تصبح B نشطة. سيتم تحديث الوقت الافتراضي لـ B إلى (A's&#x00A0;vt&#x00A0;+&#x00A0;C's&#x00A0;vt)/2، مما يهبط فعليًا في المنتصف بين الوقت الافتراضي لـ A وC. التأثير - B، التي ليس لديها ضمانات RT، ستُعاقب ولن يُسمح لها بنقل البيانات حتى يلحق الوقت الافتراضي لـ C.</p>
+<p class="Pp">إذا كانت الواجهة ذات سعة أعلى، على سبيل المثال 100Mbit، فسيتصرف هذا المثال بشكل جيد تمامًا رغم ذلك.</p>
+<p class="P<p>لنلقِ نظرة أقرب قليلاً على المثال أعلاه - فهو
+    &quot;بذكاء&quot; يُبطل واحدة من الأمور الأساسية التي يحاول معيار LS
+    تحقيقها - تساوي جميع الأوقات الافتراضية عبر التسلسل الهرمي للفئات. فئات الأوراق
+    التي لا تحتوي على منحنيات خدمة RT تُترك حرفياً لمصيرها
+    (محكومة بأوقات افتراضية مُشوَّشة).</p>
+<p class="Pp">كما أنه لا معنى له كثيراً. فالفئة A ستكون دائماً
+    مضمونة حتى 8Mbit، وهذا أكثر من أي عرض نطاق مطلق
+    قد ينتج عن معيار LS الخاص بها (باستثناء الحالة التافهة حيث تكون A فقط
+    نشطة). إذا كان عرض النطاق الذي تأخذه A أصغر من القيمة المطلقة من معيار LS،
+    فسيتم تعيين الجزء غير المستخدم تلقائياً إلى الفئات النشطة الأخرى
+    (حيث أن A لديها فترات خمول في هذه الحالة). &quot;الميزة&quot; الوحيدة
+    هي أنه حتى في حالة عرض النطاق المنخفض في المتوسط،
+    ستُعالَج الرشقات بالسرعة المحددة بمعيار RT. ومع ذلك، إذا كانت هناك حاجة
+    لسرعة إضافية (مثلاً بسبب زمن الاستجابة)، فينبغي استخدام منحنيات خدمة غير خطية
+    في هذه الحالة.</p>
+<p class="Pp">بعبارة أخرى: معيار LS لا معنى له في المثال
+    أعلاه.</p>
+<p class="Pp">يمكنك &quot;الالتفاف&quot; عليه بسرعة بالتأكد من أن كل فئة ورقة
+    لديها منحنى خدمة RT مُعيَّن (وبالتالي ضمان حصول جميعها على
+    بعض عرض النطاق)، لكن هذا لا يجعله أكثر صحة.</p>
+<p class="Pp">ضع في اعتبارك - إذا كنت تستخدم منحنيات غير خطية وحدثت
+    المخالفات الموضحة أعلاه <i>فقط</i> في المقطع الأول، فلا بأس
+    قليلاً بـ &quot;الإفراط&quot; في استخدام منحنى RT:</p>
 <pre>A - ls 5.0Mbit, rt 9Mbit/30ms, then 1Mbit
 B - ls 2.5Mbit
 C - ls 2.5Mbit</pre>
-<p class="Pp">Here, the vt of A will &quot;spike&quot; in the initial period,
-    but then A will never get more than 1Mbit until B &amp; C catch up. Then
-    everything will be back to normal.</p>
+<p class="Pp">هنا، سـ &quot;يقفز&quot; vt الخاص بـ A في الفترة الأولية،
+    لكن بعد ذلك لن تحصل A أبداً على أكثر من 1Mbit حتى تلحق B و C. ثم
+    سيعود كل شيء إلى طبيعته.</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id='LINUX_AND_TIMER_RESOLUTION'><a class='permalink' href='#LINUX_AND_TIMER_RESOLUTION'>LINUX   AND TIMER RESOLUTION</a></h1>
-<p class="Pp">In certain situations, the scheduler can throttle itself and setup
-    so called watchdog to wakeup dequeue function at some time later. In case of
-    HFSC it happens when for example no packet is eligible for scheduling, and
-    UL service curve is used to limit the speed at which LS criterion is allowed
-    to dequeue packets. It's called throttling, and accuracy of it is dependent
-    on how the kernel is compiled.</p>
-<p class="Pp">There're 3 important options in modern kernels, as far as timers'
-    resolution goes: 'tickless system', 'high resolution timer support' and
+<p class="Pp">في حالات معينة، يمكن للمجدول أن يخنق نفسه ويُعِدّ
+    ما يُسمى بـ watchdog لإيقاظ دالة إلغاء الترتيب في وقت لاحق. في حالة
+    HFSC يحدث هذا عندما لا تكون هناك حزمة مؤهلة للجدولة مثلاً، ويُستخدم
+    منحنى خدمة UL لتحديد السرعة التي يُسمح بها لمعيار LS
+    بإلغاء ترتيب الحزم. يُسمى هذا بالخنق (throttling)، وتعتمد دقته
+    على كيفية تجميع النواة.</p>
+<p class="Pp">هناك 3 خيارات مهمة في النوى الحديثة، فيما يتعلق بدقة
+    المؤقتات: 'tickless system' و 'high resolution timer support' و
     'timer frequency'.</p>
-<p class="Pp">If you have 'tickless system' enabled, then the timer interrupt
-    will trigger as slowly as possible, but each time a scheduler throttles
-    itself (or any other part of the kernel needs better accuracy), the rate
-    will be increased as needed / possible. The ceiling is either 'timer
-    frequency' if 'high resolution timer support' is not available or not
-    compiled in, or it's hardware dependent and can go <i>far</i> beyond the
-    highest 'timer frequency' setting available.</p>
-<p class="Pp">If 'tickless system' is not enabled, the timer will trigger at a
-    fixed rate specified by 'timer frequency' - regardless if high resolution
-    timers are or aren't available.</p>
-<p class="Pp">This is important to keep those settings in mind, as in scenario
-    like: no tickless, no HR timers, frequency set to 100hz - throttling
-    accuracy would be at 10ms. It doesn't automatically mean you would be
-    limited to ~0.8Mbit/s (assuming packets at ~1KB) - as long as your queues
-    are prepared to cover for timer inaccuracy. Of course, in case of e.g.
-    locally generated UDP traffic - appropriate socket size is needed as well.
-    Short example to make it more understandable (assume hardcore anti-schedule
-    settings - HZ=100, no HR timers, no tickless):</p>
+<p class="Pp">إذا كان 'tickless system' مُفعَّلاً، فسيتم تفعيل مقاطعة المؤقت
+    بأبطأ ما يمكن، ولكن في كل مرة يخنق فيها المجدول
+    نفسه (أو يحتاج أي جزء آخر من النواة إلى دقة أفضل)، ستزداد المعدل
+    حسب الحاجة / الإمكان. السقف إما أن يكون 'timer
+    frequency' إذا لم يكن 'high resolution timer support' متاحاً أو غير
+    مُجمَّع، أو أنه يعتمد على العتاد ويمكن أن يتجاوز <i>بكثير</i>
+    أعلى إعداد 'timer frequency' متاح.</p>
+<p class="Pp">إذا لم يكن 'tickless system' مُفعَّلاً، فسيتم تفعيل المؤقت بمعدل
+    ثابت يحدده 'timer frequency' - بغض النظر عما إذا كانت المؤقتات عالية الدقة
+    متاحة أم لا.</p>
+<p class="Pp">من المهم أن تضع هذه الإعدادات في اعتبارك، لأنه في سيناريو
+    مثل: لا tickless، لا مؤقتات HR، التردد مضبوط على 100hz - ستكون دقة الخنق
+    عند 10ms. هذا لا يعني تلقائياً أنك ستكون
+    محدوداً بـ ~0.8Mbit/s (بافتراض حزم بحجم ~1KB) - طالما أن قوائم الانتظار لديك
+    مستعدة لتغطية عدم دقة المؤقت. بالطبع، في حالة مثلاً
+    حركة UDP المُولَّدة محلياً - يلزم أيضاً حجم مقبس مناسب.
+    مثال قصير لجعله أكثر فهماً (بافتراض إعدادات مكافحة جدولة متطرفة
+    - HZ=100، لا مؤقتات HR، لا tickless):</p>
 <pre>tc qdisc add dev eth0 root handle 1:0 hfsc default 1
 tc class add dev eth0 parent 1:0 classid 1:1 hfsc rt m2 10Mbit</pre>
-<p class="Pp">Assuming packet of ~1KB size and HZ=100, that averages to ~0.8Mbit
-    - anything beyond it (e.g. the above example with specified rate over 10x
-    larger) will require appropriate queuing and cause bursts every ~10 ms. As
-    you can imagine, any HFSC's RT guarantees will be seriously invalidated by
-    that. Aforementioned example is mainly important if you deal with old
-    hardware - as is particularly popular for home server chores. Even then, you
-    can easily set HZ=1000 and have very accurate scheduling for typical adsl
-    speeds.</p>
-<p class="Pp">Anything modern (apic or even hpet msi based timers + 'tickless
-    system') will provide enough accuracy for superb 1Gbit scheduling. For
-    example, on one of my cheap dual-core AMD boards I have the following
-    settings:</p>
+<p class="Pp">بافتراض حزمة بحجم ~1KB و HZ=100، فإن ذلك يعطي في المتوسط ~0.8Mbit
+    - أي شيء يتجاوز ذلك (مثلاً المثال أعلاه بمعدل محدد أكبر بـ 10x
+    ) سيتطلب ترتيب انتظار مناسب ويسبب رشقات كل ~10 ms. كما
+    يمكنك أن تتخيل، فإن أي ضمانات RT لـ HFSC ستُبطل بشكل خطير
+    بذلك. المثال المذكور أعلاه مهم بشكل أساسي إذا كنت تتعامل مع عتاد
+    قديم - كما هو شائع بشكل خاص لمهام خادم المنزل. حتى في هذه الحالة، يمكنك
+    بسهولة ضبط HZ=1000 والحصول على جدولة دقيقة جداً لسرعات adsl
+    النموذجية.</p>
+<p class="Pp">أي شيء حديث (مؤقتات مبنية على apic أو حتى hpet msi + 'tickless
+    system') سيوفر دقة كافية لجدولة رائعة بـ 1Gbit. على
+    سبيل المثال، على إحدى لوحات AMD ثنائية النواة الرخيصة لدي الإعدادات
+    التالية:</p>
 <pre>tc qdisc add dev eth0 parent root handle 1:0 hfsc default 1
 tc class add dev eth0 parent 1:0 classid 1:1 hfsc rt m2 300mbit</pre>
-<p class="Pp">And a simple:</p>
+<p class="Pp">و ببساطة:</p>
 <pre>nc -u dst.host.com 54321 &lt;/dev/zero
 nc -l -p 54321 &gt;/dev/null</pre>
-<p class="Pp">...will yield the following effects over a period of ~10 seconds
-    (taken from /proc/interrupts):</p>
+<p class="Pp">...سينتج التأثيرات التالية على مدى فترة ~10 ثوانٍ
+    (مأخوذة من /proc/interrupts):</p>
 <pre>319: 42124229   0  HPET_MSI-edge  hpet2 (before)
 319: 42436214   0  HPET_MSI-edge  hpet2 (after 10s.)</pre>
-<p class="Pp">That's roughly 31000/s. Now compare it with HZ=1000 setting. The
-    obvious drawback of it is that cpu load can be rather high with servicing
-    that many timer interrupts. The example with 300Mbit RT service curve on
-    1Gbit link is particularly ugly, as it requires a lot of throttling with
-    minuscule delays.</p>
-<p class="Pp">Also note that it's just an example showing the capabilities of
-    current hardware. The above example (essentially a 300Mbit TBF emulator) is
-    pointless on an internal interface to begin with: you will pretty much
-    always want a regular LS service curve there, and in such a scenario HFSC
-    simply doesn't throttle at all.</p>
-<p class="Pp">300Mbit RT service curve (selected columns from mpstat -P ALL
+<p class="Pp">هذا حوالي 31000/ثانية. الآن قارنه بإعداد HZ=1000. العيب
+    الواضح له هو أن حمل المعالج يمكن أن يكون مرتفعاً نوعاً ما مع خدمة
+    هذا العدد الكبير من مقاطعات المؤقت. المثال مع منحنى خدمة RT بقيمة 300Mbit
+    على رابط 1Gbit قبيح بشكل خاص، لأنه يتطلب الكثير من الخنق
+    بتأخيرات ضئيلة.</p>
+<p class="Pp">لاحظ أيضاً أنه مجرد مثال يُظهر قدرات
+    العتاد الحالي. المثال أعلاه (في الأساس محاكي TBF بقيمة 300Mbit) هو
+    بلا معنى على واجهة داخلية من الأساس: سترغب دائماً تقريباً
+    في منحنى خدمة LS عادي هناك، وفي مثل هذا السيناريو لا يقوم HFSC
+    بالخنق على الإطلاق.</p>
+<p class="Pp">منحنى خدمة RT بقيمة 300Mbit (أعمدة مختارة من mpstat -P ALL
   1):</p>
 <pre>10:56:43 PM  CPU  %sys     %irq   %soft   %idle
 10:56:44 PM  all  20.10    6.53   34.67   37.19
 10:56:44 PM    0  35.00    0.00   63.00    0.00
 10:56:44 PM    1   4.95   12.87    6.93   73.27</pre>
-<p class="Pp">So, in the rare case you need those speeds with only a RT service
-    curve, or with a UL service curve: remember the drawbacks.</p>
+<p class="Pp">لذا، في الحالة النادرة التي تحتاج فيها إلى تلك السرعات مع
+    منحنى خدمة RT فقط، أو مع منحنى خدمة UL: تذكّر
+    العيوب.</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id='CAVEAT:_RANDOM_ONLINE_EXAMPLES'><a class='permalink' href='#CAVEAT:_RANDOM_ONLINE_EXAMPLES'>CAVEAT:   RANDOM ONLINE EXAMPLES</a></h1>
-<p class="Pp">For reasons unknown (though well guessed), many examples you can
-    google love to overuse UL criterion and stuff it in every node possible.
-    This makes no sense and works against what HFSC tries to do (and does pretty
-    damn well). Use UL where it makes sense: on the uppermost node to match
-    upstream router's uplink capacity. Or in special cases, such as testing
-    (limit certain subtree to some speed), or customers that must never get more
-    than certain speed. In the last case you can usually achieve the same by
-    just using a RT criterion without LS+UL on leaf nodes.</p>
-<p class="Pp">As for the router case - remember it's good to differentiate
-    between &quot;traffic to router&quot; (remote console, web config, etc.) and
-    &quot;outgoing traffic&quot;, so for example:</p>
+<p class="Pp">لأسباب غير معروفة (وإن كان يمكن تخمينها جيداً)، فإن العديد من الأمثلة التي يمكنك
+    البحث عنها في جوجل تحب الإفراط في استخدام معيار UL وحشره في كل عقدة ممكنة.
+    هذا لا معنى له ويعمل ضد ما يحاول HFSC فعله (ويفعله
+    بشكل جيد جداً). استخدم UL حيث يكون منطقياً: على العقدة العليا
+    لمطابقة سعة الوصلة الصاعدة للموجه الأعلى. أو في حالات خاصة، مثل الاختبار
+    (تحديد شجرة فرعية معينة بسرعة ما)، أو العملاء الذين يجب ألا يحصلوا أبداً على أكثر
+    من سرعة معينة. في الحالة الأخيرة يمكنك عادةً تحقيق نفس الشيء
+    بمجرد استخدام معيار RT دون LS+UL على عقد الأوراق.</p>
+<p class="Pp">أما بالنسبة لحالة الموجه - تذكّر أنه من الجيد التمييز
+    بين &quot;حركة المرور إلى الموجه&quot; (وحدة تحكم عن بُعد، إعدادات الويب، إلخ) و
+    &quot;حركة المرور الصادرة&quot;، على سبيل المثال:</p>
 <pre>tc qdisc add dev eth0 root handle 1:0 hfsc default 0x8002
 tc class add dev eth0 parent 1:0 classid 1:999 hfsc rt m2 50Mbit
 tc class add dev eth0 parent 1:0 classid 1:1 hfsc ls m2 2Mbit ul m2 2Mbit</pre>
-<p class="Pp">... so &quot;internet&quot; tree under 1:1 and &quot;router
-    itself&quot; as 1:999</p>
+<p class="Pp">... بحيث تكون شجرة &quot;الإنترنت&quot; تحت 1:1 و &quot;الموجه
+    نفسه&quot; كـ 1:999</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id='LAYER2_ADAPTATION'><a class='permalink' href='#LAYER2_ADAPTATION'>LAYER2   ADAPTATION</a></h1>
-<p class="Pp">Please refer to <a href="tc-stab.8.html">tc-stab(8)</a></p>
+<p class="Pp">يرجى الرجوع إلى <a href="tc-stab.8.html">tc-stab(8)</a></p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id='SEE_ALSO'><a class='permalink' href='#SEE_ALSO'>SEE   ALSO</a></h1>
 <p class="Pp"><a href="tc.8.html">tc(8)</a>, tc-hfsc(8), <a href="tc-stab.8.html">tc-stab(8)</a></p>
-<p class="Pp">Please direct bugreports and patches to:
+<p class="Pp">يرجى توجيه تقارير الأخطاء والتصحيحات إلى:
     &lt;netdev@vger.kernel.org&gt;</p>
 </section>
 <section class="Sh">
 <h1 class="Sh" id='AUTHOR'><a class='permalink' href='#AUTHOR'>AUTHOR</a></h1>
-<p class="Pp">Manpage created by Michal Soltys (soltys@ziu.info)</p>
+<p class="Pp">صفحة الدليل من إنشاء Michal Soltys (soltys@ziu.info)</p>
 </section>
 </div>
 <table class="foot">
@@ -567,5 +436,8 @@ tc class add dev eth0 parent 1:0 classid 1:1 hfsc ls m2 2Mbit ul m2 2Mbit</pre>
                specified in the corresponding Arch Linux package.
             </p>
         </footer>
-    </body>
+    <footer class="site-disclaimer">
+<p>هذا الموقع غير مرتبط بـ Arch Linux ولا تابع له بأي شكل من الأشكال. المحتوى هو ترجمة فقط لصفحات دليل Arch المنشورة على man.archlinux.org.</p>
+</footer>
+</body>
 </html>
